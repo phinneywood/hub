@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Gmail · Hub{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/gmail.css"><script src="/static/gmail.js" defer></script>{% endblock %}
+{% block main_class %}gmail{% endblock %}
+{% block body %}
+<nav class="tabs" aria-label="Gmail">
+  <a href="/gmail"{% if section == "today" %} class="on" aria-current="page"{% endif %}>Today</a>
+  <a href="/gmail/tools"{% if section in ("tools", "senders", "sweep", "delayed") %} class="on" aria-current="page"{% endif %}>Clean up{% if delayed_stopped %} <span class="badge warn">!</span>{% endif %}</a>
+  <a href="/gmail/plan"{% if section == "plan" %} class="on" aria-current="page"{% endif %}>Plan{% if plan_count %} <span class="badge">{{ plan_count }}</span>{% endif %}</a>
+  <a href="/gmail/explore"{% if section == "explore" %} class="on" aria-current="page"{% endif %}>Explore</a>
+  <a href="/gmail/activity"{% if section == "activity" %} class="on" aria-current="page"{% endif %}>Activity</a>
+</nav>
+{% if child %}<p class="crumb"><a href="/gmail/explore">← Explore</a></p>{% endif %}
+{% block content %}{% endblock %}
+{% endblock %}

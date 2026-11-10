@@ -1,0 +1,221 @@
+# The engine
+
+Hub is the control room for a small automation engine. This page is the map and the rules.
+Code: `hub/engine/`. Owner's page: `/engine`.
+
+## The five parts
+
+| Part | What it is | Where |
+| --- | --- | --- |
+| Sources | What Hub may read, and what of it a model may see | `catalog.SOURCES` |
+| Judgement | A model on the zero-retention route. No tools: it returns text only | `overnight.py`, `judge.py`, `hub/tools/gmail/triage.py` |
+| You | The “Needs you” list: open, do, or Not today | `hub/today.py` |
+| Actions | What Hub may do, each with a preview page, an undo and a trust level | `catalog.ACTIONS` |
+| Record and limits | Every run with its calls and cost; daily and monthly stops | `state.py` |
+
+Standing instructions (“What you’ve asked for” on the Engine page) are the owner's plain-words
+guidance. They steer judgement. They cannot add a source or an action.
+
+## Adding something
+
+- **A source**: one `Source(...)` entry in `hub/engine/catalog.py` saying in plain words what it reads
+  and what a model may see, with either rule checks (`items`), model evidence (`evidence`), or both.
+  If the overnight review may point at it, add its page to `PAGES`. A source may also have a
+  `sort` step (see “Sorting mail”) and a `prepare` step (see “Getting ready each morning”).
+- **An action**: one `Action(...)` entry with what it does, how it is undone and its preview page.
+  It starts at “suggest”. Raise `ceiling` only when the code has a reversible one-tap route (`undo`).
+  `auto` needs an `auto` function as well, and stays a separate owner decision per action.
+- **A standing instruction**: typed by the owner in “Ask Hub” on the Engine page. No code.
+
+## The overnight review
+
+The morning job (`POST /today/prepare`, this Mac only) runs four steps in order: sort
+(`sorting.py`), trusted actions (`auto.py`), getting ready (`prep.py`), then the review. “Run” on the
+Engine page runs the review alone.
+
+1. Each source with `evidence` hands over a small, bounded summary. The review reads no message
+   itself: for Gmail it gets what sorting already worked out (counts, and the sender's name,
+   subject and next step of up to 5 emails that need the owner, and up to 3 the owner is waiting
+   on). No email address is passed on; Hub keeps it for its own “Find the message” link.
+2. One Luna call returns at most 5 suggestions in a strict format.
+3. Hub checks the reply, picks every link itself from a fixed list, and saves the suggestions.
+   They show in “Needs you” marked “Suggestion”. Nothing else happens.
+
+Limits, enforced in Hub: 2 review calls a day, and $5 of recorded model cost a month across
+everything, sorting included. A failed night or a reached limit shows up as its own item in
+“Needs you”.
+
+## Sorting mail
+
+`hub/tools/gmail/triage.py` sorts each new inbox message once, into one of six kinds: needs you,
+calendar notice, record, code or sign-in link, reading, promotion or notification. It runs first in
+the morning job and on “Sort now” on the Gmail page (`/gmail`, `hub/tools/gmail/inbox.py`).
+Sorting changes nothing in Gmail.
+
+- **What it reads**: the last 7 days of inbox mail and 14 days of sent mail, as sender, subject
+  line and labels (`/gmail/search`). Mail that needs the owner is followed for 14 days.
+- **Fixed rules first**, no model: the owner's own “always” choices, conversations the owner is
+  part of, calendar notices, security notices, codes, Gmail's Promotions and Social tabs, and
+  subject-line patterns for records, policy notices and newsletters.
+- **Jev** reads the text of a message only when its subject suggests it may need the owner, and
+  answers yes or no. A “no” falls back to what the rules would otherwise have said.
+- **Luna** places what the rules couldn't, from the sender's name and domain, the subject line and
+  Gmail's category: never an address, never the text. A second Luna call words a one-line next step
+  for mail that needs the owner; a step with a link, an address or a long number is dropped.
+  Text given to either model has its links and email addresses taken out first (`judge.scrub`).
+- A model's answer never overrules the owner: a message the owner moved or finished while a sort
+  was running keeps the owner's choice. If a sort stops unexpectedly, the calls already made are
+  still counted against the limits below.
+- **Loose ends**: mail that needs the owner and has waited 2 days is flagged. A message the owner
+  sent 3 to 12 days ago to one person, with no reply in the thread (`/gmail/thread`), is read once
+  by Jev (“does this expect an answer?”) and then watched until someone replies.
+- **Records worth a look**: a security notice, or a charge at or above the owner's limit ($1,000
+  unless changed on the Gmail page), is shown instead of sitting quietly with the other records.
+- **AI off**: a sender the owner switched AI off for is never read for a model or sent to one.
+  Their mail stays “Not sorted” unless a fixed rule places it.
+- **Limits**, enforced in Hub: 6 Luna calls and 40 message checks a day, under run kind `sort`,
+  and nothing once the month's $5 is reached. Without the model key, the rules still sort.
+- **What is kept** (`triage_*` tables in Hub's database): sender, sender name, subject line, kind
+  and Hub's one-line step. Never message text or the snippet. Names, subjects and steps are
+  blanked after 14 days; rows go after 60.
+- **Corrections**: the owner can move one message, or say “always” for a sender. That beats every
+  rule and the model.
+
+The home list gets `today.gmail_triage`: emails that need the owner, records worth a look, unanswered
+questions, an unconfirmed filing change, and one line for what Hub filed (left out of the morning
+message). The overnight review gets the same picture as evidence.
+
+### Filing
+
+`hub/tools/gmail/filing.py` takes sorted mail out of the inbox and puts it under a Hub label
+(`Hub/Records`, `Hub/Reading`, `Hub/Noise`, `Hub/Expired`, `Hub/Calendar`; each is created the first
+time it is needed). One action per kind in the catalog (`gmail.file_*`), each starting at
+“Leave in the inbox”. At “File when I tap” the Gmail page has the button; at “File each morning
+and tell me” the morning job does it.
+
+- Never filed: mail that needs the owner, starred mail, a record worth a look until the owner says
+  it looks fine, unsorted mail, and anything Hub did not see in the inbox on its latest look. Codes
+  and calendar notices wait 2 days.
+- Through the helper's `/gmail/labels/apply`, at most 50 messages per call and 200 per run. Nothing
+  is deleted or marked read. A batch, or one message, can be put back for 14 days; mail put back
+  (by Hub or by hand) is left alone afterwards.
+- A refusal changes nothing. A result Hub can't confirm stops all filing until the owner taps
+  “I checked, carry on”; it is never retried by itself. A pause on Gmail changes stops filing.
+  After “I checked”, mail Hub had already filed once (an unconfirmed put-back) counts as filed, so
+  it is never filed a second time. Each message is re-checked at the moment it is sent, so one the
+  owner moved meanwhile stays in the inbox.
+
+## Owner decisions (2026-11-09)
+
+- Personal data reaches a model only over a zero-data-retention route, with a pinned provider and no
+  fallback. This is the default for anything new.
+- Exception (2026-11-10): the Kitchen tab relays household chat to the separate kitchen service,
+  whose assistant is Claude Code on the owner's Claude plan, because only it can drive the signed-in
+  Chrome. Hub itself makes no model call for Kitchen. Only a member's tap on Approve (a signed-in
+  device, never a program on this Mac) lets that assistant add to the Fred Meyer cart.
+- Subject lines and message bodies may always be sent over such a route.
+- Approved models: Luna (`hub/luna.py`) for proposals and Jev (`preschool/jev.py`) for yes/no
+  judgements. Another model needs the owner's yes.
+- Senders with AI switched off are never read for a model.
+- Agents build and test with made-up data. Real mail stays out of coding sessions.
+- Deploying, restarting, new schedules, pushing and merging to main need the owner's yes each time.
+- One repo for the engine (this one). Machine setup and public sites stay in their own repos.
+
+## Doing things without asking
+
+An action with an `auto` function in the catalog can run unasked, but only once the owner sets it
+to “Just do it and tell me” on the Engine page. Nothing starts there. Trusted actions run with the
+morning job (`POST /today/prepare`), before the overnight review, and each leaves a note in
+“Needs you” saying what it did and how to undo it. A failure leaves a note too. A pause on Gmail
+changes stops them.
+
+The first one (owner decision, 2026-11-09): turning stopped archive rules back on, only those
+that provably changed nothing before they stopped.
+
+The second can be switched on but starts at one tap: running the archive-after-30-days rules that
+are due (`gmail.run_rules`). Hub's own background jobs are off by the owner's choice, so without it
+the rules run only on “Check now”; rules more than a day late show as an item. The morning run
+stops starting new rules after two minutes; the rest stay due.
+
+Applying the plan stays a link to the Plan page (`gmail.apply_plan` has no one-tap route). The
+review list's “Apply these now” is the owner's tap on the page that shows every change.
+
+## Getting ready each morning
+
+`hub/engine/prep.py` runs each source's `prepare` with the morning job, after the trusted actions
+and before the overnight review. It is read-only housekeeping with no model, so pages and items
+have nothing to wait for. One that fails is skipped and logged by name.
+
+- Gmail (`hub/tools/gmail/nightly.py`): a fresh inbox sample and the day's inbox count, the next
+  12 loud senders with name, counts and a cautious pre-selection, how much inbox mail is over a
+  year old, and how much the backlog step would archive (inbox mail over 30 days old, never
+  starred). Saved in `gmail-prepared.json` in the data directory: addresses, sender names and
+  counts, never subjects. Used for 36 hours, then pages work things out themselves as before.
+- Hub itself: the reminder to delete the older Keychain copy of the model key (see “The model key”).
+
+`today.gmail_next` offers at most one Gmail step a day in “Needs you”: sorted mail that is ready
+to file, or the choice to let Hub file once 10 sorted emails sit in the inbox, or the backlog
+(`/gmail/backlog`: a preview, then one step through the Plan with its own undo; never one tap from
+the list). “Not this week” hides that offer for seven days and leaves the Gmail slot empty for the
+day. The sender review, bulk clean-ups, rules and filters are still there under “Clean up”
+(`/gmail/tools`); they are no longer offered on the home list.
+
+## Calendar
+
+`hub/tools/calendar/` reads the owner's main Google calendar for the next 7 days through the
+helper's event list (`/calendar/events`), and nothing else: no single-event details, guest lists
+or descriptions, and no route that creates or changes events, although the helper has some.
+The page is `/calendar`; overlapping events today or tomorrow become an item; the overnight
+review sees titles, times and places of up to 40 events. A lapsed Google sign-in shows as a
+problem tile, which is also a “Needs you” item; only the owner can renew it
+(`./phone-setup --calendar-auth` in `~/Developer/mac-mini`, from Termius).
+
+## Asking in Hub
+
+The box at the top of the Engine page takes one line. Luna (one small call, at most 20 a day) only
+picks the drawer: guidance the overnight review can follow, or something that needs building. The
+owner's own words are saved either way. If sorting fails, the line is kept as a build request.
+
+Build requests show under “Asked for, not built yet” and at `GET /engine/requests.json`. They are
+the owner's wish list for the next building session. They do nothing by themselves and are not
+permission to deploy, restart, schedule or connect anything.
+
+## Versions and the Deploy button
+
+Hub never installs anything. A fixed deployer in the machine-setup repository
+(`home-ops/hub-deployer/hub_release.py`) owns `~/Developer/hub/releases`:
+
+- `stage` (an agent may run it): refuses unless committed `main` is already pushed to GitHub, then builds it, runs the tests against the built package,
+  sets the result in `releases/<commit>` and marks it in `pending.json`. Nothing live changes.
+- The owner taps **Deploy** in “Needs you” or on the Engine page. Hub writes `queue/request.json`,
+  and only for a signed-in owner device, never for a program on this Mac.
+- The deployer backs up the data, repoints `releases/current`, restarts Hub, loads its pages and
+  goes back to the previous version if any check fails. The result is in `last.json`; a failed
+  update shows as its own item.
+
+`hub/engine/release.py` reads those notes. It is off unless `HUB_RELEASES_DIR` is set, which the
+deployer does. This is a guardrail against accidents, not a wall: everything runs as one user.
+
+## Faults Hub reports about itself
+
+A night that didn't finish, a morning that never ran (only once mornings have been running), the
+monthly limit reached, and an update that didn't take. Each is an item in “Needs you”.
+
+## The model key
+
+`hub/model_key.py` reads the OpenRouter key from 1Password (`op://Hub/OpenRouter/credential`) with a
+read-only service account limited to that vault. The service account's token is the one secret
+kept in the Keychain (`hub-1password-token`; owner-approved exception, 2026-11-09), set by the
+owner with `deploy/set-1password-token`. If 1Password doesn't answer, the older Keychain item
+`hub-openrouter` is used until the owner removes it. `/status` says which one is in use.
+
+The older item holds the same key, so nothing needs revoking. From 2026-11-13, while the key comes
+from 1Password and the older item still exists (checked without reading it), the morning job leaves
+a “Needs you” reminder. The owner deletes it with `deploy/remove-old-model-key`, which first checks
+that 1Password answers. An agent never runs that script.
+
+## Next
+
+1. More sources through the catalog, as the owner asks for them in “Ask Hub”.
+2. Gmail: a weekly line on how well sorting did (how often the owner moved something); put calendar
+   notices next to the event they are about; fewer tabs on a phone.

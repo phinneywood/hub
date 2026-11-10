@@ -1,0 +1,4 @@
+{% extends "preschool/site/layout.html" %}
+{% from "preschool/site/macros.html" import sources as source_list %}
+{% block page_title %}Earlier edition · {{ snapshot.title }}{% endblock %}
+{% block class_content %}<p class="class-status-note">Earlier page edition — not necessarily current information. <a href="/preschool/guide/{{ snapshot.slug }}">Read the current page</a>.</p><h1>{{ snapshot.title }}</h1><p class="class-meta">Edition {{ snapshot.revision }} · {{ snapshot.updated | when }}</p><div class="class-prose">{{ snapshot.body }}</div>{{ source_list(sources) }}{% endblock %}

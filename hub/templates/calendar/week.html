@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Calendar · Hub{% endblock %}
+{% block body %}
+<p class="eyebrow">Calendar</p>
+<h1 class="status-head">The next seven days</h1>
+{% if problem == 'signin' %}<p class="banner warn">Calendar needs signing in again. In Termius on the Mac mini, run <code>./phone-setup --calendar-auth</code> from <code>~/Developer/mac-mini</code>.</p>
+{% elif problem == 'down' %}<p class="banner warn">The Google helper isn’t answering right now.</p>
+{% elif not days %}<p class="note">Nothing on your calendar this week.</p>{% endif %}
+{% for d in days %}
+<h2>{{ d.label }}</h2>
+<ul class="checks">
+{% for e in d.events %}
+  <li><div><strong>{{ e.title }}</strong><small>{{ e.time }}{% if e.location %} · {{ e.location }}{% endif %}</small>{% if e.clash %}<small class="warn-text">Overlaps another event</small>{% endif %}</div></li>
+{% endfor %}
+</ul>
+{% endfor %}
+<p class="note">Read-only. Hub shows your main calendar’s titles, times and places. It can’t add or change events.</p>
+{% endblock %}

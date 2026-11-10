@@ -1,0 +1,22 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+{% set back = '/gmail/quiet' if source == 'quiet' else '/gmail/delayed' %}
+<p><a href="{{ back }}">← {{ 'Back to the sender' if source == 'quiet' else 'Back to 30-day rules' }}</a></p>
+<h1>Archive after 30 days</h1>
+<p><strong>{{ sender }}</strong></p>
+{% if covered %}<p class="warn">An existing filter may already skip the inbox for this sender. This rule won't change that filter.</p>{% endif %}
+<div class="card-big">
+  <p>Once a day, Hub will look for this sender’s inbox messages older than 30 days and archive up to 50. It uses Gmail’s sender search; messages marked with a star are excluded when it selects them.</p>
+  <p>This includes <strong>existing</strong> messages already older than 30 days. The first check is about 24 hours after you turn this on, and checks catch up when the Mac is running again. If more than 50 messages qualify, the rest wait for later checks.</p>
+  <p>Existing Gmail filters still apply and may cause new messages to skip the inbox immediately. This rule does not change those filters.</p>
+  <p>{{ count.count | num }}{{ "+" if not count.exact }} messages currently match Gmail’s search. This number can change before each check. Hub verifies the exact sender of every message before archiving and stops the rule if any do not match.</p>
+  {% if recent %}<p>Examples:</p><ul>{% for m in recent %}<li>{{ m.subject or "(no subject)" }}</li>{% endfor %}</ul>{% endif %}
+  <p>Nothing is deleted. You can stop the rule and undo completed batches from the latest 100 checks on the 30-day rules page. Undo may skip messages changed since the batch.</p>
+</div>
+<form method="post" action="/gmail/delayed/enable">
+  <input type="hidden" name="sender" value="{{ sender }}">
+  <input type="hidden" name="source" value="{{ source }}">
+  <button class="btn primary">{{ 'Turn on and review next sender' if source == 'quiet' else 'Turn on automatic archiving' }}</button>
+</form>
+<p><a href="{{ back }}">Cancel</a></p>
+{% endblock %}

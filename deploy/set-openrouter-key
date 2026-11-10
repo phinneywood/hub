@@ -1,0 +1,20 @@
+#!/bin/zsh
+# Stores the OpenRouter key for Hub in the macOS Keychain. Run in an interactive terminal.
+# The key is typed once at a hidden prompt, passed to `security` over a pipe (never as an
+# argument, so it never appears in the process list), and never printed.
+printf "Paste the OpenRouter key (nothing will be shown), then press Return: "
+read -rs KEY
+echo
+KEY=${KEY//[[:space:]]/}
+if [ -z "$KEY" ]; then
+  echo "Nothing was entered. Nothing was saved."
+  exit 1
+fi
+printf 'add-generic-password -U -s hub-openrouter -a hub -T /usr/bin/security -w %s\n' "$KEY" | security -i
+unset KEY
+if security find-generic-password -s hub-openrouter -a hub >/dev/null 2>&1; then
+  echo "Saved."
+else
+  echo "Not saved. If you saw 'User interaction is not allowed', unlock the Keychain first."
+  exit 1
+fi

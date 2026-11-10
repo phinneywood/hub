@@ -1,0 +1,11 @@
+{% extends "preschool/site/layout.html" %}
+{% from "preschool/site/macros.html" import fact, sources %}
+{% block page_title %}{{ topic.title }}{% endblock %}
+{% block class_content %}
+<p class="class-breadcrumb"><a href="/preschool/guide">Class guide</a></p><article class="class-article"><h1>{{ topic.title }}</h1>
+{% if topic.article %}<div class="class-prose">{{ topic.article.body }}</div><p class="class-meta">Updated {{ topic.article.updated | when }}</p>
+{% elif topic.facts %}<ul class="class-facts">{% for row in topic.facts %}{{ fact(row,site.today) }}{% endfor %}</ul>
+{% else %}<p>This part of the class guide has not been documented yet.</p><p>Check with the class teacher or co-op for information not listed here.</p>{% endif %}
+{{ sources(topic.sources) }}</article>
+<p class="class-secondary"><a href="/preschool/history">Earlier information &amp; page history</a></p>
+{% endblock %}

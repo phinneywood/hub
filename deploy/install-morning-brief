@@ -1,0 +1,33 @@
+#!/bin/sh
+# Owner-run: schedule the morning Hub nudge at 4:30 am. Usage:
+#   deploy/install-morning-brief HUB_LINK NOTIFY_SERVICE
+# The service label prefix is private: it is read from "label-prefix" in
+# ~/Library/Application Support/Hub (or HUB_LABEL_PREFIX) and defaults to "local".
+# Remove with: launchctl bootout gui/$(id -u)/<prefix>.hub-morning-brief
+set -eu
+[ $# -eq 2 ] || { echo "usage: $0 HUB_LINK NOTIFY_SERVICE" >&2; exit 2; }
+here=$(cd "$(dirname "$0")" && pwd)
+prefix=${HUB_LABEL_PREFIX:-$(cat "$HOME/Library/Application Support/Hub/label-prefix" 2>/dev/null || echo local)}
+label="$prefix.hub-morning-brief"
+dir="$HOME/Library/Application Support/HubMorningBrief"
+plist="$HOME/Library/LaunchAgents/$label.plist"
+mkdir -p "$dir/logs"; chmod 700 "$dir"
+cp "$here/morning_brief.py" "$dir/"
+/usr/bin/python3 - "$dir" "$plist" "$1" "$2" "$label" <<'PY'
+import os, plistlib, sys
+d, p, link, service, label = sys.argv[1:]
+plistlib.dump({
+    'Label': label,
+    'ProgramArguments': ['/usr/bin/python3', '-B', d + '/morning_brief.py'],
+    'StartCalendarInterval': {'Hour': 4, 'Minute': 30},
+    'ProcessType': 'Background', 'LimitLoadToSessionType': 'Aqua',
+    'EnvironmentVariables': {
+        'HUB_BRIEF_SOURCE': 'http://127.0.0.1:' + os.environ.get('HUB_PORT', '8780') + '/today/brief',
+        'HUB_BRIEF_LINK': link, 'HUB_BRIEF_NOTIFY': service,
+        'HUB_BRIEF_HA_HELPER': os.path.expanduser('~/Developer/home-assistant')},
+    'StandardOutPath': d + '/logs/out.log', 'StandardErrorPath': d + '/logs/err.log'}, open(p, 'wb'))
+os.chmod(p, 0o600)
+PY
+launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$plist"
+echo "Scheduled for 4:30 am daily."

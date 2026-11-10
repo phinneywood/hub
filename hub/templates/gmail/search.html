@@ -1,0 +1,21 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<h1>Search</h1>
+<form method="get" action="/gmail/search">
+  <input type="search" name="q" value="{{ q }}" placeholder="from:example.com newer_than:7d" autofocus>
+  <button>Search</button>
+</form>
+{% if result %}
+<p class="note">About {{ result.estimated_matches }} matches.</p>
+{% for m in result.messages %}
+<div class="item">
+  <strong>{{ m.subject or "(no subject)" }}</strong>
+  <div>{{ m["from"] }}</div>
+  <div class="snip">{{ m.snippet }}</div>
+  <small>{{ m.date }}{% for l in m.labels %} <span class="tag">{{ l }}</span>{% endfor %}</small>
+  {% if addresses.get(m['from']) %}<p><a href="/gmail/organize?sender={{ addresses[m['from']] | urlencode }}">Organize this sender</a></p>{% endif %}
+</div>
+{% else %}<p>No messages.</p>{% endfor %}
+{% if result.next_page_token %}<p><a href="/gmail/search?q={{ q | urlencode }}&page_token={{ result.next_page_token | urlencode }}">Next page</a></p>{% endif %}
+{% endif %}
+{% endblock %}

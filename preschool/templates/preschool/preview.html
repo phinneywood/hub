@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="crumb"><a href="/preschool#source-emails">← Source emails</a></p>
+<h1>Emails from this sender</h1>
+<p class="note">These are original source messages, not handbook entries. Opening them does not change what belongs in the handbook or send their contents for analysis.</p>
+{% if error %}<p class="warn">{{ error }}</p>{% endif %}
+{% for message in messages %}
+<article class="item"><strong>{{ message.subject or '(no subject)' }}</strong><br><small>{{ message.date }}</small>
+  <p><a href="https://mail.google.com/mail/#all/{{ message.id }}" target="_blank" rel="noopener noreferrer">Open source email ↗</a></p></article>
+{% else %}{% if not error %}<p>No messages on this page.</p>{% endif %}{% endfor %}
+{% if next_page %}<p><a href="{{ next_url }}">Older source examples →</a></p>{% endif %}
+{% endblock %}

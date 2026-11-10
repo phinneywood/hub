@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "personal-hub"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["fastapi", "uvicorn[standard]", "httpx", "jinja2", "python-multipart"]
+
+[tool.setuptools.packages.find]
+include = ["hub*", "preschool*"]
+
+[tool.setuptools.package-data]
+hub = ["templates/*.html", "templates/**/*.html", "static/*"]
+preschool = ["templates/*.html", "templates/**/*.html", "static/*"]

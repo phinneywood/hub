@@ -1,0 +1,4 @@
+#!/bin/sh
+# Refuse staged personal information and secrets. Enable once per checkout with:
+#   git config core.hooksPath githooks
+exec /usr/bin/python3 -I "$(git rev-parse --show-toplevel)/tools/privacy_scan.py" --staged

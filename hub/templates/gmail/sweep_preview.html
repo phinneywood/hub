@@ -1,0 +1,25 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<p class="crumb"><a href="/gmail/sweep">← Clean up</a></p>
+{% if error %}
+<div class="banner warn">{{ error }}</div>
+{% else %}
+<h1>{{ "Mark as read" if spec.effects.mark_read else "Archive" }}: {{ "" if exact else "more than " }}{{ count | num }} messages</h1>
+<p class="lede">{{ sentence }}</p>
+{% if not exact %}<p class="note">Applying works through every match in batches of 1,000; watch progress on the Plan page.
+  {% if not full %}<a href="/gmail/sweep/preview?kind={{ kind }}&amp;days={{ days }}&amp;category={{ category }}&amp;protect={{ protect }}&amp;full=1">Count up to {{ cap | num }}</a> (takes about 20 seconds).{% endif %}</p>{% endif %}
+{% if count == 0 %}
+<div class="banner ok">Nothing matches. Your inbox is already clear here.</div>
+{% else %}
+<h2>Examples</h2>
+<div class="sender-list">{% for m in sample %}<div class="sender-row"><div class="who"><strong>{{ m.subject or "(no subject)" }}</strong><small>{{ m.from }} · {{ m.date }}</small></div></div>{% endfor %}</div>
+<form method="post" action="/gmail/sweep/add" class="g-cta">
+  <input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="days" value="{{ days }}">
+  <input type="hidden" name="category" value="{{ category }}"><input type="hidden" name="protect" value="{{ protect }}">
+  <button class="btn primary">Add to plan</button>
+  <a class="btn" href="/gmail/sweep">Choose something else</a>
+</form>
+<p class="safe">Nothing changes until you apply the plan. Each batch of 1,000 can be undone.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

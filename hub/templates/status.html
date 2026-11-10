@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Status · Hub{% endblock %}
+{% block body %}
+{% set problems = checks | rejectattr(1) | list %}
+<p class="eyebrow">Status</p>
+<h1 class="status-head">{% if not problems %}Everything is working{% elif problems | length == 1 %}1 thing needs attention{% else %}{{ problems | length }} things need attention{% endif %}</h1>
+<ul class="checks">
+{% for name, ok, detail in checks | sort(attribute=1) %}
+  <li><span class="dot {{ 'ok' if ok else 'bad' }}" aria-hidden="true">●</span><div><strong>{{ name }}</strong><small>{{ detail }}</small></div></li>
+{% endfor %}
+</ul>
+
+<h2>Model connection checks</h2>
+<p class="note">These use invented text only, never your mail.</p>
+<div class="diag">
+  <form method="post" action="/status/luna-test"><div><strong>Luna</strong><small>Made-up sender and subjects; checks the answer passes validation.</small></div><button class="btn small"{% if not luna_ready %} disabled{% endif %}>Run test</button></form>
+  {% if luna_result %}
+    {% if luna_result.ok %}<p class="banner ok">Passed. {{ luna_result.text }} <code>{{ luna_result.query }}</code></p>
+    {% else %}<p class="warn">Failed: {{ luna_result.text }}</p>{% endif %}
+  {% endif %}
+  <form method="post" action="/status/jev-test"><div><strong>Jev</strong><small>Made-up preschool email through OpenRouter's TypeSafe decision endpoint.</small></div><button class="btn small">Run synthetic Jev check</button></form>
+  {% if jev_result %}{% if jev_result.ok %}<p class="banner ok">Passed. Synthetic relevance: {{ jev_result.relevance }} · useful information: {{ jev_result.usefulness }}</p>{% else %}<p class="warn">Jev check failed; no provider details were logged.</p>{% endif %}{% endif %}
+  <form method="post" action="/status/preschool-quality-test" class="billable"><div><strong>Preschool quality benchmark <span class="tag rem">Billable · several minutes</span></strong><small>11 fixed, invented cases through the existing model connections. Returns a JSON report. No real email, saved entries or settings are read or changed.</small></div><button class="btn small"{% if not luna_ready %} disabled{% endif %}>Run synthetic quality benchmark</button></form>
+</div>
+<p class="note">Signed in as {{ who }}.</p>
+{% endblock %}

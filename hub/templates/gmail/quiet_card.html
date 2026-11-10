@@ -1,0 +1,53 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+{% include "gmail/_paused.html" %}
+<div class="q-progress">
+  <span>{{ reviewed }} reviewed · {{ left }} left in this batch</span>
+  {% if planned %}<a href="/gmail/plan">Plan · {{ planned }}</a>{% endif %}
+</div>
+{% if delayed_enabled %}<p class="banner ok">30-day rule turned on. <a href="/gmail/delayed">Manage rules</a></p>{% endif %}
+
+<section class="card-big sender-card">
+  <h1 class="sender">{{ display_name or sender }}</h1>
+  {% if display_name %}<p class="addr">{{ sender }}</p>{% endif %}
+  <dl class="sender-stats">
+    <div><dt>In your inbox</dt><dd>{{ count | num }}{{ "+" if not exact }}</dd></div>
+    <div><dt>Unread</dt><dd>{% if unread_share is not none %}{{ unread_share }}%{% else %}{{ unread | num }}{{ "+" if not unread_exact }}{% endif %}</dd></div>
+    <div><dt>Of your last {{ sample | num }}</dt><dd>{{ sampled }}</dd></div>
+  </dl>
+  {% if unread_share is not none and unread_share >= 90 and count >= 5 %}<p class="hint">You've left almost all of these unread, so they're safe to keep out of your inbox.</p>
+  {% elif unread_share is not none and unread_share <= 20 and count >= 5 %}<p class="hint">You read most of these. Keeping them, or adding a label, may suit you better.</p>{% endif %}
+  <ul class="recent">
+    {% for m in recent %}<li{% if m.unread %} class="unread"{% endif %}>{{ m.subject or "(no subject)" }}</li>{% endfor %}
+  </ul>
+  {% if covered %}<p class="warn">A filter already skips the inbox for this sender, but these messages are still here.</p>{% endif %}
+</section>
+
+<form method="post" action="/gmail/quiet/decide" class="actions decide" data-shortcuts>
+  <input type="hidden" name="sender" value="{{ sender }}">
+  <input type="hidden" name="count" value="{{ count }}">
+  <input type="hidden" name="display_name" value="{{ display_name }}">
+  <input type="hidden" name="exact" value="{{ 1 if exact else 0 }}">
+  {# The main button follows what the owner does with this sender's mail: read most of it, and keeping comes first. #}
+  {% set reads = unread_share is not none and unread_share <= 20 and count >= 5 %}
+  {% if reads %}<button class="btn primary" name="decision" value="keep" data-key="k">Keep in inbox <kbd>K</kbd></button>{% endif %}
+  {% if covered %}
+    <button class="btn{{ ' primary' if not reads }}" name="decision" value="archive" data-key="a">Archive these {{ count | num }}{{ "+" if not exact }} <kbd>A</kbd></button>
+  {% else %}
+    <button class="btn{{ ' primary' if not reads }}" name="decision" value="filter_archive" data-key="a">Skip inbox from now on, and archive {{ count | num }}{{ "+" if not exact }} <kbd>A</kbd></button>
+  {% endif %}
+  <div class="choice-row">
+    {% if not covered %}<button class="btn" name="decision" value="filter" data-key="f">Skip inbox for new mail only <kbd>F</kbd></button>{% endif %}
+    {% if not reads %}<button class="btn" name="decision" value="keep" data-key="k">Keep in inbox <kbd>K</kbd></button>{% endif %}
+  </div>
+  <a class="btn luna" href="/gmail/assess?sender={{ sender | urlencode }}&amp;source=quiet">Ask Luna what to do</a>
+  <details class="more">
+    <summary>More options</summary>
+    <a class="btn" href="/gmail/delayed/review?sender={{ sender | urlencode }}&amp;source=quiet">Archive after 30 days…</a>
+    <a class="btn" href="/gmail/organize?sender={{ sender | urlencode }}">Label, mark read or match subjects…</a>
+    <a class="btn" href="/gmail/quiet/custom?sender={{ sender | urlencode }}">Describe it in your own words (Luna)…</a>
+  </details>
+  <button class="btn quiet" name="decision" value="later" data-key="l">Decide later <kbd>L</kbd></button>
+  <p class="note">Choices go into your plan. Nothing changes in Gmail until you apply it. Prefer a list? <a href="/gmail/review">Review several at once</a>.</p>
+</form>
+{% endblock %}

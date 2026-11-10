@@ -1,0 +1,52 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+{% if checking %}<meta http-equiv="refresh" content="4">{% endif %}
+<h1>Archive after 30 days</h1>
+<p class="lede">Each rule archives a sender’s inbox mail once it is 30 days old, never starred mail. Each check archives at most 50 messages per sender.</p>
+{% if paused %}{% include "gmail/_paused.html" %}{% endif %}
+{% if not automatic %}
+<div class="banner warn"><strong>Rules run when you tap “Check now”.</strong> To have Hub run them each morning and tell you what it archived, set “Run the archive-after-30-days rules” to “Just do it and tell me” on the <a href="/engine">Engine page</a>.
+  {% if not paused and rules | selectattr('enabled') | list %}<form method="post" action="/gmail/delayed/run-now"><button class="btn small primary"{% if checking %} disabled{% endif %}>{{ 'Checking…' if checking else 'Check now' }}</button></form>{% endif %}</div>
+{% elif not paused and rules | selectattr('enabled') | list %}
+<form method="post" action="/gmail/delayed/run-now" class="inline"><button class="btn small"{% if checking %} disabled{% endif %}>{{ 'Checking…' if checking else 'Check all now' }}</button></form>
+{% endif %}
+{% if resumed %}<div class="banner ok">Turned back on. The next check picks up where it left off.</div>{% endif %}
+{% if refused %}<div class="banner warn">That rule had a change whose result is unknown. Check Activity and Gmail, then confirm below.</div>{% endif %}
+{% if request.query_params.get('error') %}<div class="banner warn">This rule is stopped. Resume it from the list below.</div>{% endif %}
+{% set safe = rules | selectattr('error') | rejectattr('id', 'in', must_check) | list %}
+{% if safe | length > 1 %}
+<div class="banner"><strong>{{ safe | length }} rules stopped without changing anything</strong> — usually the Gmail helper was briefly unreachable.
+  <form method="post" action="/gmail/delayed/resume-safe"><button class="btn small primary">Resume all {{ safe | length }}</button></form></div>
+{% endif %}
+<div class="sender-list">
+{% for rule in rules %}
+<div class="sender-row">
+  <div class="who"><strong>{{ rule.sender }}</strong>
+    <small>{% if rule.error %}Stopped{% elif rule.enabled %}On{% else %}Off{% endif %}{% if rule.last_checked %} · last archived check {{ rule.last_checked | when }}{% endif %}</small>
+    {% if rule.error %}<small>{% if rule.id in must_check %}A change may not have finished. Check Activity and Gmail before resuming.{% else %}Nothing in Gmail changed when it stopped. Safe to resume.{% endif %}</small>{% endif %}</div>
+  <div class="do">
+  {% if rule.error %}
+    <form method="post" action="/gmail/delayed/resume"><input type="hidden" name="rule_id" value="{{ rule.id }}">{% if rule.id in must_check %}<input type="hidden" name="checked" value="1"><button class="btn small">I checked — resume</button>{% else %}<button class="btn small primary">Resume</button>{% endif %}</form>
+  {% elif rule.enabled %}
+    <form method="post" action="/gmail/delayed/stop"><input type="hidden" name="rule_id" value="{{ rule.id }}"><button class="btn small">Stop</button></form>
+  {% endif %}
+  </div>
+</div>
+{% else %}<p>No rules yet. Choose “Archive after 30 days” on a sender’s card to create one.</p>{% endfor %}
+</div>
+<details class="more"><summary>Add a rule for any sender</summary>
+<form method="get" action="/gmail/delayed/review" class="inline">
+  <input type="email" name="sender" required placeholder="Sender’s email address">
+  <button class="btn small">Review rule</button>
+</form></details>
+<details class="more"><summary>Recent checks ({{ runs | length }})</summary>
+<div class="sender-list">
+{% for run in runs %}
+<div class="sender-row">
+  <div class="who"><strong>{{ run.sender }}</strong><small>{{ run.started | when }} · {{ run.status | replace('_', ' ') }}{% if run.processed %} · {{ run.processed }} archived{% endif %}</small>
+  {% if run.error %}<small>{{ run.error }}</small>{% endif %}</div>
+  {% if run.status == 'done' and run.change_id %}<div class="do"><form method="post" action="/gmail/delayed/undo"><input type="hidden" name="run_id" value="{{ run.id }}"><button class="btn small">Undo &amp; stop rule</button></form></div>{% endif %}
+</div>
+{% else %}<p>No checks yet.</p>{% endfor %}
+</div></details>
+{% endblock %}

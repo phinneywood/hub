@@ -1,0 +1,5 @@
+{% extends "preschool/site/layout.html" %}
+{% block page_title %}Search{% endblock %}
+{% block class_content %}<h1>Search class information</h1>{% if q %}<p>Results for “{{ q }}”{% if include_past %}, including history{% else %}, current information only{% endif %}.</p>
+{% if results %}<ul class="class-search-results">{% for result in results %}<li><a href="{{ result.href }}">{{ result.title }}</a><p class="class-meta">{{ result.label }}</p>{% if result.details %}<p>{{ result.details }}</p>{% endif %}</li>{% endfor %}</ul>{% else %}<p>No matching class information is recorded.</p>{% endif %}
+<p><a href="/preschool/search?q={{ q | urlencode }}&amp;past={{ '0' if include_past else '1' }}{% if showing_dismissed %}&amp;dismissed=1{% endif %}">{{ 'Search current information only' if include_past else 'Include history in search' }}</a></p>{% else %}<p>Search for a class topic, responsibility, date or resource.</p>{% endif %}{% endblock %}

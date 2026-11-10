@@ -1,0 +1,17 @@
+{% macro fact(row, today, heading=true) %}
+<li id="fact-{{ row.key }}" class="class-fact">
+  {% if heading %}<h3>{{ row.title }}</h3>{% else %}<strong>{{ row.title }}</strong>{% endif %}
+  {% if row.date or row.time or row.location %}<p class="class-meta">{% if row.date %}<time datetime="{{ row.date }}">{{ row.date_display }}</time>{% endif %}{% if row.time %} · {{ row.time }}{% endif %}{% if row.location %} · {{ row.location }}{% endif %}{% if row.date and row.date < today %} · <strong>{{ 'Past due · check status' if row.kind == 'action' else 'Past' }}</strong>{% endif %}</p>{% elif row.kind == 'action' %}<p class="class-meta">Due date not stated</p>{% endif %}
+  {% if row.details %}<p>{{ row.details }}</p>{% endif %}
+  {% if row.url %}<p><a href="{{ row.url }}" target="_blank" rel="noopener noreferrer">Open resource</a></p>{% endif %}
+</li>
+{% endmacro %}
+{% macro sources(rows) %}
+{% if rows %}<details class="class-sources"><summary>Sources</summary><p>Original information supporting this page.</p><ul>{% for source in rows %}<li><a href="{{ source.gmail_url }}" target="_blank" rel="noopener noreferrer">Original message</a>{% if source.source_quote %}<blockquote>{{ source.source_quote }}</blockquote>{% endif %}</li>{% endfor %}</ul></details>{% endif %}
+{% endmacro %}
+{% macro fact_sources(rows) %}
+{% if rows %}<details class="class-sources"><summary>Sources</summary><ul>{% for row in rows %}{% for source in row.sources %}<li><a href="{{ source.gmail_url }}" target="_blank" rel="noopener noreferrer">Original information for {{ row.title }}</a><blockquote>{{ source.source_quote }}</blockquote></li>{% endfor %}{% endfor %}</ul></details>{% endif %}
+{% endmacro %}
+{% macro dated(rows) %}
+<ul class="class-date-list">{% for row in rows %}<li><time datetime="{{ row.date }}">{{ row.date_display }}</time> — <a href="{{ row.href }}">{{ row.title }}</a>{% if row.time %} · {{ row.time }}{% endif %}{% if row.kind == 'action' %} <small>To do</small>{% endif %}</li>{% endfor %}</ul>
+{% endmacro %}

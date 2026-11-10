@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}Hub{% endblock %}</title>
+<meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111114" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hub">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="stylesheet" href="/static/style.css">
+{% block head %}{% endblock %}
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<header class="shell">
+  <a class="brand" href="/"{% if not active %} aria-current="page"{% endif %}><span class="brand-mark" aria-hidden="true"></span>Hub</a>
+  <nav class="shell-nav" aria-label="Tools">
+    {% for t in tools %}<a href="/{{ t.slug }}"{% if active == t.slug %} class="on" aria-current="page"{% endif %}>{{ t.name }}</a>{% endfor %}
+  </nav>
+  <div class="shell-util">
+    {% if not active or active == 'gmail' %}{% set r = request.url.include_query_params(refresh=1) %}
+    <a href="{{ r.path }}?{{ r.query }}" title="Fetch fresh Gmail data instead of the cached copy">Refresh</a>{% endif %}
+    <a href="/engine"{% if active == 'engine' %} class="on" aria-current="page"{% endif %}>Engine</a>
+    <a href="/status"{% if active == 'status' %} class="on" aria-current="page"{% endif %}>Status</a>
+  </div>
+</header>
+<div id="bar"></div>
+<main class="{% block main_class %}{% endblock %}">{% block body %}{% endblock %}</main>
+</body>
+</html>

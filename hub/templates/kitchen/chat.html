@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Kitchen · Hub{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/kitchen.css"><script src="/static/kitchen.js" defer></script>{% endblock %}
+{% block main_class %}kitchen{% endblock %}
+{% block body %}
+<div class="k-head">
+  <h1>Kitchen</h1>
+  <button class="k-pill" type="button" id="k-learn" title="Read new Fred Meyer orders into your history">Update from orders</button>
+</div>
+<p class="banner warn" id="k-down" hidden>The kitchen service isn’t answering right now.</p>
+<p class="banner k-notify" id="k-notify" hidden>
+  <span>Get a notification when a reply or cart plan is ready.</span>
+  <button class="k-pill" type="button" id="k-notify-btn">Turn on</button>
+</p>
+<details class="k-list" id="k-list">
+  <summary><span>Shopping list</span><span class="k-count" id="k-list-count"></span></summary>
+  <ul class="k-list-items" id="k-list-items"></ul>
+</details>
+<div class="k-empty" id="k-empty" hidden>
+  <p>Ask for dinner ideas, add things to the list, or plan a Fred Meyer order. It knows your usual products and the household’s diets.</p>
+  <div class="k-suggest" id="k-suggest">
+    <button type="button">Something easy for dinner tonight</button>
+    <button type="button">What are we due to restock?</button>
+    <button type="button">Add bananas and eggs to the cart</button>
+  </div>
+</div>
+<ol class="k-thread" id="k-thread" aria-live="polite"></ol>
+<div class="k-msg k-assistant k-typing" id="k-working" hidden aria-label="Working on it"><span></span><span></span><span></span></div>
+<form class="k-compose" id="k-compose">
+  <label class="k-sr" for="k-text">Message</label>
+  <textarea id="k-text" rows="1" maxlength="2000" enterkeyhint="send" placeholder="Message Kitchen" required></textarea>
+  <button class="k-send" type="submit" aria-label="Send">↑</button>
+</form>
+{% endblock %}

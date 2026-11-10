@@ -1,0 +1,42 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<p class="crumb"><a href="/gmail/tools">← Clean up</a></p>
+<h1>Review list</h1>
+<p class="lede">Your next {{ rows | length }} loudest senders on one page. {% if picked %}Hub pre-selected {{ picked }} you almost never open; the rest are left for you.{% else %}Hub pre-selects only senders you almost never open; none of these qualify.{% endif %} Change any of them, then apply.</p>
+{% if prepared %}<p class="note">Prepared {{ prepared }}.</p>{% endif %}
+{% if paused %}{% include "gmail/_paused.html" %}{% endif %}
+{% if added %}<div class="banner ok">Added {{ added }} decision{{ "s" if added != 1 }}. <a href="/gmail/plan">Review plan →</a></div>{% endif %}
+{% if not rows %}
+<div class="banner ok">No senders left to review in this sample. <a href="/gmail/sweep">Clean up old mail in bulk →</a></div>
+{% else %}
+<form method="post" action="/gmail/review" class="review-list">
+{% for r in rows %}
+  <div class="review-row">
+    <input type="hidden" name="sender_{{ loop.index0 }}" value="{{ r.sender }}">
+    <input type="hidden" name="name_{{ loop.index0 }}" value="{{ r.name }}">
+    <input type="hidden" name="count_{{ loop.index0 }}" value="{{ r.count }}">
+    <input type="hidden" name="exact_{{ loop.index0 }}" value="{{ 1 if r.exact else 0 }}">
+    <div class="who"><strong>{{ r.name or r.sender }}</strong>
+      {% if r.name %}<small>{{ r.sender }}</small>{% endif %}
+      <small>{{ r.count | num }}{{ "+" if not r.exact }} in inbox{% if r.unread_share is not none %} · {{ r.unread_share }}% unread{% endif %}{% if r.covered %} · already filtered{% elif r.unread_share is not none and r.unread_share <= 25 %} · you read most of these{% endif %}</small></div>
+    <div class="do">
+      <select name="decision_{{ loop.index0 }}" aria-label="Decision for {{ r.name or r.sender }}">
+        <option value=""{% if not r.suggested %} selected{% endif %}>Skip for now</option>
+        {% if not r.covered %}<option value="filter_archive"{% if r.suggested == 'filter_archive' %} selected{% endif %}>Skip inbox + archive</option>
+        <option value="filter">Skip inbox for new mail</option>{% endif %}
+        <option value="archive"{% if r.suggested == 'archive' %} selected{% endif %}>Archive what's there</option>
+        <option value="keep"{% if r.suggested == 'keep' %} selected{% endif %}>Keep</option>
+        <option value="later">Decide later</option>
+      </select>
+      {% if luna_ready %}<a class="btn small" href="/gmail/assess?sender={{ r.sender | urlencode }}&amp;source=review">Ask Luna</a>{% endif %}
+    </div>
+  </div>
+{% endfor %}
+  <div class="g-cta">
+    {% if not paused %}<button class="btn primary" name="then" value="apply">Apply these now{% if plan_count %}, with the {{ plan_count }} already planned{% endif %}</button>{% endif %}
+    <button class="btn{{ ' primary' if paused }}" name="then" value="plan">Add choices to plan</button>
+  </div>
+  <p class="note">{% if not paused %}“Apply these now” makes the changes in Gmail straight away; each one has its own Undo on the Plan page. {% endif %}“Add choices to plan” changes nothing yet. Senders left on “Skip for now” stay in the queue.</p>
+</form>
+{% endif %}
+{% endblock %}

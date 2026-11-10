@@ -1,0 +1,14 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+{% include "gmail/_paused.html" %}
+{% if delayed_enabled %}<p class="banner ok">30-day rule turned on. <a href="/gmail/delayed">Manage rules</a></p>{% endif %}
+<section class="g-hero">
+  <h1>No loud senders left to review.</h1>
+  <p class="g-sub">You've reviewed {{ reviewed }} sender{{ "s" if reviewed != 1 }}. Every frequent sender in your last {{ sample | num }} messages has a decision.</p>
+</section>
+<div class="g-cta">
+  {% if planned %}<a class="btn primary" href="/gmail/plan">Review plan · {{ planned }} change{{ "s" if planned != 1 }}</a>{% endif %}
+  {% if deferred %}<form method="post" action="/gmail/quiet/reset-later"><button class="btn{{ '' if planned else ' primary' }}">Look at the {{ deferred }} you postponed</button></form>{% endif %}
+  <a class="btn" href="/gmail/senders?q={{ 'in:inbox older_than:1y' | urlencode }}">Find senders of old mail</a>
+</div>
+{% endblock %}

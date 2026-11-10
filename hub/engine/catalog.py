@@ -1,0 +1,255 @@
+"""The one list of what Hub reads and what Hub may do. Adding a capability starts here."""
+from datetime import date, timedelta
+
+from .. import home, today
+from .registry import Action, Source
+
+EMAILS = 5               # emails that need the owner, passed to the overnight review without their text
+UNANSWERED = 3
+PRESCHOOL_DAYS = 14
+
+# Where a suggestion may point. The model names a source; Hub picks the page.
+PAGES = {'gmail': ('/gmail', 'Open Gmail'), 'calendar': ('/calendar', 'Open calendar'), 'preschool': ('/preschool/', 'Class guide'), 'trip': ('/trip', 'Open trip'),
+         'network': ('/network', 'Details'), 'hub': ('/engine', 'Open')}
+
+
+def _named(name, address):
+    """Who a message is from or to, for a model: the name, or failing that the domain. Never the address."""
+    return name if name and '@' not in name else (address or name or '').rpartition('@')[2]
+
+
+def gmail_evidence():
+    """Inbox counts, what the last sort found, and the few emails already known to need the owner. No message text."""
+    from .. import luna, store
+    from ..tools.gmail import common, triage
+    seen = triage.picture()
+    try:
+        inbox = common.inbox_counts(common.overview()) or {}
+    except Exception:  # noqa: BLE001 - the counts are a nicety; the sort's picture stands without them
+        inbox = {}
+    if not seen['synced_at']:
+        return {'inbox_total': inbox.get('messagesTotal'), 'inbox_unread': inbox.get('messagesUnread')} if inbox else None
+    emails = [r for r in seen['needs'] if not store.ai_blocked(r['sender'])][:EMAILS]
+    return {'inbox_total': inbox.get('messagesTotal'), 'inbox_unread': inbox.get('messagesUnread'),
+            'sorted_today': {entry['name']: entry['new'] for entry in seen['kinds'].values() if entry['new']},
+            'emails_that_need_the_owner': [
+                {'ref': f'm{n}', 'sender': r['sender'], 'from': luna.clip(_named(r['name'], r['sender']), 80), 'subject': luna.clip(r['subject'] or '', 120),
+                 'next_step': r['step'] or None, 'days_waiting': r['days']} for n, r in enumerate(emails, 1)],
+            'the_owner_wrote_and_got_no_answer': [
+                {'to': luna.clip(_named(a['who'], ''), 80), 'subject': luna.clip(a['subject'] or '', 120), 'days_ago': a['days']}
+                for a in seen['asked'] if a['who']][:UNANSWERED]}
+
+
+def gmail_sort():
+    """Sort what is new in the inbox. Read-only in Gmail; the models are used within the sort's own limits."""
+    from ..tools.gmail import triage
+    triage.sort()
+
+
+def _filer(kind):
+    def run():
+        """File one kind of sorted mail. The morning list reports all filing in one line, so no note per kind."""
+        from ..tools.gmail import filing
+        filing.file(kind)
+    return run
+
+
+CALENDAR_EVENTS = 40
+
+
+def calendar_evidence():
+    from ..tools.calendar import read
+    events = read.week()
+    return {'today': home.today().isoformat(), 'next_7_days': [
+        {'date': e['day'].isoformat(), 'all_day': e['all_day'],
+         'start': None if e['all_day'] else e['start'].strftime('%H:%M'),
+         'end': None if e['all_day'] else e['end'].strftime('%H:%M'),
+         'title': e['title'][:120], 'location': e['location'][:120] or None, 'busy': e['busy']}
+        for e in events[:CALENDAR_EVENTS]]}
+
+
+def resume_safe_rules():
+    """Turn back on every stopped archive rule that provably changed nothing. Not while changes are paused."""
+    from .. import delayed
+    from ..tools.gmail import missions
+    if missions.is_paused():
+        return None
+    done = [r for r in delayed.rules() if r['error'] and not delayed.needs_check(r['id']) and delayed.resume(r['id'])]
+    if not done:
+        return None
+    return f'Hub turned {today._plural(len(done), "stopped Gmail rule")} back on'
+
+
+RULES_SECONDS = 120        # the morning run stops starting new rules after this; the rest stay due
+
+
+def run_rules():
+    """Check the archive-after-30-days rules that are due, as “Check now” does. Not while changes are paused."""
+    import time
+    from .. import delayed
+    from ..tools.gmail import missions
+    if missions.is_paused():
+        return None
+    started = time.time()
+    delayed.run_due(started, budget=RULES_SECONDS)
+    messages, rules = delayed.archived_at(started)
+    if not messages:
+        return None
+    return f'Hub archived {today._plural(messages, "old message")} from {today._plural(rules, "sender")}'
+
+
+def gmail_prepare():
+    """Today's inbox count, the next senders to review and the size of the old-mail backlog. Read-only."""
+    from ..tools.gmail import nightly
+    nightly.prepare()
+
+
+def preschool_evidence():
+    from preschool import publication
+    current = publication.latest()
+    if not current:
+        return None
+    now = home.today()
+    window = {(now + timedelta(days=n)).isoformat() for n in range(PRESCHOOL_DAYS + 1)}
+    return {'today': now.isoformat(), 'class_dates': [
+        {k: row.get(k) for k in ('date', 'title', 'start_time', 'location', 'status')}
+        for row in current['payload'].get('events', []) if row.get('date') in window][:20]}
+
+
+def trip_evidence():
+    from ..tools.trip import store
+    data = store.load()
+    return {'today': home.today().isoformat(), 'start': data['start'], 'end': data['end'],
+            'flights_chosen': bool(data.get('selected_flight'))}
+
+
+def network_evidence():
+    tile = home.network()
+    return {'headline': tile['headline'], 'detail': tile['detail']}
+
+
+MORNING_HOUR = 6           # after this, a morning with no review counts as missed
+
+
+def _hour():
+    from datetime import datetime
+    return datetime.now(home.PACIFIC).hour
+
+
+def hub_faults():
+    """Hub reporting on itself, so a broken night is an item and not a silence."""
+    from . import overnight, state
+    day = home.today().isoformat()
+    found = []
+    last = state.last_run(day, overnight.KIND)
+    if last and last['status'] == 'error':
+        found.append(today.rec('hub-overnight', 'warn', 'Last night’s review didn’t finish',
+                               'The model route didn’t answer. The rest of this list is unaffected.',
+                               href='/engine', cta='See runs'))
+    elif state.used(day, overnight.KIND)['month_cost'] >= overnight.MONTH_COST_CAP:
+        found.append(today.rec('hub-budget', 'warn', 'Overnight review is paused for the month',
+                               f'It reached its ${overnight.MONTH_COST_CAP:.0f} monthly limit.', href='/engine', cta='See spend'))
+    elif not last and _hour() >= MORNING_HOUR and state.ran_recently(day, overnight.KIND):
+        found.append(today.rec('hub-morning', 'warn', 'This morning’s review didn’t run',
+                               'The early-morning job didn’t reach Hub. You can run the review yourself.',
+                               href='/engine', cta='Open Engine'))
+    return found
+
+
+OLD_KEY_FROM = date(2026, 11, 13)  # the model key moved to 1Password on 2026-11-09; a few days of proof first
+
+
+def old_key_reminder():
+    """Remind the owner to delete the Keychain copy of the model key once 1Password has carried it for a while.
+
+    Looks only at where the key came from and whether the old item exists; never at a value.
+    """
+    from .. import model_key
+    from . import state
+    day = home.today()
+    if day < OLD_KEY_FROM or model_key.source() != '1password' or not model_key.legacy_present():
+        return
+    state.add_note(day.isoformat(), 'hub-old-key', 'info', 'Time to delete the old copy of the model key',
+                   'Hub has read the key from 1Password for several days. The Keychain copy is no longer needed.',
+                   '/status', 'How')
+
+
+def hub_release():
+    """A checked version waiting for the owner, or an update that didn’t take."""
+    from . import release
+    ready, last = release.pending(), release.last()
+    if not ready:
+        return []
+    if last and last['sha'] == ready['sha'] and last['status'] != 'accepted' and not release.requested():
+        return [today.rec('hub-release-failed', 'warn', 'The Hub update didn’t take',
+                          'The version from before is running again. Nothing was lost.', href='/engine', cta='Details')]
+    if release.requested():
+        return [today.rec('hub-release', 'info', 'Hub is updating', 'This takes about a minute. Reload to see it.',
+                          href='/engine', cta='Details')]
+    count = len(ready['subjects'])
+    why = ready['subjects'][0] + (f' and {count - 1} more' if count > 1 else '') if count else 'Built and checked.'
+    return [today.rec('hub-release', 'info', 'A new version of Hub is ready', why, href='/engine', cta='Deploy',
+                      action='hub.deploy')]
+
+
+SOURCES = [
+    Source('gmail', 'Gmail', 'The last week of inbox mail and two weeks of sent mail: senders, subject lines and, where a '
+           'message might need you, its text. Through the helper, which can read, label and archive but never send or delete.',
+           'To sort mail: the sender’s name and the subject line, and the text of a message only when it might need you or '
+           'when you wrote it and may be waiting for an answer. To the overnight review: counts, and the sender, subject '
+           'and next step of up to 5 emails that need you. Senders you switched AI off for are left out of all of it.',
+           items=(today.gmail_triage, today.gmail_rules, today.gmail_plan, today.gmail_rules_due, today.gmail_next),
+           evidence=gmail_evidence, prepare=gmail_prepare, sort=gmail_sort),
+    Source('calendar', 'Calendar', 'Your main Google calendar for the next 7 days, through the read-only helper.',
+           'Titles, times and places of up to 40 events. Never descriptions or guest lists.',
+           items=(today.calendar,), evidence=calendar_evidence),
+    Source('preschool', 'Preschool', 'The reviewed class guide Hub already keeps.',
+           'Dates, titles, times and places for the next two weeks. No names.',
+           items=(today.preschool,), evidence=preschool_evidence),
+    Source('trip', 'Trip', 'The trip plan saved in Hub.', 'Trip dates and whether flights are chosen.',
+           items=(today.trip,), evidence=trip_evidence),
+    Source('network', 'Network', 'Internet and device readings from Home Assistant.', 'The one-line status only.',
+           evidence=network_evidence),
+    Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
+           'What is already on your list and what you said “Not today” to this week.', items=(hub_faults, hub_release),
+           prepare=old_key_reminder),
+]
+
+ACTIONS = [
+    Action('gmail.resume_rules', 'Turn stopped Gmail rules back on',
+           'Restarts archive-after-30-days rules that stopped before changing anything.',
+           'Stop them again on the rules page.', page='/gmail/delayed', post='/gmail/delayed/resume-safe',
+           default='undo', ceiling='auto', auto=resume_safe_rules),
+    Action('gmail.run_rules', 'Run the archive-after-30-days rules',
+           'Checks the rules you turned on and archives what is over 30 days old, at most 50 messages per sender. Never starred mail.',
+           'Each check has its own Undo on the rules page.', page='/gmail/delayed', post='/gmail/delayed/run-now',
+           default='undo', ceiling='auto', auto=run_rules),
+    *[Action(f'gmail.file_{slug}', f'File {what}',
+             f'Takes {what} Hub sorted out of the inbox and puts them under the Gmail label {label}. {keeps}',
+             'Put a batch back from the Gmail page, for 14 days.', page='/gmail', post=f'/gmail/file/{kind}',
+             ceiling='auto', auto=_filer(kind))
+      for kind, slug, what, label, keeps in (
+          ('record', 'records', 'receipts, statements and confirmations', 'Hub/Records',
+           'A security notice or an unusually large charge stays in the inbox until you have seen it. Never starred mail.'),
+          ('expires', 'expired', 'sign-in codes and links', 'Hub/Expired', 'Only once they are 2 days old. Never starred mail.'),
+          ('calendar', 'calendar', 'calendar notices', 'Hub/Calendar',
+           'Only once they are 2 days old; the events themselves are untouched. Never starred mail.'),
+          ('reading', 'reading', 'newsletters', 'Hub/Reading', 'Never starred mail.'),
+          ('noise', 'noise', 'promotions and app notifications', 'Hub/Noise', 'Never starred mail.'))],
+    Action('gmail.apply_plan', 'Apply planned Gmail changes', 'Applies the filters and archiving you already decided.',
+           'Each change has its own Undo on the plan page.', page='/gmail/plan'),
+    Action('gmail.review_sender', 'Review one sender', 'Opens the sender with options to choose from. Nothing changes until you pick.',
+           'Remove it from the plan, or Undo after applying.', page='/gmail/assess'),
+    Action('hub.deploy', 'Update Hub to a checked version',
+           'Asks the deployer on this Mac to switch to the version that passed its checks. Your data is backed up first.',
+           'It goes back by itself if the new version fails its checks.', page='/engine', post='/engine/deploy',
+           default='undo', ceiling='undo'),
+]
+
+
+def source(slug):
+    return next((s for s in SOURCES if s.slug == slug), None)
+
+
+def action(slug):
+    return next((a for a in ACTIONS if a.slug == slug), None)

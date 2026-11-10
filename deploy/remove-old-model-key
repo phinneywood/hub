@@ -1,0 +1,27 @@
+#!/bin/zsh
+# Owner-run in Termius, once Hub's Status page has said "Model key: from 1Password" for a few days.
+# Deletes the older Keychain copy of the model key (hub-openrouter). It first checks that 1Password
+# still answers with the key, so Hub is never left without one. The key itself stays in 1Password
+# and is not revoked. No value is printed; the service-account token reaches `op` only through its
+# own environment.
+REF=${HUB_OPENROUTER_REF:-op://Hub/OpenRouter/credential}
+OP=${HUB_OP_PATH:-$HOME/.local/bin/op}
+if ! security find-generic-password -s hub-openrouter -a hub >/dev/null 2>&1; then
+  echo "There is no old copy in the Keychain (or the Keychain is locked). Nothing was deleted."
+  echo "If you expected one, run: security unlock-keychain   and try again."
+  exit 0
+fi
+TOKEN=$(security find-generic-password -s hub-1password-token -a hub -w 2>/dev/null)
+if [ -z "$TOKEN" ] || ! HOME="$HOME" PATH=/usr/bin:/bin OP_SERVICE_ACCOUNT_TOKEN="$TOKEN" "$OP" read --no-newline "$REF" >/dev/null 2>&1; then
+  unset TOKEN
+  echo "1Password didn't answer with the key at $REF, so the old copy was kept. Nothing was deleted."
+  echo "If you saw 'User interaction is not allowed', run: security unlock-keychain"
+  exit 1
+fi
+unset TOKEN
+if security delete-generic-password -s hub-openrouter -a hub >/dev/null 2>&1; then
+  echo "Deleted the old Keychain copy. Hub keeps reading the key from 1Password."
+else
+  echo "Couldn't delete it. Run: security unlock-keychain   and try again."
+  exit 1
+fi

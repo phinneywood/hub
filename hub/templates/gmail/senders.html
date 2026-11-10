@@ -1,0 +1,47 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+{% macro state(item) -%}
+{%- set what = {'filter_archive': 'skip inbox + archive', 'filter': 'skip inbox', 'archive': 'archive', 'custom': 'custom action'} -%}
+{%- if item.decision == 'keep' %}kept{% elif item.decision == 'later' %}postponed
+{%- elif item.status == 'planned' %}in plan: {{ what.get(item.decision, item.decision) }}
+{%- else %}{{ item.status | replace('_', ' ') }}: {{ what.get(item.decision, item.decision) }}{% endif -%}
+{%- endmacro %}
+<h1>Senders</h1>
+<p class="lede">Find who fills your inbox, then plan a change for each sender.</p>
+{% if invalid %}<p class="warn">Enter one full sender email address, not a name or search query.</p>{% endif %}
+{% if added %}<p class="banner ok">Added to your plan: archive inbox mail from <strong>{{ added }}</strong>. <a href="/gmail/plan">Review plan</a></p>{% endif %}
+
+<nav class="chips" aria-label="Quick searches">
+  <a href="/gmail/senders"{% if not q %} class="on"{% endif %}>Whole inbox</a>
+  {% for label, query in presets %}<a href="/gmail/senders?q={{ query | urlencode }}"{% if q == query %} class="on"{% endif %}>{{ label }}</a>{% endfor %}
+</nav>
+
+<details class="more"{% if q and q not in presets | map(attribute=1) | list %} open{% endif %}>
+  <summary>Custom search or a specific address</summary>
+  <form method="get" action="/gmail/senders" class="inline">
+    <input name="q" type="search" maxlength="500" value="{{ q }}" placeholder="in:inbox older_than:2y" aria-label="Gmail search">
+    <button class="btn small">Find senders</button>
+  </form>
+  <form method="get" action="/gmail/organize" class="inline">
+    <input name="sender" type="email" required maxlength="320" placeholder="news@example.com" aria-label="Sender email address">
+    <button class="btn small">Open sender</button>
+  </form>
+  <p class="note">Searches are read-only. Any change you plan is limited to one sender; the search itself never becomes a cleanup rule.</p>
+</details>
+
+<p class="note">Top senders among {{ sample.sample_size | num }} {{ 'matching' if q else 'recent inbox' }} messages. Open a sender for exact counts.</p>
+<div class="sender-list">
+{% for row in rows %}
+{% set item = saved.get(row.sender.lower()) %}
+  <div class="sender-row">
+    <div class="who"><strong>{{ row.sender }}</strong><small>{{ row.sample }} in this sample{% if item %} · {{ state(item) }}{% endif %}</small></div>
+    <div class="do">
+      {% if not item or item.status == 'planned' and item.decision == 'later' %}
+      <form method="post" action="/gmail/senders/archive"><input type="hidden" name="sender" value="{{ row.sender }}"><input type="hidden" name="q" value="{{ q }}"><button class="btn small primary" title="Adds this to your plan; nothing changes until you apply it">Archive all in inbox</button></form>
+      {% endif %}
+      <a class="btn small" href="/gmail/organize?sender={{ row.sender | urlencode }}">{{ 'Edit' if item and item.status == 'planned' else 'Options' }}</a>
+    </div>
+  </div>
+{% else %}<p>No senders found. Try another search.</p>{% endfor %}
+</div>
+{% endblock %}

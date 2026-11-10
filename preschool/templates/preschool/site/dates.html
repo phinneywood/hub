@@ -1,0 +1,9 @@
+{% extends "preschool/site/layout.html" %}
+{% from "preschool/site/macros.html" import fact, fact_sources %}
+{% block page_title %}Dates{% endblock %}
+{% block class_content %}<h1>Dates &amp; events</h1>
+<section><h2>Class dates &amp; deadlines</h2>{% if site.dated %}<ul class="class-facts">{% for row in site.dated %}{{ fact(row,site.today) }}{% endfor %}</ul>{{ fact_sources(site.dated) }}{% else %}<p>No upcoming class dates or deadlines are recorded yet.</p>{% endif %}</section>
+<section id="school-calendar"><h2>School-wide calendar</h2><p>Published {{ school.short_name }} dates are a separate reference. They may not apply to every class; confirm applicability and changes with the co-op.</p>
+{% if site.school_calendar %}<ul class="class-date-list">{% for event in site.school_calendar %}<li><time datetime="{{ event.date_iso }}">{{ event.date_display }}</time> — {{ event.event }}{% if event.start_time %} · {{ event.start_time }}{% endif %}{% if event.location %} · {{ event.location }}{% endif %}</li>{% endfor %}</ul>{% else %}<p>No upcoming dated entries are available from the published calendar.</p>{% endif %}
+{% if site.school_status != 'Up to date' %}<p class="class-status-note">The calendar reference may be out of date. Check the published original before relying on it.</p>{% endif %}<details class="class-sources"><summary>Calendar source</summary><a href="{{ site.school_source }}" target="_blank" rel="noopener noreferrer">Published {{ school.short_name }} school calendar</a>{% if site.school_sync %}<p>Last successful import: {{ site.school_sync | when }}.</p>{% endif %}</details></section>
+<p><a href="/preschool/history">Past class dates &amp; history</a></p>{% endblock %}

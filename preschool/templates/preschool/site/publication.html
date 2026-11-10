@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Private class guide edition{% endblock %}
+{% block head %}<link rel="stylesheet" href="/preschool/static/preschool-family.css">{% endblock %}
+{% block body %}<article class="family-site">
+<p><a href="/preschool/manage">← Site maintenance</a></p>
+<h1>Prepare the class guide</h1>
+<p>This prepares the frozen edition shown in your private class guide. It does not publish to the internet, enable automation or change Google Calendar.</p>
+{% if error %}<p role="alert" class="notice">{{ error }}</p>{% endif %}
+{% if current %}<p>Current edition {{ current.revision }}. <a href="/preschool/">Open class guide</a> · <a href="/preschool/calendar.ics">Download calendar</a></p>{% endif %}
+<p>Only the text, events and resources below will be included. Private source links, quotes, account information, history and tools are excluded structurally. Text checks cannot recognize every name or secret: read every paragraph before confirming.</p>
+<p><strong>Private relevance is not permission to share.</strong> New email-derived copy needs an exact, separately approved class To/Cc address or List-ID. Direct-only mail, missing or malformed headers, Bcc, forwards, sender familiarity and search/model matches cannot authorize sharing. Changing that approved audience invalidates earlier audience checks. Prior review preserves only the exact guide copy, not future source edits. Source-free owner-authored text still needs your privacy review.</p>
+<p><strong>{{ proposal.holds | length }} omitted item(s) require further review.</strong> School-wide reference dates are not automatically class events. Earlier preview events removed by this proposal become cancellation notices.</p>
+{% if proposal.holds %}<details><summary>Omissions</summary><ul>{% for hold in proposal.holds %}<li>{{ hold }}</li>{% endfor %}</ul></details>{% endif %}
+{% for page in proposal.pages %}<section><h2>{{ page.title }}</h2><div class="prose">{{ page.body }}</div></section>{% endfor %}
+<section><h2>Calendar proposal ({{ proposal.events | length }})</h2>
+<p>The entire bounded, reviewed class term is included. Date markers with an unconfirmed time are not confirmed all-day activities. No reminders or invitations are sent.</p>
+{% for event in proposal.events %}<div class="event"><h3>{{ event.title }}</h3><p>{{ event.date }}{% if event.start_time %} · {{ event.start_time }}{% if event.end_time %}–{{ event.end_time }}{% endif %} Pacific{% endif %} · {{ event.status }}{% if event.location %} · {{ event.location }}{% endif %}</p><p>{{ event.details }}</p>{% if event.time_note %}<p>{{ event.time_note }}</p>{% endif %}</div>{% endfor %}</section>
+<section><h2>Resources</h2><ul>{% for resource in proposal.resources %}<li><a href="{{ resource.url }}" rel="noreferrer noopener">{{ resource.title }}</a><p>{{ resource.details }}</p></li>{% else %}<li>No separately approved public links.</li>{% endfor %}</ul></section>
+<form method="post" action="/preschool/manage/publication">
+<input type="hidden" name="fingerprint" value="{{ fingerprint }}"><input type="hidden" name="revision" value="{{ current.revision if current else 0 }}">
+<p><label><input type="checkbox" name="reviewed" value="yes" required> I reviewed all included text for class-wide relevance and privacy: no family names, roster, gallery passwords, credentials, individual health information, payment status or account identifiers.</label></p>
+<button>Update private class guide</button></form>
+<p>The reader and calendar download use this exact local edition. No public hosting, passwords or calendar access tokens are used. Downloading an ICS file is a one-time import; cloud calendar providers cannot subscribe to this private address.</p>
+</article>{% endblock %}

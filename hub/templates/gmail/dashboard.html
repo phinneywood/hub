@@ -1,0 +1,53 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<h1>Inbox overview</h1>
+<div class="stats">
+  <div><b>{{ profile.messages }}</b><span>messages</span></div>
+  {% if overview %}
+  {% if inbox %}
+  <div><b>{{ "{:,}".format(inbox.messagesTotal) }}</b><span>in inbox</span></div>
+  <div><b>{{ "{:,}".format(inbox.messagesUnread) }}</b><span>unread in inbox</span></div>
+  {% endif %}
+  {% endif %}
+</div>
+<p class="note">
+  {{ profile.mailbox }} · {% if profile.organization_paused %}changes paused{% else %}changes enabled{% endif %}
+</p>
+
+{% if not overview %}
+<p class="warn">Inbox analysis unavailable: {{ problem }}</p>
+{% else %}
+<h2>Top senders <small>recent sample of {{ overview.sample_size }}</small></h2>
+<table>
+{% for sender, n in overview.top_senders_in_sample %}
+  <tr><td class="wrap">{{ sender }}</td><td class="num">{{ n }}</td>
+  <td><a href="/gmail/search?q=from:{{ sender | urlencode }}">view</a></td></tr>
+{% endfor %}
+</table>
+
+<h2>Mailing lists <small>recent sample</small></h2>
+<table>
+{% for item, n in overview.mailing_lists_in_sample %}
+  <tr><td class="wrap">{{ item }}</td><td class="num">{{ n }}</td></tr>
+{% else %}<tr><td>None found.</td></tr>
+{% endfor %}
+</table>
+
+<h2>Recurring subjects <small>recent sample</small></h2>
+<table>
+{% for item, n in overview.recurring_subjects_in_sample %}
+  <tr><td class="wrap">{{ item }}</td><td class="num">{{ n }}</td></tr>
+{% endfor %}
+</table>
+
+<h2>Label counts</h2>
+<table>
+<tr><th>Label</th><th class="num">Unread</th><th class="num">Total</th></tr>
+{% for l in overview.label_counts %}
+  <tr><td>{{ l.name }}</td><td class="num">{{ l.messagesUnread }}</td><td class="num">{{ l.messagesTotal }}</td></tr>
+{% endfor %}
+</table>
+{% if overview.label_counts_truncated %}<p class="note">Showing the first 26 user labels. See Labels for the full list.</p>{% endif %}
+<p class="note">{{ overview.note }}</p>
+{% endif %}
+{% endblock %}

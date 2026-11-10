@@ -1,0 +1,20 @@
+#!/bin/zsh
+# Store the server-side Google Routes API key without exposing it in arguments.
+printf "Paste the Google Maps API key (nothing will be shown), then press Return: "
+read -rs KEY
+echo
+KEY=${KEY//[[:space:]]/}
+if [[ -z "$KEY" || "$KEY" == *[^a-zA-Z0-9_-]* ]]; then
+  unset KEY
+  echo "No valid key entered. Nothing was saved."
+  exit 1
+fi
+printf 'add-generic-password -U -s hub-google-maps -a hub -T /usr/bin/security -w %s\n' "$KEY" | security -i
+RESULT=$?
+unset KEY
+if [[ "$RESULT" -eq 0 ]] && security find-generic-password -s hub-google-maps -a hub >/dev/null 2>&1; then
+  echo "Saved."
+else
+  echo "Not saved. Unlock the Keychain if necessary and try again."
+  exit 1
+fi

@@ -1,0 +1,6 @@
+{% extends "preschool/site/layout.html" %}
+{% from "preschool/site/macros.html" import fact_sources %}
+{% block page_title %}Forms & resources{% endblock %}
+{% block class_content %}<h1>Forms &amp; resources</h1><p>Documents and useful links for the class.</p>
+{% if site.resources %}<ul class="class-resource-list">{% for row in site.resources %}<li id="fact-{{ row.key }}">{% if row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener noreferrer">{{ row.title }}</a>{% else %}<strong>{{ row.title }}</strong>{% endif %}{% if row.details %}<p>{{ row.details }}</p>{% endif %}{% if not row.url %}<p class="class-meta">No direct resource link was recorded. See the supporting source below.</p>{% endif %}</li>{% endfor %}</ul>{{ fact_sources(site.resources) }}{% else %}<p>No class-specific forms or resource links have been recorded yet.</p>{% endif %}
+<p><a href="/preschool/guide">Back to the class guide</a></p>{% endblock %}

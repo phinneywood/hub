@@ -1,0 +1,10 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<h1>Labels</h1>
+<h2>Yours <small>{{ user | length }}</small></h2>
+<table>
+{% for l in user %}<tr><td>{{ l.name }}</td><td><a href="/gmail/search?q=label:{{ l.name | replace(' ', '-') | urlencode }}">view</a></td></tr>{% endfor %}
+</table>
+<h2>System</h2>
+<p>{% for l in system %}<span class="tag">{{ l.name }}</span>{% endfor %}</p>
+{% endblock %}

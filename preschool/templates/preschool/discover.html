@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="crumb"><a href="{{ base_path }}#class-notes">← Class handbook</a></p>
+<h1>Possible class-information senders</h1>
+<p>These senders appeared in a search for the {{ school.name }} ({{ school.short_name }}). A search match does not prove that every message from a sender belongs in the handbook.</p>
+<p class="note">This sender search reads message headers only; it does not send email bodies for analysis.</p>
+{% if error %}<p class="warn">{{ error }}</p>{% endif %}
+{% for candidate in candidates %}
+<div class="card-big"><strong>{{ candidate.address }}</strong> · {{ candidate.count }} result{{ '' if candidate.count == 1 else 's' }}
+  <ul class="subjects">{% for subject in candidate.subjects %}<li>{{ subject }}</li>{% endfor %}</ul>
+  {% if candidate.address in approved %}<span class="tag">Included in sender search</span> <a href="{{ base_path }}/preview?sender={{ candidate.address | urlencode }}">View source emails</a>
+  {% else %}<form method="post" action="{{ base_path }}/sender"><input type="hidden" name="sender" value="{{ candidate.address }}"><button class="btn small">Include in sender search</button></form>{% endif %}
+</div>
+{% else %}{% if not error %}<p>No possible senders found. You can add an address manually.</p>{% endif %}{% endfor %}
+{% endblock %}

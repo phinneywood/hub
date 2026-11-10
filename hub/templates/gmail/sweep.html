@@ -1,0 +1,52 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<h1>Clean up</h1>
+<p class="lede">Clear out old mail in bulk. Each choice shows how much it covers and examples first; nothing changes until you apply your plan, and every batch can be undone.</p>
+{% if paused %}{% include "gmail/_paused.html" %}{% endif %}
+{% if added %}<div class="banner ok">Added to your plan. <a href="/gmail/plan">Review and apply →</a></div>{% endif %}
+
+<div class="sweeps">
+<form class="sweep" method="get" action="/gmail/sweep/preview">
+  <input type="hidden" name="kind" value="archive">
+  <h2>Archive old inbox mail</h2>
+  <p>Moves old mail out of the inbox. It stays in All Mail and search.</p>
+  <label>Older than <select name="days">{% for d in ages.archive %}<option value="{{ d }}"{% if d == defaults.archive %} selected{% endif %}>{{ age_text(d) }}</option>{% endfor %}</select></label>
+  <input type="hidden" name="protect" value="0">
+  <label class="check"><input type="checkbox" name="protect" value="1" checked> Leave mail Gmail marked Important</label>
+  <button class="btn primary">See what this covers</button>
+</form>
+
+<form class="sweep" method="get" action="/gmail/sweep/preview">
+  <input type="hidden" name="kind" value="category">
+  <h2>Archive a Gmail category</h2>
+  <p>Promotions, Social and the rest pile up fastest.</p>
+  <label>Category <select name="category">{% for c in categories %}<option value="{{ c }}">{{ c | capitalize }}</option>{% endfor %}</select></label>
+  <label>Older than <select name="days">{% for d in ages.category %}<option value="{{ d }}"{% if d == defaults.category %} selected{% endif %}>{{ age_text(d) }}</option>{% endfor %}</select></label>
+  <input type="hidden" name="protect" value="0">
+  <label class="check"><input type="checkbox" name="protect" value="1" checked> Leave mail Gmail marked Important</label>
+  <button class="btn primary">See what this covers</button>
+</form>
+
+<form class="sweep" method="get" action="/gmail/sweep/preview">
+  <input type="hidden" name="kind" value="read">
+  <h2>Mark old unread mail as read</h2>
+  <p>Makes your unread count mean something again. Mail stays in the inbox.</p>
+  <label>Older than <select name="days">{% for d in ages.read %}<option value="{{ d }}"{% if d == defaults.read %} selected{% endif %}>{{ age_text(d) }}</option>{% endfor %}</select></label>
+  <input type="hidden" name="protect" value="0">
+  <label class="check"><input type="checkbox" name="protect" value="1" checked> Leave mail Gmail marked Important</label>
+  <button class="btn primary">See what this covers</button>
+</form>
+</div>
+
+{% if planned %}
+<h2>In your plan</h2>
+<div class="sender-list">{% for i in planned %}<div class="sender-row"><div class="who"><strong>Inbox cleanup</strong><small>{{ describe(i) }}</small></div>
+<div class="do"><form method="post" action="/gmail/plan/remove"><input type="hidden" name="item_id" value="{{ i.id }}"><button class="btn small">Remove</button></form></div></div>{% endfor %}</div>
+{% endif %}
+{% if finished %}
+<details class="more"><summary>Earlier cleanups ({{ finished | length }})</summary>
+<div class="sender-list">{% for i in finished %}<div class="sender-row"><div class="who"><strong>{{ i.status | replace('_', ' ') | capitalize }}</strong><small>{{ describe(i) }}{% if i.archived %} · {{ i.archived | num }} processed{% endif %}</small></div></div>{% endfor %}</div>
+</details>
+{% endif %}
+<p class="safe">Starred mail is never touched. Nothing is deleted.</p>
+{% endblock %}

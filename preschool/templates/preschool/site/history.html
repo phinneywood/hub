@@ -1,0 +1,9 @@
+{% extends "preschool/site/layout.html" %}
+{% from "preschool/site/macros.html" import fact, fact_sources %}
+{% block page_title %}History{% endblock %}
+{% block class_content %}<h1>Class history</h1><p>Previous page editions and saved information remain available for reference. A past date does not mark a responsibility complete.</p>
+<section><h2>Page editions</h2>{% if revisions %}<ul>{% for row in revisions %}<li><a href="/preschool/history/{{ row.slug }}/{{ row.revision }}">{{ row.title }} · edition {{ row.revision }}</a> · {{ row.updated | when }}</li>{% endfor %}</ul>{% else %}<p>No edited page editions have been published yet.</p>{% endif %}</section>
+<section><h2>Earlier saved information</h2>{% if historical %}<ul class="class-facts">{% for row in historical %}{{ fact(row,site.today) }}{% endfor %}</ul>{{ fact_sources(historical) }}{% else %}<p>No earlier dated information is recorded.</p>{% endif %}</section>
+{% if site.school_past %}<section id="school-history"><h2>Past school-wide calendar dates</h2><ul>{% for event in site.school_past %}<li>{{ event.date_display }} — {{ event.event }}</li>{% endfor %}</ul></section>{% endif %}
+<p><a href="/preschool">Current class website</a> · <a href="/preschool/history{% if not showing_dismissed %}?dismissed=1{% endif %}">{{ 'Hide archived entries' if showing_dismissed else 'Include archived entries' }}</a></p>
+{% endblock %}

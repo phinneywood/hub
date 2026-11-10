@@ -1,0 +1,47 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<p class="crumb"><a href="/gmail/senders">← Choose a sender</a></p>
+<h1>Here's what I'd do</h1>
+<p class="note">For {{ sender }}. Review before it goes into your plan.</p>
+
+<section class="card-big">
+  <p class="big-sentence">{{ describe(spec, preview.count, preview.exact) }}</p>
+  {% if spec.effects.label %}
+    <p><span class="tag {{ 'add' if spec.effects.label_new else '' }}">{{ "New label will be created" if spec.effects.label_new else "Existing label" }}: {{ spec.effects.label }}</span></p>
+  {% endif %}
+  {% if preview.stays is not none %}<p><strong>{{ preview.stays | num }}</strong> messages stay in your inbox.</p>{% endif %}
+  {% if preview.pattern is not none %}<p class="note">That subject rule matches {{ preview.pattern }} messages from this sender in all your mail.</p>{% endif %}
+  {% if preview.sample %}
+  <p class="note">Examples that match:</p>
+  <ul class="subjects">{% for m in preview.sample %}<li>{{ m.subject or "(no subject)" }}</li>{% endfor %}</ul>
+  {% else %}<p class="warn">No existing messages match right now.</p>{% endif %}
+  {% if spec.future and spec.older_than_days %}<p class="warn">The age limit applies only to existing mail. New matching mail is changed immediately, not after {{ spec.older_than_days }} days.</p>{% endif %}
+  <details class="more"><summary>Details &amp; exact Gmail searches</summary>
+    <p class="note">Nothing is deleted. {% if spec.future %}New mail uses a filter; {% endif %}{% if spec.effects.label_new %}the label stays even if you undo, so delete it in Gmail if you don't want it. {% endif %}</p>
+    <p class="note">Counts are current at preview time, capped at 5,000 (a + means more). Matching mail is selected again when you apply; new arrivals can change the total. One action per sender; adding this replaces its unapplied choice.</p>
+    {% if spec.existing %}<p>Cleanup: <code>{{ existing_query(spec) }}</code></p>{% endif %}
+    {% if spec.future %}<p>Future filter: <code>{{ future_query(spec) }}</code></p>{% endif %}
+  </details>
+</section>
+
+<form method="post" action="/gmail/quiet/custom/accept" class="actions decide">
+  <input type="hidden" name="sender" value="{{ sender }}">
+  <input type="hidden" name="spec" value="{{ spec_json }}">
+  <button class="btn primary">Add to plan</button>
+</form>
+
+<form method="post" action="/gmail/organize/edit" class="stack">
+  <input type="hidden" name="sender" value="{{ sender }}">
+  <input type="hidden" name="spec" value="{{ spec_json }}">
+  <button class="btn">Edit exact options</button>
+</form>
+{% if not manual %}<form method="post" action="/gmail/quiet/custom/propose" class="stack">
+  <input type="hidden" name="sender" value="{{ sender }}">
+  <input type="hidden" name="instruction" value="{{ instruction }}">
+  <input type="hidden" name="spec" value="{{ spec_json }}">
+  <label for="feedback"><strong>Not quite?</strong> Tell me what to change.</label>
+  <textarea id="feedback" name="feedback" rows="2" maxlength="300" placeholder="e.g. only older than 30 days"></textarea>
+  <button class="btn">Adjust</button>
+</form>
+{% endif %}
+{% endblock %}

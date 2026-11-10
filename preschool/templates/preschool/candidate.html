@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block head %}<link rel="stylesheet" href="/preschool/static/preschool.css">{% endblock %}
+{% block body %}
+<p class="crumb"><a href="{{ base_path }}#class-notes">← Class handbook</a></p>
+<section class="school-panel">
+<span class="school-eyebrow">POSSIBLE SOURCE EMAIL</span>
+<h1>{{ candidate.subject or '(no subject)' }}</h1>
+<p class="note">{{ candidate.sender }} · {{ candidate.sent }}</p>
+<p>{{ candidate.snippet }}</p>
+<p><a href="{{ candidate.gmail_url or gmail_base ~ candidate.id }}" target="_blank" rel="noopener noreferrer">Open original email ↗</a></p>
+<p class="note">This email matched a broad search. It has not been added to the class handbook; a search match alone does not mean it is relevant. See <a href="/preschool/criteria">what belongs in the handbook</a>.</p>
+<p class="note">Automatic sorting is paused. Opening the original email does not add it to the handbook.</p>
+</section>
+{% endblock %}

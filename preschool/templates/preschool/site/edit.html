@@ -1,0 +1,8 @@
+{% extends "preschool/site/layout.html" %}
+{% from "preschool/site/macros.html" import fact %}
+{% block page_title %}Maintain {{ topic.title }}{% endblock %}
+{% block class_content %}<p class="class-breadcrumb"><a href="/preschool/manage">Site maintenance</a></p><h1>Update {{ topic.title }}</h1><p>Write the current, self-contained account of this topic. Publishing updates the class page, not an email. The previous edition and supporting source references are kept.</p>
+{% if error %}<p class="warn" role="alert">{{ error }}</p>{% endif %}
+<form method="post" class="stack"><input type="hidden" name="revision" value="{{ revision }}"><input type="hidden" name="source_version" value="{{ source_version }}"><label for="page-body">Current page text</label><textarea id="page-body" name="body" maxlength="20000" rows="16" required>{{ body }}</textarea><button>Publish class page</button></form>
+<details class="class-sources"><summary>Saved information for this topic</summary><p>Publishing associates this page with the supporting information shown here. Conflicting or stale facts should be resolved in the page text, not treated as additional current announcements.</p><ul class="class-facts">{% for row in topic.supporting_facts %}{{ fact(row,site.today) }}{% else %}<li>No current source facts have been recorded for this topic.</li>{% endfor %}</ul></details>
+{% endblock %}

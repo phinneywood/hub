@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block head %}<link rel="stylesheet" href="/preschool/static/preschool.css?v=handbook-5">{% endblock %}
+{% macro handbook_entry(item, label, today, matches) %}
+  <li id="entry-{{ item.view_key }}" class="handbook-entry">
+    <details class="handbook-entry-details">
+    <summary><a class="handbook-entry-title" href="{{ item.url or item.gmail_url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a>{% if item.date %} · <time datetime="{{ item.date }}">{{ item.date }}</time>{% endif %}{% if item.date and item.date < today %} · <strong>{{ 'PAST DUE · CHECK STATUS' if item.kind == 'action' else 'PAST' }}</strong>{% endif %}{% if item.dismissed %} · <strong>ARCHIVED</strong>{% endif %} · <a href="{{ item.gmail_url }}" target="_blank" rel="noopener noreferrer">Email source</a> <span class="handbook-detail-hint">(details)</span></summary>
+    <div class="handbook-entry-content">
+    {% if item.date or item.time or item.location or item.kind == 'action' %}<p class="handbook-entry-meta">{% if item.date %}{{ item.date }}{% elif item.kind == 'action' %}Due date not stated{% endif %}{% if item.time %} · {{ item.time }}{% endif %}{% if item.location %} · {{ item.location }}{% endif %}</p>{% endif %}
+    {% if item.details %}<p>{{ item.details }}</p>{% endif %}
+    {% if item.uncertainty %}<p class="warn">Needs checking: {{ item.uncertainty }}</p>{% endif %}
+    {% if matches.get(item.view_key) %}<p class="warn">Similar title elsewhere in the handbook; compare the sources before editing.</p>{% endif %}
+    {% if item.url %}<p><a href="{{ item.url }}" rel="noopener noreferrer" target="_blank">Open referenced form or resource ↗</a></p>{% endif %}
+    {% if item.has_attachments %}<p class="note">{{ item.attachment_status or 'The source email had attachments.' }}</p>{% endif %}
+    <p class="handbook-source">Source evidence: “{{ item.source_quote }}”</p><p><a href="{{ item.gmail_url }}" target="_blank" rel="noopener noreferrer">Open original email</a><br><small>{{ item.subject }} · {{ item.sent }}</small></p>
+    <div class="handbook-entry-actions"><a class="handbook-edit" href="/preschool/record/{{ item.view_key }}/edit">Edit handbook entry</a>{% if item.dismissed %}<form method="post" action="/preschool/record/{{ item.view_key }}/dismiss"><input type="hidden" name="dismissed" value="0"><button class="school-link-button">Restore to handbook</button></form>{% endif %}</div>
+    </div></details>
+  </li>
+{% endmacro %}
+{% block body %}
+<div class="school-app handbook-page">
+  {% if request.query_params.get('error') == 'sender' %}<p class="warn">Enter one complete sender email address.</p>{% endif %}
+  {% if request.query_params.get('error') == 'group' %}<p class="warn">Enter the group address or name without spaces or search operators.</p>{% endif %}
+  <header class="handbook-header">
+    <h1>{{ school.name }} ({{ school.short_name }}) — Class handbook</h1>
+    <p>Class responsibilities, dates, fees, notes and forms, with links to their sources.</p>
+    <form method="get" action="{{ base_path }}" class="school-search handbook-search"><input name="q" type="search" maxlength="200" value="{{ q }}" placeholder="Search the whole handbook" aria-label="Search the whole handbook">{% if request.query_params.get('past') is not none %}<input type="hidden" name="past" value="{{ '1' if show_past else '0' }}">{% endif %}{% if showing_dismissed %}<input type="hidden" name="dismissed" value="1">{% endif %}<button>Search</button></form>
+    <nav class="handbook-contents" aria-label="Handbook contents"><strong>Contents</strong><ul><li><a href="#upcoming">Upcoming</a></li><li><a href="#recent-additions">Recently added from email</a></li><li><a href="#todo-list">To-dos, responsibilities &amp; fees</a></li><li><a href="#dates">Dates &amp; events</a></li><li><a href="#class-notes-list">Class notes &amp; routines</a></li><li><a href="#resources">Forms &amp; resources</a></li><li><a href="#history">Past items &amp; history</a></li><li><a href="/preschool/criteria">Inclusion policy</a></li></ul></nav>
+  </header>
+  <div class="handbook-mail-status"><span>{% if not auto_enabled %}Automatic handbook updates are paused.{% else %}Automatic handbook updates are on.{% endif %} Mail search: {{ scan_status }}.{% if scan_last %} Last attempt: {{ scan_last | when }}.{% endif %}{% if scan_last_success %} Both mailboxes searched through {{ scan_last_success | when }}.{% endif %}</span><form action="{{ base_path }}/scan" method="post"><button class="school-link-button">Search mail now</button></form></div>
+
+  <div class="school-layout handbook-layout">
+    <div class="school-main">
+      <section id="saved" class="school-section handbook-intro">
+        {% if has_prior_items %}<p class="note">Some older entries have not been checked against the <a href="/preschool/criteria">published inclusion policy</a>. Their original sources remain available.</p>{% endif %}
+        {% if q %}<p class="note">Matches for “{{ q }}”{% if show_past %}, including history{% else %}, current entries only{% endif %}. <a href="{{ clear_search_url }}">Clear search</a></p>{% endif %}
+      </section>
+
+      <section id="upcoming" class="school-section handbook-section">
+        <h2>Upcoming</h2>
+        {% if upcoming_items %}<ul class="handbook-bullet-list">{% for row in upcoming_items %}<li><time datetime="{{ row.date }}">{{ row.date_display }}</time> · <span class="handbook-kind">{{ row.kind }}</span> · <a href="{{ row.target }}">{{ row.title }}</a>{% if row.time %} · {{ row.time }}{% endif %}<span class="handbook-source-links">{% for source in row.sources %}<a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</span></li>{% endfor %}</ul>
+        {% else %}<p class="school-section-note">No dated class to-dos or events are coming up in the handbook yet.</p>{% endif %}
+      </section>
+
+      <section id="recent-additions" class="school-section handbook-section">
+        <h2>Recently added from email</h2>
+        {% if recent_messages %}<ul class="handbook-bullet-list">{% for message in recent_messages %}<li><time>{{ message.processed | when }}</time> · <a href="{{ message.gmail_url }}" target="_blank" rel="noopener noreferrer">{{ message.subject or 'Open source email' }}</a>{% if message.entry_url %} · <a href="{{ message.entry_url }}">Handbook entry</a>{% endif %}</li>{% endfor %}</ul>
+        {% else %}<p class="school-section-note">No email updates have been added to the handbook{% if q %} matching this search{% endif %}.</p>{% endif %}
+      </section>
+
+      <section id="todo-list" class="school-section handbook-section">
+        <h2>To-dos &amp; fees</h2>
+        {% if past_todo_count and not show_past %}<p class="note">{{ past_todo_count }} past-due to-do{{ '' if past_todo_count == 1 else 's' }} hidden. <a href="{{ past_url }}">Check past-due items</a>; they are not assumed complete.</p>{% endif %}
+        {% set todo_items = items | selectattr('kind', 'equalto', 'action') | list %}
+        {% if todo_items %}<ul class="handbook-bullet-list">{% for item in todo_items %}{{ handbook_entry(item, labels['action'], today, matches) }}{% endfor %}</ul>{% else %}<p class="school-section-note">{% if q %}No matching to-dos in this view.{% else %}No current to-dos in this view.{% endif %}</p>{% endif %}
+      </section>
+
+      <section id="dates" class="school-section handbook-section">
+        <h2>Dates &amp; events</h2>
+        {% set date_items = items | selectattr('kind', 'equalto', 'event') | list %}
+        {% if date_items %}<ul class="handbook-bullet-list">{% for item in date_items %}{{ handbook_entry(item, labels['event'], today, matches) }}{% endfor %}</ul>{% else %}<p class="school-section-note">No {% if q %}matching{% else %}current{% endif %} dates from class messages in this view.</p>{% endif %}
+        <div class="handbook-calendar-source"><div class="school-heading"><div><p class="school-eyebrow">PUBLISHED REFERENCE</p><h3>{{ school.short_name }} school calendar</h3></div><a href="{{ school_source }}" target="_blank" rel="noopener noreferrer">Open original ↗</a></div>
+        <p class="school-section-note">This calendar includes dates for the preschool as a whole, not only one class. Check the original to confirm whether an entry applies to your class and whether it has changed.</p>
+          <ul class="handbook-bullet-list school-event-list">
+          {% for event in calendar_preview %}
+            <li id="calendar-{{ event.id }}" class="school-event">{{ event.date_iso or event.date_text or 'Date not listed' }} · <a href="{{ school_source }}" target="_blank" rel="noopener noreferrer">{{ event.event }}</a>{% if event.start_time %} · {{ event.start_time }}{% if event.end_time %} – {{ event.end_time }}{% endif %}{% endif %}{% if event.location %} · {{ event.location }}{% endif %}</li>
+          {% else %}<li>No {% if q %}matching {% endif %}upcoming calendar dates.</li>{% endfor %}
+          </ul>
+          {% if calendar_rest %}<details class="school-more handbook-calendar-more"><summary>{% if show_past %}More calendar entries, including past dates{% else %}More calendar entries{% endif %}</summary><ul class="handbook-bullet-list">{% for event in calendar_rest %}<li>{{ event.date_iso or event.date_text or 'Date not listed' }} · <a href="{{ school_source }}" target="_blank" rel="noopener noreferrer">{{ event.event }}</a>{% if event.start_time %} · {{ event.start_time }}{% if event.end_time %} – {{ event.end_time }}{% endif %}{% endif %}{% if event.location %} · {{ event.location }}{% endif %}{% if event.date_iso and event.date_iso < today %} · Past{% endif %}</li>{% endfor %}</ul></details>{% endif %}
+          <small class="school-source-note">{{ school_status }}{% if school_sync %} · Updated {{ school_sync | when }}{% endif %}</small>
+        </div>
+      </section>
+
+      <section id="class-notes-list" class="school-section handbook-section">
+        <h2>Class notes &amp; updates</h2>
+        {% set update_items = items | selectattr('kind', 'equalto', 'update') | list %}
+        {% if update_items %}<ul class="handbook-bullet-list">{% for item in update_items %}{{ handbook_entry(item, labels['update'], today, matches) }}{% endfor %}</ul>{% else %}<p class="school-section-note">No {% if q %}matching{% else %}current{% endif %} class notes in this view.</p>{% endif %}
+      </section>
+
+      <section id="resources" class="school-section handbook-section">
+        <h2>Forms &amp; resources</h2>
+        {% set resource_items = items | selectattr('kind', 'equalto', 'resource') | list %}
+        {% if resource_items %}<ul class="handbook-bullet-list">{% for item in resource_items %}{{ handbook_entry(item, labels['resource'], today, matches) }}{% endfor %}</ul>{% else %}<p class="school-section-note">No {% if q %}matching{% else %}saved{% endif %} forms or resources in this view.</p>{% endif %}
+      </section>
+
+      <section id="history" class="school-section handbook-section">
+        <h2>Past items &amp; history</h2>
+        <p class="school-section-note">The default view hides past-dated entries; they are not deleted or marked complete.</p>
+        <div class="handbook-view-controls">
+          {% if show_past %}<a class="school-small-link" href="{{ current_url }}">Hide past items</a>
+          {% elif past_entry_count %}<a class="school-small-link" href="{{ past_url }}">Show past items and dates</a>{% endif %}
+          <a class="school-small-link" href="{{ archive_url }}">{{ 'Hide archived entries' if showing_dismissed else 'Include archived entries' }}</a>
+        </div>
+        {% if past_todo_count %}<p class="note">{{ past_todo_count }} past-due to-do{{ '' if past_todo_count == 1 else 's' }} {% if show_past %}shown above{% else %}hidden from the active view{% endif %}. A due date passing does not mean the task is complete.</p>{% endif %}
+        {% if show_past %}<p class="note">Past handbook entries are shown in their original sections and marked “Past” or “Past due.”</p>{% endif %}
+      </section>
+
+      <details id="source-emails" class="school-section school-more">
+        <summary class="school-heading source-email-summary"><span><span class="school-eyebrow">SOURCE EMAILS</span><strong>Possible class-message matches</strong></span></summary>
+        {% if not auto_enabled %}<p class="school-section-note">These emails matched broad search clues but have not been summarized into the handbook. A match alone does not mean an email is about this class; automatic sorting is currently paused.</p>{% else %}<p class="school-section-note">These are original emails kept for reference. Only information specifically about the {{ school.short_name }} class is summarized in the handbook.</p>{% endif %}
+        {% if request.query_params.get('error') == 'group' %}<p class="warn">Enter a complete group address or a simple group name.</p>{% endif %}
+        {% if request.query_params.get('backfill') == 'started' %}<p class="tag add">The 90-day catch-up is queued.</p>{% endif %}
+        {% if candidates %}<ul class="handbook-bullet-list">{% for candidate in candidates[:20] %}<li><a href="{{ candidate.gmail_url }}" target="_blank" rel="noopener noreferrer">{{ candidate.subject or '(no subject)' }}</a> · {{ candidate.sent }}{% if candidate.state == 'ready' %} · Screened; awaiting summary{% endif %}</li>{% endfor %}</ul>
+        {% else %}<p class="school-section-note">No new source matches need attention.</p>{% endif %}
+        {% if candidates | length > 20 %}<p class="note">Showing 20 of {{ candidates | length }} possible matches.</p>{% endif %}
+        {% if needs_review %}<details class="school-more"><summary>{{ needs_review | length }} source{{ '' if needs_review | length == 1 else 's' }} need a closer look</summary>
+          {% for candidate in needs_review %}<div class="school-archive-row"><strong>{{ candidate.subject or '(no subject)' }}</strong><p>{% if candidate.review_reason %}{{ review_reasons.get(candidate.review_reason,'Processing stopped safely; inspect the source.') }}{% elif candidate.relevance_score is not none and candidate.criteria_version == criteria_version %}The automatic relevance check was uncertain under the current inclusion policy.{% elif candidate.relevance_score is not none %}This check used an earlier inclusion policy and needs reassessment.{% else %}This source needs review before it can be summarized in the handbook.{% endif %}</p><a href="{{ candidate.gmail_url }}" target="_blank" rel="noopener noreferrer">Open source email ↗</a></div>{% endfor %}</details>{% endif %}
+        {% if filtered %}<details class="school-more"><summary>{{ filtered | length }} older matches excluded by the class-only rule</summary>
+          <p class="school-side-muted">These remain local for search history and are not included as handbook entries.</p>
+          {% for candidate in filtered %}<div class="school-archive-row"><strong>{{ candidate.subject or '(no subject)' }}</strong><p>Excluded under an earlier relevance check{% if candidate.criteria_version != criteria_version %}; not rechecked under the current inclusion policy{% endif %}.</p><a href="{{ candidate.gmail_url }}" target="_blank" rel="noopener noreferrer">Open source email ↗</a></div>{% endfor %}</details>{% endif %}
+      </details>
+    </div>
+
+    <aside class="school-sidebar handbook-sidebar">
+      <details class="school-side-card"><summary><strong>Collection settings &amp; details</strong></summary>
+        <p class="school-side-muted">The class mailing-list address helps find possible messages; it does not determine whether content belongs here. The connected mailboxes are read-only. The handbook does not send messages, make payments, submit RSVPs or change calendars.</p>
+        <form method="post" action="{{ base_path }}/group" class="stack"><label for="group">Class mailing-list address or name</label><input id="group" name="group" maxlength="320" value="{{ group }}" placeholder="class-list@example.org"><button class="btn small">Save mailing list</button></form>
+        {% if auto_enabled or backfill_enabled %}<div class="school-archive-row"><strong>Historical search · Past 90 days</strong><p>{{ backfill_status }}</p><form method="post" action="{{ base_path }}/backfill"><button class="btn small" {% if not backfill_can_start %}disabled{% endif %}>{{ 'Continue historical search' if backfill_enabled and backfill_can_start else 'Search past 90 days' if backfill_can_start else 'Historical search is running or complete' }}</button></form></div>{% endif %}
+      </details>
+    </aside>
+  </div>
+   <footer class="school-footer"><a href="/preschool/criteria">Inclusion policy</a></footer>
+</div>
+{% endblock %}

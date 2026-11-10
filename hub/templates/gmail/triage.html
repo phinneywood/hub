@@ -1,0 +1,194 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+{% macro fix(r, label="Not this") -%}
+<details class="t-fix"><summary>{{ label }}</summary>
+  <form method="post" action="/gmail/move">
+    <input type="hidden" name="message_id" value="{{ r.id }}">
+    <label>This is <select name="kind">{% for k in kinds %}{% if k != r.kind %}<option value="{{ k }}">{{ names[k] }}</option>{% endif %}{% endfor %}</select></label>
+    <label class="check"><input type="checkbox" name="always" value="1"> Always, for {{ r.sender }}</label>
+    <button class="btn small">Move</button>
+  </form>
+</details>
+{%- endmacro %}
+{% macro line(r) -%}
+<div class="who"><strong>{{ r.who }}</strong><small>{{ ago(r.days) }}{% if r.starred %} · starred{% endif %}</small></div>
+<p class="t-subject">{{ r.subject or "(no subject)" }}</p>
+{%- endmacro %}
+
+{% if working %}<meta http-equiv="refresh" content="4">
+<div class="banner" role="status"><strong>{{ "Sorting your inbox…" if working == "sorting" else "Filing…" }}</strong> This page updates by itself. You can leave; it keeps going on the Mac mini.</div>{% endif %}
+{% include "gmail/_paused.html" %}
+{% if review %}<div class="banner warn" role="status"><strong>Hub couldn’t confirm a filing change.</strong>
+  {{ emails(review) }} may or may not have left the inbox. Look in Gmail or on <a href="/gmail/activity">Activity</a>; Hub files nothing more until you say so.
+  <form method="post" action="/gmail/file/checked"><button class="btn small">I checked, carry on</button></form>
+  {% for change in review_changes %}<form method="post" action="/gmail/file/undo"><input type="hidden" name="change_id" value="{{ change }}"><button class="btn small">Undo it</button></form>{% endfor %}
+</div>{% endif %}
+{% if failed %}<div class="banner warn" role="status">The last sort didn’t finish. What Hub could place is below; “Sort now” tries again.</div>{% endif %}
+{% if notice %}<div class="banner {{ notice.tone }}" role="status">{{ notice.text }}</div>{% endif %}
+
+<section class="g-hero">
+{% if not synced %}
+  <h1>Hub hasn’t sorted your inbox yet</h1>
+  <p class="lede">Sorting reads the last 7 days of inbox mail and works out what each message is: something that needs you, a record, a code, reading or noise. Nothing in Gmail changes.</p>
+  <form method="post" action="/gmail/sort" class="g-cta"><button class="btn primary"{% if working %} disabled{% endif %}>Sort my inbox</button></form>
+{% else %}
+  <p class="eyebrow">Sorted {{ synced }}</p>
+  {% if seen.needs %}
+  <p class="g-big">{{ seen.needs | length }}</p>
+  <p class="g-sub">email{{ "s" if seen.needs | length != 1 }} need{{ "s" if seen.needs | length == 1 }} you{% if seen.waiting %} · <strong>{{ seen.waiting | length }}</strong> waiting {{ waiting_days }} days or more{% endif %}</p>
+  {% else %}
+  <h1>Nothing needs you</h1>
+  {% endif %}
+  <p class="insight">{% if seen.sorted_today %}Hub sorted <strong>{{ seen.sorted_today }}</strong> other{{ "s" if seen.sorted_today != 1 }} today: {{ sorted_text }}.{% else %}Nothing else new today.{% endif %}
+    {%- if seen.filed_today %} Filed {{ seen.filed_today }}.{% endif %}</p>
+  <form method="post" action="/gmail/sort" class="t-sort"><button class="btn small"{% if working %} disabled{% endif %}>Sort now</button></form>
+{% endif %}
+</section>
+{% if synced and not configured %}<p class="note">The model key isn’t set up, so Hub is sorting by fixed rules only and can’t read a message to see whether it needs you.</p>{% endif %}
+
+{% if seen.needs %}
+<h2>Needs you</h2>
+<div class="t-list">
+{% for r in seen.needs %}
+  <div class="t-row">
+    <div class="who"><strong>{{ r.who }}</strong><small>{{ ago(r.days) }}{% if r.days >= waiting_days %} · <span class="tag wait">waiting</span>{% endif %}{% if r.mine %} · you’re in this conversation{% endif %}</small></div>
+    <p class="t-subject">{{ r.subject or "(no subject)" }}</p>
+    {% if r.step %}<p class="t-step">{{ r.step }}</p>{% endif %}
+    <div class="t-do">
+      <a class="btn small" href="{{ find(r) }}">Find it</a>
+      <form method="post" action="/gmail/done"><input type="hidden" name="message_id" value="{{ r.id }}"><button class="btn small">Done</button></form>
+      {{ fix(r, "Doesn’t need me") }}
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% if seen.odd %}
+<h2>Worth a look</h2>
+<p class="lede">Records Hub would normally file quietly, except something stands out.</p>
+<div class="t-list">
+{% for r in seen.odd %}
+  <div class="t-row">
+    {{ line(r) }}
+    <p class="t-step">{{ "A security notice: check that this was you." if r.odd == "security" else "A charge of $" ~ (charge_limit | num) ~ " or more." }}</p>
+    <div class="t-do">
+      <a class="btn small" href="{{ find(r) }}">Find it</a>
+      <form method="post" action="/gmail/ok"><input type="hidden" name="message_id" value="{{ r.id }}"><button class="btn small">Looks fine</button></form>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% if seen.asked %}
+<h2>No answer yet</h2>
+<p class="lede">You wrote, and nobody has replied.</p>
+<div class="t-list">
+{% for a in seen.asked %}
+  <div class="t-row">
+    <div class="who"><strong>{{ a.who or "Someone" }}</strong><small>you wrote {{ ago(a.days) }}</small></div>
+    <p class="t-subject">{{ a.subject or "(no subject)" }}</p>
+    <div class="t-do">
+      <a class="btn small" href="{{ find_asked(a) }}">Find it</a>
+      <form method="post" action="/gmail/asked/dismiss"><input type="hidden" name="thread_id" value="{{ a.thread_id }}"><button class="btn small">Stop watching</button></form>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% if synced %}
+<h2>Sorted for you</h2>
+<p class="lede">Mail that asks nothing of you. Choose, kind by kind, whether Hub leaves it in the inbox or files it under a label.</p>
+{% for s in shelves %}
+<details class="t-shelf"{% if s.open %} open{% endif %}>
+  <summary><strong>{{ s.name }}</strong>
+    <span class="t-count">{{ s.count }} in inbox{% if s.new %} · {{ s.new }} new today{% endif %}{% if s.filed_count %} · {{ s.filed_count }} filed{% endif %}</span>
+    <span class="tag{{ ' on' if s.level != 'suggest' }}">{{ words[s.level] }}</span></summary>
+
+  {% if s.level != "suggest" %}
+    {% if s.ready %}
+    <form method="post" action="/gmail/file/{{ s.kind }}" class="t-file"><button class="btn primary"{% if paused or review or working %} disabled{% endif %}>File {{ emails(s.ready) }} now</button></form>
+    <p class="note">They leave the inbox and get the label {{ s.label }}. Starred mail stays.{% if s.level == "auto" %} Hub also does this each morning.{% endif %}</p>
+    {% elif s.count and s.wait %}<p class="note">{{ s.wait }}</p>
+    {% elif s.level == "auto" %}<p class="note">Hub files these each morning. Nothing is waiting.</p>{% endif %}
+  {% endif %}
+
+  {% if s.rows %}
+  <div class="t-list">
+  {% for r in s.rows %}
+    <div class="t-row">
+      {{ line(r) }}
+      <div class="t-do"><a class="btn small" href="{{ find(r) }}">Find it</a>{{ fix(r) }}</div>
+    </div>
+  {% endfor %}
+  </div>
+  {% if s.more %}<p><a href="/gmail?show={{ s.kind }}">Show all {{ s.count }}</a></p>{% endif %}
+  {% elif not s.filed_count %}<p class="note">None in the last week.</p>{% endif %}
+
+  {% if s.batches or s.filed %}
+  <details class="more"><summary>Filed in the last 14 days ({{ s.filed_count }})</summary>
+    {% for b in s.batches %}
+    <form method="post" action="/gmail/file/undo" class="t-undo"><input type="hidden" name="change_id" value="{{ b.change_id }}">
+      <span>{{ emails(b.count) }}, {{ b.at | when }}</span><button class="btn small"{% if paused %} disabled{% endif %}>Put all back</button></form>
+    {% endfor %}
+    <div class="t-list">
+    {% for r in s.filed %}
+      <div class="t-row">
+        {{ line(r) }}
+        <div class="t-do"><form method="post" action="/gmail/file/restore"><input type="hidden" name="message_id" value="{{ r.id }}"><button class="btn small"{% if paused %} disabled{% endif %}>Put back</button></form></div>
+      </div>
+    {% endfor %}
+    </div>
+    {% if s.filed_more %}<p><a href="/gmail?show={{ s.kind }}">Show all {{ s.filed_count }}</a></p>{% endif %}
+  </details>
+  {% endif %}
+
+  <form method="post" action="/gmail/trust" class="t-trust">
+    <input type="hidden" name="kind" value="{{ s.kind }}">
+    <label>{{ s.name }}: <select name="level">{% for level in s.levels %}<option value="{{ level }}"{% if level == s.level %} selected{% endif %}>{{ words[level] }}</option>{% endfor %}</select></label>
+    <button class="btn small">Save</button>
+  </form>
+</details>
+{% endfor %}
+
+{% if unsorted.open %}
+<details class="t-shelf"{% if show == "unsorted" %} open{% endif %}>
+  <summary><strong>Not sorted</strong> <span class="t-count">{{ unsorted.open | length }} in inbox</span></summary>
+  <p class="note">Hub couldn’t tell what these are, so it leaves them alone. Say what one is and Hub can remember it for that sender.</p>
+  <div class="t-list">
+  {% for r in unsorted_rows %}
+    <div class="t-row">
+      {{ line(r) }}
+      <div class="t-do"><a class="btn small" href="{{ find(r) }}">Find it</a>{{ fix(r, "Sort it") }}</div>
+    </div>
+  {% endfor %}
+  </div>
+  {% if unsorted_more %}<p><a href="/gmail?show=unsorted">Show all {{ unsorted.open | length }}</a></p>{% endif %}
+</details>
+{% endif %}
+
+{% if backlog_planned %}<p class="insight">The backlog clear is in your plan. <a href="/gmail/plan">See how it’s going →</a></p>
+{% elif backlog %}<p class="insight"><strong>{{ backlog_text }}</strong> inbox messages are over 30 days old. <a href="/gmail/backlog">Preview archiving them in one step →</a></p>{% endif %}
+
+<details class="more">
+  <summary>Settings</summary>
+  <form method="post" action="/gmail/charge-limit" class="t-trust">
+    <label>Show me a charge of $ <input type="number" name="dollars" value="{{ charge_limit }}" min="1" max="100000" inputmode="numeric"> or more</label>
+    <button class="btn small">Save</button>
+  </form>
+  {% if overrides %}
+  <h3>Senders you sorted yourself</h3>
+  <div class="t-list">
+  {% for sender, kind in overrides %}
+    <div class="t-row t-flat"><div class="who"><strong>{{ sender }}</strong><small>always {{ names[kind] }}</small></div>
+      <div class="t-do"><form method="post" action="/gmail/always"><input type="hidden" name="sender" value="{{ sender }}"><input type="hidden" name="kind" value="ask"><button class="btn small">Let Hub decide</button></form></div></div>
+  {% endfor %}
+  </div>
+  {% endif %}
+</details>
+{% endif %}
+
+<p class="safe">Hub never sends, deletes or marks mail read. Filing adds a label and takes mail out of the inbox; it stays in All Mail and search, and each batch can be put back for 14 days.</p>
+{% endblock %}

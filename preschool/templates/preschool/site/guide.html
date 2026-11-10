@@ -1,0 +1,4 @@
+{% extends "preschool/site/layout.html" %}
+{% block page_title %}Class guide{% endblock %}
+{% block class_content %}<h1>Class guide</h1><p>The practical reference for our class, organized by what families need to know.</p>
+<ul class="class-topic-index">{% for topic in site.topics %}<li><h2><a href="{{ topic.href }}">{{ topic.title }}</a></h2><p>{{ topic.description }}</p></li>{% endfor %}</ul>{% endblock %}

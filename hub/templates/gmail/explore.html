@@ -1,0 +1,12 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<h1>Explore</h1>
+<p class="note">Look around your mailbox. Nothing here changes anything.</p>
+<div class="cards">
+  <a class="card" href="/gmail/overview"><strong>Inbox overview</strong><span>Top senders, mailing lists and label counts</span></a>
+  <a class="card" href="/gmail/filters"><strong>Filters</strong><span>Everything your filters do, in plain words</span></a>
+  <a class="card" href="/gmail/health"><strong>Filter health</strong><span>Broken, duplicate, quiet and dead filters</span></a>
+  <a class="card" href="/gmail/labels"><strong>Labels</strong><span>All your labels</span></a>
+  <a class="card" href="/gmail/search"><strong>Search</strong><span>Find messages with Gmail search</span></a>
+</div>
+{% endblock %}

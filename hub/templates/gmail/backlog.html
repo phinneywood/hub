@@ -1,0 +1,33 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<p class="crumb"><a href="/gmail">← Today</a></p>
+{% include "gmail/_paused.html" %}
+{% if planned %}
+<h1>The backlog clear is in your plan</h1>
+<p class="lede">{{ "It is running now." if planned.status == "applying" else "It starts when you apply the plan." }}</p>
+<div class="g-cta"><a class="btn primary" href="/gmail/plan">Open plan</a></div>
+{% elif found.count == 0 %}
+<h1>No backlog</h1>
+<div class="banner ok">Nothing in your inbox is over {{ days }} days old, apart from starred mail.</div>
+{% else %}
+<h1>Clear the backlog: {{ amount | lower if found.how != "exact" else amount }} messages</h1>
+<p class="lede">Archive every inbox message over {{ days }} days old in one step. Starred mail stays where it is.</p>
+<ul class="t-points">
+  <li>Archived mail is not deleted. It stays in All Mail and in search, read or unread as it was.</li>
+  <li>Hub works through it in batches of 1,000 on the Mac mini. You can close the page; progress is on Plan.</li>
+  <li>Every batch can be undone from Plan.</li>
+  {% if found.how == "about" %}<li>The number is worked out from your inbox total, so it is close rather than exact.</li>{% endif %}
+</ul>
+{% if sample %}
+<h2>Examples</h2>
+<div class="sender-list">{% for m in sample %}<div class="sender-row"><div class="who"><strong>{{ m.subject or "(no subject)" }}</strong><small>{{ m.from }} · {{ m.date }}</small></div></div>{% endfor %}</div>
+{% endif %}
+<form method="post" action="/gmail/backlog/start" class="g-cta">
+  {% if paused %}<button class="btn primary">Add to plan (changes are paused)</button>
+  {% elif others %}<button class="btn primary">Add to plan</button>
+  {% else %}<button class="btn primary">Archive them</button>{% endif %}
+  <a class="btn" href="/gmail/sweep">Choose a different age</a>
+</form>
+<p class="safe">{% if others and not paused %}Your plan already holds {{ others }} other change{{ "s" if others != 1 }}, so this is added to it and starts when you apply the plan.{% elif paused %}Nothing changes while changes are paused. The step waits in your plan.{% else %}Tapping starts it straight away.{% endif %}</p>
+{% endif %}
+{% endblock %}

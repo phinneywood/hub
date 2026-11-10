@@ -1,0 +1,118 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+{% macro who(i) -%}
+<strong>{{ title(i) }}</strong>{% if i.decision != 'sweep' and i.display_name %}<small class="addr">{{ i.sender }}</small>{% endif %}
+{%- endmacro %}
+<h1>Your plan</h1>
+
+<div class="stats plan-stats">
+  <div><b>{{ (inbox.messagesTotal | num) if inbox.messagesTotal is defined else "—" }}</b><span>in inbox{% if trend and trend.change %} · {{ "−" if trend.change < 0 else "+" }}{{ trend.change | abs | num }} in {{ trend.days }} day{{ "s" if trend.days != 1 }}{% endif %}</span></div>
+  <div><b>{{ totals.archived | num }}</b><span>archived by Hub so far</span></div>
+  <div><b>{{ totals.filters }}</b><span>filter{{ "s" if totals.filters != 1 }} keeping new mail out</span></div>
+</div>
+
+{% if working %}
+<meta http-equiv="refresh" content="3">
+<div class="working">
+  <strong>Applying your plan</strong> · {{ done_count }} of {{ batch_count }} done
+  <progress value="{{ done_count }}" max="{{ batch_count }}"></progress>
+  <small>You can close this page. It keeps going on the Mac mini.</small>
+</div>
+{% elif stalled %}
+<div class="banner warn">Applying stopped partway. Nothing is lost. Tap Resume to continue.
+  <form method="post" action="/gmail/plan/continue"><button class="btn small primary">Resume</button></form></div>
+{% endif %}
+{% if paused_notice or paused %}{% include "gmail/_paused.html" %}{% if paused_notice and not paused %}<div class="banner warn">Changes are paused, so nothing was applied. Your plan is saved.</div>{% endif %}{% endif %}
+{% if rules.stopped %}<div class="banner warn">{{ rules.stopped }} “archive after 30 days” rule{{ "s are" if rules.stopped != 1 else " is" }} stopped{% if rules.safe_to_resume == rules.stopped %} — nothing changed when {{ "they" if rules.stopped != 1 else "it" }} stopped{% endif %}. <a href="/gmail/delayed">Review and resume →</a></div>{% endif %}
+
+{% if not planned and not running and not problems %}
+<p class="lede">Nothing waiting to apply.{% if later %} You parked {{ later | length }} sender{{ "s" if later | length != 1 }} — {{ "it's" if later | length == 1 else "they're" }} below.{% endif %}</p>
+<div class="g-cta"><a class="btn primary" href="/gmail/quiet">Review your loudest senders</a><a class="btn" href="/gmail/sweep">Clean up old mail in bulk</a></div>
+{% endif %}
+
+{% if planned %}
+<div class="plan-head">
+  <h2>{{ "Waiting your turn" if working else "Ready to apply" }}</h2>
+  <p class="g-sub"><strong>{{ planned | length }}</strong> change{{ "s" if planned | length != 1 }}{% if messages %} · about <strong>{{ messages | num }}</strong> messages leave your inbox{% if inbox.messagesTotal %} ({{ (100 * messages / inbox.messagesTotal) | round(1) }}%){% endif %}{% endif %}</p>
+</div>
+{% if not working %}
+<form method="post" action="/gmail/plan/apply" class="plan-apply">
+  {% if paused %}<button class="btn primary" disabled>Apply plan (paused)</button>
+  {% else %}<button class="btn primary">Apply {{ planned | length }} change{{ "s" if planned | length != 1 }}</button>{% endif %}
+</form>
+{% endif %}
+<div class="sender-list">
+{% for i in planned %}
+  <div class="sender-row">
+    <div class="who">{{ who(i) }}<small>{{ describe(i) }}{% if i.spec and i.spec.effects.label_new %} · <span class="tag add">new label</span>{% endif %}</small></div>
+    <div class="do">
+      {% if i.decision != 'sweep' %}<a class="btn small" href="/gmail/organize?sender={{ i.sender | urlencode }}">Edit</a>{% endif %}
+      <form method="post" action="/gmail/plan/remove"><input type="hidden" name="item_id" value="{{ i.id }}"><button class="btn small">Remove</button></form>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% if running %}
+<h2>Working on now</h2>
+{% for i in running %}
+<div class="item">{{ who(i) }}
+  <br><small>{{ step_text(i) }}{% if i.archived %} · {{ i.archived | num }}{% if i.count %} of about {{ i.count | num }}{{ "+" if not i.count_exact }}{% endif %} {{ 'updated' if i.spec and not i.spec.effects.skip_inbox else 'archived' }} so far{% endif %}</small>
+  {% if i.archived and i.count %}<progress value="{{ i.archived }}" max="{{ [i.count, i.archived] | max }}"></progress>{% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+{% if problems %}
+<h2>Needs a look</h2>
+{% for i in problems %}
+<div class="item">{{ who(i) }} <span class="tag rem">{{ i.status | replace("_", " ") }}</span><br><small>{{ i.error }}</small></div>
+{% endfor %}
+{% endif %}
+
+{% if later %}
+<h2>Parked for later <small>{{ later | length }}</small></h2>
+<div class="sender-list">
+{% for i in later %}
+  <div class="sender-row">
+    <div class="who">{{ who(i) }}<small>{{ i.count | num }}{{ "+" if not i.count_exact }} messages in your inbox</small></div>
+    <div class="do">
+      <a class="btn small primary" href="/gmail/assess?sender={{ i.sender | urlencode }}">Ask Luna</a>
+      <a class="btn small" href="/gmail/organize?sender={{ i.sender | urlencode }}">Choose</a>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% if finished %}
+<details class="more"><summary>Applied ({{ finished | length }})</summary>
+<div class="sender-list">
+{% for i in finished %}
+  <div class="sender-row">
+    <div class="who">{{ who(i) }}
+      <small>{% if i.status == "undone" %}Undone{% else %}{{ describe(i) }}{% if i.status == "done" and i.archived %} · {{ i.archived | num }} processed{% endif %}{% endif %}</small>
+      {% if i.error and i.status == "done" %}<small>{{ i.error }}</small>{% endif %}
+      {% if i.label_created %}<small>Created the label “{{ i.spec.effects.label }}”. Undo keeps it; delete it in Gmail if you don't want it.</small>{% endif %}</div>
+    {% if i.status == "done" and not paused %}
+    <div class="do"><form method="post" action="/gmail/plan/undo"><input type="hidden" name="item_id" value="{{ i.id }}"><button class="btn small">Undo</button></form></div>
+    {% endif %}
+  </div>
+{% endfor %}
+</div>
+</details>
+{% endif %}
+
+{% if kept %}
+<details class="more"><summary>Kept in your inbox ({{ kept | length }})</summary>
+<div class="sender-list">
+{% for i in kept %}
+  <div class="sender-row"><div class="who">{{ who(i) }}</div>
+    <div class="do"><form method="post" action="/gmail/plan/remove"><input type="hidden" name="item_id" value="{{ i.id }}"><button class="btn small">Reconsider</button></form></div></div>
+{% endfor %}
+</div>
+</details>
+{% endif %}
+<p class="safe">Nothing is deleted. Archived mail stays in All Mail, and each applied change can be undone here.</p>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+{% include "gmail/_paused.html" %}
+<section class="g-hero">
+  {% if inbox %}
+  <p class="eyebrow">In your inbox</p>
+  <p class="g-big">{{ inbox.messagesTotal | num }}</p>
+  <p class="g-sub"><strong>{{ inbox.messagesUnread | num }}</strong> unread
+    {%- if trend and trend.days %} · <span class="trend {{ 'good' if trend.change < 0 else 'bad' if trend.change > 0 else '' }}">{{ '−' if trend.change < 0 else '+' if trend.change > 0 else '±' }}{{ (trend.change | abs) | num }} in {{ trend.days }} day{{ 's' if trend.days != 1 }}</span>{% endif %}</p>
+  {% endif %}
+  <p class="insight">Your 5 loudest senders sent <strong>{{ share }}%</strong> of your last {{ sample | num }} messages.</p>
+</section>
+
+<div class="g-cta">
+  {% if ready %}
+    <a class="btn primary" href="/gmail/review">Review {{ ready }} sender{{ "s" if ready != 1 }} Hub got ready{% if picked %} · {{ picked }} pre-selected{% endif %}</a>
+    <a class="btn" href="/gmail/quiet">One at a time · {{ todo }} left</a>
+    {% if planned %}<a class="btn" href="/gmail/plan">Review plan · {{ planned }} change{{ "s" if planned != 1 }}</a>{% endif %}
+  {% elif todo %}
+    <a class="btn primary" href="/gmail/quiet">{{ 'Keep reviewing' if reviewed else 'Quiet your loudest senders' }} · {{ todo }} left</a>
+    <a class="btn" href="/gmail/review">Review several at once</a>
+    {% if planned %}<a class="btn" href="/gmail/plan">Review plan · {{ planned }} change{{ "s" if planned != 1 }}</a>{% endif %}
+  {% elif planned %}
+    <a class="btn primary" href="/gmail/plan">Review plan · {{ planned }} change{{ "s" if planned != 1 }}</a>
+  {% else %}
+    <a class="btn primary" href="/gmail/sweep">Clear out old mail in bulk</a>
+  {% endif %}
+</div>
+
+<dl class="g-stats">
+  <div><dt>Senders reviewed</dt><dd>{{ reviewed }}</dd></div>
+  <div><dt>Planned</dt><dd>{{ planned }}</dd></div>
+  <div><dt>Applied</dt><dd>{{ applied }}</dd></div>
+  <div><dt>Kept</dt><dd>{{ kept }}</dd></div>
+</dl>
+
+{% if old_mail %}<p class="insight"><strong>{{ old_mail.count | num }}{{ "+" if not old_mail.exact }}</strong> of these are over a year old. <a href="{{ old_mail_href }}">Preview archiving them in one step →</a></p>{% endif %}
+
+<h2>More ways to clear it</h2>
+<div class="g-ways">
+  <a href="/gmail/backlog"><strong>Clear the backlog</strong><span>Archive everything over 30 days old in one step, except starred mail</span></a>
+  <a href="/gmail/senders"><strong>Senders</strong><span>Who sends the most, and a rule for each</span></a>
+  <a href="/gmail/sweep"><strong>Clean up in bulk</strong><span>Archive mail over a year old, old Promotions, or mark old unread as read</span></a>
+  <a href="/gmail/senders?q={{ 'in:inbox older_than:1y' | urlencode }}"><strong>Old mail by sender</strong><span>Who fills your inbox with mail over a year old</span></a>
+  <a href="/gmail/delayed"><strong>Archive after 30 days</strong><span>{% if delayed_stopped %}{{ delayed_stopped }} stopped · tap to resume{% else %}{{ rules }} rule{{ 's' if rules != 1 }} on · keep mail briefly, then tidy{% endif %}</span></a>
+  <a href="/gmail/health"><strong>Tidy filters</strong><span>Broken, duplicate and unused filters</span></a>
+</div>
+
+<p class="safe">Nothing is ever deleted. Archived mail stays in All Mail, and applied changes can be undone from Plan.</p>
+{% endblock %}

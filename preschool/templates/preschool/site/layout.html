@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{% block page_title %}Class website{% endblock %} · {{ school.short_name }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="/preschool/static/preschool-site.css?v=class-site-2">{% endblock %}
+{% block main_class %}class-site-shell{% endblock %}
+{% block body %}
+<div class="class-site">
+  <header class="class-masthead">
+    <p class="eyebrow">{{ school.name }}</p>
+    <a class="class-name" href="/preschool">Our class</a>
+    <nav class="tabs" aria-label="Class website">
+      {% for key,url,label in [('home','/preschool','Home'),('dates','/preschool/dates','Dates'),('responsibilities','/preschool/responsibilities','Parent responsibilities'),('guide','/preschool/guide','Class guide'),('resources','/preschool/resources','Resources')] %}
+      <a href="{{ url }}"{% if section == key %} class="on" aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <form class="class-search" action="/preschool/search" method="get" role="search"><input type="search" name="q" value="{{ q or '' }}" maxlength="200" placeholder="Search class information" aria-label="Search class information">{% if request.query_params.get('past') is not none %}<input type="hidden" name="past" value="{{ request.query_params.get('past') }}">{% endif %}{% if request.query_params.get('dismissed') == '1' %}<input type="hidden" name="dismissed" value="1">{% endif %}<button>Search</button></form>
+  </header>
+  {% block class_content %}{% endblock %}
+  <footer class="class-footer">
+    <p>{% if site.site_updated %}Information last saved {{ site.site_updated | when }}.{% else %}Class information will appear here as it is published.{% endif %}{% if site.additions_paused %} New information is not being added automatically at present.{% endif %}</p>
+    <nav aria-label="Site details"><a href="/preschool/history">History</a><a href="/preschool/manage">Site maintenance</a></nav>
+  </footer>
+</div>
+{% endblock %}

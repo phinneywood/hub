@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Engine · Hub{% endblock %}
+{% block body %}
+<p class="eyebrow">Engine</p>
+<h1 class="status-head">What Hub reads, what it may do, and what it has spent</h1>
+{% if said %}<p class="banner {{ 'ok' if said_ok else 'warn' }}">{{ said }}</p>{% endif %}
+
+<h2>Ask Hub</h2>
+<form method="post" action="/engine/ask" class="engine-add">
+  <input name="text" maxlength="300" required placeholder="Tell Hub what to watch for, or what you wish it did" aria-label="Ask Hub">
+  <button class="btn small primary">Send</button></form>
+<p class="note">{% if sorting %}Hub files each line as guidance it can follow tonight, or as something that needs building.{% else %}Sorting is off right now, so each line is saved as something to build.{% endif %}
+It can’t give Hub a new ability by itself.</p>
+
+<h2>What you’ve asked for</h2>
+<p class="note">Guidance for the overnight review. It shapes what gets suggested.</p>
+<ul class="checks">
+{% for i in instructions %}
+  <li><div><strong>{{ i.text }}</strong></div>
+    <form method="post" action="/engine/instructions/remove"><input type="hidden" name="instruction_id" value="{{ i.id }}"><button class="btn small quiet">Remove</button></form></li>
+{% else %}<li><div><small>Nothing yet. For example: “Always tell me about school mail with a deadline.”</small></div></li>
+{% endfor %}
+</ul>
+
+{% if requests %}<h2>Asked for, not built yet</h2>
+<p class="note">Notes for the next building session. Nothing here runs.</p>
+<ul class="checks">
+{% for r in requests %}
+  <li><div><strong>{{ r.text }}</strong><small>{{ r.created_at | when }}</small></div>
+    <form method="post" action="/engine/requests/done"><input type="hidden" name="request_id" value="{{ r.id }}"><button class="btn small quiet">Remove</button></form></li>
+{% endfor %}
+</ul>{% endif %}
+
+{% if version.on %}<h2>Version</h2>
+<p class="note">Running {{ version.running[:7] if version.running else 'a version from outside the releases folder' }}.
+{% if version.last and version.last.status != 'accepted' %}The last update ({{ version.last.sha[:7] }}) didn’t pass its checks, so the earlier version was put back.{% endif %}</p>
+{% if version.pending %}<div class="diag">
+  <form method="post" action="/engine/deploy"><div><strong>{{ 'Updating to' if version.requested else 'Ready:' }} {{ version.pending.sha[:7] }}</strong>
+    {% for line in version.pending.subjects %}<small>{{ line }}</small>{% endfor %}
+    <small>Built and tested. Deploying backs up your data, switches over, and goes back by itself if a check fails.</small></div>
+    <button class="btn small primary"{% if version.requested %} disabled{% endif %}>Deploy</button></form>
+</div>{% else %}<p class="note">Nothing new is waiting.</p>{% endif %}{% endif %}
+
+<h2>Sources</h2>
+<ul class="checks">
+{% for s in sources %}
+  <li><div><strong>{{ s.name }}</strong><small>Reads: {{ s.reads }}</small><small>A model may see: {{ s.sends }}</small></div></li>
+{% endfor %}
+</ul>
+<p class="note">Models are reached only over the zero-retention route. They have no tools: they return text, and Hub decides what to show.</p>
+
+<h2>Actions</h2>
+<ul class="checks">
+{% for a in acts %}
+  <li><div><strong>{{ a.action.name }}</strong><small>{{ a.action.does }}</small><small>Undo: {{ a.action.undo }}</small>
+    {% if a.levels | length > 1 %}<form method="post" action="/engine/trust" class="engine-trust">
+      <input type="hidden" name="action" value="{{ a.action.slug }}">
+      <select name="level" aria-label="How far Hub may go">{% for l in a.levels %}<option value="{{ l }}"{% if l == a.level %} selected{% endif %}>{{ words[l] }}</option>{% endfor %}</select>
+      <button class="btn small">Save</button></form>
+    {% else %}<small>{{ words[a.level] }}. You do it on its own page.</small>{% endif %}</div></li>
+{% endfor %}
+</ul>
+
+<h2>Overnight review</h2>
+<p class="note">Today: {{ used.luna_calls }} of {{ limits.luna }} review calls used.
+This month, with mail sorting: ${{ '%.2f' | format(used.month_cost) }} of ${{ '%.0f' | format(limits.month) }}.</p>
+<div class="diag">
+  <form method="post" action="/engine/prepare"><div><strong>Run it now</strong><small>Reads the sources above once and adds suggestions to the home page. Changes nothing else.</small></div><button class="btn small"{% if not ready %} disabled{% endif %}>Run</button></form>
+</div>
+{% if runs %}<table class="engine-runs"><thead><tr><th>When</th><th>Result</th><th>Calls</th><th>Cost</th></tr></thead><tbody>
+{% for r in runs %}<tr><td>{{ r.ts | when }}</td><td>{{ 'Finished' if r.status == 'ok' else 'Didn’t finish' }}</td>
+  <td>{{ r.luna_calls }} review</td><td>${{ '%.4f' | format(r.cost) }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="note">No runs yet.</p>{% endif %}
+
+<h2>Mail sorting</h2>
+<p class="note">Each morning, and when you tap “Sort now” on the <a href="/gmail">Gmail page</a>, Hub works out what each new message is.
+Fixed rules place most mail with no model. Today: {{ sort_used.luna_calls }} of {{ limits.sort_luna }} sorting calls and
+{{ sort_used.jev_calls }} of {{ limits.sort_jev }} message checks used. The cost counts toward the same monthly limit.</p>
+{% if sort_runs %}<table class="engine-runs"><thead><tr><th>When</th><th>Result</th><th>Calls</th><th>Cost</th></tr></thead><tbody>
+{% for r in sort_runs %}<tr><td>{{ r.ts | when }}</td><td>{{ 'Finished' if r.status == 'ok' else 'Didn’t finish' }}</td>
+  <td>{{ r.luna_calls }} sorting · {{ r.jev_calls }} checks</td><td>${{ '%.4f' | format(r.cost) }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="note">No sorts yet.</p>{% endif %}
+{% endblock %}

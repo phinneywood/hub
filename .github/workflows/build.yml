@@ -1,0 +1,42 @@
+name: Verify installed package
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - name: Install isolated build tools
+        run: |
+          python -m venv "$RUNNER_TEMP/builder"
+          "$RUNNER_TEMP/builder/bin/python" -m pip install -r tools/build-requirements.txt
+      - name: Verify fictional dependency archives
+        run: python tools/test_macos_wheelhouse.py
+      - name: Build reviewed hash-locked macOS ARM64 wheelhouse
+        run: python -I tools/macos_wheelhouse.py build --requirements requirements.lock --lock tools/macos-arm64-wheelhouse.json --output-dir "$RUNNER_TEMP/macos-deps"
+      - name: Build archive and verify installed wheel
+        id: verify
+        run: '"$RUNNER_TEMP/builder/bin/python" -I tools/verify_build.py --macos-wheelhouse "$RUNNER_TEMP/macos-deps/macos-arm64-wheelhouse.tar"'
+      - name: Retain only commit and digest receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: verification-${{ github.sha }}
+          path: ${{ steps.verify.outputs.report }}
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain closed source and reviewed dependency release
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-${{ github.sha }}
+          path: ${{ steps.verify.outputs.release }}
+          if-no-files-found: error
+          retention-days: 14

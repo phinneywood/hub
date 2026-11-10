@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% from "network/_parts.html" import nav, ranges, graph, incidents as incident_table, device_link %}
+{% block title %}Network · Hub{% endblock %}
+{% block main_class %}network-wide{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/network.css"><script src="/static/network.js" defer></script>{% endblock %}
+{% block body %}
+<div class="network-page">
+<div class="network-head"><div><p class="eyebrow">HOME NETWORK</p><h1>Network</h1></div><a class="btn small" href="/network?range={{ selected_range }}">Refresh readings</a></div>
+{{ nav('overview') }}
+{% if not configured %}
+<section class="connection-panel"><div class="status-orb idle">○</div><div><h2>Connect Home Assistant</h2><p>From Termius on the Mac mini, in the Hub directory, run <code>.venv/bin/python deploy/set-network-ha-token</code> and enter your separate Hub token at the hidden prompt. Never paste the token into chat.</p><p>Hub reads states and Recorder history only. It does not change integrations or devices.</p></div></section>
+{% elif not connected %}
+<section class="connection-panel"><div><h2>Monitoring unavailable — network condition unknown</h2><p>{{ error }}</p><p>This means Hub cannot read Home Assistant. It does not establish an internet outage. No network changes were made.</p></div></section>
+{% else %}
+<section class="network-verdict tone-{{ tone }}"><p class="eyebrow">RIGHT NOW</p><h2><span class="tone-dot" aria-hidden="true"></span>{{ headline }}</h2>{% if facts %}<p class="verdict-facts">{{ facts }}</p>{% endif %}<p class="fine">Page fetched {{ updated }} Pacific. Each source has its own reporting time. <label><input id="network-auto" type="checkbox"> Refresh every 60 seconds</label></p></section>
+<section class="metric-grid">
+<article class="metric-card"><span class="metric-label">INTERNET</span><strong class="metric-main">{{ reach_status }}</strong><span class="metric-detail">Ping to an external target</span></article>
+<article class="metric-card"><span class="metric-label">ROUTER LINK</span><strong class="metric-main">{{ wan_status }}</strong><span class="metric-detail">What the router reports</span></article>
+<article class="metric-card"><span class="metric-label">DEVICES</span><strong class="metric-main">{{ online_count }} online / {{ client_count }} tracked</strong><span class="metric-detail">{{ node_count }} mesh nodes{% if unknown_count %} · {{ unknown_count }} unknown{% endif %}</span></article>
+</section>
+{% set worth = attention | selectattr('level', 'in', ['bad', 'warn']) | list %}
+{% set gaps = attention | rejectattr('level', 'in', ['bad', 'warn']) | list %}
+{% if worth %}<section class="panel"><div class="panel-head"><h2>Needs attention</h2><a href="#sources">Sources &amp; coverage ↓</a></div>
+{% for item in worth %}<article class="attention-item"><strong class="text-{{ item.level }}">{{ item.title }}</strong><p>{{ item.evidence }}</p><p class="next-check"><b>Next check:</b> {{ item.action }}</p></article>{% endfor %}
+</section>{% endif %}
+{% if gaps %}<details class="panel"><summary>Not monitored yet ({{ gaps | length }})</summary>
+{% for item in gaps %}<article class="attention-item"><strong>{{ item.title }}</strong><p>{{ item.evidence }}</p><p class="next-check"><b>Next check:</b> {{ item.action }}</p></article>{% endfor %}
+</details>{% endif %}
+{{ ranges('/network', selected_range, range_options, range_labels) }}
+<section class="panel"><div class="panel-head"><div><h2>Recent incidents</h2><p class="muted">{{ summary_label }} · {{ range_labels[selected_range] }}</p></div><strong>{% if summary.known %}{{ summary.reliability|round(2) }}% recorded availability{% else %}Availability unknown{% endif %}</strong></div>
+<div class="history-facts"><span>{{ summary.outages }} reported offline intervals</span><span>{{ summary.downtime_text }} reported offline</span><span>{{ summary.unknown_text }} unknown</span><span>{{ summary.coverage|round(1) }}% recorded-state coverage</span></div>
+{{ incident_table(incidents) }}
+<details class="more"><summary>About these numbers</summary><p class="fine">{{ comparison }} These are recorded states, not continuous independent observations. Silent integration failures or HA downtime may not be detectable from this history. Latest 20 intervals shown. “Offline” follows the selected source; monitoring gaps are not counted as uptime or proven outages.</p></details></section>
+{% if device_incidents %}<details class="panel"><summary>Mesh &amp; expected-client incidents</summary><p class="fine">Bounded to {{ tracked_count }} entities (up to four nodes and four expected clients). Latest 20 intervals shown. Shared timing is correlation, not a diagnosed cause.</p><table><thead><tr><th>Source</th><th>Started · Pacific</th><th>Evidence</th><th>Duration</th></tr></thead><tbody>{% for incident in device_incidents %}<tr><td><a href="{{ incident.url }}">{{ incident.source }}</a></td><td>{{ incident.when }}</td><td>{{ incident.label }}{% if incident.shared %}<small> · overlaps selected WAN/probe offline interval</small>{% endif %}</td><td>{{ incident.duration }}</td></tr>{% endfor %}</tbody></table></details>{% endif %}
+<h2>Performance history</h2><p class="muted">Aligned time axes · Pacific time · Traffic is usage, not ISP line speed.</p>
+<section class="chart-grid">{% for card in cards %}<article class="panel chart-panel"><div class="panel-head"><h3>{{ card.title }}</h3><strong>{{ card.current }}</strong></div>{{ graph(card.graph, card.title, card.unit) }}{% if card.usage %}<p class="fine">Counter usage: {{ card.usage }}</p>{% endif %}</article>{% endfor %}</section>
+<section class="panel"><div class="panel-head"><div><h2>Top active clients</h2><p class="muted">Ranked by current reported download + upload, not historical totals</p></div><a href="/network/devices?sort=activity">Explore devices →</a></div>{% if top %}<div class="device-table-wrap"><table><thead><tr><th>Client</th><th>Deco / AP</th><th>Download</th><th>Upload</th></tr></thead><tbody>{% for device in top %}<tr><td>{{ device_link(device) }}</td><td>{{ device.node or 'Not reported' }}</td><td>{{ device.download_text }}</td><td>{{ device.upload_text }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p>No fresh client-rate measurements available. Gateway totals cannot identify which device used the bandwidth.</p>{% endif %}<p class="fine">No configured line capacity or congestion baseline: high traffic alone is not diagnosed as saturation.</p></section>
+<details class="panel" id="sources"><summary>Sources, freshness &amp; limitations</summary><p>Choose exact entities when automatic selection is ambiguous. These preferences are saved in Hub only; nothing is changed in Home Assistant. Auto-selection uses a single unambiguous candidate. External probes require an external IP target or your explicit confirmation.</p>
+{% for source in sources %}<article class="source-row"><h3>{{ role_labels[source.role] }}</h3>{% if source.metric %}<p><code>{{ source.metric.entity_id }}</code> · {{ source.metric.name }}</p><p class="fine">{{ source.metric.basis }} · {{ 'Recent HA report' if source.fresh else 'Unchanged since last report; companion reading is current' if source.steady else 'Old / unverified report' }} · {{ source.updated }} Pacific</p>{% else %}<p>{{ source.note }}</p>{% endif %}
+<form method="post" action="/network/source" class="source-form"><input type="hidden" name="role" value="{{ source.role }}"><label>Measurement source<select name="entity_id"><option value=""{% if not source.choice %} selected{% endif %}>Automatic (unambiguous only)</option><option value="none"{% if source.choice == 'none' %} selected{% endif %}>Disable this measurement</option>{% for item in source.candidates %}<option value="{{ item.entity_id }}"{% if source.choice == item.entity_id %} selected{% endif %}>{{ item.attributes.friendly_name or item.entity_id }} · {{ item.entity_id }}</option>{% endfor %}</select></label>{% if source.role in ('reachability','latency','loss') %}<label class="fine"><input type="checkbox" name="external" value="yes"> I confirm this probe targets the external internet, not a LAN device or Deco API.</label>{% endif %}<button type="submit">Save source</button></form></article>{% endfor %}
+<p class="fine">A recent HA report is not proof of successful upstream polling. Five-minute freshness guard; unchanged sensors without reporting timestamps may appear unverified. Recorder retention limits history. No probes, speed tests, notifications, router controls or new integrations are enabled by Hub. Optional Deco integration coverage is explained on <a href="/network/mesh">Mesh</a>.</p></details>
+{% endif %}
+</div>
+{% endblock %}

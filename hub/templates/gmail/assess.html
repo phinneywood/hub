@@ -1,0 +1,74 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+{% set back = {'quiet': '/gmail/quiet', 'review': '/gmail/review', 'plan': '/gmail/plan'}.get(source, '/gmail/quiet') %}
+<p class="crumb"><a href="{{ back }}">← Back</a></p>
+{% set f = result.facts if result else None %}
+<h1 class="sender">{{ (f.display_name if f and f.display_name) or sender }}</h1>
+{% if f and f.display_name %}<p class="addr">{{ sender }}</p>{% endif %}
+{% if paused %}{% include "gmail/_paused.html" %}{% endif %}
+{% if saved and saved.status != 'planned' %}<div class="banner warn">This sender already has an applied change. Review it in <a href="/gmail/plan">Plan</a>.</div>{% endif %}
+
+{% if blocked %}
+<div class="banner">You turned off Luna for this sender, so nothing about it leaves the Mac mini.
+  <form method="post" action="/gmail/quiet/ai-off"><input type="hidden" name="sender" value="{{ sender }}"><input type="hidden" name="off" value="0"><button class="btn small">Allow Luna for this sender</button></form></div>
+{% elif not configured %}
+<div class="banner warn">Luna isn't set up on this Hub yet. You can still <a href="/gmail/organize?sender={{ sender | urlencode }}">choose options yourself</a>.</div>
+{% elif not result %}
+<p class="lede">Luna looks at how much of this sender's mail you have, how much you leave unread, how often it arrives and its recent subject lines, then suggests what to do. Message bodies are never sent.</p>
+<form method="post" action="/gmail/assess" class="g-cta">
+  <input type="hidden" name="sender" value="{{ sender }}"><input type="hidden" name="source" value="{{ source }}">
+  <button class="btn primary">Ask Luna</button>
+</form>
+{% endif %}
+{% if error %}<div class="banner warn">{{ error }}</div>{% endif %}
+
+{% if result %}
+<div class="stats">
+  <div><b>{{ f.messages_in_inbox | num }}{{ "+" if not f.inbox_count_exact }}</b><span>in inbox</span></div>
+  <div><b>{{ (f.unread_share_percent ~ "%") if f.unread_share_percent is not none else "—" }}</b><span>left unread</span></div>
+  <div><b>{{ f.messages_last_30_days | num }}</b><span>in the last 30 days</span></div>
+</div>
+<div class="luna-take"><span class="eyebrow">Luna's read</span><p>{{ result.summary }}</p></div>
+
+<div class="options">
+{% for o in result.options %}
+<div class="option{% if loop.first %} best{% endif %}">
+  {% if loop.first %}<span class="eyebrow">Suggested</span>{% endif %}
+  <h2>{{ o.title }}</h2>
+  {% if o.why %}<p class="why">{{ o.why }}</p>{% endif %}
+  {% if o.kind == 'action' %}
+    <p class="what">{{ o.sentence }}</p>
+    {% if o.preview.pattern is not none %}<p class="note">{{ o.preview.pattern }} messages from this sender match the subject words.</p>{% endif %}
+    {% if o.preview.stays is not none and o.preview.stays %}<p class="note">{{ o.preview.stays | num }} inbox messages stay where they are.</p>{% endif %}
+    <form method="post" action="/gmail/quiet/custom/accept">
+      <input type="hidden" name="sender" value="{{ sender }}"><input type="hidden" name="spec" value="{{ o.spec_json }}"><input type="hidden" name="source" value="{{ source }}">
+      <button class="btn {{ 'primary' if loop.first }}"{% if saved and saved.status != 'planned' %} disabled{% endif %}>Add to plan</button>
+    </form>
+  {% elif o.kind == 'archive_after_30_days' %}
+    <p class="what">New mail stays in the inbox for 30 days, then is archived. Starred mail is never archived.</p>
+    <a class="btn {{ 'primary' if loop.first }}" href="/gmail/delayed/review?sender={{ sender | urlencode }}&amp;source=quiet">Set up 30-day rule</a>
+  {% else %}
+    <p class="what">Nothing changes for this sender.</p>
+    <form method="post" action="/gmail/quiet/decide"><input type="hidden" name="sender" value="{{ sender }}"><input type="hidden" name="decision" value="keep"><input type="hidden" name="count" value="{{ f.messages_in_inbox }}"><input type="hidden" name="display_name" value="{{ f.display_name }}">
+      <button class="btn {{ 'primary' if loop.first }}">Keep in inbox</button></form>
+  {% endif %}
+</div>
+{% endfor %}
+</div>
+{% if result.dropped %}<p class="note">Hub set aside {{ result.dropped }} suggestion{{ "s" if result.dropped != 1 }} that didn't pass its safety checks.</p>{% endif %}
+
+<details class="more"{% if feedback %} open{% endif %}><summary>Not quite? Tell Luna what to change</summary>
+<form method="post" action="/gmail/assess">
+  <input type="hidden" name="sender" value="{{ sender }}"><input type="hidden" name="source" value="{{ source }}">
+  <input type="hidden" name="previous" value="{{ result.previous | tojson | forceescape }}">
+  <textarea name="feedback" maxlength="300" rows="3" placeholder="e.g. Keep the receipts, archive the promotions">{{ feedback }}</textarea>
+  <button class="btn small primary">Ask again</button>
+</form></details>
+<details class="more"><summary>Other ways to decide</summary>
+  <a class="btn" href="/gmail/organize?sender={{ sender | urlencode }}">Choose the exact options myself</a>
+  <a class="btn" href="/gmail/quiet/custom?sender={{ sender | urlencode }}">Describe it in my own words</a>
+  <form method="post" action="/gmail/quiet/ai-off"><input type="hidden" name="sender" value="{{ sender }}"><input type="hidden" name="off" value="1"><button class="btn quiet">Don't use Luna for this sender</button></form>
+</details>
+<p class="note">Luna sees counts, the unread share, how often mail arrives and up to 8 recent subject lines, never message bodies, through a zero-retention route. Every suggestion is checked by Hub before it is shown, and nothing changes until you apply your plan.</p>
+{% endif %}
+{% endblock %}

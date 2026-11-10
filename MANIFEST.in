@@ -1,0 +1,4 @@
+include AGENTS.md HANDOFF.md requirements.lock
+recursive-include docs *.md
+recursive-include tests *.py
+recursive-include tools *.py *.txt *.json

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}NYC + New Jersey · Hub{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/trip.css"><script defer src="/static/trip.js"></script>{% endblock %}
+{% block main_class %}trip-main{% endblock %}
+{% block body %}
+<div class="trip-eyebrow">PRIVATE TRIP WORKSPACE · MAY 22–29, 2027</div>
+<h1 class="trip-title">New York & New Jersey</h1>
+<p class="trip-lead">Family trip · Planning, not booked</p>
+<div id="trip-notice" role="status" aria-live="polite"></div>
+<nav class="trip-tabs" aria-label="Trip sections" id="trip-tabs"></nav>
+<div id="trip-content"><p>Loading your saved trip…</p></div>
+<dialog id="trip-dialog"><form id="trip-form"><h2 id="trip-dialog-title"></h2><div id="trip-fields"></div><p id="trip-form-error" role="alert"></p><div class="trip-actions"><button type="submit">Save changes</button><button type="button" id="trip-cancel" class="secondary">Cancel</button></div></form></dialog>
+<noscript>This workspace needs JavaScript for editing. Your saved data is available through the <a href="/trip/export">portable export</a>.</noscript>
+{% endblock %}

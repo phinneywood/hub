@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="crumb"><a href="{{ base_path }}#class-notes">← Class handbook</a></p>
+<h1>Edit handbook entry</h1>
+{% if error %}<p class="warn">{{ error }}</p>{% endif %}
+<form method="post" class="stack">
+  <label for="kind">Category</label><select name="kind" id="kind">{% for kind, label in labels.items() %}<option value="{{ kind }}" {% if kind == item.kind %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  <label for="title">Title</label><input id="title" name="title" maxlength="200" required value="{{ item.title }}">
+  <label for="details">Details</label><textarea id="details" name="details" maxlength="1200">{{ item.details }}</textarea>
+  <label for="date_value">Date</label><input id="date_value" type="date" name="date_value" value="{{ item.date or '' }}">
+  <label for="time">Time</label><input id="time" name="time" maxlength="100" value="{{ item.time or '' }}">
+  <label for="location">Location</label><input id="location" name="location" maxlength="300" value="{{ item.location or '' }}">
+  <label for="uncertainty">What should a family double-check?</label><textarea id="uncertainty" name="uncertainty" maxlength="500">{{ item.uncertainty }}</textarea>
+  <button class="btn primary">Save changes</button>
+</form>
+{% endblock %}

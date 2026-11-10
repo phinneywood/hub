@@ -1,0 +1,17 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<h1>Filters <small>{{ total }}</small></h1>
+{% if duplicates %}<p class="warn">{{ duplicates | length }} group(s) of exact duplicate filters: {% for g in duplicates %}{{ g | join(", ") }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+{% for r in rules %}
+<div class="item">
+  <div class="match">{% for m in r.match %}<code>{{ m }}</code> {% endfor %}</div>
+  <div>
+    {% for x in r.add %}<span class="tag add">+ {{ x }}</span>{% endfor %}
+    {% for x in r.remove %}<span class="tag rem">− {{ x }}</span>{% endfor %}
+    {% if not r.editable_by_connector %}<span class="tag">inspect-only</span>{% endif %}
+  </div>
+  <small>{{ r.id }}</small>
+</div>
+{% else %}<p>No filters.</p>{% endfor %}
+{% if total > rules | length %}<p class="note">Showing the first {{ rules | length }} of {{ total }}.</p>{% endif %}
+{% endblock %}

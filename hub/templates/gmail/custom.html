@@ -1,0 +1,37 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<p class="crumb"><a href="/gmail/quiet">← Back to the card</a></p>
+<section class="card-big">
+  <h1 class="sender">{{ display_name or sender }}</h1>
+  {% if display_name %}<p class="addr">{{ sender }}</p>{% endif %}
+  <p class="count"><strong>{{ count | num }}{{ "+" if not exact }}</strong> messages in your inbox</p>
+  <ul class="subjects">{% for m in recent %}<li>{{ m.subject or "(no subject)" }}</li>{% endfor %}</ul>
+</section>
+
+{% if error %}<p class="warn">{{ error }}</p>{% endif %}
+<a class="btn" href="/gmail/organize?sender={{ sender | urlencode }}">Choose exact options · no AI needed</a>
+
+{% if blocked %}
+<p>AI is turned off for this sender, so nothing about it is sent to a model.</p>
+<form method="post" action="/gmail/quiet/ai-off"><input type="hidden" name="sender" value="{{ sender }}"><input type="hidden" name="off" value="0">
+  <button class="btn">Allow AI for this sender</button></form>
+{% elif not configured %}
+<h2>Luna isn't set up yet</h2>
+<p>To turn this on, run this once in Termius on the Mac mini. The key is typed at a hidden prompt:</p>
+<p><code>~/Developer/hub/deploy/set-openrouter-key</code></p>
+<p class="note">Then come back here. No restart needed.</p>
+{% else %}
+<form method="post" action="/gmail/quiet/custom/propose" class="stack">
+  <input type="hidden" name="sender" value="{{ sender }}">
+  <label for="instruction"><strong>What should happen with this sender?</strong></label>
+  <textarea id="instruction" name="instruction" rows="4" maxlength="500" placeholder="e.g. Put these in a Receipts label and mark them read, but keep anything about a refund in my inbox.">{{ instruction }}</textarea>
+  <details class="more"><summary>What Luna sees</summary>
+  <p class="note">This sender's address, the inbox count, the three subjects above, your label names and what you type. Never message bodies. It only proposes; you review the result before anything is added to your plan.</p>
+  <p class="note">For automatic archiving after 30 days, use <a href="/gmail/delayed/review?sender={{ sender | urlencode }}&amp;source=quiet">Archive after 30 days</a>. Luna's filters cannot delay actions.</p>
+  </details>
+  <button class="btn primary">Propose an action</button>
+</form>
+<form method="post" action="/gmail/quiet/ai-off"><input type="hidden" name="sender" value="{{ sender }}"><input type="hidden" name="off" value="1">
+  <button class="btn quiet">Never use AI for this sender</button></form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<p class="crumb"><a href="/gmail/senders">← Choose another sender</a></p>
+<h1>Organize {{ display_name or sender }}</h1>
+<p class="addr">{{ sender }}</p>
+<p><strong>{{ count | num }}{{ '+' if not exact }}</strong> messages in your inbox.</p>
+<ul class="subjects">{% for m in recent %}<li>{{ m.subject or '(no subject)' }}</li>{% endfor %}</ul>
+{% if error %}<p class="warn" role="alert">{{ error }}</p>{% endif %}
+{% if frozen %}
+<p class="warn">This sender has an {{ saved.status | replace('_', ' ') }} action. It cannot be overwritten; check its outcome and available Undo in <a href="/gmail/plan">Plan</a>.</p>
+{% else %}
+<p class="note">No AI calls. Nothing changes until you preview, add to your plan, and apply. A new choice replaces this sender's unapplied choice.</p>
+<form method="post" action="/gmail/organize/preview" class="stack">
+  <input type="hidden" name="sender" value="{{ sender }}">
+  <label for="scope"><strong>When?</strong></label>
+  <select id="scope" name="scope">
+    <option value="existing" {{ 'selected' if values.scope == 'existing' }}>Existing mail only · one-time cleanup</option>
+    <option value="future" {{ 'selected' if values.scope == 'future' }}>Future mail only · Gmail filter</option>
+    <option value="both" {{ 'selected' if values.scope == 'both' }}>Existing and future mail</option>
+  </select>
+  <label for="include">Only subjects containing (optional)</label>
+  <textarea id="include" name="include" rows="3" maxlength="204" placeholder="receipt&#10;invoice">{{ values.include }}</textarea>
+  <label for="exclude">Except subjects containing (optional)</label>
+  <textarea id="exclude" name="exclude" rows="3" maxlength="204" placeholder="refund&#10;action required">{{ values.exclude }}</textarea>
+  <p class="note">One word or phrase per line, up to five, 40 characters each. Any included phrase can match; any excluded phrase protects the message. No Gmail operators.</p>
+  <label for="days">Existing mail older than this many days (optional)</label>
+  <input id="days" name="days" type="number" min="1" max="3650" step="1" value="{{ values.days }}">
+  <p class="note">Age limits apply only to this cleanup, never to the future filter. For ongoing delayed archiving, use the separate <a href="/gmail/delayed/review?sender={{ sender | urlencode }}">30-day rule review</a>.</p>
+  <h2>What should happen?</h2>
+  <label><input type="checkbox" name="skip_inbox" value="true" {{ 'checked' if values.skip_inbox }}> Archive (remove from inbox)</label>
+  <label><input type="checkbox" name="mark_read" value="true" {{ 'checked' if values.mark_read }}> Mark read</label>
+  <label for="label">Add a label (optional)</label>
+  <input id="label" name="label" list="user-labels" maxlength="40" value="{{ values.label or '' }}" placeholder="Receipts">
+  <datalist id="user-labels">{% for label in labels %}<option value="{{ label.name }}">{% endfor %}</datalist>
+  <p class="note">Choose an existing label or name a new one (up to three new labels per plan). Archiving selects inbox mail; read/label-only actions can include archived mail. Nothing is deleted.</p>
+  <button class="btn primary">Preview matches and impact</button>
+</form>
+{% endif %}
+<a class="btn quiet" href="/gmail/quiet/custom?sender={{ sender | urlencode }}">Prefer to describe it to Luna?</a>
+{% endblock %}

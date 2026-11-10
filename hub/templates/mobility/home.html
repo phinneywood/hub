@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Bike + bus · Hub{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/mobility.css"><script src="/static/mobility.js" defer></script>{% endblock %}
+{% block main_class %}mobility-main{% endblock %}
+{% block body %}
+{% set kinds = kinds|default({'bike':'Your bike','lime':'Lime before the bus'}) %}
+<div class="mobility-shell">
+  <div class="mobility-heading"><div><p class="mobility-eyebrow">{{ city|upper }}</p><h1>Bike + bus</h1><p>Ride a little, bus the rest.</p></div></div>
+  {% if notice %}<p class="mobility-notice" role="status">{{ notice }}</p>{% endif %}
+  <section class="mobility-planner" aria-label="Plan a trip">
+    <form class="stack mobility-form" method="post" action="/mobility/search" id="trip-form">
+      <div class="mobility-places">
+        <div class="mobility-place"><label for="origin"><span class="place-dot"></span>From</label><input id="origin" name="origin" required minlength="3" maxlength="240" value="{{ origin }}" placeholder="Address or landmark" autocomplete="off"></div>
+        <button type="button" id="swap-places" class="mobility-swap" aria-label="Swap start and destination" title="Reverse trip">⇅</button>
+        <div class="mobility-place"><label for="destination"><span class="place-dot destination-dot"></span>To</label><input id="destination" name="destination" required minlength="3" maxlength="240" value="{{ destination }}" placeholder="Address or landmark" autocomplete="off"></div>
+      </div>
+      <fieldset class="mobility-mode"><legend>Your ride</legend>
+        <label class="mode-choice"><input type="radio" name="kind" value="bike" {% if kind == 'bike' %}checked{% endif %}><span><b>My bike</b><small>Bring it on the bus</small></span></label>
+        <label class="mode-choice"><input type="radio" name="kind" value="lime" {% if kind == 'lime' %}checked{% endif %}><span><b>Lime → bus</b><small>Scoot first, walk last</small></span></label>
+        <label class="mode-choice"><input type="radio" name="kind" value="lime_last" {% if kind == 'lime_last' %}checked{% endif %}><span><b>Bus → Lime</b><small>Walk first, scoot last</small></span></label>
+        <label class="mode-choice"><input type="radio" name="kind" value="lime_both" {% if kind == 'lime_both' %}checked{% endif %}><span><b>Lime both ends</b><small>Two separate rentals</small></span></label>
+      </fieldset>
+      <details class="mobility-options" {% if departure or max_ride != 25 %}open{% endif %}><summary>Trip preferences <span>Departure · riding limit</span></summary>
+        <div class="mobility-options-grid">
+          <div><label for="departure">Leave at · local time</label><input id="departure" name="departure" type="datetime-local" value="{{ departure }}"><small>Blank means leave now. Up to 7 days ahead.</small><button type="button" class="mobility-text-button" id="leave-now">Use now</button></div>
+          <div><label for="max_ride">Riding limit per leg</label><select id="max_ride" name="max_ride">{% for n in [10,15,25,40] %}<option value="{{ n }}" {% if max_ride == n %}selected{% endif %}>{{ n }} minutes</option>{% endfor %}</select></div>
+        </div>
+      </details>
+      <div class="mobility-submit-row"><label class="mobility-remember"><input type="checkbox" name="remember" value="yes">Remember these two places on this Mac</label><button type="submit" class="mobility-search">Find my route <span aria-hidden="true">↗</span></button></div>
+      <p class="mobility-progress" id="search-progress" role="status" aria-live="polite" hidden>Checking ride routes and bus connections…</p>
+    </form>
+    <div class="mobility-form-footer"><span>No trip history. Google receives the route locations.</span>{% if saved %}<form method="post" action="/mobility/forget"><button class="mobility-text-button" type="submit">Forget saved places</button></form>{% endif %}</div>
+  </section>
+  <p id="search-error" class="mobility-error" role="alert" {% if not problem %}hidden{% endif %}>{{ problem or '' }}</p>
+  {% if result %}
+  <section class="mobility-results" aria-labelledby="results-heading" tabindex="-1" id="trip-results">
+    <div class="mobility-results-heading"><div><p class="mobility-eyebrow">{{ kinds.get(kind, 'Your trip') }} / {{ result.date|default(city) }}</p><h2 id="results-heading">{% if result.routes %}Your ways there{% else %}Let’s try another way{% endif %}</h2><p>Leave {{ result.departure|default('now') }} · checked {{ result.checked_at }}</p></div>
+      {% if result.routes|length > 1 %}<label class="mobility-sort">Sort by<select id="route-sort"><option value="fastest">Earliest arrival</option><option value="riding">Less riding</option><option value="transfers">Fewer transfers</option></select></label>{% endif %}
+    </div>
+    {% if kind != 'bike' %}<p class="mobility-caution"><strong>Lime is an estimate.</strong> Check availability, battery, service area and legal parking in <a href="https://www.li.me/" target="_blank" rel="noopener noreferrer">Lime</a>. Cycling directions are a proxy, not scooter navigation. {% if kind == 'lime_both' %}You’ll need a separate rental after the bus.{% endif %}</p>{% endif %}
+    {% if not result.routes %}<div class="mobility-empty"><h3>No usable bike + bus combination found within these limits.</h3><p>Try a longer riding limit, a different departure or another riding option. The search is bounded—this doesn’t mean a route doesn’t exist.</p></div>{% endif %}
+    {% if result.limited %}<p class="mobility-caution">The search reached its time or request limit. These are the options checked so far; there may be others.</p>{% endif %}
+    <div class="mobility-route-list" id="route-list">
+    {% for route in result.routes %}
+      <article class="mobility-route" data-minutes="{{ route.minutes }}" data-riding="{{ route.ride_minutes }}" data-transfers="{{ route.transfers }}">
+        <div class="mobility-route-top"><div class="mobility-badges">{% for badge in route.badges %}<span>{{ badge }}</span>{% endfor %}</div><span class="mobility-arrival">Arrive <b>{{ route.arrival }}</b>{% if route.next_day %} · {{ route.arrival_day }}{% endif %}</span></div>
+        <div class="mobility-route-summary"><div class="mobility-duration">{{ route.minutes }}<span>min total</span></div><div class="mobility-route-overview"><div class="mobility-chain" aria-label="Route sequence">{% for step in route.steps if step.kind in ['ride','bus','walk'] %}{% if not loop.first %}<span class="chain-arrow" aria-hidden="true">→</span>{% endif %}{% if step.kind == 'bus' %}<span class="line-pill">Bus {{ step.line }}</span>{% else %}<span class="mode-pill">{{ 'Bike' if step.kind == 'ride' and kind == 'bike' else 'Scooter' if step.kind == 'ride' else 'Walk' }} <b>{{ step.minutes }}′</b></span>{% endif %}{% endfor %}</div><p>{{ route.ride_minutes }} min riding · {{ route.walk_minutes }} min walking · {{ route.transfers }} transfer{% if route.transfers != 1 %}s{% endif %}</p></div></div>
+        {% if route.walking_comparison is defined %}
+        {% set comparison = route.walking_comparison %}
+        <div class="mobility-same-route" aria-label="Walking comparison on the same buses">
+          <div class="same-route-heading"><strong>Same buses + walking</strong>{% if comparison.state == 'same_departure' %}<span>{{ comparison.minutes }} min · arrive {{ comparison.arrival }}{% if comparison.next_day %} {{ comparison.arrival_day }}{% endif %}</span>{% endif %}</div>
+          {% if comparison.state == 'same_departure' %}
+            <p>{% if route.vs_bus > 0 %}Riding gets you there {{ route.vs_bus }} min sooner.{% elif route.vs_bus < 0 %}Walking gets you there {{ -route.vs_bus }} min sooner on these same buses.{% else %}Same arrival time. Reaching the bus earlier becomes extra waiting, not an earlier bus.{% endif %}</p>
+            <small>Same starting time, stops, scheduled buses and transfers · {{ comparison.walk_minutes }} min walking.</small>
+          {% elif comparison.state == 'leave_earlier' %}
+            <p>Walking cannot catch the {{ comparison.first_bus_departure }} bus from your selected starting time.</p>
+            <small>To take these exact buses, leave by {{ comparison.leave_by }} on {{ comparison.leave_by_day }} ({{ comparison.earlier_minutes }} min earlier). Walking arrival: {{ comparison.arrival }} on {{ comparison.arrival_day }}. No different bus route substituted.</small>
+          {% else %}
+            <p>{% if comparison.state == 'limit' %}The search limit was reached before these walking legs could be checked.{% else %}Walking directions for these exact stops are unavailable.{% endif %}</p><small>No comparison with a different bus route is shown.</small>
+          {% endif %}
+        </div>
+        {% endif %}
+        <details class="mobility-itinerary" {% if loop.first %}open{% endif %}><summary>Step-by-step <span>{{ route.wait_minutes }} min waiting · {{ route.buses }} bus{% if route.buses != 1 %}es{% endif %}</span></summary>
+          <ol class="mobility-timeline">{% for step in route.steps %}<li class="step-{{ step.kind }}"><time>{{ step.start }}</time><div class="timeline-content"><div class="timeline-heading"><strong>{{ step.title }}</strong><span>{{ step.minutes }} min{% if step.distance is defined %} · {{ step.distance }} mi{% endif %}</span></div>{% if step.kind == 'bus' %}<p class="timeline-stop">{{ step.from }} <span>→</span> {{ step.to }}</p><p class="timeline-detail">Toward {{ step.headsign or 'destination' }} · arrive {{ step.arrive }}{% if step.agency %} · {{ step.agency }}{% endif %}</p>{% endif %}{% if step.note %}<p class="timeline-detail">{{ step.note }}</p>{% endif %}{% if step.link %}<a class="timeline-link" href="{{ step.link }}" target="_blank" rel="noopener noreferrer">{{ 'Cycling reference' if kind != 'bike' and step.kind == 'ride' else 'Directions for this leg' }} ↗</a>{% endif %}</div></li>{% endfor %}<li class="step-finish"><time>{{ route.arrival }}</time><div class="timeline-content"><strong>You’re there.</strong></div></li></ol>
+        </details>
+        {% if route.warnings %}<details class="mobility-route-warnings"><summary>Cycling route advisories</summary>{% for warning in route.warnings %}<p>{{ warning }}</p>{% endfor %}</details>{% endif %}
+      </article>
+    {% endfor %}
+    </div>
+    <p class="mobility-search-meta">{{ result.calls }} of 24 Google requests · {{ result.checked }} boarding/alighting combinations checked. Bounded search, not a guarantee of the fastest possible route.</p>
+  </section>
+  {% else %}<div class="mobility-intro"><span aria-hidden="true">↳</span><div><h2>Your whole trip, connected.</h2><p>Real cycling legs. Reachable bus departures. Compare walking against the exact same bus stops, departures and transfers. No extra handling time added.</p></div></div>{% endif %}
+  <details class="mobility-notes"><summary>How this works & things to know</summary><div>
+    <h3>Same route, fair comparison</h3><p>We calculate each riding leg and look for reachable buses. Walking transfers and scheduled waiting stay in the itinerary. No loading, unloading, pickup, parking or extra transfer allowances are added. Each walking comparison uses the same stops, scheduled bus departures and transfers as its riding option—only the first and last legs change to walking. If walking would miss the first bus, we show the earlier leave-by time, not a different bus or an impossible trip.</p>
+    <h3>Check before you go</h3><p>Bus times are estimates, not a guarantee of live tracking or rack space. Confirm operator bike policies and that your bike fits. A full rack may mean waiting for another bus. Cycling directions may include unsuitable or restricted roads. Scooter directions are a cycling proxy: check signs, legal routes and Lime’s app. End the rental before boarding; never carry a rented scooter onto the bus.</p>
+    <h3>A useful search, not every possible route</h3><p>Google transit alternatives and nearby corridor anchors at both ends provide candidates. Rail and ferries are excluded. We can miss better stops or connections. Separate Google Maps leg links can recalculate times. Minute labels are rounded individually; the total is calculated from the actual timestamps.</p>
+    <h3>Your data & usage</h3><p>Locations go to Google, not an AI provider. No trip history is saved. Only checking “Remember” stores the two locations in an owner-only local file on this Mac; Forget removes it. Route results are never saved. One search at a time, six attempts per hour; each search has a 24-request and 90-second ceiling. Sorting results makes no new API calls. Google quota settings—not budget alerts—limit account spending.</p>
+  </div></details>
+  <footer class="mobility-footer"><span>Route data: <b>Google Maps</b></span><span><a href="https://www.google.com/help/terms_maps/">Terms</a><a href="https://policies.google.com/privacy">Privacy</a></span></footer>
+</div>
+{% endblock %}

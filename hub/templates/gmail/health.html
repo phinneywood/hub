@@ -1,0 +1,39 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<h1>Filter &amp; label health</h1>
+<p class="note">Checked {{ total }} filters and {{ label_total }} labels.</p>
+
+<h2>Problems found</h2>
+{% for i in issues %}
+<div class="item"><span class="tag rem">{{ i.kind }}</span> {{ i.detail }}<br><small>Filter {{ i.filter }}</small></div>
+{% else %}<p>No structural problems.</p>{% endfor %}
+
+<h2>Activity checks</h2>
+{% if not activity %}
+<p>See which filters and labels haven't matched anything lately. This runs about {{ total + label_total }} searches against Gmail and takes a few seconds.</p>
+<form method="get" action="/gmail/health"><input type="hidden" name="run" value="1"><button>Run activity checks</button></form>
+{% else %}
+{% if not activity.complete %}<p class="warn">The bridge rate limit stopped the checks early. Wait a minute and run them again.</p>{% endif %}
+{% macro rows(list) %}
+{% for r in list %}
+<div class="item">
+  <div class="match">{% for m in r.match %}<code>{{ m }}</code> {% endfor %}</div>
+  {% for x in r.add %}<span class="tag add">+ {{ x }}</span>{% endfor %}{% for x in r.remove %}<span class="tag rem">− {{ x }}</span>{% endfor %}
+</div>
+{% endfor %}
+{% endmacro %}
+<h3>No matches in a year <small>{{ dead | length }}</small></h3>
+{{ rows(dead) }}{% if not dead %}<p>None.</p>{% endif %}
+<h3>Quiet: nothing in {{ days }} days, but some in the past year <small>{{ quiet | length }}</small></h3>
+{{ rows(quiet) }}{% if not quiet %}<p>None.</p>{% endif %}
+<p class="note">Gmail keeps no record of filter matches, so this searches for mail the filter's conditions would match. A filter that only fires on very old mail would look unused.</p>
+
+<h3>Empty labels <small>{{ empty | length }}</small></h3>
+<p>{% for l in empty %}<span class="tag">{{ l.name }}</span>{% else %}None.{% endfor %}</p>
+<form method="get" action="/gmail/health"><input type="hidden" name="run" value="1"><input type="hidden" name="refresh" value="1"><button>Run again</button></form>
+{% endif %}
+
+<h2>Labels no filter uses <small>{{ unused | length }}</small></h2>
+<p>{% for l in unused %}<span class="tag">{{ l.name }}</span>{% else %}Every label is used by a filter.{% endfor %}</p>
+<p class="note">Unused is fine for labels you apply by hand.</p>
+{% endblock %}

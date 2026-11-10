@@ -1,0 +1,18 @@
+{% extends "gmail/base.html" %}
+{% block content %}
+<h1>Activity</h1>
+<h2>What this app did</h2>
+{% for a in log %}
+<div class="item"><strong>{{ a.action }}</strong> <small>{{ a.ts | when }}</small><br>{{ a.detail }}</div>
+{% else %}<p>Nothing yet.</p>{% endfor %}
+
+<h2>Recent Gmail changes <small>from the bridge's journal</small></h2>
+{% for c in result.changes %}
+<div class="item">
+  <strong>{{ c.kind }}</strong> · {{ c.status }}
+  <div><small>{{ c.created_at | when }}</small></div>
+  {% if c.label %}<div>Created label “{{ c.label.name }}”</div>
+  {% elif c.message_count is defined and c.message_count is not none %}<div>{{ c.message_count }} messages</div>{% endif %}
+</div>
+{% else %}<p>No changes recorded.</p>{% endfor %}
+{% endblock %}

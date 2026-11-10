@@ -1,0 +1,8 @@
+{% extends "preschool/site/layout.html" %}
+{% from "preschool/site/macros.html" import fact, fact_sources %}
+{% block page_title %}Parent responsibilities{% endblock %}
+{% block class_content %}<h1>Parent responsibilities</h1><p>What to do, prepare or pay for the class. An elapsed deadline does not tell us whether a task is complete or a fee has been paid.</p>
+<nav class="class-quick-links" aria-label="Parent guide"><a href="/preschool/guide/participation">Participation &amp; class duties</a><a href="/preschool/guide/fees">Tuition &amp; fees</a><a href="/preschool/guide/preparation">What to bring</a><a href="/preschool/resources">Forms</a></nav>
+<section><h2>Current responsibilities</h2>{% if site.responsibilities %}<ul class="class-facts">{% for row in site.responsibilities %}{{ fact(row,site.today) }}{% endfor %}</ul>{{ fact_sources(site.responsibilities) }}{% else %}<p>No additional current tasks are recorded here. See the topic pages above for ongoing responsibilities.</p>{% endif %}</section>
+{% if site.past_due %}<section id="past-due"><h2>Past deadlines · check status</h2><p>These are preserved reminders, not a statement that anything remains unpaid or unfinished.</p><ul class="class-facts">{% for row in site.past_due %}{{ fact(row,site.today) }}{% endfor %}</ul>{{ fact_sources(site.past_due) }}</section>{% endif %}
+{% endblock %}

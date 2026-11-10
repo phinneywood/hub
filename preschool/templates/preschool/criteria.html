@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block head %}<link rel="stylesheet" href="/preschool/static/preschool.css?v=handbook-5">{% endblock %}
+{% block body %}
+<div class="school-app handbook-page">
+  <p class="crumb"><a href="/preschool#class-notes">← Class handbook</a></p>
+  <header class="handbook-header">
+    <p>INCLUSION RULES · VERSION {{ version }}</p><h1>{{ criteria.TITLE }}</h1>
+    <p>This handbook keeps useful {{ school.short_name }} class information—not general neighborhood news. Automatic sorting is {{ 'on' if automatic_enabled else 'paused' }}.</p>
+  </header>
+
+  <div class="school-layout handbook-layout school-criteria-layout">
+    <div class="school-main">
+      <section class="school-section"><p class="school-eyebrow">01 · FIND POSSIBILITIES</p><h2>Search broadly, decide narrowly.</h2>
+        <p>{{ criteria.DISCOVERY }}</p>
+        <p class="school-section-note">Being sent to the class mailing list helps find a message, but does not by itself make that message relevant.</p>
+      </section>
+       <section class="school-section"><p class="school-eyebrow">02 · INCLUDE</p><h2>What to know, bring, do or pay.</h2>
+        <ul class="criteria-list">{% for rule in criteria.INCLUDE %}<li>{{ rule }}</li>{% endfor %}</ul>
+      </section>
+      <section class="school-section"><p class="school-eyebrow">03 · EXCLUDE OR HOLD</p><h2>Don't turn a mention into a rule.</h2>
+        <ul class="criteria-list">{% for rule in criteria.EXCLUDE %}<li>{{ rule }}</li>{% endfor %}</ul>
+        <p>Dates and times stay as stated. Missing or ambiguous details are flagged, never guessed. Recurring invitations, cancellations and changes need source review.</p>
+      </section>
+      <section class="school-section"><p class="school-eyebrow">04 · KEEP IT PRIVATE</p><h2>Capture the school detail, not the family chatter.</h2>
+        <ul class="criteria-list">{% for rule in criteria.PRIVACY %}<li>{{ rule }}</li>{% endfor %}</ul>
+      </section>
+      <section class="school-section"><p class="school-eyebrow">05 · ATTACHMENTS AND LINKS</p><h2>Read the source, never take an action.</h2>
+        <ul class="criteria-list">{% for rule in criteria.EVIDENCE %}<li>{{ rule }}</li>{% endfor %}</ul>
+      </section>
+      <section class="school-section"><p class="school-eyebrow">HOW NOTES GET HERE</p><h2>Search, check, summarize.</h2>
+        <ol class="criteria-list"><li>The app finds possible messages using the preschool name, class mailing list and tuition clues.</li>
+          <li>Only current information specific to the {{ school.short_name }} class belongs in these notes. Neighborhood articles and unrelated messages are left out.</li>
+          <li>When automatic sorting is on, useful dates, tasks, stated class fees and updates can be summarized with a source link. Nothing is paid, sent, RSVP’d or added to Calendar.</li>
+        </ol>
+         <p class="school-section-note">{% if not automatic_enabled %}Automatic sorting is currently paused, so searching alone does not add a handbook entry. {% endif %}Editing an entry changes only that entry; changes to these inclusion rules are versioned and tested separately.</p>
+      </section>
+    </div>
+    <aside class="school-sidebar">
+      <div class="school-side-card school-side-warm"><p class="school-eyebrow">ONE HANDBOOK</p><h2>Personal and shared class mail.</h2><p>Relevant entries are combined here. Each source link opens the email in its original mailbox.</p></div>
+      <div class="school-side-card"><p class="school-eyebrow">IF SOMETHING LOOKS WRONG</p><div class="school-step"><b>01</b><span>Open the linked source to check the original wording.</span></div><div class="school-step"><b>02</b><span>Edit a handbook entry to correct that entry.</span></div><div class="school-step"><b>03</b><span>Change the inclusion policy only when a rule should change for future messages.</span></div><p class="school-side-muted">Inclusion policy version {{ version }}.</p></div>
+    </aside>
+  </div>
+  <footer class="school-footer"><a href="/preschool">Back to handbook</a></footer>
+</div>
+{% endblock %}

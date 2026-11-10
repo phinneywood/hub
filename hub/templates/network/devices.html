@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "network/_parts.html" import nav, device_link %}
+{% block title %}Devices · Network · Hub{% endblock %}
+{% block main_class %}network-wide{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/network.css">{% endblock %}
+{% block body %}<div class="network-page"><h1>Devices</h1>{{ nav('devices') }}
+{% if error %}<p class="inline-warning">{{ error }}</p>{% else %}
+<p class="muted">Expected devices needing attention first. A phone leaving home is not a device failure.</p>
+<form class="device-search" method="get"><input type="search" name="q" value="{{ query }}" placeholder="Name, IP, link or node"><select name="sort" aria-label="Sort"><option value="attention"{% if sort == 'attention' %} selected{% endif %}>Needs attention first</option><option value="activity"{% if sort == 'activity' %} selected{% endif %}>Current activity</option><option value="node"{% if sort == 'node' %} selected{% endif %}>Deco / AP</option></select><select name="status" aria-label="Filter"><option value="all">All devices</option><option value="attention"{% if status == 'attention' %} selected{% endif %}>Expected, needs attention</option><option value="online"{% if status == 'online' %} selected{% endif %}>Online</option></select><button>Apply</button></form>
+<section class="panel device-table-wrap"><table class="network-table"><thead><tr><th>Device</th><th>Report</th><th>Deco / link</th><th>Download / upload</th><th>IP</th><th>Last HA report · Pacific</th></tr></thead><tbody>{% for device in devices %}<tr><td>{{ device_link(device) }}<small>{{ 'Mesh node' if device.kind == 'node' else 'Expected connected' if device.expected else 'May leave / sleep' }}</small></td><td>{{ device.status }}</td><td>{{ device.node or 'Not reported' }}<small>{{ device.connection or 'Unknown link' }}</small></td><td>{{ device.download_text }}<small>{{ device.upload_text }}</small></td><td>{{ device.ip or 'Not reported' }}</td><td>{{ device.updated_text }}</td></tr>{% else %}<tr><td colspan="6">No matching network devices detected.</td></tr>{% endfor %}</tbody></table></section>{% endif %}</div>{% endblock %}
