@@ -4,3 +4,4 @@ httpx
 jinja2
 pytest
 python-multipart
+pydantic-ai-slim[openrouter,ui]==2.66.0

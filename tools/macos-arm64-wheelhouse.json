@@ -1,5 +1,5 @@
 {
-  "requirements_sha256": "de021175a215073182a6dc62028b8afc268cb6e315c04b666237298019391bb8",
+  "requirements_sha256": "66c52a974b49df475261fe7ea62b5a760da38c6584b7d432c86cef984542008f",
   "schema": 1,
   "target": {
     "abi": "cp312",
@@ -45,6 +45,18 @@
       "version": "0.162.0"
     },
     {
+      "filename": "genai_prices-0.2.3-py3-none-any.whl",
+      "name": "genai-prices",
+      "sha256": "56976ce2b04ec206117f7d0e53f4849211a6724ab3a12119afec304eba63ee25",
+      "version": "0.2.3"
+    },
+    {
+      "filename": "griffelib-2.4.1-py3-none-any.whl",
+      "name": "griffelib",
+      "sha256": "76bc562f936ad1ce198d2cf6d0731bd5c92a7d934b69ef828ef22ee0ffdb62ce",
+      "version": "2.4.1"
+    },
+    {
       "filename": "h11-0.16.0-py3-none-any.whl",
       "name": "h11",
       "sha256": "63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86",
@@ -57,6 +69,12 @@
       "version": "1.0.9"
     },
     {
+      "filename": "httpcore2-2.16.0-py3-none-any.whl",
+      "name": "httpcore2",
+      "sha256": "5c4358319f2602d984ad93182c9fee5160f22e9da7babdda870a5e7c4e2dc34f",
+      "version": "2.16.0"
+    },
+    {
       "filename": "httptools-0.9.0-cp312-cp312-macosx_11_0_arm64.whl",
       "name": "httptools",
       "sha256": "f9ccc9884241efceb4547a92955d128574c864681f11b7ea3ecbde295fafbe8b",
@@ -67,6 +85,12 @@
       "name": "httpx",
       "sha256": "d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad",
       "version": "0.28.1"
+    },
+    {
+      "filename": "httpx2-2.16.0-py3-none-any.whl",
+      "name": "httpx2",
+      "sha256": "fd2c5d7909e8d86fe92d53020c310ca0e4e431b838c207c5754b9bbf0308d49a",
+      "version": "2.16.0"
     },
     {
       "filename": "idna-3.20-py3-none-any.whl",
@@ -87,10 +111,28 @@
       "version": "3.1.6"
     },
     {
+      "filename": "jiter-0.19.0-cp312-cp312-macosx_11_0_arm64.whl",
+      "name": "jiter",
+      "sha256": "730b0387fbea21b71b86b6975e20da7a364b04c4428eba0d15e6f0a7b20aa59b",
+      "version": "0.19.0"
+    },
+    {
+      "filename": "logfire_api-5.5.0-py3-none-any.whl",
+      "name": "logfire-api",
+      "sha256": "ffa071d45ddb89aa21dc5a1b24044aa8dc296606b60305ab988bfdc328f57f3e",
+      "version": "5.5.0"
+    },
+    {
       "filename": "markupsafe-3.0.4-cp312-cp312-macosx_11_0_arm64.whl",
       "name": "markupsafe",
       "sha256": "0930db9bdc62d22944e10b066448bb65dc9abe9112880c7cab8da54db4284d5f",
       "version": "3.0.4"
+    },
+    {
+      "filename": "openai-3.49.0-py3-none-any.whl",
+      "name": "openai",
+      "sha256": "3977754792115027ba80ae16996ba3366478b5b228e1ab58e2660bd7ac8c3d78",
+      "version": "3.49.0"
     },
     {
       "filename": "opentelemetry_api-1.45.2-py3-none-any.whl",
@@ -123,10 +165,22 @@
       "version": "2.14.2"
     },
     {
+      "filename": "pydantic_ai_slim-2.66.0-py3-none-any.whl",
+      "name": "pydantic-ai-slim",
+      "sha256": "c47bbd0abe6f51e5400308a53b4f7e3409a582b1459140c381e3d4701a205608",
+      "version": "2.66.0"
+    },
+    {
       "filename": "pydantic_core-2.50.2-cp312-cp312-macosx_11_0_arm64.whl",
       "name": "pydantic-core",
       "sha256": "596921489390a002d6a5e303384a0f1f98384f8bb550fbf38a1aafa6093da0f9",
       "version": "2.50.2"
+    },
+    {
+      "filename": "pydantic_graph-2.66.0-py3-none-any.whl",
+      "name": "pydantic-graph",
+      "sha256": "5b2a0aafc569c00fdb36879b1e80bed06ed5926979e2c1d44533222f208fd2ec",
+      "version": "2.66.0"
     },
     {
       "filename": "pygments-2.21.0-py3-none-any.whl",
@@ -159,10 +213,22 @@
       "version": "6.0.3"
     },
     {
+      "filename": "sniffio-1.3.1-py3-none-any.whl",
+      "name": "sniffio",
+      "sha256": "2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2",
+      "version": "1.3.1"
+    },
+    {
       "filename": "starlette-1.10.0-py3-none-any.whl",
       "name": "starlette",
       "sha256": "478c0ab3b4ced6e82719849c118fa406f0278a3499c1a898cd15cd31bdc38ce4",
       "version": "1.10.0"
+    },
+    {
+      "filename": "truststore-0.10.5-py3-none-any.whl",
+      "name": "truststore",
+      "sha256": "9aaaedaefaf06d8b206278cf8b5012bc897f485a874503501e12d776df78951c",
+      "version": "0.10.5"
     },
     {
       "filename": "typing_extensions-4.16.0-py3-none-any.whl",
