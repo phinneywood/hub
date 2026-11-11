@@ -111,7 +111,6 @@ def status(request: Request, luna_result=None, jev_result=None):
             ("Sending unavailable", profile.get("sending_available") is False, "the bridge can't send mail"),
         ]
     who = request.headers.get("tailscale-user-login", "this Mac (direct)")
-    checks.append(("Luna key stored", luna.configured(), "model key found in the Keychain" if luna.configured() else "run deploy/set-openrouter-key"))
     return render(request, "status.html", active="status", checks=checks, who=who, luna_result=luna_result, jev_result=jev_result,
                   luna_ready=luna.configured())
 
@@ -174,7 +173,7 @@ def landing(request: Request):
 def today_page(request: Request, snoozed: int = 0):
     from . import cards, home as summaries
     greeting_text, date_text = summaries.greeting()
-    return render(request, "today.html", active="today", snoozed=bool(snoozed),
+    return render(request, "today.html", active="today", snoozed=snoozed if snoozed in (1, 7) else 0,
                   greeting_text=greeting_text, date_text=date_text, **cards.page())
 
 
@@ -203,7 +202,7 @@ def today_snooze(key: str = Form(...)):
     today.hide(key)
     if key.startswith("ai-"):
         state.dismiss(key)  # remembered for a week so the overnight review doesn't raise it again
-    return RedirectResponse("/today?snoozed=1", status_code=303)
+    return RedirectResponse("/today?snoozed=" + ("7" if key.startswith(today.WEEK_KEYS) else "1"), status_code=303)
 
 
 @app.post("/today/prepare")

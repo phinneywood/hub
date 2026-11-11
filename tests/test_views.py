@@ -107,7 +107,8 @@ def test_today_has_a_card_per_tool_and_not_today_comes_back_to_today(client, mon
     assert 'href="/kitchen">Cart plan to approve</a>' in kitchen and 'Ask about this' not in kitchen    # nothing Ask Hub could look up
     gone = client.post('/today/snooze', data={'key': 'a'}, headers=ORIGIN, follow_redirects=False)
     assert gone.status_code == 303 and gone.headers['location'] == '/today?snoozed=1'
-    assert 'Hidden until tomorrow. Nothing needs you right now.' in client.get('/today?snoozed=1').text
+    shown = client.get('/today?snoozed=1').text
+    assert 'Hidden until tomorrow.' in shown and 'Nothing needs you right now.' in shown
     assert client.post('/today/snooze', data={'key': 'a'}, headers={'origin': 'https://evil.invalid'}).status_code == 403
 
 

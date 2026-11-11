@@ -80,6 +80,10 @@ def _change(ids, body):
             _mark(ids, state='open')
             return None
         result = {}
+    except Exception:  # noqa: BLE001 - the change may have gone through, so it waits for the owner
+        result = {}
+    if not isinstance(result, dict):
+        result = {}
     if result.get('status') == 'applied' and result.get('change_id'):
         return result['change_id']
     _mark(ids, state='review', change_id=result.get('change_id'))
@@ -119,6 +123,9 @@ def file(kind, now=None):
         return {'status': 'filed' if count else 'nothing', 'count': count}
     except bridge.BridgeError:  # reading the inbox or the labels failed; nothing was sent
         return {'status': 'error', 'count': count}
+    except Exception:  # noqa: BLE001 - rows marked before the failure wait for the owner, never “nothing moved”
+        store.log('mail filing failed', triage.NAMES[kind])
+        return {'status': 'review' if waiting_review() else 'error', 'count': count}
     finally:
         try:
             if count:

@@ -67,10 +67,14 @@ def health():
         return False
 
 
-def _request(method, path, params=None, body=None):
+TIMEOUT = 120         # seconds; writes and big reads can be slow
+QUICK_TIMEOUT = 5     # for small reads a page waits on, such as the profile behind the pause check
+
+
+def _request(method, path, params=None, body=None, timeout=TIMEOUT):
     try:
         token = config.BRIDGE_TOKEN_FILE.read_text().strip()
-        response = httpx.request(method, config.BRIDGE_URL + path, params=params, json=body, timeout=120,
+        response = httpx.request(method, config.BRIDGE_URL + path, params=params, json=body, timeout=timeout,
                                  headers={"Authorization": "Bearer " + token})
     except (OSError, httpx.HTTPError):
         raise BridgeError("Gmail bridge is unreachable")
@@ -80,22 +84,26 @@ def _request(method, path, params=None, body=None):
         except ValueError:
             message = "Bridge request failed"
         raise BridgeError(message, response.status_code)
-    return response.json()
+    try:
+        return response.json()
+    except ValueError:
+        # A write may still have gone through, so this is never “refused”: callers treat it as unknown.
+        raise BridgeError("The Gmail bridge gave an answer Hub couldn't read") from None
 
 
-def get(path, ttl=CACHE_SECONDS, **params):
+def get(path, ttl=CACHE_SECONDS, timeout=TIMEOUT, **params):
     if path not in READ_PATHS:
         raise BridgeError("Path not allowed")
     params = {k: v for k, v in params.items() if v not in (None, "")}
     # Full message bodies must never be retained in the bridge response cache.
     if path in {"/gmail/message", "/gmail/thread", "/gmail/attachment", "/gmail/calendar-attachment", "/gmail/document-attachment",
                 "/gmail/shared/message", "/gmail/shared/calendar-attachment", "/gmail/shared/document-attachment"}:
-        return _request("GET", path, params=params)
+        return _request("GET", path, params=params, timeout=timeout)
     key = (path, tuple(sorted(params.items())))
     hit = _cache.get(key)
     if hit and time.monotonic() - hit[0] < ttl:
         return hit[1]
-    value = _request("GET", path, params=params)
+    value = _request("GET", path, params=params, timeout=timeout)
     _cache[key] = (time.monotonic(), value)
     _fetched[key] = time.time()
     return value

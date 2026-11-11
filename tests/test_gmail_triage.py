@@ -842,7 +842,7 @@ def test_the_page_before_any_sort_offers_one_and_reads_only_hubs_own_picture(gma
     response = client.get('/gmail')
     page = shown(response)
     assert response.status_code == 200 and 'Hub hasn’t sorted your inbox yet' in page and 'Sort my inbox' in page
-    assert 'Sorted for you' not in page and 'Hub never sends, deletes or marks mail read.' in page
+    assert 'Sorted for you' not in page and 'Hub never sends or deletes mail, and filing never marks it read.' in page
     assert {path for path, _ in gmail.reads} == {'/gmail/profile'}
 
     assert client.post('/gmail/sort', follow_redirects=False).status_code == 403 and triage.synced_at() == 0  # no Origin
@@ -900,8 +900,11 @@ def test_the_page_still_opens_when_gmail_cannot_be_reached(gmail):
     trust('record', 'undo')
     gmail.down = True
     response = client.get('/gmail')
-    assert response.status_code == 200 and 'Changes are paused.' in shown(response)
+    assert response.status_code == 200 and 'The Gmail helper isn’t answering.' in shown(response) and 'maintenance pause' not in response.text
     assert re.search(r'<button class="btn primary" disabled>File 2 emails now', response.text)
+    gmail.down, gmail.paused = False, True
+    bridge.clear_cache()
+    assert 'Changes are paused.' in shown(client.get('/gmail'))   # the maintenance marker keeps its own words
 
 
 # --- the backlog --------------------------------------------------------------------------------------
@@ -1080,3 +1083,31 @@ def test_a_date_without_a_zone_is_utc_and_a_date_far_from_this_week_is_not_belie
     triage.sort()
     assert states() == {'r1': 'old', 'r2': 'open'}  # kept, not added and removed on every sort
     assert time.time() - 8 * DAY < triage.get('r1')['received'] and triage.get('r2')['received'] <= time.time()
+
+
+@pytest.mark.parametrize('answer', [ValueError('unreadable reply'), ['not', 'a', 'dict']])
+def test_an_unexpected_reply_to_filing_waits_for_the_owner_instead_of_saying_nothing_moved(gmail, answer, monkeypatch):
+    receipts(gmail, 2)
+    triage.sort()
+    trust('record', 'undo')
+    def post(path, body):
+        if path != '/gmail/labels/apply':
+            return gmail.post(path, body)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+    monkeypatch.setattr(bridge, 'post', post)
+    assert filing.file('record') == {'status': 'review', 'count': 0}
+    assert set(states().values()) == {'review'}
+
+
+def test_an_unreadable_bridge_answer_is_an_unknown_bridge_error(monkeypatch):
+    class Reply:
+        status_code = 200
+        def json(self):
+            raise ValueError('not json')
+    monkeypatch.setattr(bridge.httpx, 'request', lambda *a, **k: Reply())
+    monkeypatch.setattr(bridge.config, 'BRIDGE_TOKEN_FILE', type('T', (), {'read_text': lambda self: 'x'})())
+    with pytest.raises(bridge.BridgeError) as caught:
+        bridge._request('POST', '/gmail/labels/apply', body={})
+    assert caught.value.status is None   # never one of filing's “refused” codes

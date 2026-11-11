@@ -8,6 +8,15 @@ templates.env.filters["num"] = lambda n: f"{int(n):,}" if isinstance(n, (int, fl
 templates.env.filters["when"] = lambda ts: datetime.fromtimestamp(float(ts)).strftime("%b %-d, %-I:%M %p") if ts else ""
 
 
+
+def _gmail_pause():
+    from .tools.gmail import missions
+    return missions.pause_state()
+
+
+templates.env.globals["gmail_pause"] = _gmail_pause  # why changes are held: the banner words it
+
+
 def render(request, name, active=None, status_code=200, **context):
     from .tools import TOOLS
     return templates.TemplateResponse(request, name, {"tools": TOOLS, "active": active, **context}, status_code=status_code)

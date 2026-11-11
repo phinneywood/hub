@@ -131,7 +131,8 @@ def test_not_this_week_hides_an_offer_for_a_week_and_the_slot_for_the_day(monkey
     _save(backlog=20_000)
     page = client.get('/today').text
     assert '20,000 inbox messages are over 30 days old' in page and 'Not this week' in page
-    client.post('/today/snooze', data={'key': 'gmail-next-backlog'}, headers=ORIGIN)
+    gone = client.post('/today/snooze', data={'key': 'gmail-next-backlog'}, headers=ORIGIN, follow_redirects=False)
+    assert gone.headers['location'] == '/today?snoozed=7' and 'Hidden for a week.' in client.get(gone.headers['location']).text
     assert today.needs_you() == []
     assert store.snoozed('2026-01-05') >= {'gmail-next', 'gmail-next-backlog'}  # the offer, and the slot for today
     for later in (date(2026, 1, 6), date(2026, 1, 11)):

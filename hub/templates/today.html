@@ -8,6 +8,7 @@
 </div>
 <section class="needs" aria-labelledby="needs-title">
   <h2 class="needs-title" id="needs-title">Needs you</h2>
+  {% if snoozed %}<p class="banner" role="status">Hidden {{ 'for a week' if snoozed == 7 else 'until tomorrow' }}.</p>{% endif %}
   {% for n in decisions %}
   <article class="decision tone-{{ n.tone }}">
     <p class="decision-owner"><span class="tone-dot" aria-hidden="true"></span>{{ n.owner }}{% if n.suggested %} <span class="tag">Suggestion</span>{% endif %}</p>
@@ -21,7 +22,7 @@
       <a class="ask-about" href="/ask?about={{ n.ask | urlencode }}">Ask about this<span class="sr"> ({{ n.title }})</span></a>
     </div>
   </article>
-  {% else %}<p class="needs-clear">{{ 'Hidden until tomorrow. ' if snoozed }}Nothing needs you right now.</p>
+  {% else %}<p class="needs-clear">Nothing needs you right now.</p>
   {% endfor %}
 </section>
 {% if tools %}<section aria-labelledby="tools-title">

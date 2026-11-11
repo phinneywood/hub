@@ -10,6 +10,7 @@ from ... import bridge, home
 DAYS = 7
 LIMIT = 100
 CACHE_SECONDS = 300
+TIMEOUT = 15        # seconds; the page and the Today card wait on this read
 
 
 class SignInNeeded(Exception):
@@ -29,7 +30,7 @@ def week(now=None):
     now = now or datetime.now(home.PACIFIC)
     start = datetime.combine(now.date(), time(), home.PACIFIC)
     try:
-        reply = bridge.get('/calendar/events', ttl=CACHE_SECONDS, start=start.isoformat(),
+        reply = bridge.get('/calendar/events', ttl=CACHE_SECONDS, timeout=TIMEOUT, start=start.isoformat(),
                            end=(start + timedelta(days=DAYS)).isoformat(), time_zone=home.PACIFIC.key, limit=LIMIT)
     except bridge.BridgeError as error:
         if error.status in (401, 403) or 'authoriz' in str(error).lower():
@@ -44,8 +45,11 @@ def week(now=None):
             ends, last = _when(raw['end'])
         except (KeyError, ValueError):
             continue
-        events.append({'title': str(raw.get('summary') or '(No title)')[:200], 'day': day,
-                       'last_day': last - timedelta(days=1) if begins is None else last,
+        if begins is None:
+            last -= timedelta(days=1)                   # an all-day end date is exclusive
+        elif ends > begins:
+            last = (ends - timedelta(microseconds=1)).date()  # ending at midnight doesn't reach the next day
+        events.append({'title': str(raw.get('summary') or '(No title)')[:200], 'day': day, 'last_day': max(day, last),
                        'start': begins, 'end': ends, 'all_day': begins is None,
                        'location': str(raw.get('location') or '')[:200],
                        'busy': raw.get('transparency') != 'transparent'})

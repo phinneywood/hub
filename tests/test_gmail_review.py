@@ -91,7 +91,7 @@ def test_today_page_shows_trend_and_no_dead_mission(calls):
 def test_get_swr_serves_cache_then_refreshes_in_background(monkeypatch):
     fetched = []
 
-    def fake_request(method, path, params=None, body=None):
+    def fake_request(method, path, params=None, body=None, timeout=None):
         fetched.append(params["n"])
         return {"n": len(fetched)}
     monkeypatch.setattr(bridge, "_request", fake_request)
@@ -116,7 +116,7 @@ def test_inbox_overview_is_saved_and_served_after_restart(monkeypatch):
     from hub import bridge, config
     from hub.tools.gmail import common
     calls = []
-    monkeypatch.setattr(bridge, '_request', lambda method, path, params=None, body=None: calls.append(path) or _overview(42))
+    monkeypatch.setattr(bridge, '_request', lambda method, path, params=None, body=None, timeout=None: calls.append(path) or _overview(42))
     assert common.inbox_counts(common.overview())['messagesTotal'] == 42
     saved = config.DATA_DIR / common.SAVED_OVERVIEW
     assert stat.S_IMODE(saved.stat().st_mode) == 0o600

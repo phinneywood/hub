@@ -18,11 +18,18 @@ def go(path, **query):
     return RedirectResponse(path + ("?" + urlencode(query) if query else ""), status_code=303)
 
 
-def is_paused():
+def pause_state():
+    """'ok', 'paused' (the maintenance marker on the Mac mini) or 'unreachable' (the Gmail helper didn't answer)."""
     try:
-        return bool(bridge.get("/gmail/profile", ttl=15).get("organization_paused"))
+        profile = bridge.get("/gmail/profile", ttl=15, timeout=bridge.QUICK_TIMEOUT)
     except bridge.BridgeError:
-        return True
+        return "unreachable"
+    return "paused" if profile.get("organization_paused") else "ok"
+
+
+def is_paused():
+    """Whether changes must wait. Fails closed: a helper that isn't answering counts as paused."""
+    return pause_state() != "ok"
 
 
 def decided_senders():

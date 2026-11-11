@@ -74,7 +74,7 @@ def test_bridge_client_rejects_unlisted_paths():
 def test_message_reads_bypass_cache(monkeypatch):
     requests = []
     monkeypatch.setattr(bridge, "_cache", {})
-    def request(method, path, params=None, body=None):
+    def request(method, path, params=None, body=None, timeout=None):
         requests.append((method, path, params))
         return {"text": "fake message body"}
     monkeypatch.setattr(bridge, "_request", request)

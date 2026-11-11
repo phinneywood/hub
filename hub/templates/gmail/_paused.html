@@ -1,1 +1,2 @@
-{% if paused %}<div class="banner warn" role="status"><strong>Changes are paused.</strong> Keep reviewing and planning; nothing in Gmail changes until the maintenance pause on the Mac mini is lifted. <a href="/status">Status</a></div>{% endif %}
+{% if paused %}{% if gmail_pause() == 'unreachable' %}<div class="banner warn" role="status"><strong>The Gmail helper isn’t answering.</strong> Keep reviewing and planning; nothing in Gmail changes until it answers again. <a href="/status">Status</a></div>
+{% else %}<div class="banner warn" role="status"><strong>Changes are paused.</strong> Keep reviewing and planning; nothing in Gmail changes until the maintenance pause on the Mac mini is lifted. <a href="/status">Status</a></div>{% endif %}{% endif %}

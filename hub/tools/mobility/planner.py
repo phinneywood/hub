@@ -222,6 +222,7 @@ def combine_options(api, seed, origin, destination, departure, kind, max_ride):
         warnings.extend(access["warnings"])
     options = api.compute(boarding, alighting, "TRANSIT", ready, alternatives=True)
     results = []
+    skipped = None
     for route in options[:3]:
         try:
             timeline = list(itinerary)
@@ -242,6 +243,10 @@ def combine_options(api, seed, origin, destination, departure, kind, max_ride):
             if not results:
                 raise
             break
+        except MapsError as err:  # one stop Google can't route, or outside the area: skip only this option
+            skipped = err
+    if not results and skipped:
+        raise skipped
     return results
 
 
@@ -329,7 +334,7 @@ def search(origin_text, destination_text, kind="bike", departure=None, max_ride=
     owned = api is None
     transport = api or Routes()
     api = SearchCache(transport)
-    results, tested, limited = [], set(), False
+    results, tested, limited, skipped = [], set(), False, None
     try:
         baseline = api.compute(origin, destination, "TRANSIT", departure, alternatives=True)
         seeds = list(baseline[:2])
@@ -338,13 +343,20 @@ def search(origin_text, destination_text, kind="bike", departure=None, max_ride=
         if baseline:
             try:
                 leg = baseline[0]["legs"][0]
-                for anchor in nearby(leg["startLocation"]):
-                    seeds.extend(api.compute(anchor, destination, "TRANSIT", departure)[:1])
+                trips = [(anchor, destination) for anchor in nearby(leg["startLocation"])]
                 if kind != "lime":
-                    for anchor in nearby(leg["endLocation"]):
-                        seeds.extend(api.compute(origin, anchor, "TRANSIT", departure)[:1])
-            except INVALID:
-                pass
+                    trips += [(origin, anchor) for anchor in nearby(leg["endLocation"])]
+            except (*INVALID, MapsError):
+                trips = []
+            for start, end in trips:
+                try:
+                    seeds.extend(api.compute(start, end, "TRANSIT", departure)[:1])
+                except SearchLimit:
+                    raise
+                except MapsError as err:  # a nearby corridor Google can't route; the others still count
+                    skipped = err
+                except INVALID:
+                    continue
         for seed in seeds[:6]:
             try:
                 trip = buses(seed)
@@ -362,7 +374,11 @@ def search(origin_text, destination_text, kind="bike", departure=None, max_ride=
             except SearchLimit:
                 limited = True
                 break
+            except MapsError as err:
+                skipped = err
         results = distinct(results)
+        if not results and skipped and not limited:
+            raise skipped  # nothing to show, so say why rather than “no routes”
         for result in results:
             result["vs_bus"] = None
             try:
@@ -372,7 +388,7 @@ def search(origin_text, destination_text, kind="bike", departure=None, max_ride=
                     result["vs_bus"] = comparison["minutes"] - result["minutes"]
             except SearchLimit:
                 result["walking_comparison"] = {"state": "limit"}
-            except INVALID:
+            except (*INVALID, MapsError):
                 result["walking_comparison"] = {"state": "unavailable"}
             finally:
                 result.pop("_transit_route", None)

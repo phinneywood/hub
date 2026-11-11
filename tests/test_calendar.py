@@ -104,3 +104,19 @@ def test_page_lists_the_week_and_explains_a_lapsed_sign_in(helper):
     assert 'phone-setup --calendar-auth' in TestClient(app).get('/calendar').text
     helper['fail'] = bridge.BridgeError('Gmail bridge is unreachable')
     assert 'isn’t answering' in TestClient(app).get('/calendar').text
+
+
+def test_an_event_runs_on_every_day_it_covers(monkeypatch):
+    from hub.tools.calendar import pages
+    helper_events = [ev('Synthetic overnight', {'dateTime': _at(-1, 20)}, {'dateTime': _at(0, 9, 30)}),
+                     ev('Synthetic late call', {'dateTime': _at(0, 22)}, {'dateTime': (NOW + timedelta(days=1)).replace(hour=0).isoformat()}),
+                     ev('Synthetic retreat', {'date': '2026-03-03'}, {'date': '2026-03-06'})]
+    monkeypatch.setattr(bridge, 'get', lambda path, ttl=60, **params: {'events': helper_events})
+    overnight, late, retreat = read.week(NOW)
+    assert str(late['last_day']) == '2026-03-04'   # ending at midnight stays on its own day
+    today = NOW.date()
+    assert pages._covered(overnight, today) == [today]   # began yesterday, still shown under Today
+    assert pages._time(overnight, today) == 'Until 9:30 AM'
+    assert pages._covered(retreat, today) == [today, today + timedelta(days=1)]
+    assert pages._time(retreat, today) == 'All day'
+    assert pages._time(late, today) == '10 PM–12 AM'

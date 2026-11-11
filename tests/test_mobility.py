@@ -504,3 +504,24 @@ def test_walking_miss_is_explained_without_quicker_slower_claim(monkeypatch):
     assert "15 min earlier" in response.text
     assert "No different bus route substituted" in response.text
     assert "gets you there" not in response.text
+
+
+def test_one_unroutable_option_keeps_the_others():
+    class OneFails(FakeRoutes):
+        def compute(self, *args, **kwargs):
+            if args[2] == "TRANSIT" and "1st St" in args[0].get("address", ""):  # one nearby corridor
+                raise google.MapsError("Google Routes is unavailable right now.")
+            return super().compute(*args, **kwargs)
+    api = OneFails()
+    found = planner.search("Invented North", "Invented South", api=api)
+    assert found["routes"] and any("9th St" in r[1].get("address", "") for r in api.requests)  # the other corridor was still tried
+
+
+def test_every_option_failing_says_why():
+    class AllFail(FakeRoutes):
+        def compute(self, *args, **kwargs):
+            if args[2] == "BICYCLE":
+                raise google.MapsError("This planner supports only its configured city.")
+            return super().compute(*args, **kwargs)
+    with pytest.raises(google.MapsError, match="configured city"):
+        planner.search("Invented North", "Invented South", api=AllFail())

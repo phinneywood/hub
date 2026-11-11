@@ -56,7 +56,7 @@ def _file_soon(kind):
             _filing['result'] = filing.file(kind)
         except Exception:  # noqa: BLE001 - rows already marked stay marked and wait for the owner
             store.log('mail filing failed', triage.NAMES[kind])
-            _filing['result'] = {'status': 'error', 'count': 0}
+            _filing['result'] = {'status': 'review' if filing.waiting_review() else 'error', 'count': 0}
     thread = threading.Thread(target=work, name='gmail-file', daemon=True)
     _filing['t'] = thread
     thread.start()
