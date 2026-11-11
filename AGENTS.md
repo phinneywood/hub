@@ -2,25 +2,25 @@
 
 Own one private dashboard: Gmail organizer, Preschool, mobility and network views.
 Preschool is an internal module, not a second service. Privileged maintenance stays separate.
-No public publishing. Keep the old public project paused. Future portfolio examples use synthetic content only.
+The service is never hosted publicly; only its source may be public. Keep the old public project paused.
+Portfolio material uses synthetic content only.
 Preserve Preschool account separation, read-only bridge, source evidence, AI opt-outs, quotas and paused processing/backfill.
 
-## Personal information: Hub is not publishable
+## Personal information: this repository is public-ready
 
-Hub's files and Git history still contain personal information (found 2026-11-10). Until the owner
-approves and completes a cleanup, Hub stays a private repository: do not change its visibility, add a
-remote, push it anywhere new, copy its code into a public repository or portfolio, or rewrite its
-history. Cleanup is planned, owner-approved work, never a side effect of another task.
+Hub was cleaned on 2026-11-10: household details moved to a private settings file and the history was
+restarted from one clean commit. The source may be public; the old history lives only in a separate
+private archive repository, which must never be made public, pushed here or copied into this one.
+Changing this repository's visibility is always the owner's step.
 
-Do not add more. Write every new or changed file, commit message and branch name as if it were public:
+Keep it clean. Write every new or changed file, commit message and branch name as public:
 - **Never commit:** real names, email addresses, phone numbers, street addresses, account logins,
   user-identifying hostnames or home paths, school, class or child details, health, diet or medical
   details, financial details, mail or message content, sender lists, and secrets.
 - **Put it instead** in Hub's private data directory, read at run time. Code and docs say "the owner",
   "the household" or "the shared mailbox".
 - **Tests and fixtures** use fictional people and data only (e.g. Alex and Sam).
-- **Existing personal details:** do not spread them into new files. If an edit touches one, move it to
-  private data when that is small and in scope; otherwise leave it and list it in your report.
+- **If you find a personal detail**, stop and report it; move it to private data only with the owner's OK.
 - **Before every commit**, check the staged diff (`git diff --cached`) for these categories. The
   hooks in `githooks/` run `tools/privacy_scan.py` on staged lines, file names and the commit message,
   using the owner's private word list (`~/Library/Application Support/Hub/pii-denylist.txt`); enable
