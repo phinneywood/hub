@@ -7,5 +7,6 @@ from preschool import TOOL as PRESCHOOL
 
 from .trip import TOOL as TRIP
 from .kitchen import TOOL as KITCHEN
+from ..agent import TOOL as ASK
 
-TOOLS = [GMAIL, CALENDAR, KITCHEN, PRESCHOOL, NETWORK, MOBILITY, TRIP]
+TOOLS = [ASK, GMAIL, CALENDAR, KITCHEN, PRESCHOOL, NETWORK, MOBILITY, TRIP]

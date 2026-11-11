@@ -18,7 +18,7 @@ def test_home_renders_one_tile_per_tool_even_when_sources_fail(monkeypatch):
     monkeypatch.setattr(home, 'SUMMARIES', {**home.SUMMARIES, 'gmail': broken, 'network': broken})
     page = TestClient(app).get('/')
     assert page.status_code == 200
-    assert page.text.count('class="tile ') == 7
+    assert page.text.count('class="tile ') == 8
     assert home.UNAVAILABLE in page.text
     assert 'aria-current="page"' in page.text  # brand marks home as current
 

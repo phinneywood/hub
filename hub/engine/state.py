@@ -13,6 +13,7 @@ MAX_INSTRUCTIONS = 12
 INSTRUCTION_LENGTH = 300
 MAX_REQUESTS = 30
 KEEP_DAYS = 60
+OWN_BUDGET = ('chat',)     # run kinds with a monthly limit of their own; left out of the shared one
 
 
 def trust(action):
@@ -79,12 +80,24 @@ def last_run(day, kind):
 
 
 def used(day, kind):
-    """Model calls this kind of run made on `day`, and the cost of every kind recorded in its month."""
+    """Model calls this kind of run made on `day`, and the cost recorded in its month by every kind that shares the limit."""
     with closing(store.db()) as conn:
         calls = conn.execute('select coalesce(sum(luna_calls),0) l, coalesce(sum(jev_calls),0) j from engine_runs '
                              'where day=? and kind=?', (day, kind)).fetchone()
-        month = conn.execute('select coalesce(sum(cost),0) c from engine_runs where substr(day,1,7)=?', (day[:7],)).fetchone()
+        month = conn.execute('select coalesce(sum(cost),0) c from engine_runs where substr(day,1,7)=? and kind not in (%s)'
+                             % ','.join('?' * len(OWN_BUDGET)), (day[:7], *OWN_BUDGET)).fetchone()
     return {'luna_calls': calls['l'], 'jev_calls': calls['j'], 'month_cost': month['c']}
+
+
+def spent(day, kind):
+    """What one kind of run has cost in the month of `day`, and its model calls and tokens that day."""
+    with closing(store.db()) as conn:
+        month = conn.execute('select coalesce(sum(cost),0) c from engine_runs where substr(day,1,7)=? and kind=?',
+                             (day[:7], kind)).fetchone()
+        today = conn.execute('select coalesce(sum(luna_calls),0) l, coalesce(sum(tokens_in),0) i, coalesce(sum(tokens_out),0) o, '
+                             'count(*) n from engine_runs where day=? and kind=?', (day, kind)).fetchone()
+    return {'month_cost': month['c'], 'calls_today': today['l'], 'tokens_in_today': today['i'],
+            'tokens_out_today': today['o'], 'runs_today': today['n']}
 
 
 def save_suggestions(day, items):

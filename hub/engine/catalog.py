@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 
 from .. import home, today
-from .registry import Action, Source
+from .registry import Action, Lookup, Source
 
 EMAILS = 5               # emails that need the owner, passed to the overnight review without their text
 UNANSWERED = 3
@@ -128,6 +128,66 @@ def network_evidence():
     return {'headline': tile['headline'], 'detail': tile['detail']}
 
 
+# ---- Lookups: what Ask Hub may read on request. Each returns a small dict; none changes anything. ----
+
+LOOKUP_MAIL = 10           # emails of one kind shown to the chat's model
+MAIL_KINDS = ('needs', 'calendar', 'record', 'expires', 'reading', 'noise')
+UNAVAILABLE = {'unavailable': 'Hub could not read this just now.'}
+
+
+def today_lookup() -> dict:
+    """The owner's "Needs you" list for today: the few things that want attention, most urgent first."""
+    from . import judge
+    items = []
+    for item in today.needs_you():
+        # A mail item's second line names senders, so only its title (counts and kinds) is passed on.
+        # The mail lookup gives names and subjects, and leaves out senders with AI switched off.
+        why = None if item['key'].startswith('gmail-') else judge.scrub(item['why'])[:200]
+        items.append({'what': judge.scrub(item['title'])[:160], 'why': why})
+    return {'today': home.today().isoformat(), 'items': items}
+
+
+def mail_lookup(kind: str | None = None) -> dict:
+    """What the last sort found in the inbox. Without `kind`: how many emails of each kind.
+    With `kind` (one of needs, calendar, record, expires, reading, noise): up to 10 of them, as sender name
+    and subject line, newest first. "needs" means emails that need the owner; those include a next step."""
+    from .. import luna, store
+    from ..tools.gmail import triage
+    from . import judge
+    if kind is not None and kind not in MAIL_KINDS:
+        return {'error': 'kind must be one of: ' + ', '.join(MAIL_KINDS)}
+    seen = triage.picture()
+    if not seen['synced_at']:
+        return {'sorted': False, 'note': 'Mail has not been sorted yet.'}
+    counts = {'needs': len(seen['needs']), **{k: len(seen['kinds'][k]['open']) for k in MAIL_KINDS[1:]}}
+    found = {'sorted': True, 'in_inbox': {triage.NAMES[k]: n for k, n in counts.items() if n},
+             'the_owner_wrote_and_got_no_answer': len(seen['asked'])}
+    if kind:
+        rows = seen['needs'] if kind == 'needs' else seen['kinds'][kind]['open']
+        rows = [r for r in rows if not store.ai_blocked(r['sender'])][:LOOKUP_MAIL]
+        found['kind'] = triage.NAMES[kind]
+        found['emails'] = [{'from': luna.clip(judge.scrub(_named(r['name'], r['sender'])), 80),
+                            'subject': luna.clip(judge.scrub(r['subject'] or ''), 120), 'days_old': r['days'],
+                            **({'next_step': r['step']} if kind == 'needs' and r['step'] else {})} for r in rows]
+    return found
+
+
+def calendar_lookup() -> dict:
+    """Events on the owner's main calendar for the next 7 days: titles, times and places."""
+    try:
+        return calendar_evidence()
+    except Exception:  # noqa: BLE001 - a lapsed sign-in or a quiet helper is an answer, not a crash
+        return UNAVAILABLE
+
+
+def trip_lookup() -> dict:
+    """The trip plan saved in Hub: its dates and whether flights are chosen."""
+    try:
+        return trip_evidence()
+    except Exception:  # noqa: BLE001
+        return UNAVAILABLE
+
+
 MORNING_HOUR = 6           # after this, a morning with no review counts as missed
 
 
@@ -199,20 +259,32 @@ SOURCES = [
            'when you wrote it and may be waiting for an answer. To the overnight review: counts, and the sender, subject '
            'and next step of up to 5 emails that need you. Senders you switched AI off for are left out of all of it.',
            items=(today.gmail_triage, today.gmail_rules, today.gmail_plan, today.gmail_rules_due, today.gmail_next),
-           evidence=gmail_evidence, prepare=gmail_prepare, sort=gmail_sort),
+           evidence=gmail_evidence, prepare=gmail_prepare, sort=gmail_sort,
+           lookups=(Lookup('sorted_mail', 'Gmail', 'What the last sort found in the inbox.',
+                           'Counts, and for one kind at a time up to 10 sender names and subject lines. Never addresses, '
+                           'links or message text, and nothing from senders you switched AI off for.',
+                           '/gmail', 'Open Gmail', mail_lookup),)),
     Source('calendar', 'Calendar', 'Your main Google calendar for the next 7 days, through the read-only helper.',
            'Titles, times and places of up to 40 events. Never descriptions or guest lists.',
-           items=(today.calendar,), evidence=calendar_evidence),
+           items=(today.calendar,), evidence=calendar_evidence,
+           lookups=(Lookup('calendar_week', 'Calendar', 'Your main Google calendar for the next 7 days.',
+                           'Titles, times and places of up to 40 events. Never descriptions or guest lists.',
+                           '/calendar', 'Open calendar', calendar_lookup),)),
     Source('preschool', 'Preschool', 'The reviewed class guide Hub already keeps.',
            'Dates, titles, times and places for the next two weeks. No names.',
            items=(today.preschool,), evidence=preschool_evidence),
     Source('trip', 'Trip', 'The trip plan saved in Hub.', 'Trip dates and whether flights are chosen.',
-           items=(today.trip,), evidence=trip_evidence),
+           items=(today.trip,), evidence=trip_evidence,
+           lookups=(Lookup('trip_status', 'Trip', 'The trip plan saved in Hub.', 'Trip dates and whether flights are chosen.',
+                           '/trip', 'Open trip', trip_lookup),)),
     Source('network', 'Network', 'Internet and device readings from Home Assistant.', 'The one-line status only.',
            evidence=network_evidence),
     Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
            'What is already on your list and what you said “Not today” to this week.', items=(hub_faults, hub_release),
-           prepare=old_key_reminder),
+           prepare=old_key_reminder,
+           lookups=(Lookup('today_list', 'Needs you', 'Today’s list, as the home page shows it.',
+                           'Each item’s title, and its second line unless it is about mail. No addresses or links.',
+                           '/', 'Open today’s list', today_lookup),)),
 ]
 
 ACTIONS = [
@@ -245,6 +317,10 @@ ACTIONS = [
            'It goes back by itself if the new version fails its checks.', page='/engine', post='/engine/deploy',
            default='undo', ceiling='undo'),
 ]
+
+
+def lookups():
+    return [lookup for s in SOURCES for lookup in s.lookups]
 
 
 def source(slug):

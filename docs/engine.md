@@ -42,7 +42,7 @@ Engine page runs the review alone.
    They show in “Needs you” marked “Suggestion”. Nothing else happens.
 
 Limits, enforced in Hub: 2 review calls a day, and $5 of recorded model cost a month across
-everything, sorting included. A failed night or a reached limit shows up as its own item in
+everything, sorting included (the chat has its own limit; see “Ask Hub”). A failed night or a reached limit shows up as its own item in
 “Needs you”.
 
 ## Sorting mail
@@ -179,6 +179,35 @@ owner's own words are saved either way. If sorting fails, the line is kept as a 
 Build requests show under “Asked for, not built yet” and at `GET /engine/requests.json`. They are
 the owner's wish list for the next building session. They do nothing by themselves and are not
 permission to deploy, restart, schedule or connect anything.
+
+## Ask Hub (the chat)
+
+`/ask` is a read-only chat over the catalog. Code: `hub/agent/`; page source: `web/ask/`.
+
+- **What it can do**: only the catalog's lookups (`Lookup` entries on a `Source`): today's list, sorted
+  mail, the calendar week and the trip. A lookup returns a small bounded dict and changes nothing. There
+  is no tool that writes, so a request to change something gets a plain "read-only for now".
+  Adding a lookup is one `Lookup(...)` on its source, with `reads` and `sends` in plain words; the chat
+  shows those words on the lookup's card.
+- **What the model sees**: what each lookup's `sends` says and no more. Mail is sender names and subject
+  lines with links and addresses taken out, one kind at a time, at most 10, never from a sender with AI
+  switched off. Today's list passes a mail item's title only, because its second line names senders.
+- **The route**: `hub/agent/model.py` builds the model from `luna.URL`, `luna.MODEL` and `luna.PROVIDER`,
+  and a guard on its HTTP client refuses any request that differs. It is the only place a chat model is made.
+- **Whose conversation**: Hub's. Threads live in `ask_threads` in Hub's database. From the browser the
+  server takes the new message only. Links under an answer are the lookups' own Hub pages; links and
+  images the model writes are not shown.
+- **Limits**, enforced in Hub: run kind `chat` has its own $10 a month, apart from the $5 everything else
+  shares; 300 model calls a day as a backstop; 6 model calls per question; the last 12 turns of a thread
+  are shown to the model. Each run is recorded with its calls, tokens and cost, never its text.
+- **What is kept**: chat text for 30 days. Older turns are cut from a thread, and a thread untouched for
+  30 days is removed. The owner can delete a chat at any time.
+- **Sign-in**: the same rule as every Hub page.
+- **The page** is the one Hub page with a build step (React, assistant-ui, Vite). The built files are
+  committed in `hub/static/ask/`; Hub and the deployer need no Node. `tests/test_ask_page.py` fails if
+  they do not match `web/ask/`. See `web/ask/README.md`, and `web/ask/check/` for the browser check.
+
+Not built yet: approval cards for actions, saving a reply that was cut off mid-stream, notifications.
 
 ## Versions and the Deploy button
 
