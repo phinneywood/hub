@@ -50,7 +50,7 @@ const SIZES = [
       await page.mouse.move(column.x + column.width / 2, column.y + column.height / 2);
       await page.waitForSelector("#viz-tip:not([hidden])");
       expect((await page.locator("#viz-tip").innerText()).includes("$"), `${name}: hovering a day shows its cost`);
-      await page.locator("section[aria-labelledby=viz-spend]").screenshot({ path: `${out}/${name}-3b-insights-hover.png` });
+      await shot("3b-insights-hover", false);
       await page.mouse.move(0, 0);
     }
 
