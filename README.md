@@ -81,6 +81,9 @@ python3.12 -m venv .venv
 git config core.hooksPath githooks   # turn on the commit-time privacy check
 ```
 
+To see a change running on real data before it is deployed, the owner runs a dev Hub from this
+checkout: `deploy/dev-hub setup`, then `deploy/dev-hub start` (see docs/dev-hub.md).
+
 ## More detail
 
 Preschool includes the class-guide design at `/preschool/`, with maintenance behind its Manage

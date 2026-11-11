@@ -1,0 +1,249 @@
+#!/usr/bin/python3 -B
+"""Owner-run: a development Hub on a private copy of live Hub's data, for previewing changes.
+
+    deploy/dev-hub setup          .venv if missing, a copy of live data if missing, the service file
+    deploy/dev-hub start          start the service in this login and add its two Tailscale entries
+    deploy/dev-hub stop           stop the service and remove the Tailscale entries
+    deploy/dev-hub status         what is running, the addresses, and whether sign-in and the model key work
+    deploy/dev-hub refresh-data   (stopped) set the current copy aside and copy live data again
+
+It runs this checkout's code with auto-reload on 127.0.0.1 only. Tailscale Serve is the only way in,
+so Hub's login allowlist applies as it does for live Hub. Live Hub's data is read, never written.
+Background jobs are off and the deployer folder is not set, so the dev Hub cannot ask for a deploy.
+Taps still act for real: Gmail actions and Kitchen's Approve reach the real accounts.
+See docs/dev-hub.md. Everything private is read at run time, never stored here.
+"""
+import json
+import os
+import plistlib
+import shutil
+import sqlite3
+import subprocess
+import sys
+import time
+import urllib.request
+from pathlib import Path
+
+HOME = Path.home()
+REPO = Path(__file__).resolve().parent.parent
+SUPPORT = HOME / 'Library' / 'Application Support'
+DEV = Path(os.environ.get('HUB_DEV_DIR', SUPPORT / 'HubDev'))
+LOG = HOME / 'Library' / 'Logs' / 'hub-dev.log'
+PORT = int(os.environ.get('HUB_DEV_PORT', '8794'))            # loopback only
+HTTPS_PORT = int(os.environ.get('HUB_DEV_HTTPS_PORT', '8445'))  # https://<machine>.<tailnet>.ts.net:8445, for a normal browser
+HTTP_PORT = int(os.environ.get('HUB_DEV_HTTP_PORT', '8446'))    # http://<machine>:8446, for the Claude app's Browser pane
+# The Kitchen the dev Hub talks to: the dev Kitchen when its folder exists (the kitchen repo's deploy/dev-kitchen),
+# so Kitchen changes can be tried without touching live Kitchen. HUB_DEV_KITCHEN_SOCKET overrides it.
+DEV_KITCHEN = SUPPORT / 'KitchenDev'
+SKIP = ('deploy-backups', '__pycache__')
+DB_SUFFIXES = ('.db', '.db-wal', '.db-shm', '.db-journal')
+
+
+def fail(message):
+    print(message, file=sys.stderr)
+    sys.exit(1)
+
+
+def prefix():
+    """The private service label prefix, shared with the other owner-run installers."""
+    if os.environ.get('HUB_LABEL_PREFIX'):
+        return os.environ['HUB_LABEL_PREFIX']
+    try:
+        return (SUPPORT / 'Hub' / 'label-prefix').read_text().strip() or 'local'
+    except OSError:
+        return 'local'
+
+
+def label():
+    return prefix() + '.hub-dev'
+
+
+def live_settings():
+    """Live Hub's service environment, from its LaunchAgent (or HUB_LIVE_PLIST)."""
+    path = Path(os.environ.get('HUB_LIVE_PLIST', HOME / 'Library' / 'LaunchAgents' / (prefix() + '.hub.plist')))
+    try:
+        with open(path, 'rb') as f:
+            return plistlib.load(f).get('EnvironmentVariables', {})
+    except OSError:
+        fail(f'Live Hub service file not found: {path}. Set HUB_LIVE_PLIST to its path.')
+
+
+def kitchen_socket():
+    if os.environ.get('HUB_DEV_KITCHEN_SOCKET'):
+        return os.environ['HUB_DEV_KITCHEN_SOCKET']
+    return str(DEV_KITCHEN / 'kitchen.sock') if DEV_KITCHEN.exists() else None
+
+
+def dev_env(live, data, kitchen=None):
+    """The dev Hub's environment: live Hub's settings, its own data and port, no jobs, no deployer."""
+    env = dict(live)
+    env.pop('HUB_RELEASES_DIR', None)
+    env.update(HUB_PORT=str(PORT), HUB_DATA_DIR=str(data), HUB_BACKGROUND_JOBS='disabled', PYTHONUNBUFFERED='1')
+    if kitchen:
+        env['HUB_KITCHEN_SOCKET'] = kitchen
+    return env
+
+
+def service(env, repo=REPO, log=LOG):
+    return {
+        'Label': label(),
+        'ProgramArguments': [str(repo / '.venv' / 'bin' / 'python'), '-m', 'uvicorn', 'hub.main:app',
+                             '--host', '127.0.0.1', '--port', str(PORT),
+                             '--reload', '--reload-dir', 'hub', '--reload-dir', 'preschool'],
+        'WorkingDirectory': str(repo), 'EnvironmentVariables': env,
+        'RunAtLoad': True, 'KeepAlive': False, 'LimitLoadToSessionType': 'Aqua',
+        'StandardOutPath': str(log), 'StandardErrorPath': str(log),
+    }
+
+
+def check_apart(live, data):
+    live, data = Path(live).resolve(), Path(data).resolve()
+    if data == live or live in data.parents or data in live.parents:
+        fail(f'The dev data folder must be apart from live data ({live}).')
+
+
+def copy_data(live, data):
+    """Copy live data: files as they are, SQLite databases through SQLite's own backup."""
+    live, data = Path(live), Path(data)
+    check_apart(live, data)
+    for src in sorted(live.rglob('*')):
+        rel = src.relative_to(live)
+        if rel.parts[0] in SKIP or '__pycache__' in rel.parts or src.is_dir():
+            continue
+        dst = data / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if src.name.endswith('.db'):
+            source = sqlite3.connect(f'file:{src}?mode=ro', uri=True)
+            target = sqlite3.connect(dst)
+            try:
+                source.backup(target)
+            finally:
+                target.close()
+                source.close()
+        elif not src.name.endswith(DB_SUFFIXES):
+            shutil.copy2(src, dst)
+    for path in [data, *data.rglob('*')]:
+        path.chmod(0o700 if path.is_dir() else 0o600)
+
+
+def tailscale():
+    found = shutil.which('tailscale') or '/Applications/Tailscale.app/Contents/MacOS/tailscale'
+    return found if Path(found).exists() else fail('Tailscale command not found.')
+
+
+def names(status):
+    """(short, full) machine names from `tailscale status --json`."""
+    full = status['Self']['DNSName'].rstrip('.')
+    return full.split('.')[0], full
+
+
+def loaded():
+    return subprocess.run(['launchctl', 'print', f'gui/{os.getuid()}/{label()}'],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+
+
+def fetch(url):
+    try:
+        with urllib.request.urlopen(url, timeout=15) as response:
+            return response.status, response.read().decode('utf-8', 'replace')
+    except Exception as exc:  # noqa: BLE001 - reported, not raised
+        return getattr(exc, 'code', None), ''
+
+
+def run(*args):
+    subprocess.run(args, check=True)
+
+
+def python312():
+    found = os.environ.get('HUB_DEV_PYTHON') or shutil.which('python3.12')
+    return found or fail('Python 3.12 not found. Set HUB_DEV_PYTHON to a python3.12.')
+
+
+def setup():
+    live = live_settings()
+    data = DEV / 'data'
+    DEV.mkdir(parents=True, exist_ok=True)
+    DEV.chmod(0o700)
+    if not (REPO / '.venv' / 'bin' / 'python').exists():
+        run(python312(), '-m', 'venv', str(REPO / '.venv'))
+        run(str(REPO / '.venv' / 'bin' / 'python'), '-m', 'pip', 'install', '-q', '-r', str(REPO / 'requirements.lock'))
+    if data.exists():
+        print(f'Keeping the existing data copy in {data} (refresh-data replaces it).')
+    else:
+        copy_data(live['HUB_DATA_DIR'], data)
+        print(f'Copied live data to {data}.')
+    plist = DEV / (label() + '.plist')
+    with open(plist, 'wb') as f:
+        plistlib.dump(service(dev_env(live, data, kitchen_socket())), f)
+    plist.chmod(0o600)
+    print('Kitchen:', 'the dev Kitchen' if kitchen_socket() else 'live Kitchen')
+    print('Service file written. Next: deploy/dev-hub start (or stop, then start, if it is running)')
+
+
+def start():
+    plist = DEV / (label() + '.plist')
+    if not plist.exists():
+        fail('Run deploy/dev-hub setup first.')
+    if not loaded():
+        run('launchctl', 'bootstrap', f'gui/{os.getuid()}', str(plist))
+    ts = tailscale()
+    run(ts, 'serve', '--bg', f'--https={HTTPS_PORT}', f'http://127.0.0.1:{PORT}')
+    run(ts, 'serve', '--bg', f'--http={HTTP_PORT}', f'http://127.0.0.1:{PORT}')
+    time.sleep(3)
+    status()
+
+
+def stop():
+    if loaded():
+        run('launchctl', 'bootout', f'gui/{os.getuid()}/{label()}')
+    ts = tailscale()
+    for flag in (f'--https={HTTPS_PORT}', f'--http={HTTP_PORT}'):
+        subprocess.run([ts, 'serve', flag, 'off'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print('Stopped. The data copy is kept.')
+
+
+def refresh_data():
+    if loaded():
+        fail('Stop the dev Hub first: deploy/dev-hub stop')
+    data = DEV / 'data'
+    if data.exists():
+        aside = DEV / time.strftime('data-before-%Y%m%dT%H%M%S')
+        data.rename(aside)
+        print(f'Set the old copy aside in {aside}. Delete it when you no longer need it.')
+    copy_data(live_settings()['HUB_DATA_DIR'], data)
+    print(f'Copied live data to {data}. Next: deploy/dev-hub start')
+
+
+def status():
+    print('Service:', 'running' if loaded() else 'not running', f'({label()})')
+    try:
+        with open(DEV / (label() + '.plist'), 'rb') as f:
+            uses = plistlib.load(f)['EnvironmentVariables'].get('HUB_KITCHEN_SOCKET')
+        print('Kitchen:', 'the dev Kitchen' if uses and Path(uses).parent == DEV_KITCHEN else 'live Kitchen' if not uses else uses)
+    except (OSError, KeyError):
+        pass
+    code, _ = fetch(f'http://127.0.0.1:{PORT}/today')
+    print(f'Local 127.0.0.1:{PORT}:', code or 'no answer')
+    out = subprocess.run([tailscale(), 'status', '--json'], capture_output=True, text=True)
+    if out.returncode != 0:
+        print('Tailscale: not answering')
+        return
+    short, full = names(json.loads(out.stdout))
+    pane, browser = f'http://{short}:{HTTP_PORT}/', f'https://{full}:{HTTPS_PORT}/'
+    code, page = fetch(pane + 'status')
+    signed_in = 'Signed in as' in page and 'this Mac (direct)' not in page
+    key = 'model key found' in page
+    print('Browser pane:', pane, '-', code or 'no answer')
+    print('Normal browser:', browser)
+    if code != 200:
+        return
+    print('Sign-in applies:', 'yes' if signed_in else 'NO - check the Tailscale entries')
+    print('Model key:', 'found' if key else 'not found (start it from the Mac login, not only over SSH)')
+
+
+COMMANDS = {'setup': setup, 'start': start, 'stop': stop, 'status': status, 'refresh-data': refresh_data}
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
+        fail('usage: deploy/dev-hub ' + '|'.join(COMMANDS))
+    COMMANDS[sys.argv[1]]()

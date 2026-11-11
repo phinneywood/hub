@@ -139,4 +139,12 @@ patch.setattr(ha, 'states', lambda: STATES)
 patch.setattr(ha, 'history', history)
 
 if __name__ == '__main__':
-    uvicorn.run(app, host='127.0.0.1', port=int(os.environ.get('VIEWS_CHECK_PORT', '8793')), log_level='warning')
+    # VIEWS_CHECK_HOST: another address to listen on, such as this machine's private tailnet address, to preview
+    # the demo from the owner's own devices. VIEWS_CHECK_RELOAD=1: restart on code changes, for a live preview.
+    host, port = os.environ.get('VIEWS_CHECK_HOST', '127.0.0.1'), int(os.environ.get('VIEWS_CHECK_PORT', '8793'))
+    if os.environ.get('VIEWS_CHECK_RELOAD') == '1':
+        root = Path(__file__).resolve().parents[3]
+        uvicorn.run('demo_server:app', app_dir=str(Path(__file__).parent), host=host, port=port, log_level='info',
+                    reload=True, reload_dirs=[str(root / d) for d in ('hub', 'preschool', 'tests', 'web/views/check')])
+    else:
+        uvicorn.run(app, host=host, port=port, log_level='warning')
