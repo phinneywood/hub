@@ -22,7 +22,7 @@ def dates(start, end):
 def home(request: Request):
     trip = store.load()
     return render(request, 'trip/index.html', active='trip', heading=trip['title'].split(' · ')[0],
-                  dates=dates(trip['start'], trip['end']))
+                  dates=dates(trip['start'], trip['end']), names=store.stay_names(trip))
 
 @router.get('/data')
 def data():

@@ -108,20 +108,31 @@ def older_trip():
     return data
 
 
-def test_a_saved_trip_is_never_replaced_or_rewritten_by_the_starter_trip(tmp_path, monkeypatch):
+def test_a_saved_trip_is_read_exactly_as_stored_and_never_replaced_by_the_starter_trip(tmp_path, monkeypatch):
     monkeypatch.setattr(store.config, 'DATA_DIR', tmp_path)
     saved_trip(tmp_path, older_trip())
     before = stored(tmp_path)
     trip = store.load()
-    assert trip['id'] == 'alex-and-sam-trip' and trip['revision'] == 4
-    assert trip['scenarios'][0]['first_nightly'] == 150 and 'nyc_nightly' not in trip['scenarios'][0]
-    assert stored(tmp_path) == before  # reading upgrades in memory only; no seed row added
+    assert trip == json.loads(before[0][2])  # no renamed or added fields
+    assert trip['id'] == 'alex-and-sam-trip' and trip['scenarios'][0]['nyc_nightly'] == 150
+    assert stored(tmp_path) == before  # no seed row, nothing rewritten
+    assert domain.summarize(trip, 'wed')['costs']['first'] == 600  # older names still count
 
 
 def test_stay_names_come_from_the_trip_then_private_settings_then_neutral_words(tmp_path, monkeypatch):
     monkeypatch.setattr(store.config, 'DATA_DIR', tmp_path)
     saved_trip(tmp_path, older_trip())
-    assert (store.load()['first_stay'], store.load()['second_stay']) == ('First stay', 'Second stay')
+    trip = store.load()
+    assert store.stay_names(trip) == {'first': 'First stay', 'second': 'Second stay'}
     (tmp_path/'household.json').write_text(json.dumps({'trip': {'first_stay': 'Harbor Town', 'second_stay': 'Hill Farm'}}))
-    assert (store.load()['first_stay'], store.load()['second_stay']) == ('Harbor Town', 'Hill Farm')
-    assert store.load()['id'] == 'alex-and-sam-trip'
+    assert store.stay_names(trip) == {'first': 'Harbor Town', 'second': 'Hill Farm'}
+    assert store.stay_names({**trip, 'first_stay': 'Own name'})['first'] == 'Own name'
+    assert 'first_stay' not in store.load()
+
+
+def test_saving_an_older_trip_stores_the_new_field_names(tmp_path, monkeypatch):
+    monkeypatch.setattr(store.config, 'DATA_DIR', tmp_path)
+    saved_trip(tmp_path, older_trip())
+    saved = store.save(store.load(), 4)
+    assert saved['scenarios'][0]['first_nightly'] == 150 and 'nyc_nightly' not in saved['scenarios'][0]
+    assert json.loads(stored(tmp_path)[0][2])['scenarios'][0]['first_nightly'] == 150

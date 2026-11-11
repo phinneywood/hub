@@ -30,14 +30,22 @@ def load():
             initial = seed_trip()
             conn.execute('INSERT INTO trip VALUES (?, ?, ?)', (initial['id'], 1, json.dumps(initial)))
             row = (json.dumps(initial),)
-    trip = validate(json.loads(row[0]))
-    # Stay names the trip doesn't hold yet come from the private household file, then neutral words.
-    names = household.section('trip')
-    for field, fallback in (('first_stay', 'First stay'), ('second_stay', 'Second stay')):
-        if field not in trip:
-            value = names.get(field)
-            trip[field] = value if isinstance(value, str) and 0 < len(value.strip()) <= 60 else fallback
-    return trip
+    # Exactly as stored: older field names are renamed only on the owner's next save.
+    return validate(json.loads(row[0]), upgrade_fields=False)
+
+
+def stay_names(trip):
+    """The two stays' names: from the trip, then the private household file, then neutral words."""
+    settings = household.section('trip')
+    names = {}
+    for which, fallback in (('first', 'First stay'), ('second', 'Second stay')):
+        for value in (trip.get(which + '_stay'), settings.get(which + '_stay')):
+            if isinstance(value, str) and 0 < len(value.strip()) <= 60:
+                names[which] = value
+                break
+        else:
+            names[which] = fallback
+    return names
 
 
 def save(data, expected_revision):

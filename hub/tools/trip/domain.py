@@ -14,7 +14,7 @@ LEGACY_KEYS = {'nyc_nightly': 'first_nightly', 'nj_nightly': 'second_nightly'}
 
 
 def upgrade(data):
-    """Rename older scenario fields in place; the stored copy changes only when the owner saves."""
+    """Rename older scenario fields in place. Used on save only: reading returns a trip exactly as stored."""
     for scenario in data.get('scenarios', []) if isinstance(data, dict) else []:
         if isinstance(scenario, dict):
             for old, new in LEGACY_KEYS.items():
@@ -47,19 +47,19 @@ def flight_duration(leg):
     return int((end.timestamp() - start.timestamp()) / 60)
 
 
-def validate(data):
+def validate(data, upgrade_fields=True):
     try:
-        return _validate(data)
+        return _validate(data, upgrade_fields)
     except (KeyError, TypeError, AttributeError, OverflowError) as exc:
         raise ValueError('Malformed trip: missing or incorrectly typed fields.') from exc
 
 
-def _validate(data):
+def _validate(data, upgrade_fields=True):
     if not isinstance(data, dict) or not isinstance(data.get('id'), str) or not TRIP_ID.fullmatch(data['id']):
         raise ValueError('This file is not a Hub trip.')
     if len(json.dumps(data, allow_nan=False)) > 1_000_000:
         raise ValueError('Trip is too large (maximum 1 MB).')
-    result = upgrade(deepcopy(data))
+    result = upgrade(deepcopy(data)) if upgrade_fields else deepcopy(data)
     data = result
     def text(value, name, required=False):
         if not isinstance(value, str) or len(value) > 20000 or (required and not value.strip()):
@@ -115,7 +115,7 @@ def _validate(data):
             for field in ('done', 'nonstop'):
                 if field in item and not isinstance(item[field], bool):
                     raise ValueError(f'{field} must be true or false.')
-            for field in ('amount', 'first_nightly', 'second_nightly', 'car_daily', 'round_trip_per_person', 'party_total'):
+            for field in ('amount', 'first_nightly', 'second_nightly', *LEGACY_KEYS, 'car_daily', 'round_trip_per_person', 'party_total'):
                 value = item.get(field)
                 if value is not None and (isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or not 0 <= value <= 10_000_000):
                     raise ValueError(f'{field} must be a nonnegative amount up to $10 million, or unknown.')
@@ -158,6 +158,7 @@ def summarize(data, scenario_id):
     scenario = next(s for s in data['scenarios'] if s['id'] == scenario_id)
     start, transition, end = (date.fromisoformat(v) for v in (data['start'], scenario['transition'], data['end']))
     first, second = (transition-start).days, (end-transition).days
+    scenario = upgrade({'scenarios': [dict(scenario)]})['scenarios'][0]
     costs = {name: None if scenario.get(key) is None else round(scenario[key] * nights, 2)
              for name, key, nights in [('first', 'first_nightly', first), ('second', 'second_nightly', second),
                                        ('car', 'car_daily', second)]}

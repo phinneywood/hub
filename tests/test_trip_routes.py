@@ -102,3 +102,23 @@ def test_page_heading_and_dates_come_from_the_saved_trip(client):
     assert 'Port Ellery &amp; Larch Valley' in page and 'OCT 4–11, 2031' in page
     assert pages.dates('2031-10-28','2031-11-03')=='OCT 28 – NOV 3, 2031'
     assert pages.dates('2031-12-30','2032-01-02')=='DEC 30, 2031 – JAN 2, 2032'
+
+
+def test_data_and_export_return_an_older_saved_trip_exactly_as_stored(client, tmp_path):
+    """A release that changes no saved data must not change what /trip/data returns
+    (the deployer compares it before and after switching versions)."""
+    import sqlite3
+    older = seed.seed_trip()
+    older.update(id='alex-and-sam-trip', revision=3)
+    del older['first_stay'], older['second_stay']
+    for scenario in older['scenarios']:
+        scenario['nyc_nightly'] = scenario.pop('first_nightly')
+        scenario['nj_nightly'] = scenario.pop('second_nightly')
+    with sqlite3.connect(tmp_path/'trip.db') as conn:
+        conn.execute('CREATE TABLE trip (id TEXT PRIMARY KEY, revision INTEGER NOT NULL, document TEXT NOT NULL)')
+        conn.execute('CREATE TABLE trip_versions (revision INTEGER PRIMARY KEY, saved_at TEXT NOT NULL, document TEXT NOT NULL)')
+        conn.execute('INSERT INTO trip VALUES (?, ?, ?)', (older['id'], 3, json.dumps(older)))
+    assert client.get('/trip/data').json() == older
+    assert client.get('/trip/export').json() == older
+    page = client.get('/trip').text
+    assert '"first": "First stay"' in page and 'nyc_nightly' not in page
