@@ -182,10 +182,12 @@ permission to deploy, restart, schedule or connect anything.
 
 ## Ask Hub (the chat)
 
-`/ask` is a read-only chat over the catalog. Code: `hub/agent/`; page source: `web/ask/`.
+`/ask` (also Hub's landing page, `/`) is a read-only chat over the catalog. Cards and charts hand it a
+question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page source: `web/ask/`.
 
 - **What it can do**: only the catalog's lookups (`Lookup` entries on a `Source`): today's list, sorted
-  mail, the calendar week and the trip. A lookup returns a small bounded dict and changes nothing. There
+  mail, the inbox's size by day, the calendar week, the trip, the network's one-line status and Hub's
+  own AI spend. A lookup returns a small bounded dict and changes nothing. There
   is no tool that writes, so a request to change something gets a plain "read-only for now".
   Adding a lookup is one `Lookup(...)` on its source, with `reads` and `sends` in plain words; the chat
   shows those words on the lookup's card.

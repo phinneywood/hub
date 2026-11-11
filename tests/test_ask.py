@@ -51,6 +51,7 @@ def fictional(monkeypatch):
         {'date': '2027-03-13', 'all_day': False, 'start': '10:00', 'end': '12:00', 'title': 'Farmers market with Alex', 'location': 'Old Mill Square', 'busy': True}]})
     monkeypatch.setattr(catalog, 'trip_evidence', lambda: {'today': '2027-03-10', 'start': '2027-06-05', 'end': '2027-06-12',
                                                            'flights_chosen': False})
+    monkeypatch.setattr(catalog, 'network_evidence', lambda: {'headline': 'Internet is up', 'detail': '18 ms ping · router link up'})
     monkeypatch.setattr(today, 'needs_you', lambda tiles=(): [
         today.rec('gmail-needs', 'warn', '3 emails need you', 'From Maple Street Dental, Alex Rivera and Sam Quiet.', href='/gmail', cta='Open'),
         today.rec('calendar-overlap', 'info', 'Two events overlap tomorrow', 'Dentist and Call with the plumber, both at 3:00 PM.',
@@ -89,6 +90,15 @@ def _answer(text, r):
     if 'trip_status' in r:
         t = r['trip_status']
         return f'The trip runs {t["start"]} to {t["end"]}. Flights are {"chosen" if t["flights_chosen"] else "**not chosen yet**"}.'
+    if 'network_status' in r:
+        return f'**{r["network_status"]["headline"]}.** {r["network_status"]["detail"]}.'
+    if 'ai_spend' in r:
+        return f'So far in {r["ai_spend"]["month"]}:\n\n' + '\n'.join(
+            f'- **{m["covers"]}**: {m["spent"]} of {m["limit"]} ({m["percent_used"]}%)' for m in r['ai_spend']['limits'])
+    if 'inbox_trend' in r:
+        days = r['inbox_trend']['days']
+        return (f'The inbox went from **{days[0]["in_inbox"]:,}** to **{days[-1]["in_inbox"]:,}** over {len(days)} readings.'
+                if len(days) > 1 else 'Hub has not counted the inbox on enough days yet.')
     if 'sorted_mail' in r:
         m = r['sorted_mail']
         if 'emails' in m:
@@ -111,6 +121,12 @@ async def scripted(messages, info):
     elif wants('file', 'delete', 'send', 'archive'):
         for piece in _say('This chat is read-only for now. You can file sorted mail yourself on the Gmail page.'):
             yield piece
+    elif wants('network'):
+        yield {0: DeltaToolCall(name='network_status', json_args='{}', tool_call_id='call_network')}
+    elif wants('spent', 'spend'):
+        yield {0: DeltaToolCall(name='ai_spend', json_args='{}', tool_call_id='call_spend')}
+    elif wants('size of my inbox'):
+        yield {0: DeltaToolCall(name='inbox_trend', json_args='{}', tool_call_id='call_inbox')}
     elif wants('today', 'needs me'):
         yield {0: DeltaToolCall(name='today_list', json_args='{}', tool_call_id='call_today'),
                1: DeltaToolCall(name='calendar_week', json_args='{}', tool_call_id='call_calendar')}

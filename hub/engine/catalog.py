@@ -188,6 +188,37 @@ def trip_lookup() -> dict:
         return UNAVAILABLE
 
 
+def network_lookup() -> dict:
+    """The home network right now, in one line: whether the internet is up and what the readings say."""
+    try:
+        return network_evidence()
+    except Exception:  # noqa: BLE001
+        return UNAVAILABLE
+
+
+INBOX_DAYS = 30
+
+
+def inbox_lookup() -> dict:
+    """How many messages were in the inbox, and how many unread, on each recent day Hub counted. Counts only."""
+    from .. import store
+    return {'today': home.today().isoformat(),
+            'days': [{'day': r['day'], 'in_inbox': r['total'], 'unread': r['unread']} for r in store.inbox_history(INBOX_DAYS)]}
+
+
+def spend_lookup() -> dict:
+    """What Hub's own AI has cost this month against each monthly limit, and how its runs went in the last 30 days."""
+    from .. import insights
+    try:
+        spend = insights.spend()
+    except Exception:  # noqa: BLE001
+        return UNAVAILABLE
+    return {'month': spend['month'],
+            'limits': [{'covers': m['label'], 'spent': m['spent'], 'limit': m['cap'], 'percent_used': m['percent']} for m in spend['meters']],
+            'runs_last_30_days': [{'kind': r['name'], 'runs': r['runs'], 'did_not_finish': r['failed'], 'model_calls': r['calls'],
+                                   'cost': r['cost']} for r in spend['rows']]}
+
+
 MORNING_HOUR = 6           # after this, a morning with no review counts as missed
 
 
@@ -257,13 +288,17 @@ SOURCES = [
            'message might need you, its text. Through the helper, which can read, label and archive but never send or delete.',
            'To sort mail: the sender’s name and the subject line, and the text of a message only when it might need you or '
            'when you wrote it and may be waiting for an answer. To the overnight review: counts, and the sender, subject '
-           'and next step of up to 5 emails that need you. Senders you switched AI off for are left out of all of it.',
+           'and next step of up to 5 emails that need you. Senders you switched AI off for are left out of all of it. '
+           'To Ask Hub when you ask: also how many messages were in the inbox on each recent day.',
            items=(today.gmail_triage, today.gmail_rules, today.gmail_plan, today.gmail_rules_due, today.gmail_next),
            evidence=gmail_evidence, prepare=gmail_prepare, sort=gmail_sort,
            lookups=(Lookup('sorted_mail', 'Gmail', 'What the last sort found in the inbox.',
                            'Counts, and for one kind at a time up to 10 sender names and subject lines. Never addresses, '
                            'links or message text, and nothing from senders you switched AI off for.',
-                           '/gmail', 'Open Gmail', mail_lookup),)),
+                           '/gmail', 'Open Gmail', mail_lookup),
+                    Lookup('inbox_trend', 'Inbox size', 'The inbox count Hub notes each day it looks.',
+                           'How many messages were in the inbox, and how many unread, on each of the last 30 days. Counts only.',
+                           '/insights', 'Open Insights', inbox_lookup))),
     Source('calendar', 'Calendar', 'Your main Google calendar for the next 7 days, through the read-only helper.',
            'Titles, times and places of up to 40 events. Never descriptions or guest lists.',
            items=(today.calendar,), evidence=calendar_evidence,
@@ -278,13 +313,21 @@ SOURCES = [
            lookups=(Lookup('trip_status', 'Trip', 'The trip plan saved in Hub.', 'Trip dates and whether flights are chosen.',
                            '/trip', 'Open trip', trip_lookup),)),
     Source('network', 'Network', 'Internet and device readings from Home Assistant.', 'The one-line status only.',
-           evidence=network_evidence),
+           evidence=network_evidence,
+           lookups=(Lookup('network_status', 'Network', 'Internet and device readings from Home Assistant.',
+                           'The one-line status only: whether the internet is up, and the ping.',
+                           '/network', 'Open Network', network_lookup),)),
     Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
-           'What is already on your list and what you said “Not today” to this week.', items=(hub_faults, hub_release),
+           'What is already on your list and what you said “Not today” to this week. To Ask Hub when you ask: what its '
+           'runs cost against each limit and how many finished.', items=(hub_faults, hub_release),
            prepare=old_key_reminder,
            lookups=(Lookup('today_list', 'Needs you', 'Today’s list, as the Today page shows it.',
                            'Each item’s title, and its second line unless it is about mail. No addresses or links.',
-                           '/today', 'Open today’s list', today_lookup),)),
+                           '/today', 'Open today’s list', today_lookup),
+                    Lookup('ai_spend', 'AI spend', 'Hub’s record of its own model runs.',
+                           'This month’s cost against each limit, and for the last 30 days how many runs of each kind '
+                           'finished, their model calls and cost. Counts and dollars only, never text.',
+                           '/insights', 'Open Insights', spend_lookup))),
 ]
 
 ACTIONS = [

@@ -227,3 +227,57 @@ def test_insights_carries_the_network_overview_and_the_network_page_keeps_its_se
     assert 'action="/network/source"' not in section and 'href="/network">Network page</a>' in section    # settings stay on its own page
     own = client.get('/network?range=7d').text
     assert 'action="/network/source"' in own and 'href="/network?range=6h"' in own and 'id="network-auto"' in own
+
+
+# ---- the lookups behind the charts ----
+
+def test_charts_and_the_network_have_read_only_lookups_that_give_counts_and_dollars_only(client, monkeypatch):
+    monkeypatch.setattr(home, 'today', lambda: date(2027, 3, 20))
+    store.record_inbox('2027-03-19', 1200, 300)
+    store.record_inbox('2027-03-20', 1100, None)
+    state.record_run('2027-03-20', 'chat', 'ok', luna_calls=2, cost=1.0)
+    by_slug = {lookup.slug: lookup for lookup in catalog.lookups()}
+    assert by_slug['inbox_trend'].run() == {'today': '2027-03-20', 'days': [
+        {'day': '2027-03-19', 'in_inbox': 1200, 'unread': 300}, {'day': '2027-03-20', 'in_inbox': 1100, 'unread': None}]}
+    spend = by_slug['ai_spend'].run()
+    assert spend['limits'][1] == {'covers': 'Ask Hub', 'spent': '$1.00', 'limit': '$10.00', 'percent_used': 10}
+    assert spend['runs_last_30_days'] == [{'kind': 'Ask Hub', 'runs': 1, 'did_not_finish': 0, 'model_calls': 2, 'cost': '$1.00'}]
+    monkeypatch.setattr(catalog, 'network_evidence', lambda: {'headline': 'Internet is up', 'detail': '18 ms ping'})
+    assert by_slug['network_status'].run() == {'headline': 'Internet is up', 'detail': '18 ms ping'}
+    monkeypatch.setattr(catalog, 'network_evidence', lambda: 1 / 0)
+    assert by_slug['network_status'].run() == catalog.UNAVAILABLE
+    assert (by_slug['ai_spend'].page, by_slug['inbox_trend'].page, by_slug['network_status'].page) == ('/insights', '/insights', '/network')
+
+
+def test_every_chart_and_every_card_with_a_lookup_offers_ask_about_this(client, monkeypatch):
+    page = client.get('/insights').text
+    for key, question in (('inbox', 'size of my inbox'), ('mail', 'kinds of mail'), ('spend', 'spent on AI'), ('network', 'home network')):
+        assert f'href="/ask?about=insight%3A{key}"' in page
+        found = client.get('/ask/about', params={'ref': 'insight:' + key}).json()
+        assert question in found['question'] and found['from'] == 'Insights' and found['looks_at']
+    from hub.tools import TOOLS
+    monkeypatch.setattr(home, 'SUMMARIES', {})
+    cards_shown = {card['slug']: card['ask'] for card in cards.tools(home.tiles(TOOLS))}
+    assert cards_shown == {'gmail': 'tool:gmail', 'calendar': 'tool:calendar', 'kitchen': None, 'preschool': None,
+                           'network': 'tool:network', 'mobility': None, 'trip': 'tool:trip'}
+    # A list item about mail names both the list and the mail lookup; a tile's problem asks about its tool.
+    monkeypatch.setattr(today, 'needs_you', lambda tiles=(): [today.rec('gmail-needs', 'warn', '2 emails need you', '', href='/gmail', cta='Open')])
+    assert client.get('/ask/about', params={'ref': 'need:gmail-needs'}).json()['looks_at'] == ['Needs you', 'Gmail']
+    assert client.get('/ask/about', params={'ref': 'need:tile-network'}).json()['question'] == cards.TOPICS['tool:network'][1]
+
+
+def test_a_charts_question_is_answered_from_its_lookup_with_a_link_back_to_insights(monkeypatch):
+    from hub import luna
+    from hub.agent import model
+    from tests import test_ask
+    test_ask.fictional(monkeypatch)
+    monkeypatch.setattr(luna, 'key', lambda: 'synthetic-key')
+    monkeypatch.setattr(model, 'build', lambda http_client=None: test_ask.SCRIPTED)
+    monkeypatch.setattr(ha, 'configured', lambda: False)
+    state.record_run(home.today().isoformat(), 'overnight', 'ok', luna_calls=1, cost=0.25)
+    asked = TestClient(app)
+    question = asked.get('/ask/about', params={'ref': 'insight:spend'}).json()['question']
+    reply, chunks = test_ask.ask(asked, question)
+    assert reply.status_code == 200
+    assert {(c['url'], c['title']) for c in chunks if c['type'] == 'source-url'} == {('/insights', 'AI spend')}
+    assert '$0.25 of $5.00' in ''.join(c['delta'] for c in chunks if c['type'] == 'text-delta')
