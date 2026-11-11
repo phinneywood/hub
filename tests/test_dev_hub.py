@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'deploy' / 'dev-hub'
+if not SCRIPT.exists():  # the installed-package check carries tests but not deployment scripts
+    pytest.skip('deploy/dev-hub is not part of the installed package', allow_module_level=True)
 
 
 def load():
