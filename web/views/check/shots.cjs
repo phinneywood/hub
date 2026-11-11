@@ -34,12 +34,15 @@ const SIZES = [
     await page.waitForSelector(".decision"); await narrow("Today"); await shot("2-today");
     expect((await page.locator(".decision").count()) === 4, `${name}: one card per decision`);
     expect((await page.locator('.tile a[href="/kitchen"]').count()) > 0, `${name}: Kitchen has its own card`);
+    expect((await page.locator(".tile-name").allInnerTexts()).join("|").toUpperCase() === "KITCHEN|PRESCHOOL|NETWORK|BIKE + BUS", `${name}: a tool with a decision card has no second card`);
     const small = await page.evaluate(() => [...document.querySelectorAll(".decision-acts .btn, .shell-icon")].filter((b) => b.getBoundingClientRect().height < 40).length);
     expect(small === 0, `${name}: a button on Today is under 40px tall`);
 
     await page.goto(base + "/insights");
     await page.waitForSelector(".viz"); await narrow("Insights"); await shot("3-insights");
-    expect((await page.locator("svg.viz").count()) === 3 && (await page.locator(".trend-chart").count()) >= 2, `${name}: the charts are drawn`);
+    expect((await page.locator("svg.viz").count()) === 3, `${name}: the charts are drawn`);
+    expect((await page.locator("#network .metric-card").count()) === 3 && (await page.locator("#network .trend-chart").count()) === 0, `${name}: Insights carries the network summary only`);
+    expect((await page.locator('#network a.viz-more[href="/network"]').count()) === 1, `${name}: the summary links to the full Network page`);
     await page.locator("#network").scrollIntoViewIfNeeded();
     await page.locator("#network").screenshot({ path: `${out}/${name}-4-insights-network.png` });
     if (!size.hasTouch) {

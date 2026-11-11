@@ -80,9 +80,10 @@
 </div>
 
 <section class="viz-section" id="network" aria-labelledby="viz-network">
-  <div class="viz-head"><h2 id="viz-network">Network</h2>{{ ask('network', 'Network') }}<a class="viz-open" href="/network">Open Network<span aria-hidden="true"> →</span></a></div>
+  <div class="viz-head"><h2 id="viz-network">Network</h2>{{ ask('network', 'Network') }}</div>
   {% if network %}<div class="network-page">{{ network }}</div>
-  {% else %}<p class="viz-empty">Hub couldn’t load the network readings just now. The <a href="/network">Network page</a> may say more.</p>{% endif %}
+  <a class="btn viz-more" href="/network">Incidents, speed history and devices<span aria-hidden="true"> →</span></a>
+  {% else %}<p class="viz-empty">No network readings to show just now. The <a href="/network">Network page</a> says why.</p>{% endif %}
 </section>
 <div id="viz-tip" role="status" hidden></div>
 {% endblock %}

@@ -1,8 +1,8 @@
 {% macro nav(active) %}
 <nav class="network-nav" aria-label="Network"><a href="/network"{% if active == 'overview' %} class="selected"{% endif %}>Overview</a><a href="/network/devices"{% if active == 'devices' %} class="selected"{% endif %}>Devices</a><a href="/network/mesh"{% if active == 'mesh' %} class="selected"{% endif %}>Mesh</a></nav>
 {% endmacro %}
-{% macro ranges(path, selected, options, labels, anchor='') %}
-<nav class="range-row" aria-label="History range"><span class="muted">HISTORY</span>{% for option in options %}<a href="{{ path }}?range={{ option }}{{ anchor }}"{% if option == selected %} class="selected" aria-current="true"{% endif %}>{{ labels[option] }}</a>{% endfor %}</nav>
+{% macro ranges(path, selected, options, labels) %}
+<nav class="range-row" aria-label="History range"><span class="muted">HISTORY</span>{% for option in options %}<a href="{{ path }}?range={{ option }}"{% if option == selected %} class="selected" aria-current="true"{% endif %}>{{ labels[option] }}</a>{% endfor %}</nav>
 {% endmacro %}
 {% macro graph(chart, label, unit) %}
 {% if chart.count %}

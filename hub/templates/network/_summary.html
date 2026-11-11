@@ -1,0 +1,6 @@
+<section class="network-verdict tone-{{ tone }}"><p class="eyebrow">RIGHT NOW</p><h2><span class="tone-dot" aria-hidden="true"></span>{{ headline }}</h2>{% if facts %}<p class="verdict-facts">{{ facts }}</p>{% endif %}<p class="fine">Page fetched {{ updated }} Pacific. Each source has its own reporting time.{% if full %} <label><input id="network-auto" type="checkbox"> Refresh every 60 seconds</label>{% endif %}</p></section>
+<section class="metric-grid">
+<article class="metric-card"><span class="metric-label">INTERNET</span><strong class="metric-main">{{ reach_status }}</strong><span class="metric-detail">Ping to an external target</span></article>
+<article class="metric-card"><span class="metric-label">ROUTER LINK</span><strong class="metric-main">{{ wan_status }}</strong><span class="metric-detail">What the router reports</span></article>
+<article class="metric-card"><span class="metric-label">DEVICES</span><strong class="metric-main">{{ online_count }} online / {{ client_count }} tracked</strong><span class="metric-detail">{{ node_count }} mesh nodes{% if unknown_count %} · {{ unknown_count }} unknown{% endif %}</span></article>
+</section>

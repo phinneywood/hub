@@ -2,7 +2,7 @@
 
 Drives Ask, Today, Insights, “Ask about this”, All tools and Settings in headless Chromium at phone
 width (390 px, light and dark) and at 1280 px, on made-up data with a scripted model. It checks the
-navigation, the cards, that charts are drawn, that a card's question lands in Ask's box unsent, that
+navigation, the cards, that charts are drawn, that Insights carries only the network summary, that a card's question lands in Ask's box unsent, that
 nothing scrolls sideways, that there are no console errors (so nothing breaks Hub's content policy)
 and that the pages talk to no other host. It saves a screenshot of each view.
 

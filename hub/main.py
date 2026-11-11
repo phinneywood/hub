@@ -179,9 +179,9 @@ def today_page(request: Request, snoozed: int = 0):
 
 
 @app.get("/insights", response_class=HTMLResponse)
-def insights_page(request: Request, range: str = "24h"):
+def insights_page(request: Request):
     from . import insights
-    return render(request, "insights.html", active="insights", **insights.page(range))
+    return render(request, "insights.html", active="insights", **insights.page())
 
 
 @app.get("/tools", response_class=HTMLResponse)

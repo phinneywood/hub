@@ -40,8 +40,7 @@ def askable(ref):
 def _owner(href):
     """The tool a list item belongs to, from the page it points at."""
     from .tools import TOOLS
-    slug = href.strip('/').split('/')[0].split('?')[0]
-    return next((t['name'] for t in TOOLS if t['slug'] == slug), 'Hub')
+    return next((t['name'] for t in TOOLS if t['slug'] == _slug(href)), 'Hub')
 
 
 def decisions(needs):
@@ -49,11 +48,17 @@ def decisions(needs):
     return [{**n, 'owner': _owner(n['href']), 'ask': 'need:' + n['key']} for n in needs]
 
 
-def tools(tiles):
-    """One card per tool, from its home tile. Ask is a main view, not a card."""
+def _slug(href):
+    return href.strip('/').split('/')[0].split('?')[0]
+
+
+def tools(tiles, decided=()):
+    """One card per tool, from its home tile. Ask is a main view, not a card, and a tool that already has
+    a decision card (`decided`: those cards) is not shown twice."""
+    above = {_slug(d['href']) for d in decided}
     found = []
     for t in tiles:
-        if t['slug'] == 'ask':
+        if t['slug'] == 'ask' or t['slug'] in above:
             continue
         ref = 'tool:' + t['slug']
         found.append({**t, 'ask': ref if askable(ref) else None})
@@ -94,4 +99,5 @@ def page():
     from .tools import TOOLS
     jobs = today.start()
     tiles = home.tiles(TOOLS)
-    return {'decisions': decisions(today.collect(jobs, tiles)), 'tools': tools(tiles)}
+    decided = decisions(today.collect(jobs, tiles))
+    return {'decisions': decided, 'tools': tools(tiles, decided)}

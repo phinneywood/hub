@@ -164,11 +164,11 @@ def _soft(build):
         return {'has': False, 'failed': True}
 
 
-def page(selected='24h'):
+def page():
     from . import cards
     from .tools.network import pages as network
     try:
-        net = network.section(selected, '/insights')
+        net = network.summary()
     except Exception:  # noqa: BLE001
         net = None
     return {'inbox': _soft(inbox), 'mail': _soft(mail), 'spend': _soft(spend), 'network': net,

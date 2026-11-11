@@ -10,8 +10,7 @@ main.insights { max-width:1200px; padding:2rem 1.25rem 4rem; }
 .viz-section > .viz-head { padding:0 .15rem; }
 .viz-head { display:flex; align-items:baseline; flex-wrap:wrap; gap:.2rem 1rem; }
 .viz-head h2 { margin:0; font-size:1.08rem; letter-spacing:-.01em; flex:1; }
-.viz-open { font-size:.88rem; font-weight:600; text-decoration:none; padding:.35rem 0; }
-.viz-open:hover { text-decoration:underline; }
+.viz-more { margin:.2rem 0 0; font-size:.95rem; padding:.8rem; }
 .viz-sub { margin:1.1rem 0 .2rem; font-size:.85rem; color:var(--mut); font-weight:600; }
 .viz-lede { margin:.4rem 0 .6rem; color:var(--mut); font-size:.92rem; }
 .viz-stats { display:flex; flex-wrap:wrap; gap:.4rem 1.6rem; margin:.7rem 0 .5rem; }

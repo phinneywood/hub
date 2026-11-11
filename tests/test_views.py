@@ -100,7 +100,9 @@ def test_today_has_a_card_per_tool_and_not_today_comes_back_to_today(client, mon
     _sources(monkeypatch, lambda: [today.rec('a', 'info', 'Synthetic item', '', href='/trip', cta='Open')])
     monkeypatch.setattr(home, 'SUMMARIES', {'kitchen': lambda: home.tile('kitchen', 'warn', 'Cart plan to approve', cta='Review')})
     page = client.get('/today').text
-    assert page.count('<article class="tile ') == 7 and '>Ask</span>' not in page
+    assert page.count('<article class="tile ') == 6 and '>Ask</span>' not in page
+    assert 'Trip</span>' not in page.split('id="tools-title"')[1]            # Trip has a decision card above, so no second card
+    assert 'href="/trip">Open</a>' in page.split('id="tools-title"')[0]
     kitchen = next(card for card in page.split('<article class="tile ')[1:] if 'Kitchen</span>' in card)
     assert 'href="/kitchen">Cart plan to approve</a>' in kitchen and 'Ask about this' not in kitchen    # nothing Ask Hub could look up
     gone = client.post('/today/snooze', data={'key': 'a'}, headers=ORIGIN, follow_redirects=False)
@@ -211,22 +213,28 @@ def test_sorted_mail_is_drawn_by_kind_and_the_page_survives_a_broken_source(clie
         monkeypatch.setattr(insights, name, broken)
     monkeypatch.setattr(ha, 'configured', broken)
     page = client.get('/insights')
-    assert page.status_code == 200 and 'couldn’t load the network readings' in page.text and 'svg class="viz"' not in page.text
+    assert page.status_code == 200 and 'No network readings to show just now' in page.text and 'svg class="viz"' not in page.text
 
 
-def test_insights_carries_the_network_overview_and_the_network_page_keeps_its_settings(client, monkeypatch):
+def test_insights_carries_the_network_summary_and_the_rest_stays_on_the_network_page(client, monkeypatch):
     states = [reading('binary_sensor.router_wan', 'on', 'WAN connectivity', device_class='connectivity'),
               reading('sensor.router_download_speed', '125', 'Download speed', unit_of_measurement='Mbit/s')]
     monkeypatch.setattr(ha, 'configured', lambda: True)
     monkeypatch.setattr(ha, 'states', lambda: states)
     monkeypatch.setattr(ha, 'history', lambda ids, start, end=None, include_attributes=False: [])
-    page = client.get('/insights?range=7d').text
-    section = page.split('id="network"')[1]
-    assert 'Internet is up' in section and 'Reported up' in section and 'Performance history' in section
-    assert 'href="/insights?range=6h#network"' in section and 'class="selected" aria-current="true">7 days' in section
-    assert 'action="/network/source"' not in section and 'href="/network">Network page</a>' in section    # settings stay on its own page
+    section = client.get('/insights').text.split('id="network"')[1]
+    assert 'Internet is up' in section and 'Reported up' in section and section.count('class="metric-card"') == 3
+    assert 'href="/network">Incidents, speed history and devices' in section          # one clear way to the rest
+    for only_on_network in ('Performance history', 'Recent incidents', 'Top active clients', 'action="/network/source"',
+                            'range=', 'id="network-auto"'):
+        assert only_on_network not in section
     own = client.get('/network?range=7d').text
-    assert 'action="/network/source"' in own and 'href="/network?range=6h"' in own and 'id="network-auto"' in own
+    for kept in ('Internet is up', 'Performance history', 'Recent incidents', 'Top active clients', 'action="/network/source"',
+                 'href="/network?range=6h"', 'id="network-auto"', 'Sources &amp; coverage'):
+        assert kept in own
+    monkeypatch.setattr(ha, 'states', lambda: (_ for _ in ()).throw(ha.HomeAssistantError('Synthetic outage')))
+    quiet = client.get('/insights')
+    assert quiet.status_code == 200 and 'No network readings to show just now' in quiet.text and 'Synthetic outage' not in quiet.text
 
 
 # ---- the lookups behind the charts ----
@@ -305,3 +313,14 @@ def test_the_demo_guard_blocks_the_key_stores_and_other_machines_before_anything
         text = (SOURCE.parent / name / 'check' / 'demo_server.py').read_text()
         assert 0 < text.index('check_guard.apply(patch)') < text.index('from hub.main import app')
     sys.modules.pop('check_guard', None)
+
+
+def test_a_tools_card_comes_back_when_its_decision_is_waved_away(client, monkeypatch):
+    _sources(monkeypatch, lambda: [today.rec('a', 'info', 'Synthetic item', '', href='/kitchen', cta='Open')])
+    monkeypatch.setattr(home, 'SUMMARIES', {})
+    assert 'href="/kitchen"' in client.get('/today').text.split('id="tools-title"')[0]      # Kitchen is still one tap away
+    assert 'Kitchen</span>' not in client.get('/today').text.split('id="tools-title"')[1]
+    client.post('/today/snooze', data={'key': 'a'}, headers=ORIGIN)
+    assert 'Kitchen</span>' in client.get('/today').text.split('id="tools-title"')[1]
+    shown = cards.tools([{'slug': 'gmail'}, {'slug': 'ask'}, {'slug': 'trip'}], [{'href': '/gmail/plan?x=1'}, {'href': '/engine'}])
+    assert [card['slug'] for card in shown] == ['trip']

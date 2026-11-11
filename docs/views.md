@@ -7,7 +7,7 @@ the detail screens behind these three.
 | --- | --- | --- | --- |
 | Ask | `/` and `/ask` | The read-only chat over the catalog's lookups (see “Ask Hub” in `engine.md`) | `hub/agent/`, `web/ask/` |
 | Today | `/today` | One card per decision from “Needs you”, then one card per tool | `hub/cards.py`, `hub/today.py`, `hub/home.py` |
-| Insights | `/insights` | Charts from numbers Hub already keeps, and the Network overview | `hub/insights.py`, `hub/tools/network/` |
+| Insights | `/insights` | Charts from numbers Hub already keeps, and the Network summary | `hub/insights.py`, `hub/tools/network/` |
 
 Behind two icons in the header: **All tools** (`/tools`, every tool's own page) and **Settings**
 (`/settings`, which leads to Engine and Status). A tool page marks All tools as the current place;
@@ -21,7 +21,9 @@ action with a `post` route, at a trust level the owner chose. Otherwise the butt
 tool's preview page. “Not today” is the existing `/today/snooze`. The signed-in-device rule for
 Deploy is enforced by its own route, as before.
 
-Each tool has a card built from its home tile, so Kitchen is always one tap from Today.
+Each tool has a card built from its home tile. A tool that already has a decision card above is not
+shown a second time; its card returns when the decision is done or waved away. Either way Kitchen is
+one tap from Today.
 
 ## “Ask about this”
 
@@ -49,7 +51,8 @@ as a label or a table.
 - **What's in the inbox**: the last sort's count of each kind. Bars, one colour.
 - **AI spend**: the engine's record of runs (`state.daily`): a meter per monthly limit, cost per day
   stacked by kind of run, and a table of runs, runs that didn't finish, model calls and cost.
-- **Network**: the Network overview itself (`network.pages.section`), without its source settings.
+- **Network**: the Network page's answer only (`network.pages.summary`): the verdict and the three
+  tiles, with a link to `/network`. Incidents, speed history, clients and source settings stay there.
 
 Series colours are in `hub/static/insights.css` (`--viz-*`), chosen for both light and dark and
 checked for colour-blind separation. A kind of run keeps its colour whatever else is on the chart.

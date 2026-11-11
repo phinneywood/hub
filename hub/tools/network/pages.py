@@ -257,13 +257,14 @@ def _overview(request, selected):
     return page(request, 'home', **overview(selected))
 
 
-def section(selected, path):
-    """The overview as a block of HTML for another page, with its range links pointing back at that page."""
+def summary():
+    """The overview's answer for another page: the verdict and the three tiles, as a block of HTML. None when there is none to give."""
     from markupsafe import Markup
     from ...templating import templates
-    return Markup(templates.get_template('network/_overview.html').render(
-        range_options=RANGE_OPTIONS, range_labels=RANGE_LABELS, role_labels=ROLE_LABELS, path=path, full=False,
-        **overview(_range(selected))))
+    found = overview('24h')
+    if not found['connected']:
+        return None
+    return Markup(templates.get_template('network/_summary.html').render(full=False, **found))
 
 
 def _verdict(attention, wan_status, reach_status, values, has_reach):

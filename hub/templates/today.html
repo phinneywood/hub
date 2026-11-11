@@ -24,7 +24,7 @@
   {% else %}<p class="needs-clear">{{ 'Hidden until tomorrow. ' if snoozed }}Nothing needs you right now.</p>
   {% endfor %}
 </section>
-<section aria-labelledby="tools-title">
+{% if tools %}<section aria-labelledby="tools-title">
   <h2 class="needs-title" id="tools-title">Around the house</h2>
   <div class="tiles">
   {% for t in tools %}
@@ -43,5 +43,5 @@
     </article>
   {% endfor %}
   </div>
-</section>
+</section>{% endif %}
 {% endblock %}
