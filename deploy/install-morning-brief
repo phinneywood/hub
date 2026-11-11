@@ -24,7 +24,8 @@ plistlib.dump({
     'EnvironmentVariables': {
         'HUB_BRIEF_SOURCE': 'http://127.0.0.1:' + os.environ.get('HUB_PORT', '8780') + '/today/brief',
         'HUB_BRIEF_LINK': link, 'HUB_BRIEF_NOTIFY': service,
-        'HUB_BRIEF_HA_HELPER': os.path.expanduser('~/Developer/home-assistant')},
+        # The HA maintenance helper as staged by home-ops (ha-maintenance/install.py).
+        'HUB_BRIEF_HA_HELPER': os.path.expanduser('~/Library/Application Support/HomeOps/app')},
     'StandardOutPath': d + '/logs/out.log', 'StandardErrorPath': d + '/logs/err.log'}, open(p, 'wb'))
 os.chmod(p, 0o600)
 PY
