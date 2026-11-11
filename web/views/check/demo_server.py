@@ -1,7 +1,8 @@
 """Hub's three main views on made-up data and a scripted model, for screenshots and browser checks. Never for real use.
 
 Run from the repository root:  .venv/bin/python web/views/check/demo_server.py
-It uses a throwaway data folder, points every connector at nothing, calls no model and needs no key.
+It uses a throwaway data folder, points every connector at nothing, calls no model, needs no key and
+looks in no key store (web/check_guard.py).
 Every name, number and event here is invented.
 """
 import math
@@ -17,30 +18,29 @@ os.environ.update(HUB_DATA_DIR=scratch, HUB_BACKGROUND_JOBS='disabled', HUB_BRID
                   HUB_ALLOWED_LOGINS='', PYDANTIC_AI_NO_BANNER='1')
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+import check_guard  # noqa: E402
 import pytest  # noqa: E402
+
+patch = pytest.MonkeyPatch()
+check_guard.apply(patch)   # before the app exists: no key store, no other machine
+
 import uvicorn  # noqa: E402
 from pydantic_ai.models.function import FunctionModel  # noqa: E402
 
-from hub import bridge, home, luna, model_key, store, today  # noqa: E402
+from hub import home, luna, store, today  # noqa: E402
 from hub.agent import model  # noqa: E402
 from hub.engine import state  # noqa: E402
 from hub.main import app  # noqa: E402
-from hub.tools import TOOLS  # noqa: E402
 from hub.tools.gmail import triage  # noqa: E402
 from hub.tools.network import ha  # noqa: E402
 from tests import test_ask  # noqa: E402
 from tests.test_network import state as reading  # noqa: E402
 
-patch = pytest.MonkeyPatch()
 test_ask.fictional(patch)
 patch.setattr(luna, 'key', lambda: 'synthetic-key')
-for name in ('_keychain', '_exists'):      # the Status page must not look in the real Keychain or 1Password
-    patch.setattr(model_key, name, lambda service: None)
-patch.setattr(model_key, '_onepassword', lambda: None)
-patch.setattr(bridge, 'health', lambda: False)
 patch.setattr(model, 'build', lambda http_client=None: FunctionModel(stream_function=test_ask.scripted, model_name='scripted'))
-next(t for t in TOOLS if t['slug'] == 'trip')['description'] = 'Dates, plans and decisions for the next trip'
 
 # ---- Today: the list and a card per tool ----
 

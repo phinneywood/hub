@@ -4,8 +4,10 @@ Hub is one private, self-hosted dashboard for a household. It runs on a Mac mini
 listens only on that machine's loopback address, and is reached only over Tailscale by the
 owner's signed-in devices. It is never hosted publicly; this repository is its source.
 
-The home page opens with **Today** ("Needs you"): up to five things worth acting on, each
-linking to a preview page. Behind it are the tools:
+Hub has three main views. **Ask** is where it opens: a read-only chat over Hub's own lookups.
+**Today** has a card for each thing worth acting on ("Needs you", up to five), each linking to a
+preview page, and a card per tool. **Insights** charts what Hub already counts: inbox size, sorted
+mail, model spend against its limits, and the home network. Behind them are the tools:
 
 | Tool | What it does |
 | --- | --- |
@@ -51,7 +53,8 @@ linking to a preview page. Behind it are the tools:
         │  Tailscale (allowed logins only)
         ▼
  tailscale serve ──▶ Hub: FastAPI on 127.0.0.1 (hub/main.py)
-                       ├─ Today list and home tiles   hub/today.py, hub/home.py
+                       ├─ Today: list, tool cards     hub/today.py, hub/home.py, hub/cards.py
+                       ├─ Insights: charts             hub/insights.py
                        ├─ tools                        hub/tools/*, preschool/
                        ├─ engine: sources → judgement → Needs you → actions   hub/engine/
                        ├─ Ask Hub (read-only lookups)  hub/agent/
@@ -89,20 +92,21 @@ together. Background controls, source-write restrictions, quotas, privacy checks
 school workers remain.
 
 Design: `hub/static/style.css` holds the shared tokens (colors, tones, radii) and
-components (shell, tabs, chips, banners, tiles) every tool uses. Home (`hub/home.py`)
-shows one live, read-only tile per tool under a 2.5-second deadline. Gmail samples
+components (shell, tabs, chips, banners, tiles) every tool uses. Today (`hub/home.py`, `hub/cards.py`)
+shows one live, read-only card per tool under a 2.5-second deadline; `docs/views.md` describes the
+three main views. Gmail samples
 500 inbox messages (the bridge maximum), refreshes that overview in the background,
 continues the sender queue past the bridge's top 20 by excluding decided senders,
 and keeps one local inbox-size snapshot per day (`inbox_history` in `hub.db`, counts
-only) for the Today trend.
-- **Needs you.** Above the tiles, Home lists up to five things worth acting on (`hub/today.py`): stopped
+only) for the inbox chart on Insights.
+- **Needs you.** Above the tool cards, Today lists up to five things worth acting on (`hub/today.py`): stopped
   30-day rules, planned Gmail changes, class dates today or tomorrow, unchosen trip flights, and any tile
   reporting a fault. Each links to the tool's own preview page; only a provably harmless step gets a
   one-tap button. “Not today” hides an item until tomorrow. `/today/brief` returns the titles as plain
   text for a morning message. No model call and no new access.
 - The last inbox overview is saved to `gmail-overview.json` in the data directory (owner-only),
   so a restart shows the previous numbers at once and refreshes them in the background. The
-  home Gmail tile says how old its numbers are.
+  Gmail card on Today says how old its numbers are.
 - **Gmail review with Luna.** “Ask Luna” on a sender sends counts, the unread share, how often
   mail arrives and up to 8 recent subject lines (never bodies) through the same zero-retention
   route as custom actions. Luna returns a short read plus up to three options; every option is

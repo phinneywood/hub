@@ -281,3 +281,27 @@ def test_a_charts_question_is_answered_from_its_lookup_with_a_link_back_to_insig
     assert reply.status_code == 200
     assert {(c['url'], c['title']) for c in chunks if c['type'] == 'source-url'} == {('/insights', 'AI spend')}
     assert '$0.25 of $5.00' in ''.join(c['delta'] for c in chunks if c['type'] == 'text-delta')
+
+
+# ---- the demo servers ----
+
+def test_the_demo_guard_blocks_the_key_stores_and_other_machines_before_anything_is_served(monkeypatch):
+    import socket
+    import subprocess
+    import sys
+    from tests.test_ask_page import SOURCE
+    if not SOURCE.is_dir():
+        return  # an installed package has no web/ folder and no demo servers
+    from hub import model_key
+    monkeypatch.syspath_prepend(str(SOURCE.parent))
+    import check_guard
+    monkeypatch.setattr(subprocess, 'run', lambda *a, **k: pytest.fail('a demo must not run security or op'))
+    check_guard.apply(monkeypatch)
+    assert model_key.source(fresh=True) is None and model_key.read(fresh=True) is None and not model_key.legacy_present()
+    assert bridge.health() is False
+    with pytest.raises(OSError, match='reaches no other machine'):
+        socket.socket().connect(('192.0.2.1', 443))
+    for name in ('ask', 'views'):                      # both servers apply it before Hub's app is imported
+        text = (SOURCE.parent / name / 'check' / 'demo_server.py').read_text()
+        assert 0 < text.index('check_guard.apply(patch)') < text.index('from hub.main import app')
+    sys.modules.pop('check_guard', None)
