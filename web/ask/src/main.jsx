@@ -1,5 +1,5 @@
 import "./policy.js";
-import { StrictMode, useCallback, useEffect, useMemo, useState } from "react";
+import { StrictMode, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AssistantRuntimeProvider, ComposerPrimitive, MessagePrimitive, ThreadPrimitive, useAuiState,
@@ -28,9 +28,13 @@ const said = (error) => {
 
 let tools = {};
 
-/* Text: Markdown, but links and images the model wrote are never rendered. */
+/* Text: Markdown, but links and images the model wrote are never rendered. When the answer comes from the
+   kitchen assistant, its reply is the answer: the chat model's own words for that turn are not shown. */
 const markdown = { a: ({ children }) => <span>{children}</span>, img: () => null };
-const Text = () => <MarkdownTextPrimitive smooth components={markdown} className="ask-md" />;
+const Text = () => {
+  const handed = useAuiState((s) => s.message.parts.some((p) => p.type === "tool-call" && p.toolName === "kitchen"));
+  return handed ? null : <MarkdownTextPrimitive smooth components={markdown} className="ask-md" />;
+};
 
 /* A lookup: a quiet chip that opens into what Hub read and what the model saw, in the catalog's words. */
 function Lookup({ toolName, status }) {
@@ -52,6 +56,238 @@ function Lookup({ toolName, status }) {
           {info.page && <dd className="ask-tool-open"><a href={info.page}>{info.open} ›</a></dd>}
         </dl>
       )}
+    </div>
+  );
+}
+
+/* ---- Kitchen: Ask passes a message on; the reply, cards and buttons come straight from the kitchen service ---- */
+
+const KDOWN = "Cooking and groceries aren’t answering right now. Try again in a minute.";
+const kitchen = (path, method = "GET") =>
+  fetch("/kitchen" + path, { method }).then(async (r) => {
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || KDOWN);
+    return body;
+  });
+
+// Sends a new message through Ask, as if typed: a card's “Add missing to cart” goes to Kitchen the same way.
+const Say = createContext(() => {});
+
+const KLINK = /\[([^\]]+)\]\((https:\/\/[^\s)]+)\)|(https:\/\/[^\s)]+)/g;
+function Line({ text }) {
+  const out = [];
+  let at = 0;
+  const line = text.replace(/\*\*(.+?)\*\*/g, "$1").replace(/__(.+?)__/g, "$1").replace(/^#{1,6}\s+/, "");
+  for (const m of line.matchAll(KLINK)) {
+    out.push(line.slice(at, m.index));
+    out.push(<a key={m.index} href={m[2] || m[3]} target="_blank" rel="noopener">{m[1] || m[3]}</a>);
+    at = m.index + m[0].length;
+  }
+  out.push(line.slice(at));
+  return out;
+}
+const Paragraphs = ({ text }) => text.split(/\n{2,}/).filter((p) => p.trim()).map((p, i) => (
+  <p key={i}>{p.split("\n").map((l, j) => <span key={j}>{j > 0 && "\n"}<Line text={l} /></span>)}</p>
+));
+
+const away = (url, text, cls) => (/^https:\/\//.test(url || "")
+  ? <a className={cls} href={url} target="_blank" rel="noopener">{text}</a> : <span className={cls}>{text}</span>);
+const money = (v) => { const n = parseFloat(String(v ?? "").replace(/[^0-9.]/g, "")); return isNaN(n) ? null : n; };
+
+function Recipe({ r }) {
+  const say = useContext(Say);
+  const [asked, setAsked] = useState(false);
+  const shelf = r.recent || r.check ? [["Bought recently", r.recent], ["Check your shelf", r.check]] : [["Have", r.have]];
+  return (
+    <div className="k-card">
+      {away(r.url, r.title, "k-card-title")}
+      <div className="k-facts">{[r.active && "Active " + r.active, r.total && "Total " + r.total, r.dishes].filter(Boolean).map((f) => <span key={f} className="k-fact">{f}</span>)}</div>
+      {r.diet && <div className={"k-diet" + (/swap|check|leave out|without|side/i.test(r.diet) ? " warn" : "")}>{r.diet}</div>}
+      {[...shelf, ["Need", r.need]].filter(([, v]) => v).map(([k, v]) => <div key={k} className="k-line"><b>{k}: </b>{v}</div>)}
+      <button type="button" className="k-pill" disabled={asked}
+        onClick={() => { setAsked(true); say(`Plan the ingredients we still need for “${r.title}”.`); }}>Add missing to cart</button>
+    </div>
+  );
+}
+
+const PLAN_WORDS = { approved: "Approved, adding to the cart…", done: "Added to the cart", dismissed: "Dismissed",
+  superseded: "Replaced by a newer plan", expired: "Expired", unknown: "Not confirmed: check the cart" };
+
+const EDIT_WORDS = { approved: "Changing the cart…", done: "Done", unknown: "Not confirmed: check the cart" };
+const editLine = (i) => (i.op === "remove" ? "Remove" : i.op === "set" ? (i.qty ? `Set to ${i.qty}` : "Remove") : `Add ${i.qty}`);
+
+// Changes a member asked for in chat: made straight away, so the card only reports.
+const Edits = ({ plan }) => (
+  <div className="k-card k-plan">
+    <strong className="k-card-title">Cart changes</strong>
+    <ul className="k-plan-items">
+      {plan.items.map((i, n) => <li key={n}><span className="k-what">{away(i.url, i.product)}<small>{editLine(i)}</small></span></li>)}
+    </ul>
+    <div className="k-plan-acts"><span className={"k-plan-status" + (plan.status === "done" ? " ok" : "")}>{EDIT_WORDS[plan.status] || plan.status}</span></div>
+  </div>
+);
+
+const ORDER_WORDS = { placing: "Placing the order…", placed: "Order placed", stopped: "Not placed", dismissed: "Not now",
+  expired: "Expired: ask again for a fresh total", superseded: "Replaced by a newer check", unknown: "Not confirmed: check your orders" };
+const dollars = (v) => (v === null || v === undefined ? null : "$" + v.toFixed(2));
+
+// An order read back from checkout. Nothing is ordered until the tap; the turn that places it checks the
+// total and time again first.
+function Order({ order, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const r = order.review;
+  const decide = (choice) => {
+    setBusy(true); setError("");
+    kitchen(`/orders/${order.id}/${choice}`, "POST").then(onChange, (e) => { setError(e.message); setBusy(false); });
+  };
+  const rows = [["Items", String(r.items)], ["Subtotal", dollars(r.subtotal)], ["Fees", dollars(r.fees)],
+    ["Savings", r.savings ? "−" + dollars(r.savings) : null], ["Tax", dollars(r.tax)]].filter(([, v]) => v);
+  const placed = order.placed?.status === "placed" ? order.placed : null;
+  return (
+    <div className="k-card k-plan">
+      <strong className="k-card-title">{placed ? "Order placed" : "Order to place"}</strong>
+      <div className="k-line"><b>{r.how || "When"}: </b>{r.when}</div>
+      {r.where && <div className="k-line"><b>To: </b>{r.where}</div>}
+      {r.payment && <div className="k-line"><b>Paying with: </b>{r.payment}</div>}
+      {rows.map(([k, v]) => <div key={k} className="k-total"><span>{k}</span><span>{v}</span></div>)}
+      <div className="k-total"><span><b>Total</b></span><span><b>{dollars(r.total)}</b></span></div>
+      <div className="k-plan-acts">
+        {order.status === "pending" ? (
+          <>
+            <button type="button" className="k-go" disabled={busy} onClick={() => decide("place")}>Place order · {dollars(r.total)}</button>
+            <button type="button" disabled={busy} onClick={() => decide("dismiss")}>Not now</button>
+          </>
+        ) : (
+          <span className={"k-plan-status" + (order.status === "placed" ? " ok" : "")}>
+            {(ORDER_WORDS[order.status] || order.status) + (placed?.order_number ? " · " + placed.order_number : "")
+              + (order.decided_by ? " · " + order.decided_by : "")}
+          </span>
+        )}
+      </div>
+      {error && <p className="ask-fine bad">{error}</p>}
+      {order.status === "pending" && <span className="k-small">Places this order on fredmeyer.com. It stops if the total or time has changed.</span>}
+    </div>
+  );
+}
+
+function Plan({ plan, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  let total = 0, priced = 0;
+  plan.items.forEach((i) => { const p = money(i.price); if (p !== null) { total += p * i.qty; priced++; } });
+  const decide = (choice) => {
+    setBusy(true); setError("");
+    kitchen(`/plans/${plan.id}/${choice}`, "POST").then(onChange, (e) => { setError(e.message); setBusy(false); });
+  };
+  return (
+    <div className="k-card k-plan">
+      <strong className="k-card-title">Cart plan</strong>
+      <ul className="k-plan-items">
+        {plan.items.map((i, n) => {
+          const p = money(i.price);
+          return (
+            <li key={n}>
+              <span className="k-what">{away(i.url, i.product)}<small>{[i.size, "× " + i.qty].filter(Boolean).join(" · ")}</small></span>
+              <span className="k-price">{p !== null ? "$" + (p * i.qty).toFixed(2) : ""}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {priced > 0 && <div className="k-total"><span>Estimate{priced < plan.items.length ? " (some unpriced)" : ""}</span><span>${total.toFixed(2)}</span></div>}
+      <div className="k-plan-acts">
+        {plan.status === "pending" ? (
+          <>
+            <button type="button" className="k-go" disabled={busy} onClick={() => decide("approve")}>Add to cart</button>
+            <button type="button" disabled={busy} onClick={() => decide("dismiss")}>Not now</button>
+          </>
+        ) : (
+          <span className={"k-plan-status" + (plan.status === "done" ? " ok" : "")}>
+            {(PLAN_WORDS[plan.status] || plan.status) + (plan.decided_by ? " · " + plan.decided_by : "")}
+          </span>
+        )}
+      </div>
+      {error && <p className="ask-fine bad">{error}</p>}
+      <span className="k-small">Adds to your Fred Meyer cart only. You check out.</span>
+    </div>
+  );
+}
+
+const RESULT_WORDS = { added: "Added", already: "Already in cart", removed: "Removed", updated: "Quantity changed",
+  unavailable: "Unavailable", not_found: "Not in the cart" };
+const Result = ({ r }) => (
+  <div className="k-card k-result">
+    <strong className="k-card-title">{r.kind === "edit" ? `${r.done} of ${r.planned} changes made` : `${r.in_cart} of ${r.planned} in the cart`}</strong>
+    <ul className="k-plan-items">
+      {r.lines.map((l, n) => (
+        <li key={n} className={["unavailable", "not_found", "removed"].includes(l.status) ? "k-gone" : ""}>
+          <span className="k-what"><span>{l.product}</span>
+            <small>{[RESULT_WORDS[l.status], l.qty ? "× " + l.qty : "", l.was !== null && l.was !== undefined ? "was $" + l.was.toFixed(2) : ""].filter(Boolean).join(" · ")}</small></span>
+          <span className="k-price">{l.price !== null && ["added", "already", "updated"].includes(l.status) ? "$" + (l.price * l.qty).toFixed(2) : ""}</span>
+        </li>
+      ))}
+    </ul>
+    {[["Plan items" + (r.unpriced ? " (some unpriced)" : ""), r.total], ["Cart subtotal shown", r.cart_subtotal]]
+      .filter(([, v]) => v !== null && v !== undefined)
+      .map(([k, v]) => <div key={k} className="k-total"><span>{k}</span><span>${v.toFixed(2)}</span></div>)}
+    {away("https://www.fredmeyer.com/cart", "Open the cart", "k-pill")}
+  </div>
+);
+
+// The part of Kitchen's conversation that answers this message: everything after it, up to the next member message.
+function answer(messages) {
+  const out = [];
+  for (const m of messages) { if (m.role === "member") break; out.push(m); }
+  return out;
+}
+// Keep checking while Kitchen is working, before its first reply, or while a plan or order waits on a tap or a turn.
+const stillOpen = (msgs, plans, orders, working) => working || !msgs.some((m) => m.role !== "member")
+  || msgs.some((m) => m.plan && ["pending", "approved"].includes(plans[m.plan.id]?.status || m.plan.status))
+  || msgs.some((m) => m.order && ["pending", "placing"].includes(orders[m.order.id]?.status || m.order.status));
+
+function KitchenReply({ result, status }) {
+  const asked = typeof result?.message === "number" ? result.message : null;
+  const [msgs, setMsgs] = useState([]);
+  const [plans, setPlans] = useState({});
+  const [orders, setOrders] = useState({});
+  const [working, setWorking] = useState(false);
+  const [down, setDown] = useState(false);
+  const [round, setRound] = useState(0);
+  useEffect(() => {
+    if (asked === null) return undefined;
+    let timer, stop = false;
+    const poll = () => kitchen(`/messages?after=${asked}`).then((d) => {
+      const mine = answer(d.messages || []);
+      const busy = !!(d.busy || d.queued);
+      setMsgs(mine); setPlans(d.plans || {}); setOrders(d.orders || {}); setWorking(busy); setDown(false);
+      return stillOpen(mine, d.plans || {}, d.orders || {}, busy);
+    }, () => { setDown(true); return true; }).then((more) => {
+      if (more && !stop) timer = setTimeout(poll, document.hidden ? 15000 : 3000);
+    });
+    poll();
+    return () => { stop = true; clearTimeout(timer); };
+  }, [asked, round]);
+
+  if (status?.type === "running") return null;   // the thread's own typing dots cover this moment
+  if (asked === null) return result?.already ? null : <p className="ask-fine bad">{KDOWN}</p>;
+  const replied = msgs.some((m) => m.role === "assistant");
+  return (
+    <div className="ask-kitchen">
+      {msgs.map((m) => (m.role === "notice" ? <p key={m.id} className="ask-kitchen-notice">{m.text}</p> : (
+        <div key={m.id} className="ask-kitchen-msg">
+          <Paragraphs text={m.result ? m.text.split(/\n{2,}/).slice(1).join("\n\n") : m.text} />
+          {(m.recipes || []).map((r, i) => <Recipe key={i} r={r} />)}
+          {m.plan && (m.plan.kind === "edit"
+            ? <Edits plan={{ ...m.plan, ...(plans[m.plan.id] || {}) }} />
+            : <Plan plan={{ ...m.plan, ...(plans[m.plan.id] || {}) }} onChange={() => setRound((n) => n + 1)} />)}
+          {m.result && <Result r={m.result} />}
+          {m.order && <Order order={{ ...m.order, ...(orders[m.order.id] || {}) }} onChange={() => setRound((n) => n + 1)} />}
+        </div>
+      )))}
+      {(!replied || working) && !down && (
+        <p className="ask-kitchen-notice"><span className="ask-dot spin" aria-hidden="true" /> {working ? "Working on it. Store and recipe pages take a minute or two." : "Working on it…"}</p>
+      )}
+      {down && <p className="ask-fine bad">{KDOWN}</p>}
     </div>
   );
 }
@@ -80,13 +316,13 @@ const UserMessage = () => (
 
 const AssistantMessage = () => (
   <MessagePrimitive.Root className="ask-msg hub">
-    <MessagePrimitive.Parts components={{ Text, Source: () => null, tools: { Fallback: Lookup } }} />
+    <MessagePrimitive.Parts components={{ Text, Source: () => null, tools: { by_name: { kitchen: KitchenReply }, Fallback: Lookup } }} />
     <MessagePrimitive.Error><p className="ask-fine bad">Hub couldn’t finish that answer. Nothing was changed. Try again.</p></MessagePrimitive.Error>
     <Sources />
   </MessagePrimitive.Root>
 );
 
-const SUGGESTIONS = ["What needs me today?", "What’s on this week?", "Which emails need me?", "How’s the trip plan?"];
+const SUGGESTIONS = ["What needs me today?", "What’s on this week?", "Which emails need me?", "What should we cook tonight?"];
 
 // “Ask about this” on a card or chart opens this page with ?about=<reference>. The reference is read once;
 // Hub turns it into the question, which waits in the box for the owner to send or change.
@@ -101,14 +337,16 @@ function Chat({ threadId, initial, about, onDrop, onActivity, onRefused }) {
   });
   useEffect(() => { if (about) runtime.thread.composer.setText(about.question); }, [about, runtime]);
   const drop = () => { runtime.thread.composer.setText(""); onDrop(); };
+  const say = useCallback((text) => runtime.thread.append({ role: "user", content: [{ type: "text", text }] }), [runtime]);
   return (
+    <Say.Provider value={say}>
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadPrimitive.Root className="ask-thread">
         <ThreadPrimitive.Viewport className="ask-viewport">
           <ThreadPrimitive.Empty>
             <div className="ask-empty">
               <h1>Ask Hub</h1>
-              <p>Today’s list, mail, the calendar and the trip, in one place. It only reads: nothing is changed from here.</p>
+              <p>Today’s list, mail, the calendar, the trip and the kitchen, in one place. It reads, and hands cooking and groceries to Kitchen. Only your tap fills the cart.</p>
               <div className="ask-suggest">
                 {SUGGESTIONS.map((s) => (
                   <ThreadPrimitive.Suggestion key={s} prompt={s} send asChild><button type="button">{s}</button></ThreadPrimitive.Suggestion>
@@ -142,6 +380,7 @@ function Chat({ threadId, initial, about, onDrop, onActivity, onRefused }) {
         </div>
       </ThreadPrimitive.Root>
     </AssistantRuntimeProvider>
+    </Say.Provider>
   );
 }
 

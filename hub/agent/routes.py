@@ -147,7 +147,10 @@ async def chat(thread_id: str, request: Request):
 
     adapter = VercelAIAdapter(agent=agent.build(), run_input=run_input, accept=request.headers.get('accept'),
                               sdk_version=7, manage_message_history='server')
-    events = adapter.run_stream(model=chat_model, message_history=shown, on_complete=on_complete,
+    turn = agent.Turn(text=text, login=request.headers.get('tailscale-user-login'))
+    earlier = await run_in_threadpool(agent.recall, shown)     # what Kitchen answered before, as data
+    events = adapter.run_stream(model=chat_model, message_history=shown, on_complete=on_complete, deps=turn,
+                                instructions=earlier or None,
                                 usage_limits=UsageLimits(request_limit=agent.REQUESTS_PER_TURN))
 
     async def stream():

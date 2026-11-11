@@ -45,4 +45,6 @@ def test_the_bundle_talks_to_no_other_site_from_the_page():
     """Hub's content policy already blocks other origins; this keeps a new one from arriving unnoticed."""
     import re
     hosts = set(re.findall(r'https?://([a-zA-Z0-9.-]+)', (BUILT / 'ask.js').read_text()))
-    assert hosts <= {'www.w3.org', 'json-schema.org', 'react.dev', 'github.com', 'backend.assistant-api.com'}, hosts
+    # www.fredmeyer.com is the Kitchen result card's "Open the cart" link: a page the owner opens, never a request.
+    assert hosts <= {'www.w3.org', 'json-schema.org', 'react.dev', 'github.com', 'backend.assistant-api.com',
+                     'www.fredmeyer.com'}, hosts

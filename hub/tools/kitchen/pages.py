@@ -60,6 +60,16 @@ def decide(plan_id: int, choice: str, request: Request):
     return _relay("POST", f"/plans/{plan_id}/{choice}", {"login": _login(request)})
 
 
+@router.post("/orders/{order_id}/{choice}")
+def order(order_id: int, choice: str, request: Request):
+    # Placing an order spends money, so like Approve it takes a tap on a signed-in member's device.
+    if choice not in ("place", "dismiss"):
+        return JSONResponse({"error": "unknown choice"}, status_code=404)
+    if _login(request) is None:
+        return JSONResponse({"error": "Place the order from your phone or laptop."}, status_code=403)
+    return _relay("POST", f"/orders/{order_id}/{choice}", {"login": _login(request)})
+
+
 @router.post("/learn")
 def learn(request: Request):
     """Read-only: picks up new Fred Meyer orders into the household's purchase history."""

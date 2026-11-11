@@ -31,6 +31,8 @@ Keep it clean. Write every new or changed file, commit message and branch name a
 
 - Inspect Git state; preserve unrelated and uncommitted work.
 - Use synthetic data and mocked integrations; never test on real mail or devices.
+  The one exception is the owner-run dev Hub (`deploy/dev-hub`, docs/dev-hub.md), which previews
+  this checkout on a copy of real data. Agents may read its status and log; taps there are real.
 - Credentials, account bindings, runtime data and private diagnostics stay outside Git.
 - No sign-in, scope/provider change, external publication, deployment, service restart,
   deletion or new schedule without direct owner authorization.
@@ -48,3 +50,6 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   Owner-approved exception (2026-11-10): the Kitchen tab relays household messages to the separate
   kitchen service, whose assistant is Claude Code on the owner's Claude plan (it alone can drive the
   signed-in Chrome). Only Kitchen chat goes there; every other Hub tool keeps the zero-retention routes.
+  Owner-approved (2026-11-11): Ask Hub hands cooking and grocery messages to Kitchen too, word for word
+  with the sender's login (`catalog.HANDOFFS`). Kitchen's replies go to the page, and a short text of them
+  reaches Ask's model on later turns, as data, on its zero-retention route.

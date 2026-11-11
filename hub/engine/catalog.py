@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 
 from .. import home, today
-from .registry import Action, Lookup, Source
+from .registry import Action, Handoff, Lookup, Source
 
 EMAILS = 5               # emails that need the owner, passed to the overnight review without their text
 UNANSWERED = 3
@@ -362,8 +362,66 @@ ACTIONS = [
 ]
 
 
+def kitchen_send(text, login):
+    """Pass the owner's message to the kitchen service, as the Kitchen tab does: same text, same signed-in login."""
+    from ..tools.kitchen import client
+    status, data = client.call('POST', '/messages', {'login': login, 'text': text[:2000]})
+    if status != 200 or not isinstance(data.get('id'), int):
+        raise client.KitchenDown(str(status))
+    return {'message': data['id']}
+
+
+RECALL_CHARS = 1500     # of one Kitchen answer, for Ask Hub's model on later turns
+
+
+def kitchen_recall(message_id):
+    """Kitchen's answer to one message, as the page shows it, in short plain text: its words, recipe titles,
+    cart plans and changes with their state, and an order's total and time. No links."""
+    from ..tools.kitchen import client
+    status, data = client.call('GET', f'/messages?after={int(message_id)}')
+    if status != 200:
+        return ''
+    plans, orders, out = data.get('plans') or {}, data.get('orders') or {}, []
+    for m in data.get('messages') or []:
+        if m.get('role') == 'member':
+            break                      # the next message someone sent: its answer belongs to that one
+        if m.get('text'):
+            out.append(m['text'])
+        for r in m.get('recipes') or []:
+            facts = ', '.join(f for f in (r.get('active') and 'active ' + r['active'], r.get('total') and 'total ' + r['total']) if f)
+            out.append(f"Recipe: {r.get('title', '')}" + (f' ({facts})' if facts else ''))
+        if m.get('plan'):
+            p = m['plan']
+            state = (plans.get(str(p['id'])) or {}).get('status') or p.get('status')
+            items = '; '.join(f"{i.get('product')} × {i.get('qty')}" if i.get('op') != 'remove' else f"remove {i.get('product')}"
+                              for i in p.get('items') or [])
+            out.append(f"{'Cart changes' if p.get('kind') == 'edit' else 'Cart plan'} ({state}): {items}")
+        if m.get('order'):
+            o, r = m['order'], m['order'].get('review') or {}
+            state = (orders.get(str(o['id'])) or {}).get('status') or o.get('status')
+            out.append(f"Order ({state}): {r.get('items')} items, total ${r.get('total') or 0:.2f}, {r.get('when', '')}")
+    return '\n'.join(out)[:RECALL_CHARS]
+
+
+# Other assistants Ask Hub may hand a message to. Their replies go to the page; Ask Hub's model is given a
+# short text of them on later turns (`recall`), as data, over its own zero-retention route.
+HANDOFFS = [
+    Handoff('kitchen', 'Kitchen',
+            'The household kitchen assistant: recipes, the shopping list, Fred Meyer order history and cart plans. '
+            'It can read the store and recipe sites; only your tap on Add to cart changes the cart, and you check out.',
+            'Your message, word for word, and who you are, to Kitchen. Kitchen’s assistant is Claude on your own plan '
+            '(the approved exception for Kitchen chat). Its reply is shown here; on your next message a short text of '
+            'it goes to Ask Hub’s model, on its usual private route, so follow-ups make sense.',
+            '/kitchen', 'Open Kitchen', kitchen_send, kitchen_recall),
+]
+
+
 def lookups():
     return [lookup for s in SOURCES for lookup in s.lookups]
+
+
+def handoffs():
+    return list(HANDOFFS)
 
 
 def source(slug):

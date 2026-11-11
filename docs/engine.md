@@ -26,6 +26,9 @@ guidance. They steer judgement. They cannot add a source or an action.
   It starts at “suggest”. Raise `ceiling` only when the code has a reversible one-tap route (`undo`).
   `auto` needs an `auto` function as well, and stays a separate owner decision per action.
 - **A standing instruction**: typed by the owner in “Ask Hub” on the Engine page. No code.
+- **A hand-off**: one `Handoff(...)` in `HANDOFFS`, for another assistant Ask Hub may pass the owner's
+  message to (see “Hand-offs” under Ask Hub). Adding one is an owner decision: it sends chat text
+  somewhere new.
 
 ## The overnight review
 
@@ -113,6 +116,9 @@ and tell me” the morning job does it.
   whose assistant is Claude Code on the owner's Claude plan, because only it can drive the signed-in
   Chrome. Hub itself makes no model call for Kitchen. Only a member's tap on Approve (a signed-in
   device, never a program on this Mac) lets that assistant add to the Fred Meyer cart.
+  Since 2026-11-11 Ask Hub can pass a cooking or grocery message to Kitchen too (see “Hand-offs”).
+  The message goes word for word; Kitchen's reply is shown on the page, and a short text of it is given
+  to Ask's model on later turns, on Luna's zero-retention route.
 - Subject lines and message bodies may always be sent over such a route.
 - Approved models: Luna (`hub/luna.py`) for proposals and Jev (`preschool/jev.py`) for yes/no
   judgements. Another model needs the owner's yes.
@@ -182,13 +188,14 @@ permission to deploy, restart, schedule or connect anything.
 
 ## Ask Hub (the chat)
 
-`/ask` (also Hub's landing page, `/`) is a read-only chat over the catalog. Cards and charts hand it a
+`/ask` (also Hub's landing page, `/`) is a chat over the catalog: it reads, and hands kitchen requests to Kitchen. Cards and charts hand it a
 question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page source: `web/ask/`.
 
 - **What it can do**: only the catalog's lookups (`Lookup` entries on a `Source`): today's list, sorted
   mail, the inbox's size by day, the calendar week, the trip, the network's one-line status and Hub's
-  own AI spend. A lookup returns a small bounded dict and changes nothing. There
-  is no tool that writes, so a request to change something gets a plain "read-only for now".
+  own AI spend. A lookup returns a small bounded dict and changes nothing. Apart from the Kitchen
+  hand-off below there is no tool that does anything, so a request to change something gets a plain
+  "read-only for now".
   Adding a lookup is one `Lookup(...)` on its source, with `reads` and `sends` in plain words; the chat
   shows those words on the lookup's card.
 - **What the model sees**: what each lookup's `sends` says and no more. Mail is sender names and subject
@@ -208,6 +215,26 @@ question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page 
 - **The page** is the one Hub page with a build step (React, assistant-ui, Vite). The built files are
   committed in `hub/static/ask/`; Hub and the deployer need no Node. `tests/test_ask_page.py` fails if
   they do not match `web/ask/`. See `web/ask/README.md`, and `web/ask/check/` for the browser check.
+
+### Hand-offs
+
+Cooking, recipes, groceries, the shopping list and the Fred Meyer cart belong to Kitchen. For those the
+model calls the `kitchen` tool (`catalog.HANDOFFS`). The tool takes no arguments: it sends the owner's new
+message exactly as typed, with their Tailscale login, to the kitchen service, the same request the
+Kitchen tab makes, once per turn. The model gets back only that Kitchen was asked and the message's
+number, and replies "On it." (an empty reply would end the turn in an error). The page hides the model's words for that turn: Kitchen's reply is the answer, with no Kitchen label or link, so Ask reads as one assistant.
+
+The page then reads Kitchen's answer straight from `/kitchen/messages`: every Kitchen message after that
+one, up to the next member message. It shows the reply, recipe cards, the cart plan with Add to cart and
+Not now, and the cart result, and keeps checking while Kitchen works or a plan is waiting. Add to cart
+is Kitchen's own route, so it still needs a tap on a signed-in device. The conversation is Kitchen's, so
+it also shows in the Kitchen tab.
+
+On each later turn, Hub asks Kitchen again for its answers to the thread's last 3 hand-offs (`recall`)
+and gives the model a short plain text of each (at most 1,500 characters): Kitchen's words, recipe
+titles, cart plans and changes with their state, and an order's total and time. It goes in that turn's
+instructions, marked as data that may come from web pages, so "how long does the first one take?" makes
+sense. It is fetched fresh each turn, so a cart result or a placed order shows up as it is now.
 
 Not built yet: approval cards for actions, saving a reply that was cut off mid-stream, notifications.
 

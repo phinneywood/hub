@@ -4,12 +4,12 @@
     "package-lock.json": "4a3ca7379290f2b84deb87b19bb5072364d251e81ef71f97a7dc78c143e73567",
     "vite.config.js": "1cf0b5fef37cf2bcf96bca6d44fd020926c48117abb597c7fa276c45bd1704b1",
     "record-build.mjs": "8753f52b81cb6e87c655f4f56bc5d3706ebfd38772400011284e977515a1affe",
-    "src/ask.css": "9b195a3a361ef5821ae3615b06538f47e8f33c77cc08593c9bddb3705c52a34f",
-    "src/main.jsx": "6a5ff39ef1088bdfa50db80fbaac4c3585f1192a592e9211fa4695447aed589b",
+    "src/ask.css": "526efa3b163af09aa48b95cd9d969f630e38c4db71f9e6f9f1a9ec5587075a2f",
+    "src/main.jsx": "bb5b9de086ea194f4bc50cb4f176081306357114cace4e3c6534f015849bf384",
     "src/policy.js": "cf5f565b0659bd234401b8ab5edefe673dbd485c0cbfdaf97d2cc5bd09365d02"
   },
   "built": {
-    "ask.css": "0302cd7c6695e3a9d63f3efcf90c31e99c32877fb2f025deea4669b3ad3dc0a6",
-    "ask.js": "e055c402cb7ef47eba39d4b84cc5808b33e6183c2e773301a45e320224f20b72"
+    "ask.css": "626f90164295ec1ca9ca01e9350fcaf31dcabadf222fef0994c34d96a1d0d4ce",
+    "ask.js": "53c4d07b8f62c4aaee04ff849e7cd2da68edaf419a0ffd4a7ba490e12722263e"
   }
 }

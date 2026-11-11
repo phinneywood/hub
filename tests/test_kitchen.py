@@ -80,3 +80,12 @@ def test_service_worker_is_served_as_javascript():
 def test_learn_new_orders_is_relayed(service):
     assert TestClient(app).post('/kitchen/learn', headers=MEMBER).status_code == 200
     assert service[-1] == ('POST', '/learn', {'login': 'me@example.com'})
+
+
+def test_placing_an_order_needs_a_signed_in_device_and_names_the_member(service):
+    assert TestClient(app).post('/kitchen/orders/7/place', headers=ORIGIN).status_code == 403
+    assert TestClient(app).post('/kitchen/orders/7/buy', headers=MEMBER).status_code == 404
+    assert TestClient(app).post('/kitchen/orders/7/place', headers=MEMBER).status_code == 200
+    assert service[-1] == ('POST', '/orders/7/place', {'login': 'me@example.com'})
+    assert TestClient(app).post('/kitchen/orders/7/place', headers={'tailscale-user-login': 'me@example.com',
+                                                                    'origin': 'https://elsewhere.example'}).status_code == 403

@@ -23,6 +23,24 @@ class Lookup:
 
 
 @dataclass(frozen=True)
+class Handoff:
+    """Another assistant Ask Hub may pass the owner's message to, word for word, when the message is for it.
+
+    Its answer is shown in the chat straight from that assistant. On later turns the chat's model is given
+    a short, bounded text of that answer as data (`recall`), so follow-ups make sense. Whatever the other
+    assistant can change still needs the owner's own tap there (Kitchen's Add to cart, for example).
+    """
+    slug: str            # the tool's name
+    name: str            # what the chat calls it: “Asked <name>”
+    reads: str           # plain words: what it is for and what it can do
+    sends: str           # plain words: what leaves Hub, and to whom
+    page: str            # its own Hub page
+    open: str            # that link's words
+    send: Callable       # send(text, login) -> {'message': id}; raises when the assistant isn't answering
+    recall: Callable     # recall(id) -> its answer to that message as short plain text, or ''; may raise
+
+
+@dataclass(frozen=True)
 class Source:
     slug: str
     name: str
