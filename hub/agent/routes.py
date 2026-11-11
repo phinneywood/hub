@@ -67,6 +67,13 @@ def status():
             'budget': {'month_cost': round(spent['month_cost'], 4), 'cap': MONTH_COST_CAP}, 'text_days': store.TEXT_DAYS}
 
 
+@router.get('/about')
+def about(ref: str = ''):
+    """What an “Ask about this” link stands for: Hub's own question for that card or chart. Reads only."""
+    from .. import cards
+    return cards.about(ref) or _error(404, 'Hub doesn’t know that card any more.')
+
+
 @router.get('/threads')
 def threads():
     return store.threads()

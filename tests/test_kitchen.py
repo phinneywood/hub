@@ -26,7 +26,9 @@ def service(monkeypatch):
 def test_page_and_nav():
     page = TestClient(app).get('/kitchen')
     assert page.status_code == 200
-    assert '>Kitchen</h1>' in page.text and 'href="/kitchen"' in page.text
+    assert '>Kitchen</h1>' in page.text
+    for where in ('/today', '/tools'):      # Kitchen stays one tap away: its own card, and the All tools menu
+        assert 'href="/kitchen"' in TestClient(app).get(where).text
 
 
 def test_message_carries_the_members_login(service):

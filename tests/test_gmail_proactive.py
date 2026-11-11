@@ -129,7 +129,7 @@ def test_not_this_week_hides_an_offer_for_a_week_and_the_slot_for_the_day(monkey
     monkeypatch.setattr(home, 'SUMMARIES', {})
     monkeypatch.setattr(catalog, 'SOURCES', [Source('gmail', 'Gmail', '', '', items=(today.gmail_next,))])
     _save(backlog=20_000)
-    page = client.get('/').text
+    page = client.get('/today').text
     assert '20,000 inbox messages are over 30 days old' in page and 'Not this week' in page
     client.post('/today/snooze', data={'key': 'gmail-next-backlog'}, headers=ORIGIN)
     assert today.needs_you() == []

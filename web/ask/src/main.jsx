@@ -88,13 +88,19 @@ const AssistantMessage = () => (
 
 const SUGGESTIONS = ["What needs me today?", "What’s on this week?", "Which emails need me?", "How’s the trip plan?"];
 
-function Chat({ threadId, initial, onActivity, onRefused }) {
+// “Ask about this” on a card or chart opens this page with ?about=<reference>. The reference is read once;
+// Hub turns it into the question, which waits in the box for the owner to send or change.
+const ABOUT = new URLSearchParams(location.search).get("about");
+
+function Chat({ threadId, initial, about, onDrop, onActivity, onRefused }) {
   const transport = useMemo(() => new DefaultChatTransport({ api: `/ask/threads/${threadId}/chat` }), [threadId]);
   const runtime = useChatRuntime({
     id: threadId, messages: initial, transport,
     onFinish: onActivity,
     onError: (error) => onRefused(said(error)),
   });
+  useEffect(() => { if (about) runtime.thread.composer.setText(about.question); }, [about, runtime]);
+  const drop = () => { runtime.thread.composer.setText(""); onDrop(); };
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadPrimitive.Root className="ask-thread">
@@ -115,6 +121,17 @@ function Chat({ threadId, initial, onActivity, onRefused }) {
           <div className="ask-spacer" />
         </ThreadPrimitive.Viewport>
         <div className="ask-dock">
+          {about && (
+            <ThreadPrimitive.Empty>
+              <div className="ask-context" role="note">
+                <span className="ask-context-text">
+                  <span>About <b>{about.label}</b>, from {about.from}</span>
+                  {about.looks_at.length > 0 && <small>Hub can look at: {about.looks_at.join(", ")}</small>}
+                </span>
+                <button type="button" onClick={drop} aria-label="Start without this question">✕</button>
+              </div>
+            </ThreadPrimitive.Empty>
+          )}
           <ThreadPrimitive.ScrollToBottom asChild><button type="button" className="ask-to-bottom" aria-label="Scroll to the latest">↓</button></ThreadPrimitive.ScrollToBottom>
           {/* The page's own script dims the page on any form submit; this form doesn't navigate. */}
           <ComposerPrimitive.Root className="ask-composer" onSubmit={(e) => e.stopPropagation()}>
@@ -129,7 +146,8 @@ function Chat({ threadId, initial, onActivity, onRefused }) {
 }
 
 function App() {
-  const [threadId, setThreadId] = useState(() => location.hash.slice(1) || newId());
+  const [threadId, setThreadId] = useState(() => (ABOUT ? "" : location.hash.slice(1)) || newId());
+  const [about, setAbout] = useState(null);
   const [initial, setInitial] = useState(null);
   const [threads, setThreads] = useState([]);
   const [notice, setNotice] = useState("");
@@ -142,14 +160,18 @@ function App() {
 
   useEffect(() => {
     setInitial(null);
-    history.replaceState(null, "", "#" + threadId);
+    history.replaceState(null, "", location.pathname + "#" + threadId);   // and drops ?about, so a reload starts clean
     Promise.all([api(`/threads/${threadId}/messages`), api("/status")]).then(
       ([messages, s]) => { tools = s.tools; setNotice(s.unavailable || ""); setInitial(messages); },
       () => { setNotice(DOWN); setInitial([]); });
     api("/threads").then(setThreads, () => {});
   }, [threadId]);
 
-  const open = (id) => { setSheet(false); setThreadId(id); };
+  useEffect(() => {
+    if (ABOUT) api("/about?ref=" + encodeURIComponent(ABOUT)).then(setAbout, () => {});
+  }, []);
+
+  const open = (id) => { setSheet(false); setAbout(null); setThreadId(id); };
   const remove = (id) => api("/threads/" + id, "DELETE").then(() => { if (id === threadId) open(newId()); else refresh(); }, () => {});
   return (
     <>
@@ -159,7 +181,7 @@ function App() {
         <button type="button" className="ask-pill" onClick={() => open(newId())} aria-label="New chat">＋</button>
       </div>
       {notice && <p className="banner warn ask-notice" role="status">{notice}</p>}
-      {initial === null ? <div className="ask-loading" /> : <Chat key={threadId} threadId={threadId} initial={initial} onActivity={refresh} onRefused={setNotice} />}
+      {initial === null ? <div className="ask-loading" /> : <Chat key={threadId} threadId={threadId} initial={initial} about={about} onDrop={() => setAbout(null)} onActivity={refresh} onRefused={setNotice} />}
       {sheet && (
         <div className="ask-sheet-wrap" onClick={() => setSheet(false)}>
           <div className="ask-sheet" role="dialog" aria-label="Chats" onClick={(e) => e.stopPropagation()}>

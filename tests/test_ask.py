@@ -257,7 +257,7 @@ def test_a_whole_turn_on_the_real_model_class_sends_exactly_lunas_route_and_reco
 
 def test_the_page_is_in_the_nav_and_loads_only_hubs_own_files(ready):
     page = ready.get('/ask')
-    assert page.status_code == 200 and '<a href="/ask" class="on" aria-current="page">Ask</a>' in page.text
+    assert page.status_code == 200 and '<a href="/" class="on" aria-current="page">Ask</a>' in page.text
     assert '/static/ask/ask.js' in page.text and '/static/ask/ask.css' in page.text and 'id="ask-root"' in page.text
     assert page.headers['content-security-policy'] == "default-src 'self'; frame-ancestors 'none'"
     assert ready.get('/static/ask/ask.js').status_code == 200
@@ -282,14 +282,14 @@ def test_a_question_streams_lookups_words_and_hubs_own_citations_then_is_saved_a
     assert reply.status_code == 200
     kinds = [c['type'] for c in chunks]
     assert kinds.count('tool-output-available') == 2 and kinds.count('text-delta') > 5 and 'error' not in kinds
-    assert {(c['url'], c['title']) for c in chunks if c['type'] == 'source-url'} == {('/', 'Needs you'), ('/calendar', 'Calendar')}
+    assert {(c['url'], c['title']) for c in chunks if c['type'] == 'source-url'} == {('/today', 'Needs you'), ('/calendar', 'Calendar')}
     text = ''.join(c['delta'] for c in chunks if c['type'] == 'text-delta')
     assert '3 things' in text and 'Dentist' in text
     saved = ready.get(f'/ask/threads/{THREAD}/messages').json()
     assert saved[0]['role'] == 'user' and {m['role'] for m in saved[1:]} == {'assistant'}
     parts = [p for m in saved[1:] for p in m['parts']]
     assert [p['state'] for p in parts if p['type'].startswith('tool-')] == ['output-available'] * 2
-    assert {p['url'] for p in parts if p['type'] == 'source-url'} == {'/', '/calendar'}           # citations survive a reload
+    assert {p['url'] for p in parts if p['type'] == 'source-url'} == {'/today', '/calendar'}           # citations survive a reload
     assert [t['title'] for t in ready.get('/ask/threads').json()] == ['What needs me today?']
     run = state.runs(routes.KIND)[0]
     assert run['status'] == 'ok' and run['luna_calls'] == 2 and run['tokens_in'] > 0

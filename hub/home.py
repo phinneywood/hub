@@ -1,4 +1,4 @@
-"""Live, read-only summaries for the Hub home page.
+"""Live, read-only summaries of each tool, for the cards on Today.
 
 Each tile reads what its tool already reads (cached bridge responses, local
 SQLite, Home Assistant states). Tiles run in parallel under one short deadline
@@ -221,7 +221,7 @@ def tiles(tools):
         else:
             try:
                 item = job.result()
-            except Exception:  # noqa: BLE001 - a broken source must not break the home page
+            except Exception:  # noqa: BLE001 - a broken source must not break the page
                 item = tile(t['slug'], 'idle', UNAVAILABLE, t.get('description', ''))
         item['name'] = t['name']
         result.append(item)

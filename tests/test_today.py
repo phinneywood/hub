@@ -78,15 +78,15 @@ def test_home_shows_actions_and_not_today_hides_until_tomorrow(monkeypatch):
                                           cta='Turn back on', action='gmail.resume_rules'),
                                 today.rec('b', 'info', 'Synthetic plan', '', href='/gmail/plan', cta='Review and apply')])
     client = TestClient(app)
-    page = client.get('/').text
+    page = client.get('/today').text
     assert 'action="/gmail/delayed/resume-safe"' in page and 'href="/gmail/plan"' in page
     assert client.get('/today/brief').text == '2 things for today:\n• Synthetic rule stopped\n• Synthetic plan'
     after = client.post('/today/snooze', data={'key': 'a'}, headers={'origin': 'http://testserver'}).text
     assert 'Synthetic rule stopped' not in after and 'Synthetic plan' in after
     monkeypatch.setattr(home, 'today', lambda: date(2099, 1, 1))
-    assert 'Synthetic rule stopped' in client.get('/').text
+    assert 'Synthetic rule stopped' in client.get('/today').text
 
 
 def test_home_says_so_when_nothing_needs_you(monkeypatch):
     _only(monkeypatch)
-    assert 'Nothing needs you right now.' in TestClient(app).get('/').text
+    assert 'Nothing needs you right now.' in TestClient(app).get('/today').text

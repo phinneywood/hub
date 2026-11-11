@@ -65,7 +65,7 @@ It can’t give Hub a new ability by itself.</p>
 <p class="note">Today: {{ used.luna_calls }} of {{ limits.luna }} review calls used.
 This month, with mail sorting: ${{ '%.2f' | format(used.month_cost) }} of ${{ '%.0f' | format(limits.month) }}.</p>
 <div class="diag">
-  <form method="post" action="/engine/prepare"><div><strong>Run it now</strong><small>Reads the sources above once and adds suggestions to the home page. Changes nothing else.</small></div><button class="btn small"{% if not ready %} disabled{% endif %}>Run</button></form>
+  <form method="post" action="/engine/prepare"><div><strong>Run it now</strong><small>Reads the sources above once and adds suggestions to Today. Changes nothing else.</small></div><button class="btn small"{% if not ready %} disabled{% endif %}>Run</button></form>
 </div>
 {% if runs %}<table class="engine-runs"><thead><tr><th>When</th><th>Result</th><th>Calls</th><th>Cost</th></tr></thead><tbody>
 {% for r in runs %}<tr><td>{{ r.ts | when }}</td><td>{{ 'Finished' if r.status == 'ok' else 'Didn’t finish' }}</td>

@@ -146,13 +146,14 @@ def _usage(rows, metric, start, end):
     return a.format_bytes(result['bytes']) + (' observed' if complete else ' minimum · partial/reset data') if len(within) >= 2 else 'Insufficient history'
 
 
-def _overview(request, selected):
+def overview(selected):
+    """Everything the overview shows, as plain values. The Network page and the Insights section both render it."""
     if not ha.configured():
-        return page(request, 'home', configured=False, connected=False, error=None, selected_range=selected)
+        return dict(configured=False, connected=False, error=None, selected_range=selected)
     try:
         states = ha.states()
     except ha.HomeAssistantError as exc:
-        return page(request, 'home', configured=True, connected=False, error=str(exc), selected_range=selected)
+        return dict(configured=True, connected=False, error=str(exc), selected_range=selected)
     now = datetime.now(timezone.utc)
     days = a.RANGE_DAYS[selected]
     start = now - timedelta(days=days)
@@ -241,7 +242,7 @@ def _overview(request, selected):
     client_rows = [d for d in devices if d['kind'] == 'client']
     top = sorted((d for d in client_rows if d['online'] and d['fresh'] and (d['download_kb'] is not None or d['upload_kb'] is not None)),
                  key=lambda d: -((d['download_kb'] or 0) + (d['upload_kb'] or 0)))[:5]
-    return page(request, 'home', configured=True, connected=True, error=None, selected_range=selected,
+    return dict(configured=True, connected=True, error=None, selected_range=selected,
                 wan_status=wan_status, reach_status=reach_status, attention=attention, cards=cards, summary=summary,
                 summary_label='External reachability' if summary_role == 'reachability' else 'Router WAN report',
                 comparison=comparison, incidents=summary['incidents'][:20], sources=source_rows,
@@ -250,6 +251,19 @@ def _overview(request, selected):
                 online_count=sum(d['online'] and d['fresh'] and d['known'] for d in client_rows),
                 unknown_count=sum(not d['fresh'] or not d['known'] for d in client_rows),
                 updated=a.local_time(now), **_verdict(attention, wan_status, reach_status, values, 'reachability' in sources))
+
+
+def _overview(request, selected):
+    return page(request, 'home', **overview(selected))
+
+
+def section(selected, path):
+    """The overview as a block of HTML for another page, with its range links pointing back at that page."""
+    from markupsafe import Markup
+    from ...templating import templates
+    return Markup(templates.get_template('network/_overview.html').render(
+        range_options=RANGE_OPTIONS, range_labels=RANGE_LABELS, role_labels=ROLE_LABELS, path=path, full=False,
+        **overview(_range(selected))))
 
 
 def _verdict(attention, wan_status, reach_status, values, has_reach):

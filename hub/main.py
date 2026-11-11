@@ -165,13 +165,34 @@ def manifest():
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, snoozed: int = 0):
-    from . import home as summaries, today
+def landing(request: Request):
+    """Hub opens on Ask. The same page answers at /ask; the day's cards are at /today."""
+    return render(request, "ask/chat.html", active="ask")
+
+
+@app.get("/today", response_class=HTMLResponse)
+def today_page(request: Request, snoozed: int = 0):
+    from . import cards, home as summaries
     greeting_text, date_text = summaries.greeting()
-    jobs = today.start()
-    tiles = summaries.tiles(TOOLS)
-    return render(request, "home.html", tiles=tiles, needs=today.collect(jobs, tiles), snoozed=bool(snoozed),
-                  greeting_text=greeting_text, date_text=date_text)
+    return render(request, "today.html", active="today", snoozed=bool(snoozed),
+                  greeting_text=greeting_text, date_text=date_text, **cards.page())
+
+
+@app.get("/insights", response_class=HTMLResponse)
+def insights_page(request: Request, range: str = "24h"):
+    from . import insights
+    return render(request, "insights.html", active="insights", **insights.page(range))
+
+
+@app.get("/tools", response_class=HTMLResponse)
+def all_tools(request: Request):
+    """The secondary menu: every tool's own page."""
+    return render(request, "tools.html", active="tools", listed=[t for t in TOOLS if t["slug"] != "ask"])
+
+
+@app.get("/settings", response_class=HTMLResponse)
+def settings(request: Request):
+    return render(request, "settings.html", active="settings")
 
 
 @app.post("/today/snooze")
@@ -182,7 +203,7 @@ def today_snooze(key: str = Form(...)):
     today.hide(key)
     if key.startswith("ai-"):
         state.dismiss(key)  # remembered for a week so the overnight review doesn't raise it again
-    return RedirectResponse("/?snoozed=1", status_code=303)
+    return RedirectResponse("/today?snoozed=1", status_code=303)
 
 
 @app.post("/today/prepare")
@@ -219,7 +240,7 @@ def engine_page(request: Request, ran: str = "", asked: str = "", deploy: str = 
 
 
 KEY_WORDS = {"1password": "from 1Password", "keychain": "from the Keychain (older setup)", None: "not set up"}
-RAN_WORDS = {"ok": "Done. Anything it found is on the home page.", "already": "Already ran today.",
+RAN_WORDS = {"ok": "Done. Anything it found is on Today.", "already": "Already ran today.",
              "daily_limit": "Today’s limit of model calls is used up.", "monthly_limit": "This month’s spending limit is reached.",
              "not_set_up": "The model key isn’t set up.", "error": "The model route didn’t answer. Nothing changed.",
              "busy": "A review is already running."}

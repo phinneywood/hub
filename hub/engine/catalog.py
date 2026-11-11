@@ -282,9 +282,9 @@ SOURCES = [
     Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
            'What is already on your list and what you said “Not today” to this week.', items=(hub_faults, hub_release),
            prepare=old_key_reminder,
-           lookups=(Lookup('today_list', 'Needs you', 'Today’s list, as the home page shows it.',
+           lookups=(Lookup('today_list', 'Needs you', 'Today’s list, as the Today page shows it.',
                            'Each item’s title, and its second line unless it is about mail. No addresses or links.',
-                           '/', 'Open today’s list', today_lookup),)),
+                           '/today', 'Open today’s list', today_lookup),)),
 ]
 
 ACTIONS = [

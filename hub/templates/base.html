@@ -15,19 +15,21 @@
 <script src="/static/app.js" defer></script>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="shell">
-  <a class="brand" href="/"{% if not active %} aria-current="page"{% endif %}><span class="brand-mark" aria-hidden="true"></span>Hub</a>
-  <nav class="shell-nav" aria-label="Tools">
-    {% for t in tools %}<a href="/{{ t.slug }}"{% if active == t.slug %} class="on" aria-current="page"{% endif %}>{{ t.name }}</a>{% endfor %}
+  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Hub</a>
+  <nav class="shell-nav" aria-label="Main">
+    {% for slug, name, href in (('ask', 'Ask', '/'), ('today', 'Today', '/today'), ('insights', 'Insights', '/insights')) %}<a href="{{ href }}"{% if active == slug %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}
   </nav>
   <div class="shell-util">
-    {% if not active or active == 'gmail' %}{% set r = request.url.include_query_params(refresh=1) %}
+    {% if active in ('today', 'gmail') %}{% set r = request.url.include_query_params(refresh=1) %}
     <a href="{{ r.path }}?{{ r.query }}" title="Fetch fresh Gmail data instead of the cached copy">Refresh</a>{% endif %}
-    <a href="/engine"{% if active == 'engine' %} class="on" aria-current="page"{% endif %}>Engine</a>
-    <a href="/status"{% if active == 'status' %} class="on" aria-current="page"{% endif %}>Status</a>
+    {% set in_tool = active and active not in ('ask', 'today', 'insights', 'settings', 'engine', 'status') %}
+    <a class="shell-icon{% if in_tool %} on{% endif %}" href="/tools"{% if active == 'tools' %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg><span class="shell-label">All tools</span></a>
+    <a class="shell-icon{% if active in ('settings', 'engine', 'status') %} on{% endif %}" href="/settings" aria-label="Settings"{% if active == 'settings' %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="6.4"/><circle cx="12" cy="12" r="2.4"/><path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.35 5.35l2.1 2.1M16.55 16.55l2.1 2.1M5.35 18.65l2.1-2.1M16.55 7.45l2.1-2.1"/></svg></a>
   </div>
 </header>
 <div id="bar"></div>
-<main class="{% block main_class %}{% endblock %}">{% block body %}{% endblock %}</main>
+<main id="main" class="{% block main_class %}{% endblock %}">{% block body %}{% endblock %}</main>
 </body>
 </html>

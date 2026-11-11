@@ -109,7 +109,7 @@ def test_not_today_on_a_suggestion_is_remembered_for_the_next_run(ready):
     overnight.prepare(luna_transport=_reply(('Synthetic nudge', 'Why.', 'gmail', None)))
     client = TestClient(app)
     key = today.needs_you()[0]['key']
-    assert 'Suggestion' in client.get('/').text
+    assert 'Suggestion' in client.get('/today').text
     assert 'Synthetic nudge' not in client.post('/today/snooze', data={'key': key}, headers=ORIGIN).text
     assert state.recent_suggestions('2999-01-01') == [
         {'day': state.runs(overnight.KIND)[0]['day'], 'title': 'Synthetic nudge', 'owner_said_not_today': True}]

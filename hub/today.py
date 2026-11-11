@@ -1,4 +1,4 @@
-"""“Needs you” list for the Hub home page and the morning brief.
+"""“Needs you” list for Today and the morning brief.
 
 Each source in `engine.catalog` looks at what its tool already keeps locally and returns
 zero or more recommendations. Everything here is read-only and calls no model; suggestions
@@ -107,7 +107,7 @@ def gmail_triage():
 OLD_MAIL_WORTH = 500       # a smaller backlog than this isn't worth a bulk step
 FILING_WORTH = 10          # sorted mail sitting in the inbox before Hub offers to file it
 GMAIL_FILED = 'gmail-filed'
-FYI = (GMAIL_FILED,)       # told, not asked: shown on the home page, left out of the morning message
+FYI = (GMAIL_FILED,)       # told, not asked: shown on Today, left out of the morning message
 GMAIL_NEXT = 'gmail-next'  # the one slot for Hub's own Gmail offers; each offer's key starts with it
 WEEK_KEYS = (GMAIL_NEXT + '-',)  # “not now” hides these for a week: the same offer every morning is nagging
 

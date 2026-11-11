@@ -100,6 +100,16 @@ def spent(day, kind):
             'tokens_out_today': today['o'], 'runs_today': today['n']}
 
 
+def daily(day, days=30):
+    """Per day and kind over the `days` ending on `day`: runs, runs that didn't finish, model calls and cost."""
+    with closing(store.db()) as conn:
+        rows = conn.execute("select day, kind, count(*) runs, sum(status != 'ok') failed, "
+                            'sum(luna_calls + jev_calls) calls, sum(cost) cost from engine_runs '
+                            'where day <= ? and day > date(?, ?) group by day, kind order by day',
+                            (day, day, f'-{days} days'))
+        return [dict(r) for r in rows]
+
+
 def save_suggestions(day, items):
     with closing(store.db()) as conn, conn:
         conn.execute('delete from engine_suggestions where day < date(?, ?)', (day, '-7 days'))

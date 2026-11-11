@@ -16,11 +16,11 @@ def test_home_renders_one_tile_per_tool_even_when_sources_fail(monkeypatch):
     def broken():
         raise RuntimeError('synthetic failure')
     monkeypatch.setattr(home, 'SUMMARIES', {**home.SUMMARIES, 'gmail': broken, 'network': broken})
-    page = TestClient(app).get('/')
+    page = TestClient(app).get('/today')
     assert page.status_code == 200
-    assert page.text.count('class="tile ') == 8
+    assert page.text.count('class="tile ') == 7     # every tool but Ask, which is a main view
     assert home.UNAVAILABLE in page.text
-    assert 'aria-current="page"' in page.text  # brand marks home as current
+    assert '<a href="/today" class="on" aria-current="page">Today</a>' in page.text
 
 
 def test_slow_source_does_not_block_the_page(monkeypatch):
@@ -97,7 +97,7 @@ def test_greeting_by_time_of_day():
 def test_shell_shows_refresh_only_where_gmail_data_is_used():
     client = TestClient(app)
     assert 'refresh=1' not in client.get('/trip').text
-    assert 'refresh=1' in client.get('/').text
+    assert 'refresh=1' in client.get('/today').text and 'refresh=1' not in client.get('/').text
 
 
 def _network_fixture(monkeypatch, reach_age, latency_age, reach_state='on'):

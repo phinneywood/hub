@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Insights · Hub{% endblock %}
+{% block main_class %}insights{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/network.css"><link rel="stylesheet" href="/static/insights.css"><script src="/static/insights.js" defer></script>{% endblock %}
+{% macro ask(key, what) %}{% if asks[key] %}<a class="ask-about" href="/ask?about=insight%3A{{ key }}">Ask about this<span class="sr"> ({{ what }})</span></a>{% endif %}{% endmacro %}
+{% block body %}
+<div class="home-head">
+  <p class="home-date">Insights</p>
+  <h1>How things are going</h1>
+</div>
+<div class="viz-grid">
+
+<section class="viz-card" aria-labelledby="viz-inbox">
+  <div class="viz-head"><h2 id="viz-inbox">Inbox size</h2>{{ ask('inbox', 'Inbox size') }}</div>
+  {% if inbox.has %}
+  <div class="viz-stats">
+    <div><span>In the inbox now</span><strong>{{ inbox.now | num }}</strong></div>
+    <div><span>Since {{ inbox.since }}</span><strong>{{ inbox.change_text }}</strong></div>
+    {% if inbox.unread is not none %}<div><span>Unread</span><strong>{{ inbox.unread | num }}</strong></div>{% endif %}
+  </div>
+  <svg class="viz" viewBox="0 0 {{ w }} {{ h }}" role="img" aria-label="Line chart: messages in the inbox each day from {{ inbox.first_day }} to {{ inbox.last_day }}. Now {{ inbox.now | num }}; {{ inbox.change_text }} since {{ inbox.since }}.">
+    {% for t in inbox.ticks %}<line class="viz-grid-line" x1="{{ left }}" x2="{{ right }}" y1="{{ t.y }}" y2="{{ t.y }}"/><text class="viz-tick" x="{{ left - 6 }}" y="{{ t.y + 3.5 }}" text-anchor="end">{{ t.label }}</text>{% endfor %}
+    <path class="viz-line s1" d="{{ inbox.line }}"/>
+    <circle class="viz-end s1" cx="{{ inbox.end.x }}" cy="{{ inbox.end.y }}" r="4"/>
+    <text class="viz-value" x="{{ inbox.end.x + 4 }}" y="{{ inbox.end_label_y }}" text-anchor="end">{{ inbox.end_label }}</text>
+    <text class="viz-tick" x="{{ left }}" y="{{ h - 6 }}">{{ inbox.first_day }}</text><text class="viz-tick" x="{{ right }}" y="{{ h - 6 }}" text-anchor="end">{{ inbox.last_day }}</text>
+    {% for p in inbox.points %}<g class="viz-pt" data-tip="{{ p.tip }}"><rect class="viz-hit" x="{{ p.left }}" y="0" width="{{ p.width }}" height="{{ floor_y }}"/><line class="viz-cross" x1="{{ p.x }}" x2="{{ p.x }}" y1="8" y2="{{ floor_y }}"/><circle class="viz-end s1" cx="{{ p.x }}" cy="{{ p.y }}" r="4"/></g>{% endfor %}
+  </svg>
+  <details class="more"><summary>Show the numbers</summary>
+    <table><thead><tr><th>Day</th><th class="num">In inbox</th><th class="num">Unread</th></tr></thead><tbody>
+    {% for r in inbox.rows %}<tr><td>{{ r.day }}</td><td class="num">{{ r.total | num }}</td><td class="num">{{ r.unread | num if r.unread is not none else '—' }}</td></tr>{% endfor %}
+    </tbody></table></details>
+  <p class="viz-note">One reading on each day Hub checked the inbox. Counts only.</p>
+  {% else %}<p class="viz-empty">{% if inbox.now is not none %}{{ inbox.now | num }} in the inbox today. {% endif %}The trend appears once Hub has counted the inbox on two different days.</p>{% endif %}
+</section>
+
+<section class="viz-card" aria-labelledby="viz-mail">
+  <div class="viz-head"><h2 id="viz-mail">What’s in the inbox</h2>{{ ask('mail', 'What’s in the inbox') }}</div>
+  {% if mail.has %}
+  <p class="viz-lede">{{ mail.total | num }} sorted {{ 'message' if mail.total == 1 else 'messages' }} from the last week{% if mail.needs %}, {{ mail.needs }} of them for you{% endif %}.</p>
+  <svg class="viz" viewBox="0 0 {{ w }} {{ mail.height }}" role="img" aria-label="Bar chart: sorted mail in the inbox by kind. {% for b in mail.bars %}{{ b.name }} {{ b.count }}{{ ', ' if not loop.last }}{% endfor %}.">
+    {% for b in mail.bars %}<g class="viz-bar" data-tip="{{ b.name }}&#10;{{ b.count | num }} in inbox">
+      <rect class="viz-hit" x="0" y="{{ b.y - 4 }}" width="{{ w }}" height="{{ mail.bar + 12 }}"/>
+      <text class="viz-label" x="{{ mail.x - 8 }}" y="{{ b.y + 11 }}" text-anchor="end">{{ b.name }}</text>
+      <path class="viz-fill s1" d="M{{ mail.x }} {{ b.y }}H{{ mail.x + b.width - 2 }}q4 0 4 4v{{ mail.bar - 8 }}q0 4 -4 4H{{ mail.x }}Z"/>
+      <text class="viz-value" x="{{ mail.x + b.width + 8 }}" y="{{ b.y + 11 }}">{{ b.count | num }}</text></g>{% endfor %}
+  </svg>
+  <p class="viz-note">From the last sort. Filing what asks nothing of you is on the <a href="/gmail">Gmail page</a>.</p>
+  {% elif mail.empty %}<p class="viz-empty">The last sort left nothing in the inbox.</p>
+  {% else %}<p class="viz-empty">Mail hasn’t been sorted yet. The chart appears after the first sort.</p>{% endif %}
+</section>
+
+<section class="viz-card" aria-labelledby="viz-spend">
+  <div class="viz-head"><h2 id="viz-spend">AI spend</h2>{{ ask('spend', 'AI spend') }}</div>
+  {% if spend.meters %}
+  <div class="viz-meters">
+    {% for m in spend.meters %}<div class="viz-meter is-{{ m.state }}">
+      <div class="viz-meter-head"><span>{{ m.label }}</span><strong>{{ m.spent }} <small>of {{ m.cap }} in {{ spend.month }}</small></strong></div>
+      <svg viewBox="0 0 100 8" preserveAspectRatio="none" role="img" aria-label="{{ m.label }}: {{ m.spent }} of {{ m.cap }} this month, {{ m.percent }} percent. {{ m.words }}"><rect class="viz-track" width="100" height="8" rx="4"/><rect class="viz-used" width="{{ m.width }}" height="8" rx="4"/></svg>
+      <small>{{ m.covers }} · {{ m.percent }}% used{% if m.words %} · <b>{{ m.words }}</b>{% endif %}</small>
+    </div>{% endfor %}
+  </div>
+  {% if spend.has %}
+  <h3 class="viz-sub">Cost by day, last 30 days</h3>
+  {% if spend.legend | length > 1 %}<ul class="viz-legend">{% for l in spend.legend %}<li><span class="viz-swatch s{{ l.series }}" aria-hidden="true"></span>{{ l.name }}</li>{% endfor %}</ul>{% endif %}
+  <svg class="viz" viewBox="0 0 {{ w }} {{ h }}" role="img" aria-label="Stacked column chart: model cost on each of the last 30 days, by kind of run. The table below has the totals.">
+    <line class="viz-grid-line" x1="{{ left }}" x2="{{ right }}" y1="{{ spend.top_y }}" y2="{{ spend.top_y }}"/><text class="viz-tick" x="{{ left - 6 }}" y="{{ spend.top_y + 3.5 }}" text-anchor="end">{{ spend.top_tick }}</text>
+    <line class="viz-grid-line" x1="{{ left }}" x2="{{ right }}" y1="{{ spend.mid_y }}" y2="{{ spend.mid_y }}"/><text class="viz-tick" x="{{ left - 6 }}" y="{{ spend.mid_y + 3.5 }}" text-anchor="end">{{ spend.mid_tick }}</text>
+    <line class="viz-axis" x1="{{ left }}" x2="{{ right }}" y1="{{ spend.floor_y }}" y2="{{ spend.floor_y }}"/><text class="viz-tick" x="{{ left - 6 }}" y="{{ spend.floor_y + 3.5 }}" text-anchor="end">$0</text>
+    <text class="viz-tick" x="{{ left }}" y="{{ h - 6 }}">{{ spend.first_day }}</text><text class="viz-tick" x="{{ right }}" y="{{ h - 6 }}" text-anchor="end">{{ spend.last_day }}</text>
+    {% for c in spend.columns %}<g class="viz-col" data-tip="{{ c.tip }}"><rect class="viz-hit" x="{{ c.left }}" y="0" width="{{ c.width }}" height="{{ spend.floor_y }}"/>{% for s in c.segments %}<path class="viz-fill s{{ s.series }}" d="{{ s.path }}"/>{% endfor %}</g>{% endfor %}
+  </svg>
+  <table class="viz-table"><caption>Runs in the last 30 days</caption><thead><tr><th>Kind</th><th class="num">Runs</th><th class="num">Didn’t finish</th><th class="num">Model calls</th><th class="num">Cost</th></tr></thead><tbody>
+    {% for r in spend.rows %}<tr><td>{{ r.name }}</td><td class="num">{{ r.runs }}</td><td class="num">{{ r.failed }}</td><td class="num">{{ r.calls | num }}</td><td class="num">{{ r.cost }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% else %}<p class="viz-empty">No model runs recorded in the last 30 days.</p>{% endif %}
+  <p class="viz-note">Counts and cost only, never text. Limits and each run are on the <a href="/engine">Engine page</a>.</p>
+  {% else %}<p class="viz-empty">Hub couldn’t read its record of runs just now.</p>{% endif %}
+</section>
+</div>
+
+<section class="viz-section" id="network" aria-labelledby="viz-network">
+  <div class="viz-head"><h2 id="viz-network">Network</h2>{{ ask('network', 'Network') }}<a class="viz-open" href="/network">Open Network<span aria-hidden="true"> →</span></a></div>
+  {% if network %}<div class="network-page">{{ network }}</div>
+  {% else %}<p class="viz-empty">Hub couldn’t load the network readings just now. The <a href="/network">Network page</a> may say more.</p>{% endif %}
+</section>
+<div id="viz-tip" role="status" hidden></div>
+{% endblock %}
