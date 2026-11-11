@@ -55,10 +55,10 @@ def test_preschool_lists_today_and_tomorrow_only(monkeypatch):
 
 def test_trip_flights_only_inside_the_horizon(monkeypatch):
     from hub.tools.trip import store as trips
-    monkeypatch.setattr(trips, 'load', lambda: {'start': '2027-05-22', 'end': '2027-05-29', 'selected_flight': None})
-    monkeypatch.setattr(home, 'today', lambda: date(2026, 11, 9))
+    monkeypatch.setattr(trips, 'load', lambda: {'start': '2031-10-04', 'end': '2031-10-11', 'selected_flight': None})
+    monkeypatch.setattr(home, 'today', lambda: date(2031, 5, 1))
     assert today.trip() == []
-    monkeypatch.setattr(home, 'today', lambda: date(2027, 5, 1))
+    monkeypatch.setattr(home, 'today', lambda: date(2031, 9, 13))
     assert today.trip()[0]['why'] == 'The trip is in 21 days and nothing is selected.'
 
 

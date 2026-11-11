@@ -67,14 +67,14 @@ def test_preschool_tile_without_edition(monkeypatch):
 
 def test_trip_tile_counts_down_and_flags_unbooked_flights(monkeypatch):
     from hub.tools.trip import store
-    monkeypatch.setattr(store, 'load', lambda: {'title': 'Synthetic City · Wedding', 'start': '2027-05-22',
-                                                'end': '2027-05-29', 'selected_flight': None})
-    monkeypatch.setattr(home, 'today', lambda: date(2027, 5, 1))
+    monkeypatch.setattr(store, 'load', lambda: {'title': 'Synthetic City · Family trip', 'start': '2031-10-04',
+                                                'end': '2031-10-11', 'selected_flight': None})
+    monkeypatch.setattr(home, 'today', lambda: date(2031, 9, 13))
     result = home.trip()
     assert result['headline'] == 'Synthetic City'
-    assert result['detail'] == 'In 21 days · May 22–29'
+    assert result['detail'] == 'In 21 days · Oct 4–11'
     assert result['lines'][0]['label'] == 'Choose flights'
-    monkeypatch.setattr(home, 'today', lambda: date(2027, 5, 24))
+    monkeypatch.setattr(home, 'today', lambda: date(2031, 10, 6))
     assert home.trip()['detail'] == 'Day 3 of 8'
 
 

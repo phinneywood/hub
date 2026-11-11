@@ -1,13 +1,28 @@
 import json
+from datetime import date
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 from ...templating import render
 from . import store, domain
 router = APIRouter()
 
+def dates(start, end):
+    """'OCT 4–11, 2031', or with both months/years when they differ."""
+    a, b = date.fromisoformat(start), date.fromisoformat(end)
+    if (a.year, a.month) == (b.year, b.month):
+        text = f'{a:%b} {a.day}–{b.day}, {b.year}'
+    elif a.year == b.year:
+        text = f'{a:%b} {a.day} – {b:%b} {b.day}, {b.year}'
+    else:
+        text = f'{a:%b} {a.day}, {a.year} – {b:%b} {b.day}, {b.year}'
+    return text.upper()
+
+
 @router.get('')
 def home(request: Request):
-    return render(request, 'trip/index.html', active='trip')
+    trip = store.load()
+    return render(request, 'trip/index.html', active='trip', heading=trip['title'].split(' · ')[0],
+                  dates=dates(trip['start'], trip['end']))
 
 @router.get('/data')
 def data():
@@ -15,7 +30,7 @@ def data():
 
 @router.get('/export')
 def export():
-    return JSONResponse(store.load(), headers={'Content-Disposition': 'attachment; filename="nyc-nj-trip.json"'})
+    return JSONResponse(store.load(), headers={'Content-Disposition': 'attachment; filename="trip.json"'})
 
 @router.post('/save')
 async def save(request: Request):
@@ -29,6 +44,8 @@ async def save(request: Request):
         if not isinstance(revision, int) or isinstance(revision, bool):
             raise ValueError('Invalid revision.')
         current = store.load()
+        if not isinstance(doc, dict) or doc.get('id') != current['id']:
+            raise ValueError('This file is not the saved trip.')
         # Imports and edits cannot forge the audit trail or replace another trip.
         doc['history'] = current.get('history', [])
         doc['revision'] = current['revision']

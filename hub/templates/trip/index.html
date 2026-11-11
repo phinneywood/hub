@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}NYC + New Jersey · Hub{% endblock %}
+{% block title %}Trip · Hub{% endblock %}
 {% block head %}<link rel="stylesheet" href="/static/trip.css"><script defer src="/static/trip.js"></script>{% endblock %}
 {% block main_class %}trip-main{% endblock %}
 {% block body %}
-<div class="trip-eyebrow">PRIVATE TRIP WORKSPACE · MAY 22–29, 2027</div>
-<h1 class="trip-title">New York & New Jersey</h1>
+<div class="trip-eyebrow">PRIVATE TRIP WORKSPACE · {{ dates }}</div>
+<h1 class="trip-title">{{ heading }}</h1>
 <p class="trip-lead">Family trip · Planning, not booked</p>
 <div id="trip-notice" role="status" aria-live="polite"></div>
 <nav class="trip-tabs" aria-label="Trip sections" id="trip-tabs"></nav>

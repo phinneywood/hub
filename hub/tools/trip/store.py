@@ -7,6 +7,8 @@ import os
 import sqlite3
 from ... import config
 from .domain import validate
+from hub import household
+
 from .seed import seed_trip
 
 
@@ -21,11 +23,21 @@ def _connect():
 
 
 def load():
+    """The saved trip. The invented starter trip is written only when the database has no trip at all."""
     with closing(_connect()) as conn, conn:
-        initial = seed_trip()
-        conn.execute('INSERT OR IGNORE INTO trip VALUES (?, ?, ?)', (initial['id'], 1, json.dumps(initial)))
-        row = conn.execute('SELECT document FROM trip WHERE id=?', (initial['id'],)).fetchone()
-    return validate(json.loads(row[0]))
+        row = conn.execute('SELECT document FROM trip ORDER BY rowid LIMIT 1').fetchone()
+        if row is None:
+            initial = seed_trip()
+            conn.execute('INSERT INTO trip VALUES (?, ?, ?)', (initial['id'], 1, json.dumps(initial)))
+            row = (json.dumps(initial),)
+    trip = validate(json.loads(row[0]))
+    # Stay names the trip doesn't hold yet come from the private household file, then neutral words.
+    names = household.section('trip')
+    for field, fallback in (('first_stay', 'First stay'), ('second_stay', 'Second stay')):
+        if field not in trip:
+            value = names.get(field)
+            trip[field] = value if isinstance(value, str) and 0 < len(value.strip()) <= 60 else fallback
+    return trip
 
 
 def save(data, expected_revision):

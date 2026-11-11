@@ -1,10 +1,10 @@
-# NYC / NJ trip workspace
+# Trip workspace
 
 ## Scope and integration
 
-Private Hub tool at `/trip`, registered in `hub/tools/__init__.py`. Uses Hub's existing owner authorization, same-origin writes, CSP and no-store headers. No network fetches, new credentials, booking, messaging, reminders or external synchronization. Hotel research remains paused. Wednesday May 26, 2027 is the preferred transition; Thursday remains an exploratory alternative. Flight selection never creates a reservation.
+Private Hub tool at `/trip`, registered in `hub/tools/__init__.py`. Uses Hub's existing owner authorization, same-origin writes, CSP and no-store headers. No network fetches, new credentials, booking, messaging, reminders or external synchronization. The trip has two stays and compares two moving days between them (the Wednesday and Thursday scenarios). Flight selection never creates a reservation. Flight observations are dated and labeled; neither a quote nor a selected option implies live inventory.
 
-The latest observation is the AS356/AS370 Main round-trip quote of $1,670.43 for two adults and a child, observed November 8, 2026 before companion fare. Older observations remain separately labeled. Nonstop flights preferred. Neither quote nor selected option implies live inventory.
+The saved trip lives only in the private trip database. A fresh install starts from an invented example trip (`hub/tools/trip/seed.py`). Stay names come from the trip itself, or from the private `household.json` (`trip.first_stay`, `trip.second_stay`), or fall back to neutral words.
 
 ## Storage and portability
 
@@ -29,7 +29,7 @@ Aggregate tests: `.venv/bin/python -m pytest -q`. This executor injects SOCKS pr
 
 ## Workflow and limits
 
-Plan compares both transitions with unknown cost inputs and a separate exploration state. Explicit choices require a rationale and create decision records. Itinerary and Travel view show unallocated days, selected flights, fixed wedding dates and manually entered items. People, reservations, budget, decisions, preparation and links are editable records. Budget preserves candidate/selected/booked/paid status and scope; scenario estimates and reservation amounts are not automatically double-counted. Actual shared allocation is manually entered rather than assumed equal. Flight observations can be added/updated, retaining prior versions; outbound and optional return legs have editable airport-local timestamps, timezones and stop status.
+Plan compares both transitions with unknown cost inputs and a separate exploration state. Explicit choices require a rationale and create decision records. Itinerary and Travel view show unallocated days, selected flights, fixed event dates and manually entered items. People, reservations, budget, decisions, preparation and links are editable records. Budget preserves candidate/selected/booked/paid status and scope; scenario estimates and reservation amounts are not automatically double-counted. Actual shared allocation is manually entered rather than assumed equal. Flight observations can be added/updated, retaining prior versions; outbound and optional return legs have editable airport-local timestamps, timezones and stop status.
 
 File uploads, live airline integrations, automatic Sheet synchronization, true offline mode and full accounting/allocation automation are deferred. Dates & Reminders Sheet remains the owner of personal date reminders. Changes here do not update it; record any necessary sync as an open decision. Do not store companion codes or raw confirmation secrets.
 

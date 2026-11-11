@@ -30,7 +30,7 @@ def test_initial_load_unknowns_export_and_save_conflict(client):
     doc=response.json()
     assert response.headers['cache-control']=='no-store'
     assert response.headers['content-security-policy']=="default-src 'self'; frame-ancestors 'none'"
-    assert doc['scenarios'][0]['nyc_nightly'] is None
+    assert doc['scenarios'][0]['first_nightly'] is None
     assert doc['records']['itinerary'][1]['time'] is None
     assert client.get('/trip/export').json()==doc
     doc['notes']='Synthetic note'
@@ -51,21 +51,24 @@ def test_auth_and_same_origin_fail_closed(client):
 
 @pytest.mark.parametrize('mutate',[
     lambda d:d.update(title=[]),
-    lambda d:d.update(start='2027-05-22',end='9999-12-31'),
+    lambda d:d.update(start='2031-10-04',end='9999-12-31'),
     lambda d:d.update(records=[]),
     lambda d:d['records']['documents'][0].update(url='javascript:alert(1)'),
     lambda d:d['records']['documents'][0].update(url='https://user:secret@example.invalid/'),
     lambda d:d['flights'][0].update(source='data:text/html,bad'),
     lambda d:d['flights'][0].update(outbound=[]),
     lambda d:d['flights'][0]['outbound'].update(origin_timezone='missing/zone'),
-    lambda d:d['flights'][0]['outbound'].update(departure='2027-05-22T09:05:00+00:00'),
+    lambda d:d['flights'][0]['outbound'].update(departure='2031-10-04T09:05:00+00:00'),
     lambda d:d['flights'][0].update(party_total=-3),
-    lambda d:d['scenarios'][0].update(nyc_nightly='100'),
-    lambda d:d['scenarios'][0].update(nyc_nightly=True),
-    lambda d:d['scenarios'][0].update(nyc_nightly=1e100),
+    lambda d:d['scenarios'][0].update(first_nightly='100'),
+    lambda d:d['scenarios'][0].update(first_nightly=True),
+    lambda d:d['scenarios'][0].update(second_nightly=1e100),
+    lambda d:d.update(first_stay=''),
+    lambda d:d.update(timezone='Not/AZone'),
+    lambda d:d.update(id='another-trip'),
     lambda d:d['records']['preparation'][0].update(done='false'),
-    lambda d:d['records']['itinerary'][0].update(date='20270522'),
-    lambda d:d.update(selected_flight=['as477']),
+    lambda d:d['records']['itinerary'][0].update(date='20311004'),
+    lambda d:d.update(selected_flight=['f1']),
 ])
 def test_malformed_import_rejected_without_changes(client,mutate):
     doc=client.get('/trip/data').json();mutate(doc)
@@ -86,9 +89,16 @@ def test_import_does_not_forge_history_or_duplicate_records(client):
 
 def test_legacy_local_timestamp_normalized_and_new_party_quote(client):
     doc=client.get('/trip/data').json()
-    doc['flights'][0]['outbound']['departure']='2027-05-22T09:05'
+    doc['flights'][0]['outbound']['departure']='2031-10-04T09:05'
     saved=post(client,doc).json()
-    assert saved['flights'][0]['outbound']['departure']=='2027-05-22T09:05:00-07:00'
-    latest=next(f for f in saved['flights'] if f['id']=='as356-as370-new')
-    assert latest['party_total']==1670.43 and latest['round_trip_per_person'] is None
-    assert latest['return']['arrival']=='2027-05-29T18:38:00-07:00'
+    assert saved['flights'][0]['outbound']['departure']=='2031-10-04T09:05:00-06:00'
+    latest=next(f for f in saved['flights'] if f['id']=='f2-party')
+    assert latest['party_total']==1170.43 and latest['round_trip_per_person'] is None
+    assert latest['return']['arrival']=='2031-10-11T16:38:00-06:00'
+
+
+def test_page_heading_and_dates_come_from_the_saved_trip(client):
+    page=client.get('/trip').text
+    assert 'Port Ellery &amp; Larch Valley' in page and 'OCT 4–11, 2031' in page
+    assert pages.dates('2031-10-28','2031-11-03')=='OCT 28 – NOV 3, 2031'
+    assert pages.dates('2031-12-30','2032-01-02')=='DEC 30, 2031 – JAN 2, 2032'

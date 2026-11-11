@@ -49,13 +49,13 @@ def fictional(monkeypatch):
         {'date': '2027-03-11', 'all_day': False, 'start': '15:00', 'end': '16:00', 'title': 'Dentist', 'location': 'Maple Street Dental', 'busy': True},
         {'date': '2027-03-11', 'all_day': False, 'start': '15:00', 'end': '15:45', 'title': 'Call with the plumber', 'location': None, 'busy': True},
         {'date': '2027-03-13', 'all_day': False, 'start': '10:00', 'end': '12:00', 'title': 'Farmers market with Alex', 'location': 'Old Mill Square', 'busy': True}]})
-    monkeypatch.setattr(catalog, 'trip_evidence', lambda: {'today': '2027-03-10', 'start': '2027-05-22', 'end': '2027-05-29',
+    monkeypatch.setattr(catalog, 'trip_evidence', lambda: {'today': '2027-03-10', 'start': '2027-06-05', 'end': '2027-06-12',
                                                            'flights_chosen': False})
     monkeypatch.setattr(today, 'needs_you', lambda tiles=(): [
         today.rec('gmail-needs', 'warn', '3 emails need you', 'From Maple Street Dental, Alex Rivera and Sam Quiet.', href='/gmail', cta='Open'),
         today.rec('calendar-overlap', 'info', 'Two events overlap tomorrow', 'Dentist and Call with the plumber, both at 3:00 PM.',
                   href='/calendar', cta='Open'),
-        today.rec('trip-flights', 'info', 'Choose flights', 'The trip is in 73 days and nothing is selected.', href='/trip', cta='Open')])
+        today.rec('trip-flights', 'info', 'Choose flights', 'The trip is in 87 days and nothing is selected.', href='/trip', cta='Open')])
 
 
 # ---- the scripted model ----

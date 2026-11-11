@@ -8,6 +8,19 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import re
 
 CATEGORIES = ('itinerary', 'reservations', 'people', 'budget', 'decisions', 'documents', 'preparation')
+TRIP_ID = re.compile(r'[a-z0-9][a-z0-9-]{0,59}')
+# Older saved trips used place-specific names for the two stays' nightly costs.
+LEGACY_KEYS = {'nyc_nightly': 'first_nightly', 'nj_nightly': 'second_nightly'}
+
+
+def upgrade(data):
+    """Rename older scenario fields in place; the stored copy changes only when the owner saves."""
+    for scenario in data.get('scenarios', []) if isinstance(data, dict) else []:
+        if isinstance(scenario, dict):
+            for old, new in LEGACY_KEYS.items():
+                if old in scenario and new not in scenario:
+                    scenario[new] = scenario.pop(old)
+    return data
 
 
 def _local_timestamp(value, zone):
@@ -42,11 +55,11 @@ def validate(data):
 
 
 def _validate(data):
-    if not isinstance(data, dict) or data.get('id') != 'nyc-nj-2027':
-        raise ValueError('This file is not the NYC / NJ trip.')
+    if not isinstance(data, dict) or not isinstance(data.get('id'), str) or not TRIP_ID.fullmatch(data['id']):
+        raise ValueError('This file is not a Hub trip.')
     if len(json.dumps(data, allow_nan=False)) > 1_000_000:
         raise ValueError('Trip is too large (maximum 1 MB).')
-    result = deepcopy(data)
+    result = upgrade(deepcopy(data))
     data = result
     def text(value, name, required=False):
         if not isinstance(value, str) or len(value) > 20000 or (required and not value.strip()):
@@ -64,8 +77,13 @@ def _validate(data):
             raise ValueError('Links must be ordinary https:// or http:// URLs without embedded credentials.')
     text(data['title'], 'Trip title', True)
     text(data.get('notes', ''), 'Notes')
-    if data.get('timezone') != 'America/New_York':
-        raise ValueError('Trip local timezone must remain America/New_York.')
+    for field in ('first_stay', 'second_stay'):
+        if field in data and (not isinstance(data[field], str) or not 0 < len(data[field].strip()) <= 60):
+            raise ValueError('Stay names must be short text.')
+    try:
+        ZoneInfo(data['timezone'])
+    except (ValueError, TypeError, ZoneInfoNotFoundError) as exc:
+        raise ValueError('Trip local timezone must be a valid time zone name.') from exc
     start, end = iso_date(data['start']), iso_date(data['end'])
     if not 0 < (end-start).days <= 366:
         raise ValueError('Trip duration must be between 1 and 366 days.')
@@ -97,7 +115,7 @@ def _validate(data):
             for field in ('done', 'nonstop'):
                 if field in item and not isinstance(item[field], bool):
                     raise ValueError(f'{field} must be true or false.')
-            for field in ('amount', 'nyc_nightly', 'nj_nightly', 'car_daily', 'round_trip_per_person', 'party_total'):
+            for field in ('amount', 'first_nightly', 'second_nightly', 'car_daily', 'round_trip_per_person', 'party_total'):
                 value = item.get(field)
                 if value is not None and (isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or not 0 <= value <= 10_000_000):
                     raise ValueError(f'{field} must be a nonnegative amount up to $10 million, or unknown.')
@@ -125,10 +143,6 @@ def _validate(data):
                     raise ValueError('Flight legs must be objects.')
                 for field in ('number','origin','destination','origin_timezone','destination_timezone'):
                     text(leg[field], field, True)
-                for airport, zone in (('origin', 'origin_timezone'), ('destination','destination_timezone')):
-                    expected = {'SEA':'America/Los_Angeles','PAE':'America/Los_Angeles','EWR':'America/New_York','JFK':'America/New_York'}.get(leg[airport])
-                    if expected and leg[zone] != expected:
-                        raise ValueError('Airport timezone does not match its location.')
                 for time, zone in (('departure','origin_timezone'), ('arrival','destination_timezone')):
                     leg[time] = _local_timestamp(leg[time], leg[zone]).isoformat()
                 if not 0 < flight_duration(leg) <= 48*60:
@@ -143,12 +157,13 @@ def _validate(data):
 def summarize(data, scenario_id):
     scenario = next(s for s in data['scenarios'] if s['id'] == scenario_id)
     start, transition, end = (date.fromisoformat(v) for v in (data['start'], scenario['transition'], data['end']))
-    nyc, nj = (transition-start).days, (end-transition).days
+    first, second = (transition-start).days, (end-transition).days
     costs = {name: None if scenario.get(key) is None else round(scenario[key] * nights, 2)
-             for name, key, nights in [('nyc', 'nyc_nightly', nyc), ('nj', 'nj_nightly', nj), ('car', 'car_daily', nj)]}
+             for name, key, nights in [('first', 'first_nightly', first), ('second', 'second_nightly', second),
+                                       ('car', 'car_daily', second)]}
     flight = next((f for f in data['flights'] if f['id'] == data.get('selected_flight')), None)
     fare = flight.get('round_trip_per_person') if flight else None
-    return {'nyc_nights': nyc, 'nj_nights': nj, 'full_nyc_days': max(0, nyc-1), 'transition': scenario['transition'],
+    return {'first_nights': first, 'second_nights': second, 'full_first_days': max(0, first-1), 'transition': scenario['transition'],
             'known_total': round(sum(v for v in costs.values() if v is not None), 2),
             'missing_costs': [key for key, value in costs.items() if value is None], 'costs': costs,
             'complete': all(v is not None for v in costs.values()),
