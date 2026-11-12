@@ -8,6 +8,10 @@
 </div>
 <section class="needs" aria-labelledby="needs-title">
   <h2 class="needs-title" id="needs-title">Needs you</h2>
+  {% if home_change %}<div class="banner{{ ' warn' if home_change.unknown or home_change.not_sent else '' }} home-change" role="status">
+    <span>{{ (home_change.done or ['Nothing changed'])|join(', ') }}.{% if home_change.unknown %} Home Assistant didn’t confirm {{ home_change.unknown|join(', ') }}.{% endif %}{% if home_change.not_sent %} Not done: {{ home_change.not_sent|join(', ') }}.{% endif %}</span>
+    {% if home_change.undo and not home_change.undone %}<form method="post" action="/house/undo/{{ home_change.batch }}"><button class="btn small">Undo</button></form>{% endif %}
+  </div>{% endif %}
   {% if snoozed %}<p class="banner" role="status">Hidden {{ 'for a week' if snoozed == 7 else 'until tomorrow' }}.</p>{% endif %}
   {% for n in decisions %}
   <article class="decision tone-{{ n.tone }}">
@@ -36,6 +40,7 @@
       {% if t.lines %}<ul class="tile-items">{% for i in t.lines %}
         <li{% if i.struck %} class="struck"{% endif %}><span>{{ i.label }}</span><small>{{ i.note }}</small></li>{% endfor %}
       </ul>{% endif %}
+      {% if t.acts %}<span class="tile-acts">{% for a in t.acts %}<form method="post" action="{{ a.post }}">{% for k, v in a.fields.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}<button class="btn small">{{ a.label }}</button></form>{% endfor %}</span>{% endif %}
       <span class="tile-foot">
         <a class="tile-cta" href="{{ t.href }}">{{ t.cta or 'Open' }}<span class="sr"> {{ t.name }}</span><span aria-hidden="true"> →</span></a>
         {% if t.ask %}<a class="ask-about" href="/ask?about={{ t.ask | urlencode }}">Ask about this<span class="sr"> ({{ t.name }})</span></a>{% endif %}

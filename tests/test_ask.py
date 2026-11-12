@@ -179,9 +179,14 @@ def test_every_lookup_is_complete_and_the_agent_has_exactly_these_tools():
         assert handoff.name and handoff.reads and handoff.sends and handoff.open and handoff.page.startswith('/')
     built = agent.build()
     tools = built._function_toolset.tools
-    assert set(tools) == {l.slug for l in found} | {h.slug for h in handoffs}
+    controls = catalog.controls()
+    assert [c.slug for c in controls] == ['home_control', 'play_music']
+    assert set(tools) == {l.slug for l in found} | {h.slug for h in handoffs} | {c.slug for c in controls}
     assert not tools['kitchen'].function_schema.json_schema.get('properties')   # the model can't put words in the owner's mouth
-    assert not any(tool.requires_approval for tool in tools.values())   # nothing here changes anything; Kitchen's cart needs its own tap
+    for c in controls:   # the model never says who asked: that comes from the signed-in request
+        assert 'login' not in tools[c.slug].function_schema.json_schema['properties'] and c.run.__doc__
+        assert catalog.action(c.action).ceiling == 'undo'
+    assert not any(tool.requires_approval for tool in tools.values())   # house changes are undoable; Kitchen's cart needs its own tap
     assert set(agent.describe()) == set(tools) and agent.describe()['kitchen']['handoff']
 
 
@@ -361,7 +366,8 @@ def test_a_whole_turn_on_the_real_model_class_sends_exactly_lunas_route_and_reco
     assert url == luna.URL and body['model'] == luna.MODEL and body['provider'] == luna.PROVIDER and body['stream'] is True
     assert 'models' not in body and body['reasoning'] == {'effort': 'none'} and body['max_tokens'] == model.MAX_OUTPUT_TOKENS
     assert auth == 'Bearer synthetic-key'
-    assert {t['function']['name'] for t in body['tools']} == {l.slug for l in catalog.lookups()} | {h.slug for h in catalog.handoffs()}
+    assert {t['function']['name'] for t in body['tools']} == ({l.slug for l in catalog.lookups()} | {h.slug for h in catalog.handoffs()}
+                                                              | {c.slug for c in catalog.controls()})
     run = state.runs(routes.KIND)[0]
     assert (run['status'], run['luna_calls'], run['tokens_in'], run['tokens_out']) == ('ok', 1, 700, 12)
     assert run['cost'] == pytest.approx(0.0021)

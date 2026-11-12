@@ -46,7 +46,7 @@ def _owner(href):
 
 def decisions(needs):
     """One card per “Needs you” item. The one-tap step is the list's own: `today._settle` already decided it."""
-    return [{**n, 'owner': _owner(n['href']), 'ask': 'need:' + n['key']} for n in needs]
+    return [{**n, 'owner': 'Home' if n['key'].startswith('house-') else _owner(n['href']), 'ask': 'need:' + n['key']} for n in needs]
 
 
 def _slug(href):

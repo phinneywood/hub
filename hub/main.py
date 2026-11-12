@@ -170,10 +170,15 @@ def landing(request: Request):
 
 
 @app.get("/today", response_class=HTMLResponse)
-def today_page(request: Request, snoozed: int = 0):
+def today_page(request: Request, snoozed: int = 0, home: str = ""):
     from . import cards, home as summaries
+    from .tools.house import control
     greeting_text, date_text = summaries.greeting()
-    return render(request, "today.html", active="today", snoozed=snoozed if snoozed in (1, 7) else 0,
+    try:
+        home_change = control.summary(home) if home else None
+    except Exception:  # noqa: BLE001 - the banner is a nicety; Today shows without it
+        home_change = None
+    return render(request, "today.html", active="today", snoozed=snoozed if snoozed in (1, 7) else 0, home_change=home_change,
                   greeting_text=greeting_text, date_text=date_text, **cards.page())
 
 

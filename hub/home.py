@@ -14,10 +14,11 @@ DEADLINE_SECONDS = 2.5
 _pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix='hub-home')
 
 
-def tile(slug, tone, headline, detail='', *, items=(), cta=None, href=None, as_of=None):
-    """tone: ok | warn | bad | info | idle. as_of: how old the numbers are, e.g. 'Updated 12 min ago'."""
+def tile(slug, tone, headline, detail='', *, items=(), cta=None, href=None, as_of=None, acts=()):
+    """tone: ok | warn | bad | info | idle. as_of: how old the numbers are, e.g. 'Updated 12 min ago'.
+    acts: one-tap buttons, each {'label', 'post', 'fields'}; a signed-in tap only."""
     return {'slug': slug, 'tone': tone, 'headline': headline, 'detail': detail,
-            'lines': list(items), 'cta': cta, 'href': href or '/' + slug, 'as_of': as_of}
+            'lines': list(items), 'cta': cta, 'href': href or '/' + slug, 'as_of': as_of, 'acts': list(acts)}
 
 
 def today():
@@ -205,10 +206,12 @@ def kitchen():
 
 def house():
     from .tools.house import broker, read
+    link = read.links().get('assistant_url')
+    where = {'href': link or '/house/changes', 'cta': 'Open Home Assistant' if link else 'Changes'}
     try:
         found = read.snapshot()
     except broker.HomeDown:
-        return tile('house', 'idle', 'Home isn’t reachable', 'Hub couldn’t read Home Assistant through the broker.')
+        return tile('house', 'idle', 'Home isn’t reachable', 'Hub couldn’t read Home Assistant through the broker.', **where)
     issues = read.attention(found)
     playing = [d for d in found['speakers'] if d['on']]
     facts = [f'{d["name"]}: {d["detail"]}' if d['detail'] else d['name'] + ' playing' for d in playing[:1]]
@@ -216,11 +219,16 @@ def house():
     if found['security'] and not any(d['open'] or d['state'] == 'jammed' for d in found['security']):
         facts.append('All locked and closed')
     lights = found['lights_on']
+    acts = []
+    if lights:
+        acts.append({'label': 'All lights off', 'post': '/house/do', 'fields': {'target': 'lights-on', 'action': 'off'}})
+    acts += [{'label': f'Pause {d["name"]}', 'post': '/house/do', 'fields': {'target': d['id'], 'action': 'pause'}}
+             for d in playing[:1]]
     headline = f'{lights} light{"s" * (lights != 1)} on' if lights else 'All lights off'
     if issues:
-        return tile('house', 'warn', issues[0][2], ' · '.join(facts), items=[{'label': words, 'note': ''} for _, _, words in issues[1:3]],
-                    cta='Check')
-    return tile('house', 'ok' if lights or playing else 'idle', headline, ' · '.join(facts))
+        return tile('house', 'warn', issues[0][2], ' · '.join(facts), acts=acts,
+                    items=[{'label': words, 'note': ''} for _, _, words in issues[1:3]], **where)
+    return tile('house', 'ok' if lights or playing else 'idle', headline, ' · '.join(facts), acts=acts, **where)
 
 
 SUMMARIES = {'kitchen': kitchen, 'house': house, 'gmail': gmail, 'calendar': calendar, 'preschool': preschool, 'network': network, 'trip': trip, 'mobility': mobility}

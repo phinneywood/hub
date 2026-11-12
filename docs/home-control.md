@@ -1,6 +1,6 @@
 # Home control (design, 2026-11-11)
 
-Status: step 1 (read) built on a branch, awaiting review; the rest proposed. Owner decisions on 2026-11-11:
+Status: steps 1 and 2 (read, then lights, power and music) built on a branch; the rest proposed. Owner decisions on 2026-11-11:
 
 - Hub talks to Home Assistant directly for devices and playback, and to Music Assistant's own API
   for playlists. Only Apple Music edits that no API offers would go to a Claude Code turn driving the
@@ -52,20 +52,24 @@ Status: step 1 (read) built on a branch, awaiting review; the rest proposed. Own
 - **Catalog entries.** A `Home` source in `hub/engine/catalog.py` with lookups (`home_status`: rooms,
   devices in the allowlisted domains and their states; `music_now`: what plays where) and actions per
   class. Each action has a preview, an undo where one exists, and a trust level on the Engine page.
-- **Ask can act.** Ask gets its first doing tools: `home_control` and `play_music`. Arguments are an
-  entity from `home_status` and an allowlisted action; anything else is refused before Home Assistant
-  hears of it. Ask shows a result card ("Kitchen lights off · Undo"). For security devices it shows
-  an approval card instead, and nothing happens until the owner taps it (the same signed-in-device
-  rule as Deploy and Place order). Device names and states reach Ask's model only over its
-  zero-retention route, as today.
-- **A Home page** (`/house`, shown as "Home"): rooms with their lights and plugs as toggles, the
-  thermostat, now playing per speaker with play, pause and volume, and the security devices with their
-  state and tap-to-approve buttons. A card on Today summarises it, and flags an unlocked door or an
-  open garage at night.
+- **Ask can act.** Ask's first doing tools are `home_control` (lights, plugs, fans, scenes) and
+  `play_music` (play, pause, skip, volume, group). The model names a device, room or speaker from
+  `home_status` and `music_now`; Hub resolves it to an entity it keeps and checks the action twice
+  (`control.py`, then `broker.WRITES`). Who asked comes from the signed-in request, never from the model.
+  The owner can set the "Change lights, plugs, scenes and speakers" action to Suggest only on the Engine
+  page, and then Ask changes nothing. For security devices Ask will show an approval card instead
+  (step 5). Device names and states reach Ask's model only over its zero-retention route.
+- **No Home page of its own.** Home Assistant already has dashboards, so `/house` opens Home Assistant
+  (its address is in the private settings file, `household.json` → `home.assistant_url`, with
+  `home.music_url` for Music Assistant's player). Hub keeps only `/house/changes`: what it changed,
+  with Undo.
+- **Today.** A Home card with the lights and music in one line and one-tap buttons ("All lights off",
+  "Pause"), a banner with Undo after a tap, and a "Needs you" line for the alarm going off or a jammed
+  lock at any hour, and an unlocked door or open garage at night.
 - **Record.** Every change is logged in Hub (who asked, from where, what changed, the state before),
-  so Undo and the Home page can show recent changes.
-- **Limits.** At most 30 device actions per minute from Ask; a failed or unknown result is reported
-  as unknown, never as done.
+  so Undo, for a day, can put it back.
+- **Limits.** At most 30 device changes a minute; a change whose answer never came back is reported as
+  not confirmed, never as done. Playback that starts from silence starts at 15%.
 
 ## Music: Music Assistant's own API
 
@@ -120,24 +124,29 @@ Apple Music on the web can do the edits its API can't, in the owner's signed-in 
 
 ## Order of work
 
-1. **Read.** The Home source, `home_status` and `music_now` lookups, and a read-only Home page and
-   Today card.
-2. **Lights, power and music.** Actions with Undo, Ask's `home_control` and `play_music` tools and
-   result cards, and toggles on the Home page.
-3. **Playlists by API.** Music Assistant playlists (create and full editing) and adding to Apple
-   Music playlists.
-4. **Thermostat**, once its Home Assistant setup is finished and reads are checked.
-5. **Security devices** with approval cards.
-6. **Apple Music edits through Chrome**, only if the owner wants them.
+1. **Read.** Built: the Home source, `home_status` and `music_now`, the Today card and "Needs you".
+2. **Lights, power and music.** Built: `home_control` and `play_music` in Ask, Today buttons, Undo and
+   the changes page. A proper result card with Undo inside the chat needs the Ask page rebuilt (Node);
+   until then Ask's answer links to Home changes.
+3. **Security devices** with approval cards (Lock from "Needs you").
+4. **Automations.** Ask drafts one in plain words; nothing is created until the owner taps Create.
+   Hub marks the ones it makes and only edits or deletes those; one that touches locks, the garage or
+   the alarm is flagged on the card.
+5. **Playlists by API.** Music Assistant playlists (create and full editing) and adding to Apple Music
+   playlists, plus a "Needs you" reminder a month before the Apple Music sign-in expires.
+6. **Thermostat**, once its Home Assistant setup is finished and reads are checked.
+7. **Apple Music edits through Chrome**, only if the owner wants them.
 
 Tests use made-up devices and a fake Home Assistant. Nothing is switched on or off to check a build.
 The first live check of each step is the owner trying it.
 
 ## Owner setup
 
-Nothing for steps 1, 2, 4 and 5: the HA broker already has access.
+The HA broker already has access, so steps 1 to 4 and 6 need nothing more.
 
-1. **In Music Assistant** (for step 3): create an API key in its settings and save it in 1Password's
+1. **For the links:** add the Home Assistant and Music Assistant addresses to `household.json` in Hub's
+   private data folder, under `"home": {"assistant_url": "…", "music_url": "…"}`.
+2. **In Music Assistant** (for step 5): create an API key in its settings and save it in 1Password's
    `Hub` vault as item `Music Assistant`, field `credential`.
-2. **In Chrome on the Mac mini** (only for step 6): sign in to music.apple.com once with the Apple
+3. **In Chrome on the Mac mini** (only for step 7): sign in to music.apple.com once with the Apple
    Account that holds the library.

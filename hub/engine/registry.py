@@ -41,6 +41,19 @@ class Handoff:
 
 
 @dataclass(frozen=True)
+class Control:
+    """Something Ask Hub may change for the owner when asked, right away, with Undo. Each run is recorded."""
+    slug: str            # the tool's name
+    name: str            # what the chat calls it
+    reads: str           # plain words: what it changes and how it is put back
+    sends: str           # plain words: what the model sees
+    page: str            # where the owner sees and undoes the change
+    open: str            # that link's words
+    action: str          # the catalog Action whose trust level governs it
+    run: Callable        # run(login, **typed arguments) -> small dict; its docstring is what the model reads
+
+
+@dataclass(frozen=True)
 class Source:
     slug: str
     name: str

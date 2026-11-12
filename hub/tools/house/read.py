@@ -13,7 +13,7 @@ from . import broker
 
 POWER = ('light', 'switch', 'fan')
 SECURITY = ('lock', 'cover', 'alarm_control_panel')
-KEPT = POWER + SECURITY + ('media_player', 'climate')
+KEPT = POWER + SECURITY + ('media_player', 'climate', 'scene')
 OTHER_ROOM = 'Other'
 NAME = 80
 REGISTRY_SECONDS = 300      # rooms and names change rarely
@@ -38,6 +38,12 @@ OPEN = {'lock': ('unlocked', 'open', 'opening', 'unlocking'), 'cover': ('open', 
 
 _lock = threading.Lock()
 _cache = {'registry': None, 'registry_at': float('-inf'), 'snapshot': None, 'snapshot_at': float('-inf')}
+
+
+def forget_states():
+    """After a change: the next read asks Home Assistant again."""
+    with _lock:
+        _cache.update(snapshot=None, snapshot_at=float('-inf'))
 
 
 def clear_cache():
@@ -132,7 +138,9 @@ def _device(entity_id, item, registry, players_only):
             'on': state == 'on' if domain in POWER else state in ('playing', 'buffering') if domain == 'media_player'
             else state not in ('off', *OFFLINE) if domain == 'climate' else False,
             'offline': state in OFFLINE, 'open': state in OPEN.get(domain, ()), 'detail': _detail(domain, state, attrs),
-            'group': [m for m in attrs.get('group_members') or () if isinstance(m, str) and m != entity_id]}
+            'level': _percent(attrs.get('brightness'), 255) if domain == 'light' and state == 'on' else None,
+            'volume': attrs.get('volume_level') if isinstance(attrs.get('volume_level'), (int, float)) else None,
+            'members': [m for m in attrs.get('group_members') or () if isinstance(m, str) and m != entity_id]}
 
 
 def _build(registry, states):
@@ -143,7 +151,7 @@ def _build(registry, states):
     devices.sort(key=lambda d: d['name'].lower())
     names = {d['id']: d['name'] for d in devices}
     for d in devices:
-        d['group'] = [names[m] for m in d['group'] if m in names]
+        d['group'] = [names[m] for m in d['members'] if m in names]
     rooms = {}
     for d in devices:
         if d['kind'] in POWER:
@@ -153,14 +161,16 @@ def _build(registry, states):
             'climate': [d for d in devices if d['kind'] == 'climate'],
             'security': [d for d in devices if d['kind'] in SECURITY],
             'speakers': [d for d in devices if d['kind'] == 'media_player'],
+            'scenes': [d for d in devices if d['kind'] == 'scene'],
             'lights_on': sum(d['on'] for d in devices if d['kind'] == 'light'),
             'read_at': datetime.now(home.PACIFIC)}
 
 
-def snapshot():
-    """The house now. Raises broker.HomeDown when Home Assistant can't be read."""
+def snapshot(fresh=False):
+    """The house now. Raises broker.HomeDown when Home Assistant can't be read. fresh: skip the short cache,
+    as before a change."""
     with _lock:
-        if time.monotonic() - _cache['snapshot_at'] < STATE_SECONDS and _cache['snapshot']:
+        if not fresh and time.monotonic() - _cache['snapshot_at'] < STATE_SECONDS and _cache['snapshot']:
             return _cache['snapshot']
     found = _build(*_fetch())
     with _lock:
@@ -185,3 +195,20 @@ def attention(found, now=None):
         elif d['open'] and late:
             out.append(('warn', d, f'{d["name"]} is {"unlocked" if d["kind"] == "lock" and d["state"] != "open" else "open"}'))
     return sorted(out, key=lambda x: x[0] != 'bad')
+
+
+def links():
+    """Where Home Assistant and Music Assistant open for the owner, from the private settings file
+    (household.json, section "home": "assistant_url", "music_url"). Never written into Git."""
+    from ... import household
+    try:
+        home_settings = household.section('home')
+    except ValueError:
+        home_settings = {}
+    found = {}
+    for key in ('assistant_url', 'music_url'):
+        value = home_settings.get(key)
+        if isinstance(value, str) and value.startswith(('https://', 'http://')) and len(value) < 300 \
+                and not any(c in value for c in '"\'<> '):
+            found[key] = value
+    return found

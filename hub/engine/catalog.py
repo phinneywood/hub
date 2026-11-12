@@ -1,8 +1,9 @@
 """The one list of what Hub reads and what Hub may do. Adding a capability starts here."""
 from datetime import date, timedelta
+from typing import Literal
 
 from .. import home, today
-from .registry import Action, Handoff, Lookup, Source
+from .registry import Action, Control, Handoff, Lookup, Source
 
 EMAILS = 5               # emails that need the owner, passed to the overnight review without their text
 UNANSWERED = 3
@@ -10,7 +11,7 @@ PRESCHOOL_DAYS = 14
 
 # Where a suggestion may point. The model names a source; Hub picks the page.
 PAGES = {'gmail': ('/gmail', 'Open Gmail'), 'calendar': ('/calendar', 'Open calendar'), 'preschool': ('/preschool/', 'Class guide'), 'trip': ('/trip', 'Open trip'),
-         'network': ('/network', 'Details'), 'house': ('/house', 'Open Home'), 'hub': ('/engine', 'Open')}
+         'network': ('/network', 'Details'), 'house': ('/house/changes', 'Home changes'), 'hub': ('/engine', 'Open')}
 
 
 def _named(name, address):
@@ -203,8 +204,10 @@ def house_items():
         found = read.snapshot()
     except broker.HomeDown:
         return []  # the Home tile already says it can't be read
+    link = read.links().get('assistant_url') or '/house/changes'
     return [today.rec(f'house-{d["id"]}', tone, words, 'From Home Assistant just now.' if tone == 'bad' else
-                      'It’s night. Check it on the Home page.', href='/house', cta='See Home') for tone, d, words in read.attention(found)]
+                      'It’s night. Check it in Home Assistant.', href=link, cta='Open Home Assistant')
+            for tone, d, words in read.attention(found)]
 
 
 def _thing(d):
@@ -226,7 +229,8 @@ def home_lookup(room: str | None = None) -> dict:
     except broker.HomeDown:
         return UNAVAILABLE
     answer = {'read_at': found['read_at'].strftime('%H:%M'), 'lights_on': found['lights_on'],
-              'thermostat': [_thing(d) for d in found['climate']], 'doors_and_alarm': [_thing(d) for d in found['security']]}
+              'thermostat': [_thing(d) for d in found['climate']], 'doors_and_alarm': [_thing(d) for d in found['security']],
+              'scenes': [_thing(d)['name'] for d in found['scenes']]}
     if room is None:
         answer['rooms'] = [{'room': r['name'], 'on': [_thing(d)['name'] for d in r['devices'] if d['on']]} for r in found['rooms']]
         return answer
@@ -250,6 +254,79 @@ def music_lookup() -> dict:
     return {'read_at': found['read_at'].strftime('%H:%M'),
             'speakers': [{**_thing(d), **({'grouped_with': [luna.clip(n, 80) for n in d['group']]} if d['group'] else {})}
                          for d in found['speakers']]}
+
+
+# ---- Controls: what Ask Hub may change when the owner asks. Recorded, with Undo on the Home changes page. ----
+
+def _refusal(login):
+    from . import state
+    if login is None:
+        return {'refused': 'Changes to the house need the owner signed in on their phone or laptop.'}
+    if state.trust(action('house.control')) == 'suggest':
+        return {'refused': 'The owner set Home control to “Suggest only” on the Engine page, so Hub changes nothing. '
+                           'They can do it in Home Assistant.'}
+    return None
+
+
+def _changed(result):
+    out = {'done': result['done']}
+    if result['unknown']:
+        out['not_confirmed'] = result['unknown']
+        out['note'] = 'Home Assistant didn’t confirm these. Say so; never say they were done.'
+    if result['not_sent']:
+        out['not_done'] = result['not_sent']
+    if result['undo']:
+        out['undo'] = 'The owner can undo this for a day on the Home changes page.'
+    return out
+
+
+def home_control(login, device: str, action: Literal['on', 'off', 'brightness', 'activate'],
+                 brightness_percent: int | None = None) -> dict:
+    """Change lights, plugs, fans or scenes in the house right away, when the owner asks. `device` is a name
+    from home_status: a light, plug, fan or scene, or a room name (all its lights), or "all lights".
+    `action`: on, off, brightness (a light, with brightness_percent 1-100) or activate (a scene).
+    Locks, the garage door, the alarm, the thermostat and automations can't be changed here."""
+    from ..tools.house import control, read
+    refused = _refusal(login)
+    if refused:
+        return refused
+    kinds = ('scene',) if action == 'activate' else ('light',) if action == 'brightness' else read.POWER
+    try:
+        targets = control.resolve(device, kinds)
+        return _changed(control.change(targets, action, login=login, via='ask', value=brightness_percent))
+    except control.Refused as error:
+        return {'refused': str(error)}
+
+
+def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause', 'next', 'previous', 'volume', 'group', 'ungroup'],
+               what: str | None = None, kind: Literal['track', 'album', 'artist', 'playlist', 'radio'] | None = None,
+               volume_percent: int | None = None, with_speakers: list[str] | None = None) -> dict:
+    """Control the Music Assistant speakers right away, when the owner asks. `speaker` is a speaker name from
+    music_now. `action`: play_media (search Apple Music for `what`, of `kind`, and play it; a speaker that
+    was silent starts quietly unless volume_percent is given), play, pause, next, previous, volume (with
+    volume_percent 0-100), group (with with_speakers, names from music_now) or ungroup."""
+    from ..tools.house import control, read
+    refused = _refusal(login)
+    if refused:
+        return refused
+    try:
+        found = read.snapshot()
+        [target] = control.resolve(speaker, ('media_player',), found)[:1]
+        members = [m for name in with_speakers or () for m in control.resolve(name, ('media_player',), found)[:1]]
+        return _changed(control.change([target], action, login=login, via='ask', value=volume_percent, query=what,
+                                       kind=kind, members=members))
+    except control.Refused as error:
+        return {'refused': str(error)}
+
+
+CONTROLS = [
+    Control('home_control', 'Home control', 'Turns lights, plugs and fans on or off, sets brightness and turns on '
+            'scenes, through the HA broker. Each change is recorded and can be undone for a day.',
+            'Device, room and scene names, and what happened.', '/house/changes', 'Home changes', 'house.control', home_control),
+    Control('play_music', 'Music', 'Plays, pauses, skips, sets the volume and groups the Music Assistant speakers. '
+            'A silent speaker starts at about 15%. Each change is recorded and can be undone for a day.',
+            'Speaker names, what you asked to play, and what happened.', '/house/changes', 'Home changes', 'house.control', play_music),
+]
 
 
 INBOX_DAYS = 30
@@ -422,6 +499,10 @@ ACTIONS = [
            'Each change has its own Undo on the plan page.', page='/gmail/plan'),
     Action('gmail.review_sender', 'Review one sender', 'Opens the sender with options to choose from. Nothing changes until you pick.',
            'Remove it from the plan, or Undo after applying.', page='/gmail/assess'),
+    Action('house.control', 'Change lights, plugs, scenes and speakers',
+           'When you ask in Ask Hub or tap a button on Today: lights, plugs and fans on or off, brightness, scenes, '
+           'and playing, pausing, volume and grouping on the speakers. Never locks, the garage, the alarm or the thermostat.',
+           'Undo on the Home changes page, for a day.', page='/house/changes', post='/house/do', default='undo', ceiling='undo'),
     Action('hub.deploy', 'Update Hub to a checked version',
            'Asks the deployer on this Mac to switch to the version that passed its checks. Your data is backed up first.',
            'It goes back by itself if the new version fails its checks.', page='/engine', post='/engine/deploy',
@@ -489,6 +570,10 @@ def lookups():
 
 def handoffs():
     return list(HANDOFFS)
+
+
+def controls():
+    return list(CONTROLS)
 
 
 def source(slug):

@@ -220,3 +220,9 @@ textarea { width:100%; padding:.7rem; font:inherit; border:1px solid var(--line)
 .checks li > form { margin:0 0 0 auto; flex:none; }
 .engine-runs { width:100%; margin-top:.75rem; font-size:.9rem; }
 .need-text .tag { margin:0; font-weight:400; font-size:.72rem; }
+
+/* ---------- Home ---------- */
+.tile-acts { display:flex; flex-wrap:wrap; gap:.4rem; margin:.5rem 0 .2rem; }
+.tile-acts form { margin:0; }
+.home-change { display:flex; align-items:center; justify-content:space-between; gap:.8rem; }
+.home-change form { margin:0; flex:none; }

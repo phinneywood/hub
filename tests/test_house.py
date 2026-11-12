@@ -61,6 +61,21 @@ def fake(monkeypatch):
 
     def exchange(message, timeout):
         asked.append(message)
+        if message['op'] == 'request':
+            domain, service = message['path'].removeprefix('/api/services/').split('/')
+            data = message['body']
+            item = next((s for s in world['states'] if s['entity_id'] == data['entity_id']), None)
+            if item and service in ('turn_on', 'turn_off'):
+                item['state'] = service.removeprefix('turn_')
+                if 'brightness_pct' in data:
+                    item['attributes']['brightness'] = round(data['brightness_pct'] * 255 / 100)
+            elif item and service == 'media_pause':
+                item['state'] = 'paused'
+            elif item and service in ('media_play', 'play_media'):
+                item['state'] = 'playing'
+            elif item and service == 'volume_set':
+                item['attributes']['volume_level'] = data['volume_level']
+            return []
         return [answers[c['type']]() for c in message['commands']]
     monkeypatch.setattr(broker, '_exchange', exchange)
     world['asked'] = asked
@@ -185,29 +200,27 @@ def test_attention_at_night_and_any_hour(fake):
 
 # ---- The page, the tile and Today ----
 
-def test_home_page_shows_rooms_and_says_it_is_read_only(fake):
-    page = TestClient(app).get('/house').text
-    for text in ('Doors and alarm', 'Thermostat', 'Speakers', 'Kitchen', 'Counter lights', 'Song A – Band B', 'Read-only for now'):
-        assert text in page
-    assert 'Porch camera' not in page and '<form' not in page.split('<main')[1]
-
-
-def test_home_page_when_the_broker_is_down(monkeypatch):
-    down(monkeypatch)
-    page = TestClient(app).get('/house')
-    assert page.status_code == 200 and 'isn’t answering' in page.text and 'nothing was changed' in page.text
+def test_house_opens_home_assistant_when_its_address_is_set(monkeypatch):
+    from hub import config
+    client = TestClient(app)
+    assert client.get('/house', follow_redirects=False).headers['location'] == '/house/changes'
+    (config.DATA_DIR / 'household.json').write_text(json.dumps({'home': {'assistant_url': 'https://ha.example:8123',
+                                                                         'music_url': 'javascript:alert(1)'}}))
+    assert client.get('/house', follow_redirects=False).headers['location'] == 'https://ha.example:8123'
+    assert read.links() == {'assistant_url': 'https://ha.example:8123'}          # only web addresses
 
 
 def test_tile_and_today_items(fake, monkeypatch):
     tile = home.house()
     assert (tile['tone'], tile['headline']) == ('ok', '1 light on')
+    assert [a['label'] for a in tile['acts']] == ['All lights off', 'Pause Living room']
     assert 'All locked and closed' in tile['detail'] and 'Thermostat 68° · set to 70°' in tile['detail']
     monkeypatch.setattr(read, 'night', lambda now=None: True)
     set_state(fake, 'lock.front_door', 'unlocked')
     tile = home.house()
     assert (tile['tone'], tile['headline']) == ('warn', 'Front door is unlocked')
     [item] = catalog.house_items()
-    assert (item['key'], item['href'], item['tone']) == ('house-lock.front_door', '/house', 'warn')
+    assert (item['key'], item['href'], item['tone']) == ('house-lock.front_door', '/house/changes', 'warn')
 
 
 def test_tile_and_items_when_the_broker_is_down(monkeypatch):
@@ -239,3 +252,130 @@ def test_lookups_scrub_names_and_fail_soft(fake, monkeypatch):
     down(monkeypatch)
     read.clear_cache()
     assert catalog.home_lookup() == catalog.UNAVAILABLE and catalog.music_lookup() == catalog.UNAVAILABLE
+
+
+# ---- Changing the house ----
+
+from hub.tools.house import control  # noqa: E402
+
+SIGNED_IN = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
+
+
+def sent(world):
+    return [(m['path'].removeprefix('/api/services/'), m['body']) for m in world['asked'] if m['op'] == 'request']
+
+
+def test_the_broker_client_checks_every_change():
+    for domain, service, data in (('lock', 'unlock', {'entity_id': 'lock.front_door'}),
+                                  ('light', 'turn_on', {'entity_id': 'lock.front_door'}),
+                                  ('light', 'turn_on', {'entity_id': 'light.counter', 'brightness_pct': 150}),
+                                  ('light', 'turn_on', {'entity_id': 'light.counter', 'flash': 'long'}),
+                                  ('media_player', 'join', {'entity_id': 'media_player.a', 'group_members': ['light.x']}),
+                                  ('music_assistant', 'play_media', {'entity_id': 'media_player.a', 'media_id': 'x', 'media_type': 'podcast', 'enqueue': 'replace'}),
+                                  ('climate', 'set_temperature', {'entity_id': 'climate.hallway'}),
+                                  ('automation', 'trigger', {'entity_id': 'automation.morning'})):
+        with pytest.raises(ValueError):
+            broker.act(domain, service, data)
+
+
+def test_a_change_is_recorded_and_undone(fake):
+    result = control.change(['light.counter', 'light.floor_lamp'], 'off', login='me@example.com', via='ask')
+    assert result['done'] == ['Counter lights off', 'Floor lamp off'] and result['undo']
+    assert sent(fake) == [('light/turn_off', {'entity_id': 'light.counter'}), ('light/turn_off', {'entity_id': 'light.floor_lamp'})]
+    back = control.undo(result['batch'], login='me@example.com', via='tap')
+    assert back['done'] == ['Counter lights put back', 'Floor lamp put back']
+    assert sent(fake)[2:] == [('light/turn_on', {'entity_id': 'light.counter', 'brightness_pct': 50}),
+                              ('light/turn_off', {'entity_id': 'light.floor_lamp'})]
+    with pytest.raises(control.Refused):
+        control.undo(result['batch'], login='me@example.com', via='tap')     # once only
+    [latest, first] = control.recent()
+    assert latest['via'] == 'undo' and first['undone'] and not first['undo']
+
+
+def test_only_kept_devices_and_their_actions(fake):
+    for targets, action in ((['lock.front_door'], 'off'), (['camera.porch'], 'off'), (['light.hidden'], 'off'),
+                            (['media_player.living_room_sonos'], 'pause'), (['switch.kettle'], 'brightness')):
+        with pytest.raises(control.Refused):
+            control.change(targets, action, login='me@example.com', via='ask')
+    assert sent(fake) == []
+
+
+def test_music_starts_quietly_from_silence_and_undo_restores(fake):
+    result = control.change(['media_player.kitchen'], 'play_media', login='me@example.com', via='ask', query='calm piano', kind='playlist')
+    assert result['done'] == ['Kitchen speaker playing “calm piano”']
+    assert sent(fake) == [('media_player/volume_set', {'entity_id': 'media_player.kitchen', 'volume_level': 0.15}),
+                          ('music_assistant/play_media', {'entity_id': 'media_player.kitchen', 'media_id': 'calm piano',
+                                                          'media_type': 'playlist', 'enqueue': 'replace'})]
+    control.undo(result['batch'], login='me@example.com', via='tap')
+    assert sent(fake)[2:] == [('media_player/media_pause', {'entity_id': 'media_player.kitchen'}),
+                              ('media_player/volume_set', {'entity_id': 'media_player.kitchen', 'volume_level': 0.2})]
+    count = len(sent(fake))
+    already = control.change(['media_player.living_room'], 'play_media', login='me@example.com', via='ask', query='Band B', kind='artist')
+    assert already['done'] and [p for p, _ in sent(fake)[count:]] == ['music_assistant/play_media']   # already playing: volume left alone
+
+
+def test_an_unanswered_change_is_unknown_and_an_unreachable_broker_is_not_done(fake, monkeypatch):
+    def lost(domain, service, data, timeout=None):
+        raise broker.HomeDown('The Home Assistant broker gave an answer Hub couldn’t read.')
+    monkeypatch.setattr(broker, 'act', lost)
+    result = control.change(['switch.kettle'], 'off', login='me@example.com', via='ask')
+    assert result['done'] == [] and result['unknown'] == ['Kettle off'] and result['undo']
+    def missing(domain, service, data, timeout=None):
+        raise broker.NotSent('The Home Assistant broker on this Mac isn’t answering.')
+    monkeypatch.setattr(broker, 'act', missing)
+    result = control.change(['switch.kettle'], 'off', login='me@example.com', via='ask')
+    assert result['not_sent'] == ['Kettle off'] and not result['undo']
+
+
+def test_at_most_thirty_changes_a_minute(fake, monkeypatch):
+    monkeypatch.setattr(control, '_recent', type(control._recent)())
+    monkeypatch.setattr(control, 'PER_MINUTE', 3)
+    control.change(['light.counter', 'switch.kettle'], 'off', login='me@example.com', via='ask')
+    with pytest.raises(control.Refused):
+        control.change(['light.floor_lamp', 'switch.kettle'], 'on', login='me@example.com', via='ask')
+
+
+def test_resolve_names_rooms_and_all_lights(fake):
+    found = read.snapshot()
+    assert control.resolve('counter lights', read.POWER, found) == ['light.counter']
+    assert control.resolve('kitchen lights', ('light',), found) == ['light.counter']
+    assert sorted(control.resolve('all lights', ('light',), found)) == ['light.counter', 'light.floor_lamp', 'light.porch']
+    assert control.resolve('kettle', read.POWER, found) == ['switch.kettle']
+    with pytest.raises(control.Refused) as error:
+        control.resolve('garage', read.POWER, found)
+    assert 'Which one?' in str(error.value)
+
+
+def test_today_buttons_need_a_signed_in_tap_and_show_undo(fake, monkeypatch):
+    monkeypatch.setattr(control, '_recent', type(control._recent)())
+    client = TestClient(app)
+    assert client.post('/house/do', data={'target': 'lights-on', 'action': 'off'}, headers={'sec-fetch-site': 'same-origin'}).status_code == 403
+    assert client.post('/house/do', data={'target': 'lights-on', 'action': 'off'},
+                       headers={'origin': 'https://elsewhere.example', 'tailscale-user-login': 'me@example.com'}).status_code == 403
+    reply = client.post('/house/do', data={'target': 'lights-on', 'action': 'off'}, headers=SIGNED_IN, follow_redirects=False)
+    assert reply.status_code == 303 and reply.headers['location'].startswith('/today?home=')
+    assert sent(fake) == [('light/turn_off', {'entity_id': 'light.counter'})]
+    page = client.get(reply.headers['location'], headers=SIGNED_IN).text
+    assert 'Counter lights off.' in page and '/house/undo/' in page
+    batch = reply.headers['location'].split('=')[1]
+    assert client.post(f'/house/undo/{batch}', headers=SIGNED_IN, follow_redirects=False).status_code == 303
+    assert sent(fake)[-1] == ('light/turn_on', {'entity_id': 'light.counter', 'brightness_pct': 50})
+    changes = client.get('/house/changes', headers=SIGNED_IN).text
+    assert 'Counter lights off' in changes and 'undone' in changes
+    refused = client.post('/house/do', data={'target': 'lock.front_door', 'action': 'off'}, headers=SIGNED_IN)
+    assert refused.status_code == 200 and 'Hub can’t control that' in refused.text
+
+
+def test_ask_controls(fake, monkeypatch):
+    from hub.engine import state
+    monkeypatch.setattr(control, '_recent', type(control._recent)())
+    assert catalog.home_control(None, 'kettle', 'off')['refused'].startswith('Changes to the house need')
+    assert catalog.home_control('me@example.com', 'kettle', 'off') == {
+        'done': ['Kettle off'], 'undo': 'The owner can undo this for a day on the Home changes page.'}
+    assert catalog.home_control('me@example.com', 'counter lights', 'brightness', 30)['done'] == ['Counter lights at 30%']
+    assert 'Which one?' in catalog.home_control('me@example.com', 'front door', 'off')['refused']
+    found = catalog.play_music('me@example.com', 'living room', 'group', with_speakers=['kitchen speaker'])
+    assert found['done'] == ['Living room grouped']
+    assert sent(fake)[-1] == ('media_player/join', {'entity_id': 'media_player.living_room', 'group_members': ['media_player.kitchen']})
+    state.set_trust(catalog.action('house.control'), 'suggest')
+    assert 'Suggest only' in catalog.home_control('me@example.com', 'kettle', 'on')['refused']
