@@ -18,7 +18,7 @@ def test_home_renders_one_tile_per_tool_even_when_sources_fail(monkeypatch):
     monkeypatch.setattr(home, 'SUMMARIES', {**home.SUMMARIES, 'gmail': broken, 'network': broken})
     page = TestClient(app).get('/today')
     assert page.status_code == 200
-    assert page.text.count('class="tile ') == 7     # every tool but Ask, which is a main view
+    assert page.text.count('class="tile ') == 8     # every tool but Ask, which is a main view
     assert home.UNAVAILABLE in page.text
     assert '<a href="/today" class="on" aria-current="page">Today</a>' in page.text
 

@@ -11,6 +11,10 @@ PORT = int(os.environ.get("HUB_PORT", "8780"))
 KITCHEN_SOCKET = Path(os.environ.get(
     "HUB_KITCHEN_SOCKET", Path.home() / "Library" / "Application Support" / "Kitchen" / "kitchen.sock"))
 
+# The HA broker (home-ops) holds the owner's Home Assistant admin token; Hub only ever talks to its socket.
+HA_BROKER_SOCKET = Path(os.environ.get(
+    "HUB_HA_BROKER_SOCKET", Path.home() / "Library" / "Application Support" / "HomeOps" / "run" / "ha-broker.sock"))
+
 DATA_DIR = Path(os.environ.get("HUB_DATA_DIR", Path(__file__).resolve().parent.parent / "var"))
 
 

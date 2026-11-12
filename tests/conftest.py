@@ -8,6 +8,8 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(config, "ALLOWED_LOGINS", {"me@example.com"})
     bridge.clear_cache()
+    from hub.tools.house import read as house
+    house.clear_cache()
 
 
 @pytest.fixture(autouse=True)

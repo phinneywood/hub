@@ -10,7 +10,7 @@ PRESCHOOL_DAYS = 14
 
 # Where a suggestion may point. The model names a source; Hub picks the page.
 PAGES = {'gmail': ('/gmail', 'Open Gmail'), 'calendar': ('/calendar', 'Open calendar'), 'preschool': ('/preschool/', 'Class guide'), 'trip': ('/trip', 'Open trip'),
-         'network': ('/network', 'Details'), 'hub': ('/engine', 'Open')}
+         'network': ('/network', 'Details'), 'house': ('/house', 'Open Home'), 'hub': ('/engine', 'Open')}
 
 
 def _named(name, address):
@@ -196,6 +196,62 @@ def network_lookup() -> dict:
         return UNAVAILABLE
 
 
+def house_items():
+    """The alarm going off or a jammed lock at any hour; an unlocked door or open garage at night."""
+    from ..tools.house import broker, read
+    try:
+        found = read.snapshot()
+    except broker.HomeDown:
+        return []  # the Home tile already says it can't be read
+    return [today.rec(f'house-{d["id"]}', tone, words, 'From Home Assistant just now.' if tone == 'bad' else
+                      'It’s night. Check it on the Home page.', href='/house', cta='See Home') for tone, d, words in read.attention(found)]
+
+
+def _thing(d):
+    from .. import luna
+    from . import judge
+    out = {'name': luna.clip(judge.scrub(d['name']), 80), 'state': d['label']}
+    if d['detail']:
+        out['detail'] = luna.clip(judge.scrub(d['detail']), 160)
+    return out
+
+
+def home_lookup(room: str | None = None) -> dict:
+    """The house right now, from Home Assistant. Without `room`: each room with the lights and plugs that are
+    on, the thermostat, and the locks, garage door and alarm. With `room` (a room name from that answer):
+    every light and plug in that room and its state. Read-only: Hub can't switch anything yet."""
+    from ..tools.house import broker, read
+    try:
+        found = read.snapshot()
+    except broker.HomeDown:
+        return UNAVAILABLE
+    answer = {'read_at': found['read_at'].strftime('%H:%M'), 'lights_on': found['lights_on'],
+              'thermostat': [_thing(d) for d in found['climate']], 'doors_and_alarm': [_thing(d) for d in found['security']]}
+    if room is None:
+        answer['rooms'] = [{'room': r['name'], 'on': [_thing(d)['name'] for d in r['devices'] if d['on']]} for r in found['rooms']]
+        return answer
+    match = next((r for r in found['rooms'] if r['name'].lower() == str(room).strip().lower()), None)
+    if not match:
+        return {'error': 'No room by that name. Rooms: ' + ', '.join(r['name'] for r in found['rooms'])}
+    answer['room'] = match['name']
+    answer['devices'] = [_thing(d) for d in match['devices']]
+    return answer
+
+
+def music_lookup() -> dict:
+    """What each Music Assistant speaker is doing: playing, paused or idle, the song and artist, the volume,
+    and which other speakers it is grouped with. Read-only."""
+    from .. import luna
+    from ..tools.house import broker, read
+    try:
+        found = read.snapshot()
+    except broker.HomeDown:
+        return UNAVAILABLE
+    return {'read_at': found['read_at'].strftime('%H:%M'),
+            'speakers': [{**_thing(d), **({'grouped_with': [luna.clip(n, 80) for n in d['group']]} if d['group'] else {})}
+                         for d in found['speakers']]}
+
+
 INBOX_DAYS = 30
 
 
@@ -317,6 +373,17 @@ SOURCES = [
            lookups=(Lookup('network_status', 'Network', 'Internet and device readings from Home Assistant.',
                            'The one-line status only: whether the internet is up, and the ping.',
                            '/network', 'Open Network', network_lookup),)),
+    Source('house', 'Home', 'Lights, plugs, speakers, the thermostat, locks, the garage door and the alarm, from Home '
+           'Assistant through the HA broker on this Mac. Never cameras, location or automations. Read-only for now.',
+           'Nothing to the overnight review. To Ask Hub when you ask: room and device names and their states, the '
+           'thermostat’s readings, and what each speaker is playing.',
+           items=(house_items,),
+           lookups=(Lookup('home_status', 'Home', 'Lights, plugs, the thermostat, locks, the garage door and the alarm.',
+                           'Room and device names and whether each is on, locked or open, and the thermostat’s readings.',
+                           '/house', 'Open Home', home_lookup),
+                    Lookup('music_now', 'Speakers', 'The Music Assistant speakers.',
+                           'Speaker names, whether each is playing, the song and artist, the volume and its group.',
+                           '/house', 'Open Home', music_lookup))),
     Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
            'What is already on your list and what you said “Not today” to this week. To Ask Hub when you ask: what its '
            'runs cost against each limit and how many finished.', items=(hub_faults, hub_release),

@@ -203,7 +203,27 @@ def kitchen():
     return tile('kitchen', 'idle', 'Kitchen', 'Shopping list, recipes and the Fred Meyer cart.', cta='Open')
 
 
-SUMMARIES = {'kitchen': kitchen, 'gmail': gmail, 'calendar': calendar, 'preschool': preschool, 'network': network, 'trip': trip, 'mobility': mobility}
+def house():
+    from .tools.house import broker, read
+    try:
+        found = read.snapshot()
+    except broker.HomeDown:
+        return tile('house', 'idle', 'Home isn’t reachable', 'Hub couldn’t read Home Assistant through the broker.')
+    issues = read.attention(found)
+    playing = [d for d in found['speakers'] if d['on']]
+    facts = [f'{d["name"]}: {d["detail"]}' if d['detail'] else d['name'] + ' playing' for d in playing[:1]]
+    facts += [f'Thermostat {d["detail"].removeprefix("Now ")}' for d in found['climate'][:1] if d['detail']]
+    if found['security'] and not any(d['open'] or d['state'] == 'jammed' for d in found['security']):
+        facts.append('All locked and closed')
+    lights = found['lights_on']
+    headline = f'{lights} light{"s" * (lights != 1)} on' if lights else 'All lights off'
+    if issues:
+        return tile('house', 'warn', issues[0][2], ' · '.join(facts), items=[{'label': words, 'note': ''} for _, _, words in issues[1:3]],
+                    cta='Check')
+    return tile('house', 'ok' if lights or playing else 'idle', headline, ' · '.join(facts))
+
+
+SUMMARIES = {'kitchen': kitchen, 'house': house, 'gmail': gmail, 'calendar': calendar, 'preschool': preschool, 'network': network, 'trip': trip, 'mobility': mobility}
 UNAVAILABLE = 'Couldn’t load a summary'
 
 

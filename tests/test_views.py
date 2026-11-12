@@ -100,7 +100,7 @@ def test_today_has_a_card_per_tool_and_not_today_comes_back_to_today(client, mon
     _sources(monkeypatch, lambda: [today.rec('a', 'info', 'Synthetic item', '', href='/trip', cta='Open')])
     monkeypatch.setattr(home, 'SUMMARIES', {'kitchen': lambda: home.tile('kitchen', 'warn', 'Cart plan to approve', cta='Review')})
     page = client.get('/today').text
-    assert page.count('<article class="tile ') == 6 and '>Ask</span>' not in page
+    assert page.count('<article class="tile ') == 7 and '>Ask</span>' not in page
     assert 'Trip</span>' not in page.split('id="tools-title"')[1]            # Trip has a decision card above, so no second card
     assert 'href="/trip">Open</a>' in page.split('id="tools-title"')[0]
     kitchen = next(card for card in page.split('<article class="tile ')[1:] if 'Kitchen</span>' in card)
@@ -267,7 +267,7 @@ def test_every_chart_and_every_card_with_a_lookup_offers_ask_about_this(client, 
     from hub.tools import TOOLS
     monkeypatch.setattr(home, 'SUMMARIES', {})
     cards_shown = {card['slug']: card['ask'] for card in cards.tools(home.tiles(TOOLS))}
-    assert cards_shown == {'gmail': 'tool:gmail', 'calendar': 'tool:calendar', 'kitchen': None, 'preschool': None,
+    assert cards_shown == {'gmail': 'tool:gmail', 'calendar': 'tool:calendar', 'kitchen': None, 'house': 'tool:house', 'preschool': None,
                            'network': 'tool:network', 'mobility': None, 'trip': 'tool:trip'}
     # A list item about mail names both the list and the mail lookup; a tile's problem asks about its tool.
     monkeypatch.setattr(today, 'needs_you', lambda tiles=(): [today.rec('gmail-needs', 'warn', '2 emails need you', '', href='/gmail', cta='Open')])

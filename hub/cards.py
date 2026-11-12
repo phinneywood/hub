@@ -17,13 +17,14 @@ TOPICS = {
     'tool:calendar': ('Calendar', 'What’s on my calendar this week, and does anything overlap?', ('calendar_week',)),
     'tool:trip': ('Trip', 'How is the trip plan coming along, and what’s left to decide?', ('trip_status',)),
     'tool:network': ('Network', 'How is the home network doing right now?', ('network_status',)),
+    'tool:house': ('Home', 'What’s on around the house right now, and is everything locked?', ('home_status', 'music_now')),
     'insight:inbox': ('Inbox size', 'How has the size of my inbox changed lately?', ('inbox_trend',)),
     'insight:mail': ('What’s in the inbox', 'What kinds of mail are sitting in my inbox, and which need me?', ('sorted_mail',)),
     'insight:spend': ('AI spend', 'How much has Hub spent on AI this month, against its limits?', ('ai_spend',)),
     'insight:network': ('Network', 'How is the home network doing right now?', ('network_status',)),
 }
 LIST = ('Today’s list', 'What needs me today?', ('today_list',))
-ALSO = {'gmail-': 'sorted_mail', 'calendar-': 'calendar_week', 'trip-': 'trip_status'}   # a list item's own source, by its key
+ALSO = {'gmail-': 'sorted_mail', 'calendar-': 'calendar_week', 'trip-': 'trip_status', 'house-': 'home_status'}   # a list item's own source, by its key
 
 
 def _known(slugs):
