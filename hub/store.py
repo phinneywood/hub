@@ -3,6 +3,7 @@
 Sorted mail has its own tables in tools/gmail/triage.py, with their own retention.
 """
 import json
+import os
 import sqlite3
 import time
 from contextlib import closing
@@ -57,7 +58,11 @@ NEW_COLUMNS = {"spec": "text", "label_id": "text", "label_created": "integer not
 
 def db():
     config.DATA_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
-    conn = sqlite3.connect(config.DATA_DIR / "hub.db")
+    path = config.DATA_DIR / "hub.db"
+    os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
+    if path.stat().st_mode & 0o077:
+        path.chmod(0o600)
+    conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     have = {r["name"] for r in conn.execute("pragma table_info(plan_items)")}
