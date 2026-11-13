@@ -614,6 +614,8 @@ def undo(batch, *, login, via):
     if outcome != 'not_sent':
         with _db() as conn:
             conn.execute('update music_changes set undone = 1 where id = ?', (row['id'],))
+    from ...engine import friction
+    friction.undone([row], via)
     return _report(new, words, outcome, False)
 
 

@@ -245,6 +245,15 @@ question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page 
   go to `improvement-requests.json` in the private data folder (owner-only), where the Manager reads them;
   each shows on Today for a day and on the Engine page until removed. Hub never edits or deploys its own
   code.
+- **Friction and fix cards** (`hub/engine/friction.py`): during the day Hub keeps short, scrubbed lines about
+  where it got in the way: a control or hand-off that refused, wasn't available, matched nothing or wasn't
+  confirmed (in Hub's own words), an answer that said Hub couldn't (none of its words), an Ask change undone
+  within 10 minutes, the owner pushing back ("no, …", "I said …") right after a change (only which tool),
+  and "Hub should …" wishes (the owner's sentence, scrubbed and clipped). Lines are kept 30 days. With the
+  morning job (the Hub source's `prepare`, no model) the last 3 days are grouped by kind and tool, ranked by
+  how often and how recently, and at most 2 become fix cards on Today: **Build** files a brief into
+  `improvement-requests.json` for the Manager, **Not now** hides it until it happens again, **Never** keeps
+  that kind off the cards for good. Golden runs and their put-backs are never friction.
 - **What the model sees**: what each lookup's `sends` says and no more. Mail is sender names and subject
   lines with links and addresses taken out, one kind at a time, at most 10, never from a sender with AI
   switched off. Today's list passes a mail item's title only, because its second line names senders.

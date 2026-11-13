@@ -19,10 +19,13 @@
     <h3>{{ n.title }}</h3>
     {% if n.why %}<p class="decision-why">{{ n.why }}</p>{% endif %}
     <div class="decision-acts">
+      {% if n.acts %}{% for a in n.acts %}<form method="post" action="{{ a.post }}"><button class="btn small{{ ' primary' if a.primary else ' quiet' }}">{{ a.label }}</button></form>{% endfor %}
+      {% else %}
       {% if n.post %}<form method="post" action="{{ n.post }}"><button class="btn small primary">{{ n.cta }}</button></form>
       <a class="btn small" href="{{ n.href }}">Details</a>
       {% else %}<a class="btn small primary" href="{{ n.href }}">{{ n.cta }}</a>{% endif %}
       <form method="post" action="/today/snooze"><input type="hidden" name="key" value="{{ n.key }}"><button class="btn small quiet">{{ n.later or 'Not today' }}</button></form>
+      {% endif %}
       <a class="ask-about" href="/ask?about={{ n.ask | urlencode }}">Ask about this<span class="sr"> ({{ n.title }})</span></a>
     </div>
   </article>

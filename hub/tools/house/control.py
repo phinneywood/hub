@@ -288,6 +288,8 @@ def undo(batch, *, login, via):
             if outcome != 'not_sent':
                 conn.execute('update house_changes set undone = 1 where id = ?', (r['id'],))
     read.forget_states()
+    from ...engine import friction
+    friction.undone([r for r, _ in plans], via)
     return _report(new, out)
 
 

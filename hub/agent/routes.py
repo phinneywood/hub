@@ -15,7 +15,7 @@ from pydantic_ai.messages import ModelResponse
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 
 from .. import home, luna
-from ..engine import state
+from ..engine import friction, state
 from ..templating import render
 from . import agent, model, store
 
@@ -182,6 +182,7 @@ async def chat(thread_id: str, request: Request):
     def on_complete(result):
         store.save(thread_id, older + result.all_messages())
         _record(day, 'ok', result)
+        friction.from_turn(text, result.new_messages(), shown)   # scrubbed one-liners for the morning's fix cards
         done.append(True)
 
     adapter = VercelAIAdapter(agent=agent.build(), run_input=run_input, accept=request.headers.get('accept'),

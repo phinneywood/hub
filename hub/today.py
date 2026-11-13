@@ -17,10 +17,11 @@ TRIP_HORIZON_DAYS = 120
 RANK = {'bad': 0, 'warn': 1, 'ok': 2, 'info': 3}
 
 
-def rec(key, tone, title, why, *, href, cta, action=None, suggested=False):
-    """action: slug of a catalog action that performs this step. suggested: came from the overnight review."""
+def rec(key, tone, title, why, *, href, cta, action=None, suggested=False, acts=None):
+    """action: slug of a catalog action that performs this step. suggested: came from the overnight review.
+    acts: buttons of the item's own, each {'post', 'label', 'primary'}, in place of the usual step and Not today."""
     return {'key': key, 'tone': tone, 'title': title, 'why': why, 'href': href, 'cta': cta, 'action': action,
-            'post': None, 'suggested': suggested}
+            'post': None, 'suggested': suggested, 'acts': acts}
 
 
 def _plural(count, word):

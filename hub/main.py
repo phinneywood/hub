@@ -370,6 +370,21 @@ def engine_note_skip(proposal_id: str, request: Request):
     return taps.done(request, "/engine/notes?done=skipped", NOTE_WORDS["skipped"])
 
 
+@app.post("/engine/friction/{card_id}/{choice}")
+def engine_friction_decide(card_id: str, choice: str, request: Request):
+    """A fix card on Today: Build files a brief for the next building session; Not now; Never. Signed-in taps only."""
+    from urllib.parse import quote
+    from .engine import friction
+    login = request.headers.get("tailscale-user-login")
+    if login is None:
+        return HTMLResponse("Decide from your phone or laptop.", status_code=403)
+    try:
+        friction.decide(card_id, choice, login=login)
+    except friction.Refused as error:
+        return RedirectResponse("/today?problem=" + quote(str(error)), status_code=303)
+    return RedirectResponse("/engine#improvements" if choice == "build" else "/today", status_code=303)
+
+
 @app.post("/engine/improvements/remove")
 def engine_improvement_remove(request_id: str = Form(...)):
     from .engine import improve

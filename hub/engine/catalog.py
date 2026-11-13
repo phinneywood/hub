@@ -673,6 +673,21 @@ def _hour():
     return datetime.now(home.PACIFIC).hour
 
 
+def friction_items():
+    """Fix cards from the friction Hub noticed lately: Build, Not now or Never."""
+    from . import friction
+    return friction.today_items()
+
+
+def hub_prepare():
+    """With the morning job, no model: the old-key reminder, then recent friction ranked into fix cards."""
+    from . import friction
+    try:
+        old_key_reminder()
+    finally:
+        friction.prepare()
+
+
 def improvement_items():
     """Improvement requests the owner filed in the last day, so they see it was kept."""
     from . import improve
@@ -785,8 +800,8 @@ SOURCES = [
                            '/house/playlists', 'Playlists', library_lookup))),
     Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
            'What is already on your list and what you said “Not today” to this week. To Ask Hub when you ask: what its '
-           'runs cost against each limit and how many finished.', items=(hub_faults, hub_release, improvement_items),
-           prepare=old_key_reminder,
+           'runs cost against each limit and how many finished.', items=(hub_faults, hub_release, improvement_items, friction_items),
+           prepare=hub_prepare,
            lookups=(Lookup('today_list', 'Needs you', 'Today’s list, as the Today page shows it.',
                            'Each item’s title, and its second line unless it is about mail. No addresses or links.',
                            '/today', 'Open today’s list', today_lookup),
