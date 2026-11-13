@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Recipes · Hub{% endblock %}
+{% block body %}
+<p class="eyebrow">Settings</p>
+<h1 class="status-head">Recipes</h1>
+{% if problem %}<p class="banner warn">{{ problem }}</p>{% endif %}
+{% if said %}<p class="banner ok">{{ said }}</p>{% endif %}
+<h2>Waiting for you</h2>
+{% if waiting %}
+<ul class="checks">
+{% for r in waiting %}
+  <li><div><strong>{{ r.name }}</strong>
+      {% for line in r.lines %}<small>{{ loop.index }}. {{ line }}</small>{% endfor %}
+      <small>Ask Hub proposed this from your message: “{{ r.said }}”</small>
+    </div>
+    <form method="post" action="/engine/recipes/{{ r.id }}/save"><button class="btn small primary">Save</button></form>
+    <form method="post" action="/engine/recipes/{{ r.id }}/skip"><button class="btn small quiet">Not now</button></form>
+  </li>
+{% endfor %}
+</ul>
+{% else %}<p class="note">Nothing waiting. Ask Hub proposes a recipe when you ask it to save a routine (“save this as great room music”); it waits here for a day.</p>{% endif %}
+<h2>Saved</h2>
+<ul class="checks">
+{% for r in saved %}
+  <li><div><strong>{{ r.name }}</strong>
+      {% for line in r.lines %}<small>{{ loop.index }}. {{ line }}
+        <form method="post" action="/engine/recipes/drop-step" class="inline"><input type="hidden" name="recipe_id" value="{{ r.id }}"><input type="hidden" name="index" value="{{ loop.index0 }}"><button class="btn small quiet" aria-label="Remove step {{ loop.index }} of {{ r.name }}">Remove step</button></form></small>{% endfor %}
+      <form method="post" action="/engine/recipes/rename" class="engine-add"><input type="hidden" name="recipe_id" value="{{ r.id }}"><input name="name" maxlength="40" required value="{{ r.name }}" aria-label="New name for {{ r.name }}"><button class="btn small">Rename</button></form>
+    </div>
+    <form method="post" action="/engine/recipes/remove"><input type="hidden" name="recipe_id" value="{{ r.id }}"><button class="btn small quiet">Remove</button></form></li>
+{% else %}<li><div><small>Nothing saved yet.</small></div></li>
+{% endfor %}
+</ul>
+<p class="note">A recipe can only do what Ask Hub can already do in the house: lights, plugs, scenes and speakers. Each step is checked
+again every time it runs and is recorded with Undo on the Home changes page.</p>
+{% endblock %}

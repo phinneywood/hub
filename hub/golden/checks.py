@@ -8,7 +8,7 @@ aliases ("living_room_speaker"), which the trace resolves to the names Hub actua
 import re
 from dataclasses import dataclass, field
 
-CONTROLS = ('home_control', 'play_music', 'edit_playlist', 'remember')
+CONTROLS = ('home_control', 'play_music', 'edit_playlist', 'remember', 'propose_recipe', 'run_recipe')
 HANDOFFS = ('kitchen',)
 
 

@@ -220,6 +220,18 @@ question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page 
   instructions. A note about speakers playing together keeps them as a zone (docs/home-control.md). Saved
   notes are listed and removed on the Notes page and the Engine page. The chat page has no card of its own
   for this yet (its rebuild needs Node); the answer links to the Notes page.
+- **Recipes** (`propose_recipe`, `run_recipe`, `hub/engine/recipes.py`): named routines made only of steps
+  Ask can already take, each one a `home_control` or `play_music` call with that control's own arguments
+  ("great room music": the kitchen speaker joins the living room's, both at 15%, a calm pick). A recipe can't
+  add a capability: its steps are checked against the catalog (the tool, its argument types, nothing extra,
+  never who asked or the owner's words, and that each device exists) when it is proposed, when it is saved
+  and every time it runs. Ask proposes one only when the owner's typed message asks for a recipe or routine,
+  under a name taken from that message. It waits a day on the Recipes page (`/engine/recipes`, linked from
+  Settings); only a signed-in tap saves it, replacing a recipe of the same name. Saved recipes are named to
+  Ask on every turn and run when the owner's message names one: the whole recipe is checked first, then each
+  step runs through its control like a typed request (trust level, limits, record and Undo), stopping at the
+  first step that isn't done. The Recipes page lists, renames, trims and removes them. Golden scenarios:
+  `recipe-is-proposed-not-run`, `recipe-runs-by-name`.
 - **What the model sees**: what each lookup's `sends` says and no more. Mail is sender names and subject
   lines with links and addresses taken out, one kind at a time, at most 10, never from a sender with AI
   switched off. Today's list passes a mail item's title only, because its second line names senders.

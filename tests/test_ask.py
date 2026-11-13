@@ -180,13 +180,13 @@ def test_every_lookup_is_complete_and_the_agent_has_exactly_these_tools():
     built = agent.build()
     tools = built._function_toolset.tools
     controls = catalog.controls()
-    assert [c.slug for c in controls] == ['home_control', 'play_music', 'edit_playlist', 'remember']
+    assert [c.slug for c in controls] == ['home_control', 'play_music', 'edit_playlist', 'remember', 'propose_recipe', 'run_recipe']
     assert set(tools) == {l.slug for l in found} | {h.slug for h in handoffs} | {c.slug for c in controls}
     assert not tools['kitchen'].function_schema.json_schema.get('properties')   # the model can't put words in the owner's mouth
     for c in controls:   # the model never says who asked: that comes from the signed-in request
         assert 'login' not in tools[c.slug].function_schema.json_schema['properties'] and c.run.__doc__
         assert 'said' not in tools[c.slug].function_schema.json_schema['properties']   # the owner's words come from the turn
-        assert catalog.action(c.action).ceiling == ('suggest' if c.slug == 'remember' else 'undo')   # a note needs a tap
+        assert catalog.action(c.action).ceiling == ('suggest' if c.slug in ('remember', 'propose_recipe') else 'undo')   # a note or recipe needs a tap
     assert not any(tool.requires_approval for tool in tools.values())   # house changes are undoable; Kitchen's cart needs its own tap
     assert set(agent.describe()) == set(tools) and agent.describe()['kitchen']['handoff']
 

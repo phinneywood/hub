@@ -48,8 +48,10 @@ def names(live=False):
 def _fill(value, aliases, lower=False):
     if isinstance(value, str):
         return value.format(**({k: v.lower() for k, v in aliases.items()} if lower else aliases))
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [_fill(v, aliases, lower) for v in value]
+    if isinstance(value, dict):
+        return {k: _fill(v, aliases, lower) for k, v in value.items()}
     return value
 
 
@@ -188,7 +190,8 @@ def run(scenario, make_model, *, aliases, spend=None, writes=False):
     from ..tools.house import read
     read.clear_cache()
     spend = spend or Spend()
-    with dryrun.layer(enabled=not (writes and scenario.harmless)) as ledger:
+    given = [(name, _fill(steps, aliases)) for name, steps in scenario.given]
+    with dryrun.layer(enabled=not (writes and scenario.harmless), recipes=given) as ledger:
         trace = asyncio.run(_turns(scenario, make_model, aliases, ledger, spend))
         trace.changes = list(ledger.changes)
         _house(trace)

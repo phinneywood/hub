@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from typing import Literal
 
 from .. import home, today
+from .recipes import Step as RecipeStep
 from .registry import Action, Control, Handoff, Lookup, Source
 
 EMAILS = 5               # emails that need the owner, passed to the overnight review without their text
@@ -561,6 +562,56 @@ def remember(login, note: str, speakers: list[str] | None = None, *, said: str =
     return out
 
 
+def propose_recipe(login, name: str, steps: list[RecipeStep], *, said: str = '') -> dict:
+    """Propose a recipe: a named routine of things Hub can already do, only when the owner's latest message asks to
+    save one ("save this as great room music: kitchen and living room together at 15%, play something calm").
+    `name`: the owner's own short name for it. `steps`: in order, each {"tool": "home_control" or "play_music",
+    "args": {...the arguments you would give that tool}}, using names from home_status and music_now; at most 8.
+    A recipe can only do what those two tools do. Nothing runs and nothing is saved here: Hub shows it on the
+    Recipes page and only the owner's tap saves it. Say that."""
+    from .. import luna
+    from ..tools.house import broker
+    from . import judge, recipes
+
+    def safe(text):
+        return luna.clip(judge.scrub(str(text)), 600)
+    if login is None:
+        return {'refused': 'Recipes need the owner signed in on their phone or laptop.'}
+    try:
+        proposed = recipes.propose(name, steps, said, login=login)
+    except recipes.Refused as error:
+        return {'refused': safe(error)}
+    except broker.HomeDown as error:
+        return {'unavailable': f'{error} Nothing was proposed.'}
+    return {'needs_tap': f'Nothing is saved yet. The owner taps Save on the Recipes page linked below to keep '
+                         f'“{safe(proposed["name"])}”: ' + safe('; '.join(recipes.describe(s) for s in proposed['steps']))
+                         + '. Say that.'}
+
+
+def run_recipe(login, name: str, *, said: str = '') -> dict:
+    """Run one of the owner's saved recipes, by its name, when their latest message names it ("great room music").
+    Each step runs as if the owner had asked for it, with the usual limits and Undo. Say what was done, and if it
+    stopped early, where and why."""
+    from .. import luna
+    from ..tools.house import broker
+    from . import judge, recipes
+
+    def safe(text):
+        return luna.clip(judge.scrub(str(text)), 600)
+    if login is None:
+        return {'refused': 'Recipes need the owner signed in on their phone or laptop.'}
+    try:
+        ran = recipes.run(name, login=login, said=said)
+    except recipes.Refused as error:
+        return {'refused': safe(error)}
+    except broker.HomeDown as error:
+        return {'unavailable': str(error)}
+    out = {'ran': safe(ran['ran']), 'steps': [{'step': safe(s['step']), **s['result']} for s in ran['steps']]}
+    if ran.get('stopped'):
+        out['stopped'] = safe(ran['stopped']) + ' The steps after it didn’t run.'
+    return out
+
+
 CONTROLS = [
     Control('home_control', 'Home control', 'Turns lights, plugs and fans on or off, sets brightness and turns on '
             'scenes, through the HA broker. Each change is recorded and can be undone for a day.',
@@ -575,6 +626,12 @@ CONTROLS = [
     Control('remember', 'Notes', 'Proposes a short standing note when you ask Hub to remember something. Only your tap '
             'on the Notes page saves it; saved notes guide Ask and the overnight review, and you can remove them.',
             'The note in your words, and speaker names for a zone.', '/engine/notes', 'Save or skip', 'hub.notes', remember),
+    Control('propose_recipe', 'Recipes', 'Proposes a named routine made only of things Ask can already do in the house, '
+            'when you ask for one. Only your tap on the Recipes page saves it; you can rename, trim or remove it there.',
+            'The recipe’s name in your words, and its steps.', '/engine/recipes', 'Save or skip', 'hub.recipes', propose_recipe),
+    Control('run_recipe', 'Run a recipe', 'Runs one of your saved recipes when you name it. Each step is checked again '
+            'and runs like a typed request, recorded with Undo.',
+            'The recipe’s name, its steps and what happened.', '/house/changes', 'Home changes', 'house.control', run_recipe),
 ]
 
 
@@ -763,6 +820,9 @@ ACTIONS = [
     Action('hub.notes', 'Keep a note from Ask Hub',
            'When you ask Ask Hub to remember something, it shows a short note on the Notes page. Only your tap saves it.',
            'Remove it on the Engine page.', page='/engine/notes'),
+    Action('hub.recipes', 'Keep a recipe from Ask Hub',
+           'When you ask Ask Hub to save a routine, it shows it on the Recipes page, made only of things Ask can already '
+           'do. Only your tap saves it.', 'Remove it on the Recipes page.', page='/engine/recipes'),
     Action('hub.deploy', 'Update Hub to a checked version',
            'Asks the deployer on this Mac to switch to the version that passed its checks. Your data is backed up first.',
            'It goes back by itself if the new version fails its checks.', page='/engine', post='/engine/deploy',

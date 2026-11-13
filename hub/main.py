@@ -369,6 +369,64 @@ def engine_note_remove(instruction_id: int = Form(...)):
     return RedirectResponse("/engine/notes", status_code=303)
 
 
+RECIPE_WORDS = {"saved": "Saved. Name it in Ask Hub to run it.", "skipped": "Not saved.", "renamed": "Renamed.",
+                "removed": "Removed.", "trimmed": "Step removed."}
+
+
+@app.get("/engine/recipes", response_class=HTMLResponse)
+def engine_recipes(request: Request, done: str = "", problem: str = ""):
+    """Recipes Ask Hub proposed, waiting for the owner's tap, and the recipes already saved."""
+    from .engine import recipes
+
+    def shown(r):
+        return {**r, "lines": [recipes.describe(s) for s in r["steps"]]}
+    return render(request, "recipes.html", active="engine", waiting=[shown(r) for r in recipes.waiting()],
+                  saved=[shown(r) for r in recipes.saved()], said=RECIPE_WORDS.get(done, ""), problem=problem[:200])
+
+
+def _recipe_change(change, done):
+    from urllib.parse import quote
+    from .engine import recipes
+    try:
+        change()
+    except recipes.Refused as error:
+        return RedirectResponse("/engine/recipes?problem=" + quote(str(error)), status_code=303)
+    return RedirectResponse(f"/engine/recipes?done={done}", status_code=303)
+
+
+@app.post("/engine/recipes/{proposal_id}/save")
+def engine_recipe_save(proposal_id: str, request: Request):
+    """Only a tap from a signed-in device saves a recipe: never the chat's model, never a program on this Mac."""
+    from .engine import recipes
+    if request.headers.get("tailscale-user-login") is None:
+        return HTMLResponse("Save recipes from your phone or laptop.", status_code=403)
+    return _recipe_change(lambda: recipes.save(proposal_id), "saved")
+
+
+@app.post("/engine/recipes/{proposal_id}/skip")
+def engine_recipe_skip(proposal_id: str):
+    from .engine import recipes
+    return _recipe_change(lambda: recipes.skip(proposal_id), "skipped")
+
+
+@app.post("/engine/recipes/rename")
+def engine_recipe_rename(recipe_id: int = Form(...), name: str = Form(...)):
+    from .engine import recipes
+    return _recipe_change(lambda: recipes.rename(recipe_id, name), "renamed")
+
+
+@app.post("/engine/recipes/drop-step")
+def engine_recipe_drop_step(recipe_id: int = Form(...), index: int = Form(...)):
+    from .engine import recipes
+    return _recipe_change(lambda: recipes.drop_step(recipe_id, index), "trimmed")
+
+
+@app.post("/engine/recipes/remove")
+def engine_recipe_remove(recipe_id: int = Form(...)):
+    from .engine import recipes
+    return _recipe_change(lambda: recipes.remove(recipe_id), "removed")
+
+
 def store_log(action, detail):
     from . import store
     store.log(action, detail)

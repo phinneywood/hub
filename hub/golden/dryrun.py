@@ -13,6 +13,8 @@ over them, so a second turn ("play it in the kitchen as well") sees the music th
 Undo records (house_changes, music_changes) and proposals waiting for the owner's tap (a note to save, a
 playlist to make) go to a scratch database, never Hub's own, so a dry run leaves nothing on the Home changes,
 Playlists or Notes pages. Proposals are recorded too, as `to: 'proposal'`: they change nothing until a tap.
+Recipes are read from that scratch database as well, so a scenario brings its own (`given`), made-up and
+checked like any other, and the owner's real recipes are neither used nor touched.
 
 `COVERED` names every Ask tool that can change something. A test fails if the catalog gains a control or a
 hand-off this layer doesn't stand in front of, so a new capability can't skip the dry run by accident.
@@ -25,7 +27,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 COVERED = {'home_control': 'home', 'play_music': 'home', 'edit_playlist': 'music', 'remember': 'proposal',
-           'kitchen': 'kitchen'}
+           'propose_recipe': 'proposal', 'run_recipe': 'home', 'kitchen': 'kitchen'}
 DRY_ID = -1                     # the message number a held-back Kitchen hand-off is given
 
 
@@ -99,21 +101,24 @@ def _scratch_db(folder):
 
 
 @contextmanager
-def layer(enabled=True):
+def layer(enabled=True, recipes=()):
     """Stand in Hub's three doors for the length of the block. Yields the Ledger. With enabled=False (live
     writes, for scenarios marked harmless and only when the owner asks) changes really happen and are
-    recorded in Hub's own change log, with Undo; the Ledger stays empty."""
-    from ..engine import notes
+    recorded in Hub's own change log, with Undo; the Ledger stays empty. `recipes`: (name, steps) pairs a scenario
+    starts with, saved in the scratch database after the usual checks."""
+    from ..engine import notes, recipes as recipe_book
     from ..tools.house import broker, control, music
     from ..tools.kitchen import client
     ledger = Ledger()
     if not enabled:
+        if recipes:
+            raise ValueError('A scenario that brings its own recipes only runs as a dry run.')
         yield ledger
         return
     real_exchange, real_send, real_call = broker._exchange, music._send, client.call
     saved = {'broker': real_exchange, 'music_send': real_send, 'settle': music._settle, 'kitchen': real_call,
              'control_db': control._db, 'music_db': music._db, 'notes_db': notes._db,
-             'note': notes.propose, 'playlist': music.propose}
+             'note': notes.propose, 'playlist': music.propose, 'recipes_db': recipe_book._db, 'recipe': recipe_book.propose}
 
     def exchange(message, timeout):
         if message.get('op') == 'ws':
@@ -162,20 +167,29 @@ def layer(enabled=True):
         ledger.add('proposal', 'playlist', {'name': name, 'songs': list(songs or ())})
         return found
 
+    def recipe(name, steps, said, *, login):
+        found = saved['recipe'](name, steps, said, login=login)
+        ledger.add('proposal', 'recipe', {'name': found['name'], 'steps': found['steps']})
+        return found
+
     with tempfile.TemporaryDirectory(prefix='hub-golden-') as folder:
         broker._exchange, music._send, client.call = exchange, send, kitchen
         music._settle = lambda playlist_id, want: 'done'     # nothing was sent, so there is nothing to read back
         control._db = _with_schema(_scratch_db(Path(folder)), control.SCHEMA)
         music._db = _with_schema(_scratch_db(Path(folder)), music.SCHEMA)
         notes._db = _with_schema(_scratch_db(Path(folder)), notes.SCHEMA)
-        notes.propose, music.propose = note, playlist
+        recipe_book._db = _with_schema(_scratch_db(Path(folder)), recipe_book.SCHEMA)
+        notes.propose, music.propose, recipe_book.propose = note, playlist, recipe
         try:
+            for name, steps in recipes:
+                recipe_book.keep(name, steps)
             yield ledger
         finally:
             broker._exchange, music._send, music._settle, client.call = (
                 saved['broker'], saved['music_send'], saved['settle'], saved['kitchen'])
             control._db, music._db, notes._db = saved['control_db'], saved['music_db'], saved['notes_db']
             notes.propose, music.propose = saved['note'], saved['playlist']
+            recipe_book._db, recipe_book.propose = saved['recipes_db'], saved['recipe']
 
 
 def _with_schema(db, schema):
