@@ -13,7 +13,7 @@ MAX_INSTRUCTIONS = 12
 INSTRUCTION_LENGTH = 300
 MAX_REQUESTS = 30
 KEEP_DAYS = 60
-OWN_BUDGET = ('chat',)     # run kinds with a monthly limit of their own; left out of the shared one
+OWN_BUDGET = ('chat', 'golden')   # run kinds with a monthly limit of their own; left out of the shared one
 
 
 def trust(action):

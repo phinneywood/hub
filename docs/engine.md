@@ -31,6 +31,10 @@ guidance. They steer judgement and are given to Ask Hub on every turn. They cann
 - **A hand-off**: one `Handoff(...)` in `HANDOFFS`, for another assistant Ask Hub may pass the owner's
   message to (see “Hand-offs” under Ask Hub). Adding one is an owner decision: it sends chat text
   somewhere new.
+- **Golden scenarios** for anything Ask can newly do or should newly refuse: real requests with checks on
+  what Hub would change and say, run offline in the suite and live on demand (`docs/golden-tests.md`).
+  A new control or hand-off must also be covered by the dry-run layer (`hub/golden/dryrun.py`); a test fails
+  until it is.
 
 ## The overnight review
 

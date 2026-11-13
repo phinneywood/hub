@@ -77,6 +77,18 @@
   <p class="viz-note">Counts and cost only, never text. Limits and each run are on the <a href="/engine">Engine page</a>.</p>
   {% else %}<p class="viz-empty">Hub couldn’t read its record of runs just now.</p>{% endif %}
 </section>
+
+<section class="viz-card" aria-labelledby="viz-golden">
+  <div class="viz-head"><h2 id="viz-golden">Golden tests</h2></div>
+  {% if golden.total %}
+  <div class="viz-stats">
+    <div><span>Passed</span><strong>{{ golden.passed }} of {{ golden.total }}</strong></div>
+    <div><span>Last run</span><strong>{{ golden.when }}</strong></div>
+  </div>
+  {% if golden.failed %}<p class="viz-lede">Not passing: {{ golden.failed | join(', ') }}.</p>{% endif %}
+  <p class="viz-note">Real requests run through Ask as a dry run. Details on the <a href="/golden">Golden tests page</a>.</p>
+  {% else %}<p class="viz-empty">No live run yet. Start one from <a href="/golden">Settings → Golden tests</a>.</p>{% endif %}
+</section>
 </div>
 
 <section class="viz-section" id="network" aria-labelledby="viz-network">

@@ -171,6 +171,8 @@ def page():
         net = network.summary()
     except Exception:  # noqa: BLE001
         net = None
+    from .golden import runner as golden
     return {'inbox': _soft(inbox), 'mail': _soft(mail), 'spend': _soft(spend), 'network': net,
+            'golden': _soft(lambda: golden.latest() or {'has': False}),
             'asks': {key: cards.askable('insight:' + key) for key in ('inbox', 'mail', 'spend', 'network')},
             'w': W, 'h': H, 'left': LEFT, 'right': W - RIGHT, 'floor_y': TOP + PLOT_H}

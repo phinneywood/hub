@@ -11,12 +11,11 @@ import threading
 from fastapi import APIRouter, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic_ai import UsageLimits
 from pydantic_ai.messages import ModelResponse
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 
 from .. import home, luna
-from ..engine import notes, state
+from ..engine import state
 from ..templating import render
 from . import agent, model, store
 
@@ -147,12 +146,9 @@ async def chat(thread_id: str, request: Request):
 
     adapter = VercelAIAdapter(agent=agent.build(), run_input=run_input, accept=request.headers.get('accept'),
                               sdk_version=7, manage_message_history='server')
-    turn = agent.Turn(text=text, login=request.headers.get('tailscale-user-login'))
-    earlier = await run_in_threadpool(agent.recall, shown)     # what Kitchen answered before, as data
-    saved = await run_in_threadpool(notes.for_ask)             # the owner's own standing notes, saved by their tap
-    events = adapter.run_stream(model=chat_model, message_history=shown, on_complete=on_complete, deps=turn,
-                                instructions='\n\n'.join(filter(None, (saved, earlier))) or None,
-                                usage_limits=UsageLimits(request_limit=agent.REQUESTS_PER_TURN))
+    # Who asked, the owner's saved notes, what Kitchen answered before (as data) and the limits.
+    settings = await run_in_threadpool(agent.settings, text, request.headers.get('tailscale-user-login'), shown)
+    events = adapter.run_stream(model=chat_model, message_history=shown, on_complete=on_complete, **settings)
 
     async def stream():
         try:

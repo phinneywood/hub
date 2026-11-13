@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Golden tests · Hub{% endblock %}
+{% block body %}
+<p class="eyebrow">Settings</p>
+<h1 class="status-head">Golden tests</h1>
+{% if said %}<p class="banner ok">{{ said }}</p>{% endif %}
+<p class="note">Real requests, run through Ask with the real model over its private route and your real Hub data. Changes are a
+dry run: Hub checks each one as it would for real, writes down what it would do, and sends nothing to the house, the
+speakers, playlists or Kitchen.</p>
+
+<h2>Latest run</h2>
+{% if latest %}
+<p class="note"><strong>{{ latest.passed }} of {{ latest.total }} passed</strong> · {{ latest.when }} · ${{ '%.3f' % latest.cost }} · {{ latest.writes }}{% if latest.stopped %} · {{ latest.stopped }}{% endif %}</p>
+<ul class="checks">
+{% for r in latest.scenarios %}
+  <li><div><strong>{{ {'pass': '✓', 'fail': '✗', 'error': '!', 'skipped': '–'}[r.status] }} {{ r.id }}</strong><small>{{ r.about }}</small>
+    {% for f in r.failures %}<small><b>{{ f.check }}:</b> {{ f.why }}</small>{% endfor %}</div></li>
+{% endfor %}
+</ul>
+{% else %}<p class="note">No live run yet.</p>{% endif %}
+
+<h2>Run now</h2>
+<form method="post" action="/golden/run"><button class="btn small primary"{% if refusal %} disabled{% endif %}>Run the golden tests</button></form>
+<p class="note">{% if running %}A run is going now.{% elif refusal %}{{ refusal }}{% else %}{{ scenarios | length }} scenarios, a minute or two.{% endif %}
+Up to ${{ '%.2f' % cap }} a run and ${{ '%.0f' % month_cap }} a month (${{ '%.2f' % spent }} so far this month), on the Engine page’s record as “golden”.</p>
+
+<h2>Scenarios</h2>
+<ul class="checks">
+{% for s in scenarios %}<li><div><strong>{{ s.id }}</strong><small>{{ s.about }}</small></div></li>{% endfor %}
+</ul>
+{% endblock %}

@@ -37,6 +37,9 @@ app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 for tool in TOOLS:
     app.include_router(tool["router"], prefix="/" + tool["slug"])
 
+from .golden.routes import router as golden_router  # noqa: E402
+app.include_router(golden_router, prefix="/golden")
+
 
 @app.on_event("startup")
 def startup():
