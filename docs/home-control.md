@@ -86,6 +86,12 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   so Undo, for a day, can put it back.
 - **Limits.** At most 30 device changes a minute; a change whose answer never came back is reported as
   not confirmed, never as done. Playback that starts from silence starts at 15%.
+- **Playing is checked.** Hub sends Music Assistant only a concrete address (`library://playlist/7`,
+  `apple_music://album/…`) of the kind asked, never a description; the broker client refuses anything else.
+  After a play or resume Hub reads the speaker back for a few seconds, and one that isn't playing is
+  recorded as not confirmed, with what was sent (2026-11-13: a play Home Assistant accepted stayed silent,
+  and Ask had said it was playing). Grouping a silent speaker with one that is playing makes the playing
+  one lead, so the music isn't stopped.
 
 ## Music: Music Assistant's own API
 

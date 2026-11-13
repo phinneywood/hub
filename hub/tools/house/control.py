@@ -17,6 +17,8 @@ from . import broker, read
 PER_MINUTE = 30
 UNDO_SECONDS = 24 * 3600
 QUIET = 0.15                 # playback that starts from silence starts here
+PLAYING = ('playing', 'buffering')
+CHECKS, CHECK_WAIT = 4, 1.0  # reading a speaker back after play: Home Assistant accepting it doesn't mean music started
 POWER = read.POWER
 MEDIA_KINDS = tuple(sorted(broker.MEDIA_TYPES))
 ACTIONS = {
@@ -91,6 +93,10 @@ def _steps(d, action, value=None, query=None, kind=None, members=(), label=None,
         query = ' '.join(str(query or '').split())[:200]
         if not query or kind not in broker.MEDIA_TYPES:
             raise Refused('Say what to play, and whether it is a track, album, artist, playlist or radio station.')
+        uri = broker.MEDIA_URI.fullmatch(query)
+        if not uri or uri.group(1) != kind:     # broker checks again; this refusal comes before anything is sent
+            raise Refused('Hub plays only a playlist, album, artist, song or station it found in the library or Apple Music, '
+                          'never a description. Nothing was played.')
         steps, start = [], d['state'] not in ('playing', 'paused', 'buffering')
         split = alone and bool(d['members'])
         if split:                   # play only here: out of its group first, and Undo puts it back
@@ -176,11 +182,26 @@ def _run(steps):
     return 'done'
 
 
+def _playing(entity):
+    """Whether the speaker is playing, read back a few times while Music Assistant starts. False when it can't be read."""
+    for n in range(CHECKS):
+        if n:
+            time.sleep(CHECK_WAIT)
+        try:
+            now = devices(read.snapshot(fresh=True)).get(entity)
+        except broker.HomeDown:
+            return False
+        if now and now['state'] in PLAYING:
+            return True
+    return False
+
+
 def _report(batch, rows):
     done = [r['words'] for r in rows if r['outcome'] == 'done']
     unknown = [r['words'] for r in rows if r['outcome'] == 'unknown']
     failed = [r['words'] for r in rows if r['outcome'] == 'not_sent']
     return {'batch': batch, 'done': done, 'unknown': unknown, 'not_sent': failed,
+            'silent': [r['words'] for r in rows if r.get('silent')],
             'undo': any(r['undoable'] and r['outcome'] != 'not_sent' for r in rows)}
 
 
@@ -218,10 +239,17 @@ def change(targets, action, *, login, via, value=None, query=None, kind=None, me
     if action == 'group':
         if len(chosen) != 1 or chosen[0]['kind'] != 'media_player':
             raise Refused('Say which speaker the others should join.')
-        plans = _joins(chosen[0], [m for m in members if m != chosen[0]['id']], found)
+        leader, others = chosen[0], [m for m in members if m != chosen[0]['id']]
+        if leader['state'] not in PLAYING:  # a silent leader would silence the music the others are playing
+            playing = [found[m] for m in others if m in found and found[m]['state'] in PLAYING]
+            if len({frozenset([d['id'], *d['members']]) for d in playing}) > 1:
+                raise Refused('More than one of those speakers is playing. Say which music the others should join.')
+            if playing:
+                leader, others = playing[0], [leader['id'], *(m for m in others if m != playing[0]['id'])]
+        plans = _joins(leader, others, found)
         if not plans:
-            raise Refused('Say which other speakers to group with it.' if not [m for m in members if m != chosen[0]['id']]
-                          else f'Those speakers already play together with {chosen[0]["name"]}.')
+            raise Refused('Say which other speakers to group with it.' if not others
+                          else f'Those speakers already play together with {leader["name"]}.')
     else:
         plans = [(d, action, *_steps(d, action, value, query, kind, members, label, alone, soft)) for d in chosen]
     if together and action == 'play_media' and len(chosen) == 1:
@@ -236,8 +264,10 @@ def change(targets, action, *, login, via, value=None, query=None, kind=None, me
     for d, act, steps, words in plans:
         before = {'state': d['state'], 'level': d['level'], 'volume': d['volume'], 'members': d['members'],
                   'alone': bool(alone and act == 'play_media' and d['members'])}
-        outcome = _run(steps)
-        rows.append({'entity': d['id'], 'name': d['name'], 'words': words, 'outcome': outcome,
+        outcome, silent = _run(steps), False
+        if act in ('play_media', 'play') and outcome != 'not_sent' and not _playing(d['id']):
+            outcome, silent = 'unknown', True        # sent, maybe accepted, but nothing plays: never recorded as done
+        rows.append({'entity': d['id'], 'name': d['name'], 'words': words, 'outcome': outcome, 'silent': silent,
                      'undoable': _inverse(d['id'], d['kind'], act, before) is not None})
         with _db() as conn:
             conn.execute('insert into house_changes(batch, ts, login, via, entity, name, action, words, before, outcome) '

@@ -86,6 +86,7 @@ def ma(monkeypatch):
     fake = FakeMusic()
     monkeypatch.setattr(music, '_send', fake)
     monkeypatch.setattr(music, 'WAIT', 0)
+    monkeypatch.setattr(control, 'CHECK_WAIT', 0)
     monkeypatch.setattr(control, '_recent', type(control._recent)())
     music._expiry.update(value=None, at=float('-inf'))
     return fake
@@ -375,7 +376,7 @@ def house(ma, monkeypatch):
     monkeypatch.setattr(music, '_send', PlayingMusic())
     world = {'media_player.living_room': {'state': 'idle', 'volume': 0.14, 'members': ['media_player.kitchen'], 'name': 'Living room'},
              'media_player.kitchen': {'state': 'idle', 'volume': 0.3, 'members': ['media_player.living_room'], 'name': 'Kitchen speaker'},
-             'sent': [], 'fail': set()}
+             'sent': [], 'fail': set(), 'stuck': set()}
 
     def snapshot(fresh=False):
         speakers = [{'id': e, 'name': s['name'], 'kind': 'media_player', 'state': s['state'], 'level': None,
@@ -387,6 +388,8 @@ def house(ma, monkeypatch):
         world['sent'].append((f'{domain}/{service}', data))
         if service in world['fail']:
             raise broker.HomeDown('Home Assistant couldn’t be read just now.')
+        if service in world['stuck']:          # accepted, but nothing happens
+            return
         s = world[data['entity_id']]
         if service == 'unjoin':
             for m in s['members']:
@@ -462,6 +465,50 @@ def test_music_that_did_not_start_is_said_plainly(house):
     house['media_player.living_room']['members'] = house['media_player.kitchen']['members'] = []
     found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='calm piano')
     assert found['not_confirmed'] and 'isn’t playing' in found['note']
+
+
+def test_music_accepted_but_silent_is_not_done_and_says_what_was_sent(house):
+    house['stuck'].add('play_media')
+    found = catalog.play_music('me@example.com', 'living room', 'play_media', what='calm piano', soft=True)
+    assert found['done'] == [] and found['not_confirmed'] == ['Living room on its own playing “Calm Piano Evening” at 15%']
+    assert 'Calm Piano Evening' in found['note'] and 'nothing seems to be playing' in found['note']
+    assert control.recent()[0]['unknown'] and not control.recent()[0]['done']      # recorded as not confirmed, never done
+    assert control.recent()[0]['undo']                                              # the split and volume can still go back
+
+
+def test_resume_that_does_not_start_is_said_plainly(house):
+    house['stuck'].add('media_play')
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play')
+    assert found['not_confirmed'] == ['Kitchen speaker playing'] and 'nothing seems to be playing' in found['note']
+    house['stuck'].clear()
+    assert catalog.play_music('me@example.com', 'kitchen speaker', 'play')['done'] == ['Kitchen speaker playing']
+
+
+def test_a_description_is_never_sent_to_music_assistant(house, monkeypatch):
+    with pytest.raises(control.Refused, match='never a description'):
+        control.change(['media_player.kitchen'], 'play_media', login='me@example.com', via='ask',
+                       query='soft gentle instrumental music for reading', kind='playlist')
+    with pytest.raises(control.Refused):
+        control.change(['media_player.kitchen'], 'play_media', login='me@example.com', via='ask',
+                       query='library://album/3', kind='playlist')                   # the address must be of that kind
+    monkeypatch.setattr(music, 'ready', lambda: False)
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='calm piano')
+    assert 'Nothing was played' in found['unavailable'] and house['sent'] == []
+
+
+def test_grouping_with_a_silent_speaker_follows_the_one_playing(house):
+    _apart(house, 'media_player.kitchen', volume=0.2)
+    found = catalog.play_music('me@example.com', 'living room', 'group', with_speakers=['kitchen speaker'])
+    assert house['sent'][-1] == ('media_player/join', {'entity_id': 'media_player.kitchen',
+                                                       'group_members': ['media_player.living_room']})
+    assert found['done'] == ['Living room joined Kitchen speaker at 20%']
+
+
+def test_grouping_two_rooms_playing_different_music_asks(house):
+    _apart(house, 'media_player.kitchen')
+    house['media_player.patio'] = {'state': 'playing', 'volume': 0.4, 'members': [], 'name': 'Patio'}
+    found = catalog.play_music('me@example.com', 'living room', 'group', with_speakers=['kitchen speaker', 'patio'])
+    assert 'More than one' in found['refused'] and house['sent'] == []
 
 
 # ---- "As well" joins the music already playing; zones play together; playlists only when asked ----

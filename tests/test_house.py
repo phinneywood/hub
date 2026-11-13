@@ -78,6 +78,7 @@ def fake(monkeypatch):
             return []
         return [answers[c['type']]() for c in message['commands']]
     monkeypatch.setattr(broker, '_exchange', exchange)
+    monkeypatch.setattr(control, 'CHECK_WAIT', 0)
     world['asked'] = asked
     return world
 
@@ -272,6 +273,10 @@ def test_the_broker_client_checks_every_change():
                                   ('light', 'turn_on', {'entity_id': 'light.counter', 'flash': 'long'}),
                                   ('media_player', 'join', {'entity_id': 'media_player.a', 'group_members': ['light.x']}),
                                   ('music_assistant', 'play_media', {'entity_id': 'media_player.a', 'media_id': 'x', 'media_type': 'podcast', 'enqueue': 'replace'}),
+                                  ('music_assistant', 'play_media', {'entity_id': 'media_player.a', 'media_id': 'soft music for reading',
+                                                                     'media_type': 'playlist', 'enqueue': 'replace'}),
+                                  ('music_assistant', 'play_media', {'entity_id': 'media_player.a', 'media_id': 'library://album/3',
+                                                                     'media_type': 'playlist', 'enqueue': 'replace'}),
                                   ('climate', 'set_temperature', {'entity_id': 'climate.hallway'}),
                                   ('automation', 'trigger', {'entity_id': 'automation.morning'})):
         with pytest.raises(ValueError):
@@ -301,16 +306,16 @@ def test_only_kept_devices_and_their_actions(fake):
 
 
 def test_music_starts_quietly_from_silence_and_undo_restores(fake):
-    result = control.change(['media_player.kitchen'], 'play_media', login='me@example.com', via='ask', query='calm piano', kind='playlist')
+    result = control.change(['media_player.kitchen'], 'play_media', login='me@example.com', via='ask', query='library://playlist/3', kind='playlist', label='calm piano')
     assert result['done'] == ['Kitchen speaker playing “calm piano”']
     assert sent(fake) == [('media_player/volume_set', {'entity_id': 'media_player.kitchen', 'volume_level': 0.15}),
-                          ('music_assistant/play_media', {'entity_id': 'media_player.kitchen', 'media_id': 'calm piano',
+                          ('music_assistant/play_media', {'entity_id': 'media_player.kitchen', 'media_id': 'library://playlist/3',
                                                           'media_type': 'playlist', 'enqueue': 'replace'})]
     control.undo(result['batch'], login='me@example.com', via='tap')
     assert sent(fake)[2:] == [('media_player/media_pause', {'entity_id': 'media_player.kitchen'}),
                               ('media_player/volume_set', {'entity_id': 'media_player.kitchen', 'volume_level': 0.2})]
     count = len(sent(fake))
-    already = control.change(['media_player.living_room'], 'play_media', login='me@example.com', via='ask', query='Band B', kind='artist')
+    already = control.change(['media_player.living_room'], 'play_media', login='me@example.com', via='ask', query='apple_music://artist/b1', kind='artist', label='Band B')
     assert already['done'] and [p for p, _ in sent(fake)[count:]] == ['music_assistant/play_media']   # already playing: volume left alone
 
 

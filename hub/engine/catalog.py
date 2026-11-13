@@ -422,18 +422,19 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
                                  'Nothing new was picked. Tell the owner.')
                 return out
         if action != 'play_media':
-            return _changed(control.change([target], action, login=login, via='ask', value=volume_percent,
-                                           query=what, label=what, kind=kind, members=members))
+            result = control.change([target], action, login=login, via='ask', value=volume_percent,
+                                    query=what, label=what, kind=kind, members=members)
+            return _silent(_changed(result), result)
         if not ' '.join(str(what or '').split()):
             return {'refused': 'Say what to play.'}
-        picked = None
-        if music.ready():
-            try:
-                picked = music.pick(what, kind)
-            except control.Refused as error:
-                return {'nothing_matched': f'{safe(error)} Nothing was played.'}
-            except music.MusicDown as error:
-                return {'unavailable': f'{error} Hub couldn’t look that up, so nothing was played.'}
+        if not music.ready():
+            return {'unavailable': 'Music Assistant isn’t set up in Hub, so Hub can’t look up what to play. Nothing was played.'}
+        try:
+            picked = music.pick(what, kind)
+        except control.Refused as error:
+            return {'nothing_matched': f'{safe(error)} Nothing was played.'}
+        except music.MusicDown as error:
+            return {'unavailable': f'{error} Hub couldn’t look that up, so nothing was played.'}
         mates = [] if group_too is False else zones.mates(target, players)
         outside = [players[m] for m in here['members'] if m in players and m not in mates]
         alone = bool(here['members']) and (group_too is False or (bool(outside) and group_too is not True))
@@ -441,30 +442,32 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
             return {'ask_first': f'{safe(here["name"])} is grouped with {safe(", ".join(d["name"] for d in outside))}, '
                                  'and the group is playing. Nothing was changed. Ask the owner whether to play in all of '
                                  f'them or only in {safe(here["name"])}, then call again with group_too.'}
-        name = safe(picked['name']) if picked else what
+        name = safe(picked['name'])
         result = control.change([target], action, login=login, via='ask', value=volume_percent, soft=soft, alone=alone,
-                                query=picked['uri'] if picked else what, label=name,
-                                kind=picked['kind'] if picked else kind, together=mates)
+                                query=picked['uri'], label=name, kind=picked['kind'], together=mates)
     except control.Refused as error:
         return {'refused': safe(error)}
     except broker.HomeDown as error:
         return {'unavailable': str(error)}
     out = _changed(result)
-    if picked:
-        out['picked'] = f'{name}, {"a playlist of yours" if picked["mine"] and picked["kind"] == "playlist" else "from your library" if picked["mine"] else "from Apple Music"} ({picked["kind"]}). Tell the owner what you picked.'
+    out['picked'] = f'{name}, {"a playlist of yours" if picked["mine"] and picked["kind"] == "playlist" else "from your library" if picked["mine"] else "from Apple Music"} ({picked["kind"]}). Tell the owner what you picked.'
     if alone and here['members']:
         out['grouping'] = f'{safe(here["name"])} was taken out of its group so it plays only there; Undo puts it back.'
     if mates:
         out['zone'] = (f'{safe(", ".join(players[m]["name"] for m in mates))} play along, in sync: the owner made them one '
                        'zone. Undo puts all of it back. Say so.')
-    if result['unknown']:
-        try:
-            now = control.devices(read.snapshot(fresh=True)).get(target)
-        except broker.HomeDown:
-            now = None
-        if now and now['state'] not in ('playing', 'buffering'):
-            out['note'] = (f'Home Assistant didn’t confirm it, and {safe(here["name"])} isn’t playing now. '
-                           'Say the music didn’t start; never say it is playing.')
+    return _silent(out, result)
+
+
+def _silent(out, result):
+    """Say plainly when music was sent but the speaker isn't playing: Home Assistant accepting a play isn't music."""
+    from .. import luna
+    from . import judge
+    if result.get('silent'):
+        sent = '; '.join(luna.clip(judge.scrub(w), 200) for w in result['silent'])
+        out['note'] = (f'Hub sent this: {sent}. The speaker isn’t playing now, so nothing seems to be playing. Tell the '
+                       'owner what was sent and that the music didn’t start; never say it is playing, and don’t raise '
+                       'the volume to fix it.')
     return out
 
 

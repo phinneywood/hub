@@ -15,6 +15,7 @@ def house(monkeypatch):
     world = golden_world.install(monkeypatch)
     sent = []
     monkeypatch.setattr(broker, '_exchange', lambda m, t: sent.append(m['body']) or [] if m['op'] == 'request' else world.exchange(m, t))
+    monkeypatch.setattr(control, '_playing', lambda entity: True)      # this world's speakers don't change state; naming only
     return sent
 
 

@@ -26,6 +26,9 @@ WRITES = {
 }
 ENTITY = re.compile(r'^(light|switch|fan|scene|media_player)\.[a-z0-9_]{1,120}$')
 MEDIA_TYPES = {'track', 'album', 'artist', 'playlist', 'radio'}
+# Something concrete Music Assistant can play: a library or provider address such as library://playlist/7, never words.
+# A description sent as media_id makes Music Assistant guess, and usually nothing plays.
+MEDIA_URI = re.compile(r'^[a-z][a-z0-9_]{0,40}://(track|album|artist|playlist|radio)/[A-Za-z0-9._:~%-]{1,160}$')
 LIMIT = 16 * 1024 * 1024      # one reply line; the broker caps Home Assistant's own answers at 8 MB each
 TIMEOUT = 8
 
@@ -89,9 +92,13 @@ def _checked(domain, service, data):
     if not isinstance(members, list) or len(members) > 12 or any(
             not isinstance(m, str) or not ENTITY.fullmatch(m) or not m.startswith('media_player.') for m in members):
         raise ValueError('Group members must be speakers.')
-    if domain == 'music_assistant' and not (isinstance(data.get('media_id'), str) and 0 < len(data['media_id']) <= 200
-                                            and data.get('media_type') in MEDIA_TYPES and data.get('enqueue') in ('replace', 'add', 'next')):
+    if domain == 'music_assistant' and not (isinstance(data.get('media_id'), str) and data.get('media_type') in MEDIA_TYPES
+                                            and data.get('enqueue') in ('replace', 'add', 'next')):
         raise ValueError('Say what to play and what kind of thing it is.')
+    if domain == 'music_assistant':
+        uri = MEDIA_URI.fullmatch(data['media_id'])
+        if not uri or uri.group(1) != data['media_type']:
+            raise ValueError('Hub plays only a playlist, album, artist, song or station it found, never a description.')
     return data
 
 
