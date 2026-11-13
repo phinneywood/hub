@@ -210,6 +210,25 @@ def house_items():
             for tone, d, words in read.attention(found)]
 
 
+def music_items():
+    """A month before the Apple Music sign-in in Music Assistant runs out, and before Hub's own key does."""
+    from ..tools.house import music, read
+    found, day = [], home.today()
+    link = read.links().get('music_url') or '/house/playlists'
+    for key, ends, title, why in (
+            ('music-apple', music.apple_sign_in_ends(), 'Apple Music sign-in', 'Sign in again in Music Assistant’s Apple '
+             'Music settings, from home Wi-Fi: the sign-in window only opens there.'),
+            ('music-key', music.key_ends(), 'Hub’s Music Assistant key', 'Make a new key for Hub’s Music Assistant user '
+             'and replace the one in 1Password; playlists stop working from Hub until then.')):
+        if ends is None or (ends - day).days > music.WARN_DAYS:
+            continue
+        when = f'{ends:%b} {ends.day}'
+        found.append(today.rec(key, 'warn' if ends <= day else 'info',
+                               f'{title} ended {when}' if ends <= day else f'{title} ends {when}', why,
+                               href=link, cta='Open Music Assistant' if link.startswith('http') else 'Playlists'))
+    return found
+
+
 def _thing(d):
     from .. import luna
     from . import judge
@@ -254,6 +273,44 @@ def music_lookup() -> dict:
     return {'read_at': found['read_at'].strftime('%H:%M'),
             'speakers': [{**_thing(d), **({'grouped_with': [luna.clip(n, 80) for n in d['group']]} if d['group'] else {})}
                          for d in found['speakers']]}
+
+
+LIBRARY_ITEMS = 50          # playlists or songs shown to the chat's model at once
+
+
+def library_lookup(search: str | None = None, playlist: str | None = None) -> dict:
+    """The music library in Music Assistant. Without arguments: the playlists (each marked Music Assistant or
+    Apple Music, and whether it can be edited) and what played recently. With `search`: songs, albums, artists
+    and playlists matching it. With `playlist` (a name from the list): its songs in order. Read-only."""
+    from .. import luna
+    from ..tools.house import control, music
+    from . import judge
+
+    def name(text):
+        return luna.clip(judge.scrub(text), 80)
+
+    def song(s):
+        return f'{name(s["name"])} – {name(s["artist"])}' if s['artist'] else name(s['name'])
+    if not music.ready():
+        return {'unavailable': 'Music Assistant isn’t set up in Hub yet.'}
+    try:
+        if playlist:
+            chosen = music.find(playlist)
+            songs = music.tracks(chosen['id'])
+            return {'playlist': name(chosen['name']), 'where': music.WHERE_WORDS[chosen['where']], 'count': len(songs),
+                    'songs': [f'{s["pos"]}. {song(s)}' for s in songs[:LIBRARY_ITEMS]]}
+        if search:
+            found = music.search(search, ('track', 'album', 'artist', 'playlist'), limit=8)
+            return {kind + 's': [song(s) for s in items] for kind, items in found.items()}
+        lists = music.playlists()
+        return {'playlists': [{'name': name(p['name']), 'where': music.WHERE_WORDS[p['where']],
+                               'can_edit': ('everything' if p['where'] == 'music' else 'add songs only')
+                               if p['editable'] and p['where'] != 'other' else 'no'} for p in lists[:LIBRARY_ITEMS]],
+                'recently_played': [name(r['name']) for r in music.recent()]}
+    except control.Refused as error:
+        return {'error': str(error)}
+    except music.MusicDown:
+        return UNAVAILABLE
 
 
 # ---- Controls: what Ask Hub may change when the owner asks. Recorded, with Undo on the Home changes page. ----
@@ -304,8 +361,9 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
     """Control the Music Assistant speakers right away, when the owner asks. `speaker` is a speaker name from
     music_now. `action`: play_media (search Apple Music for `what`, of `kind`, and play it; a speaker that
     was silent starts quietly unless volume_percent is given), play, pause, next, previous, volume (with
-    volume_percent 0-100), group (with with_speakers, names from music_now) or ungroup."""
-    from ..tools.house import control, read
+    volume_percent 0-100), group (with with_speakers, names from music_now) or ungroup. To play one of the
+    owner's playlists, use its name from music_library with kind playlist."""
+    from ..tools.house import control, music, read
     refused = _refusal(login)
     if refused:
         return refused
@@ -313,10 +371,57 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
         found = read.snapshot()
         [target] = control.resolve(speaker, ('media_player',), found)[:1]
         members = [m for name in with_speakers or () for m in control.resolve(name, ('media_player',), found)[:1]]
+        if action == 'play_media' and kind == 'playlist' and what:
+            what = music.playlist_uri(what) or what     # a library playlist by its exact name, not a search hit
         return _changed(control.change([target], action, login=login, via='ask', value=volume_percent, query=what,
                                        kind=kind, members=members))
     except control.Refused as error:
         return {'refused': str(error)}
+
+
+def edit_playlist(login, action: Literal['create', 'add', 'remove', 'move', 'rename', 'delete'], playlist: str,
+                  songs: list[str] | None = None, new_name: str | None = None, position: int | None = None) -> dict:
+    """Edit the owner's playlists right away, when the owner asks. `playlist` is a name from music_library
+    (for create, the new playlist's name). `songs` are song titles, each with its artist when known
+    ("Title – Artist"). `action`: create (a new Music Assistant playlist, with songs if given), add (songs to
+    the end), remove (songs), move (songs[0] to `position`, 1 = first), rename (to new_name) or delete.
+    Apple Music playlists can only gain songs. Delete never happens here: Hub shows the owner a page to confirm it."""
+    from ..tools.house import music
+    from . import state
+    if login is None:
+        return {'refused': 'Changes to playlists need the owner signed in on their phone or laptop.'}
+    if state.trust(next(a for a in ACTIONS if a.slug == 'house.playlists')) == 'suggest':  # `action` is the argument here
+        return {'refused': 'The owner set playlist editing to “Suggest only” on the Engine page, so Hub changes nothing. '
+                           'They can do it in Music Assistant.'}
+    if not music.ready():
+        return {'refused': 'Music Assistant isn’t set up in Hub yet.'}
+    try:
+        if action == 'delete':
+            chosen = music.find(playlist)
+            music.check_editable(chosen)
+            return {'needs_tap': f'Nothing is deleted yet. The owner confirms deleting “{chosen["name"]}” on the '
+                                 'Playlists page linked below; it can’t be undone.'}
+        if action == 'create':
+            result = music.create(playlist, songs, login=login, via='ask')
+        elif action == 'add':
+            result = music.add(playlist, songs, login=login, via='ask')
+        elif action == 'remove':
+            result = music.remove(playlist, songs, login=login, via='ask')
+        elif action == 'move':
+            result = music.move(playlist, (songs or [''])[0], position, login=login, via='ask')
+        else:
+            result = music.rename(playlist, new_name, login=login, via='ask')
+    except music.Refused as error:
+        return {'refused': str(error)}
+    except music.MusicDown as error:
+        return {'unavailable': f'{error} Nothing was changed.' if isinstance(error, music.NotSent) else str(error)}
+    out = _changed(result)
+    if out.get('undo'):
+        out['undo'] = 'The owner can undo this for a day on the Playlists page.'
+    for key in ('missing', 'note'):
+        if result.get(key):
+            out['songs_not_found' if key == 'missing' else key] = result[key]
+    return out
 
 
 CONTROLS = [
@@ -326,6 +431,10 @@ CONTROLS = [
     Control('play_music', 'Music', 'Plays, pauses, skips, sets the volume and groups the Music Assistant speakers. '
             'A silent speaker starts at about 15%. Each change is recorded and can be undone for a day.',
             'Speaker names, what you asked to play, and what happened.', '/house/changes', 'Home changes', 'house.control', play_music),
+    Control('edit_playlist', 'Playlists', 'Makes and edits Music Assistant playlists and adds songs to Apple Music '
+            'playlists, through Music Assistant with Hub’s own key. Each edit is recorded and can be undone for a day; '
+            'deleting a playlist needs your tap on the Playlists page.',
+            'Playlist and song names, and what happened.', '/house/playlists', 'Playlists', 'house.playlists', edit_playlist),
 ]
 
 
@@ -454,13 +563,16 @@ SOURCES = [
            'Assistant through the HA broker on this Mac. Never cameras, location or automations. Read-only for now.',
            'Nothing to the overnight review. To Ask Hub when you ask: room and device names and their states, the '
            'thermostat’s readings, and what each speaker is playing.',
-           items=(house_items,),
+           items=(house_items, music_items),
            lookups=(Lookup('home_status', 'Home', 'Lights, plugs, the thermostat, locks, the garage door and the alarm.',
                            'Room and device names and whether each is on, locked or open, and the thermostat’s readings.',
                            '/house', 'Open Home', home_lookup),
                     Lookup('music_now', 'Speakers', 'The Music Assistant speakers.',
                            'Speaker names, whether each is playing, the song and artist, the volume and its group.',
-                           '/house', 'Open Home', music_lookup))),
+                           '/house', 'Open Home', music_lookup),
+                    Lookup('music_library', 'Music library', 'Playlists, recent plays and search in Music Assistant.',
+                           'Playlist names and where each lives, song, album and artist names, and what played recently.',
+                           '/house/playlists', 'Playlists', library_lookup))),
     Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
            'What is already on your list and what you said “Not today” to this week. To Ask Hub when you ask: what its '
            'runs cost against each limit and how many finished.', items=(hub_faults, hub_release),
@@ -503,6 +615,11 @@ ACTIONS = [
            'When you ask in Ask Hub or tap a button on Today: lights, plugs and fans on or off, brightness, scenes, '
            'and playing, pausing, volume and grouping on the speakers. Never locks, the garage, the alarm or the thermostat.',
            'Undo on the Home changes page, for a day.', page='/house/changes', post='/house/do', default='undo', ceiling='undo'),
+    Action('house.playlists', 'Edit playlists',
+           'When you ask in Ask Hub: make Music Assistant playlists, add, remove and move songs, rename them, and add '
+           'songs to your own Apple Music playlists. Deleting a playlist always waits for your tap.',
+           'Undo on the Playlists page, for a day. Songs added to Apple Music playlists are removed in the Music app.',
+           page='/house/playlists', default='undo', ceiling='undo'),
     Action('hub.deploy', 'Update Hub to a checked version',
            'Asks the deployer on this Mac to switch to the version that passed its checks. Your data is backed up first.',
            'It goes back by itself if the new version fails its checks.', page='/engine', post='/engine/deploy',

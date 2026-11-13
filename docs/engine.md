@@ -23,7 +23,8 @@ guidance. They steer judgement. They cannot add a source or an action.
   If the overnight review may point at it, add its page to `PAGES`. A source may also have a
   `sort` step (see “Sorting mail”) and a `prepare` step (see “Getting ready each morning”).
 - **An action**: one `Action(...)` entry with what it does, how it is undone and its preview page.
-  It starts at “suggest”. Raise `ceiling` only when the code has a reversible one-tap route (`undo`).
+  It starts at “suggest”. Raise `ceiling` only when the code has a reversible one-tap route (`undo`):
+  a `post` route for Today, or an Ask `Control` that names the action and records each run with Undo.
   `auto` needs an `auto` function as well, and stays a separate owner decision per action.
 - **A standing instruction**: typed by the owner in “Ask Hub” on the Engine page. No code.
 - **A hand-off**: one `Handoff(...)` in `HANDOFFS`, for another assistant Ask Hub may pass the owner's
@@ -198,6 +199,11 @@ question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page 
   "read-only for now".
   Adding a lookup is one `Lookup(...)` on its source, with `reads` and `sends` in plain words; the chat
   shows those words on the lookup's card.
+- **What it can change** (`Control` entries in `CONTROLS`, docs/home-control.md): lights, plugs and
+  scenes (`home_control`), the speakers (`play_music`) and playlists (`edit_playlist`), only when the
+  owner's latest message asks, only for a signed-in owner, and never when the control's action is set to
+  Suggest only. Each change is recorded with Undo for a day. Deleting a playlist never happens in the chat:
+  it points to a confirmation page instead.
 - **What the model sees**: what each lookup's `sends` says and no more. Mail is sender names and subject
   lines with links and addresses taken out, one kind at a time, at most 10, never from a sender with AI
   switched off. Today's list passes a mail item's title only, because its second line names senders.

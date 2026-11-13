@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Playlists · Hub{% endblock %}
+{% block body %}
+<p class="eyebrow">Home</p>
+<h1 class="status-head">Playlists</h1>
+{% if problem %}<p class="banner warn">{{ problem }}</p>{% endif %}
+{% if banner %}<p class="banner {{ 'warn' if banner.unknown or banner.not_sent else 'ok' }}">
+  {% if banner.done %}{{ banner.done|join(', ') }}.{% endif %}
+  {% if banner.unknown %}Music Assistant didn’t confirm: {{ banner.unknown|join(', ') }}.{% endif %}
+  {% if banner.not_sent %}Not done: {{ banner.not_sent|join(', ') }}.{% endif %}
+</p>{% endif %}
+<p>
+{% if links.music_url %}<a class="btn small primary" href="{{ links.music_url }}">Open Music Assistant</a>{% endif %}
+<a class="btn small" href="/house/changes">Home changes</a>
+</p>
+<h2>In the library</h2>
+{% if unreadable %}<p class="note">{{ unreadable }}</p>
+{% elif lists %}
+<ul class="checks">
+{% for p in lists %}
+  <li><span class="dot {{ 'ok' if p.where == 'music' else 'idle' }}" aria-hidden="true">●</span>
+    <div><strong>{{ p.name }}</strong>
+      <small>{{ where[p.where] }}{% if p.where == 'apple' %} · {{ 'Hub can add songs' if p.editable else 'read-only' }}{% endif %}</small>
+    </div>
+    {% if p.where == 'music' %}<a class="btn small" href="/house/playlists/delete/{{ p.id }}">Delete…</a>{% endif %}
+  </li>
+{% endfor %}
+</ul>
+{% else %}<p class="note">There are no playlists in the library yet.</p>{% endif %}
+<h2>What Hub changed</h2>
+{% if rows %}
+<ul class="checks">
+{% for r in rows %}
+  <li><span class="dot {{ 'bad' if r.not_sent or r.unknown else 'ok' }}" aria-hidden="true">●</span>
+    <div><strong>{{ (r.done + r.unknown + r.not_sent)|join(', ') }}</strong>
+      <small>{{ r.when }} · {{ {'ask': 'from Ask', 'tap': 'from this page', 'undo': 'Undo'}.get(r.via, r.via) }}{% if r.undone %} · undone{% endif %}</small>
+      {% if r.unknown %}<small class="warn-text">Music Assistant didn’t confirm this.</small>{% endif %}
+      {% if r.not_sent %}<small class="warn-text">Not done.</small>{% endif %}
+    </div>
+    {% if r.undo and not r.undone %}<form method="post" action="/house/playlists/undo/{{ r.batch }}"><button class="btn small">Undo</button></form>{% endif %}
+  </li>
+{% endfor %}
+</ul>
+{% else %}<p class="note">Hub hasn’t changed any playlists yet.</p>{% endif %}
+<p class="note">Ask Hub makes and edits Music Assistant playlists and adds songs to your Apple Music playlists. Each edit can be undone here for a day. Apple Music can’t remove, reorder, rename or delete by API; do that in the Music app.</p>
+{% endblock %}

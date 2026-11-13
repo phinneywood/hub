@@ -43,16 +43,21 @@ def legacy_present():
     return _exists(LEGACY_SERVICE)
 
 
-def _onepassword():
+def _onepassword(reference=None):
     token = _keychain(TOKEN_SERVICE)
     if not token:
         return None
     try:
-        out = subprocess.run([str(OP), "read", "--no-newline", REFERENCE], capture_output=True, text=True, timeout=20,
+        out = subprocess.run([str(OP), "read", "--no-newline", reference or REFERENCE], capture_output=True, text=True, timeout=20,
                              env={"HOME": str(Path.home()), "PATH": "/usr/bin:/bin", "OP_SERVICE_ACCOUNT_TOKEN": token})
     except (OSError, subprocess.TimeoutExpired):
         return None
     return out.stdout.strip() or None if out.returncode == 0 else None
+
+
+def secret(reference):
+    """Another item in Hub's vault, by `op://` reference, or None. Same service account; no Keychain fallback."""
+    return _onepassword(reference)
 
 
 def read(fresh=False):

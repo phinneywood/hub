@@ -180,7 +180,7 @@ def test_every_lookup_is_complete_and_the_agent_has_exactly_these_tools():
     built = agent.build()
     tools = built._function_toolset.tools
     controls = catalog.controls()
-    assert [c.slug for c in controls] == ['home_control', 'play_music']
+    assert [c.slug for c in controls] == ['home_control', 'play_music', 'edit_playlist']
     assert set(tools) == {l.slug for l in found} | {h.slug for h in handoffs} | {c.slug for c in controls}
     assert not tools['kitchen'].function_schema.json_schema.get('properties')   # the model can't put words in the owner's mouth
     for c in controls:   # the model never says who asked: that comes from the signed-in request

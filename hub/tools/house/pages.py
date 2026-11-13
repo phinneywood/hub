@@ -69,3 +69,67 @@ def undo(batch: str, request: Request, back: str = Form('/today')):
     except control.Refused as error:
         return _changes(request, problem=str(error))
     return _back(back, result['batch'])
+
+
+# ---- Playlists, through Music Assistant (music.py) ----
+
+def _playlists(request, problem='', done=''):
+    from . import music
+    lists, unreadable = [], ''
+    if music.ready():
+        try:
+            lists = music.playlists()
+        except music.MusicDown as error:
+            unreadable = str(error)
+    else:
+        unreadable = 'Music Assistant isn’t set up in Hub yet.'
+    rows = music.recent_changes()
+    for r in rows:
+        r['when'] = datetime.fromtimestamp(r['ts'], home.PACIFIC).strftime('%a %-I:%M %p')
+    return render(request, "house/playlists.html", active="house", lists=lists, rows=rows, links=read.links(),
+                  where=music.WHERE_WORDS, problem=problem[:200], unreadable=unreadable,
+                  banner=music.summary(done) if done else None)
+
+
+@router.get("/playlists", response_class=HTMLResponse)
+def playlists(request: Request, done: str = ''):
+    return _playlists(request, done=done[:12])
+
+
+@router.get("/playlists/delete/{playlist_id}", response_class=HTMLResponse)
+def confirm_delete(playlist_id: str, request: Request):
+    """The confirmation tap before a playlist is deleted: it can't be undone."""
+    from . import music
+    try:
+        chosen = next((p for p in music.playlists() if p['id'] == playlist_id[:40]), None)
+        if chosen is None:
+            raise music.Refused('That playlist isn’t in the library any more.')
+        music.check_editable(chosen)
+        count = len(music.tracks(chosen['id']))
+    except (music.Refused, music.MusicDown) as error:
+        return _playlists(request, problem=str(error))
+    return render(request, "house/delete_playlist.html", active="house", playlist=chosen, count=count)
+
+
+@router.post("/playlists/delete/{playlist_id}")
+def delete_playlist(playlist_id: str, request: Request):
+    from . import music
+    if _login(request) is None:
+        return HTMLResponse("Delete playlists from your phone or laptop.", status_code=403)
+    try:
+        result = music.delete(playlist_id[:40], login=_login(request), via='tap')
+    except (music.Refused, music.MusicDown) as error:
+        return _playlists(request, problem=str(error))
+    return RedirectResponse(f'/house/playlists?done={result["batch"]}', status_code=303)
+
+
+@router.post("/playlists/undo/{batch}")
+def undo_playlist(batch: str, request: Request):
+    from . import music
+    if _login(request) is None:
+        return HTMLResponse("Undo from your phone or laptop.", status_code=403)
+    try:
+        result = music.undo(batch, login=_login(request), via='tap')
+    except (music.Refused, music.MusicDown) as error:
+        return _playlists(request, problem=str(error))
+    return RedirectResponse(f'/house/playlists?done={result["batch"]}', status_code=303)

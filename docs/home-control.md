@@ -1,6 +1,6 @@
 # Home control (design, 2026-11-11)
 
-Status: steps 1 and 2 (read, then lights, power and music) built on a branch; the rest proposed. Owner decisions on 2026-11-11:
+Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playlists) built on a branch; the rest proposed. Owner decisions on 2026-11-11:
 
 - Hub talks to Home Assistant directly for devices and playback, and to Music Assistant's own API
   for playlists. Only Apple Music edits that no API offers would go to a Claude Code turn driving the
@@ -77,6 +77,42 @@ Playing goes through Home Assistant (`music_assistant.search`, `music_assistant.
 `media_player.*`). Playlists go straight to Music Assistant's own API on the Green (port 8095), with
 its own login key, because Home Assistant's Music Assistant actions have no playlist calls.
 
+**How Hub connects** (built in step 5, `hub/tools/house/music.py`):
+
+- `POST <music_url>/api` with `Authorization: Bearer <key>` and the body
+  `{"message_id", "command", "args"}`; the answer is the bare result. `music_url` is the private
+  `household.json` setting the links already use, so the key travels over the Tailscale HTTPS route to
+  the Green, never over plain HTTP if the owner sets the https address.
+- **The key** belongs to a separate, non-admin Music Assistant user made for Hub (owner, 2026-11-12), so
+  it can't change Music Assistant's settings, providers or users. Hub reads it from 1Password
+  (`op://Hub/Music Assistant/credential`) with the same read-only service account as the model key
+  (`model_key.secret`). It is never logged, shown, or put in a URL, plist or file. Music Assistant's
+  long-lived keys last 365 days and don't renew.
+- **Only these commands leave Hub** (`music.READS`, `music.WRITES`): `music/playlists/library_items`,
+  `music/playlists/playlist_tracks`, `music/search`, `music/recently_played_items`, `auth/tokens`,
+  `music/playlists/create_playlist`, `music/playlists/add_playlist_tracks`,
+  `music/playlists/remove_playlist_tracks` (positions count from 1) and `music/library/remove_item`.
+- **A non-admin key has no rename or reorder** (`music/playlists/update` and `music/playlists/remove`
+  are admin-only, and no move command exists). Hub renames by copying into a playlist with the new name
+  and deleting the old one only once the copy is whole, and moves a song by removing the tail of the
+  list and adding it back in the new order.
+- **Adds and removes run in the background** in Music Assistant, and a refusal (for example "not
+  editable") only shows inside that background task. Hub reads the playlist back for up to 8 seconds and
+  records the edit as not confirmed unless the song count matches.
+- **Errors over `/api`** are plain HTTP statuses: 401/403 (key refused) and 400 (refused) mean nothing
+  changed; other failures and timeouts are recorded as unknown.
+
+**Reminders on Today** (from `music_items`, no new schedule):
+
+- The Apple Music sign-in lasts about 180 days, and Music Assistant doesn't report when it ends (its
+  setup keeps the sign-in time privately and no command returns it). Hub counts from the sign-in date in
+  `household.json` → `home.apple_music_signed_in` (`YYYY-MM-DD`) and shows a line from 30 days before.
+- Hub's own key: from `auth/tokens`, the key named `Hub`, asked at most twice a day. The field names of
+  that answer weren't checked against a live server; if they differ, the line just never shows.
+
+**Checked in the Music Assistant 2.10.9 source but not yet live:** the shape of `auth/tokens`, and what
+a failed background task looks like (Hub doesn't depend on it).
+
 What that API can do with playlists (checked in the Music Assistant 2.10.9 source):
 
 | | Music Assistant playlist | Apple Music playlist |
@@ -132,8 +168,10 @@ Apple Music on the web can do the edits its API can't, in the owner's signed-in 
 4. **Automations.** Ask drafts one in plain words; nothing is created until the owner taps Create.
    Hub marks the ones it makes and only edits or deletes those; one that touches locks, the garage or
    the alarm is flagged on the card.
-5. **Playlists by API.** Music Assistant playlists (create and full editing) and adding to Apple Music
-   playlists, plus a "Needs you" reminder a month before the Apple Music sign-in expires.
+5. **Playlists by API.** Built on a branch: the `music_library` lookup, the `edit_playlist` control
+   (create, add, remove, move, rename; add only for Apple Music), the Playlists page with Undo and the
+   delete confirmation, playing a library playlist by its exact name, and "Needs you" lines a month
+   before the Apple Music sign-in or Hub's key run out. Trust: "Edit playlists" on the Engine page.
 6. **Thermostat**, once its Home Assistant setup is finished and reads are checked.
 7. **Apple Music edits through Chrome**, only if the owner wants them.
 
@@ -146,7 +184,8 @@ The HA broker already has access, so steps 1 to 4 and 6 need nothing more.
 
 1. **For the links:** add the Home Assistant and Music Assistant addresses to `household.json` in Hub's
    private data folder, under `"home": {"assistant_url": "…", "music_url": "…"}`.
-2. **In Music Assistant** (for step 5): create an API key in its settings and save it in 1Password's
-   `Hub` vault as item `Music Assistant`, field `credential`.
+2. **In Music Assistant** (for step 5): add a non-admin user for Hub, sign in as it, create a long-lived
+   key named `Hub`, and save it in 1Password's `Hub` vault as item `Music Assistant`, field `credential`.
+   Add `"apple_music_signed_in": "YYYY-MM-DD"` (the last Apple Music sign-in) to the same `home` section.
 3. **In Chrome on the Mac mini** (only for step 7): sign in to music.apple.com once with the Apple
    Account that holds the library.

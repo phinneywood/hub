@@ -35,7 +35,7 @@ def test_every_catalog_entry_is_complete_and_actions_never_default_above_what_th
     for action in catalog.ACTIONS:
         assert action.does and action.undo and action.page.startswith('/')
         assert TRUST.index(action.default) <= TRUST.index(action.ceiling)
-        assert action.post or action.ceiling == 'suggest'  # one tap needs a route that performs it
+        assert action.post or action.ceiling == 'suggest' or action.slug in {c.action for c in catalog.controls()}  # one tap needs a route, or Ask's control is it
         assert action.auto or action.ceiling != 'auto'     # unasked only with code that does it
     assert {s.slug for s in catalog.SOURCES if s.evidence} <= set(catalog.PAGES)
 

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Delete playlist · Hub{% endblock %}
+{% block body %}
+<p class="eyebrow">Playlists</p>
+<h1 class="status-head">Delete “{{ playlist.name }}”?</h1>
+<p>It has {{ count }} song{{ 's' if count != 1 }}. Deleting it removes it from Music Assistant, and Hub can’t undo that.</p>
+<form method="post" action="/house/playlists/delete/{{ playlist.id }}">
+  <button class="btn primary">Delete playlist</button>
+  <a class="btn" href="/house/playlists">Keep it</a>
+</form>
+{% endblock %}
