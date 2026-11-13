@@ -6,14 +6,17 @@ A hand-off passes the owner's message, word for word, to another assistant (Kitc
 decides that the message is for it; it cannot change the words. On later turns `recall()` gives the model a
 short text of what the other assistant answered, as data, so follow-ups make sense.
 """
-import functools
 import inspect
+import time
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
 from pydantic_ai import Agent, RunContext, Tool, UsageLimits
 from pydantic_ai.messages import ToolReturn, ToolReturnPart
+from pydantic_ai.models.wrapper import WrapperModel
 from pydantic_ai.ui.vercel_ai.response_types import SourceUrlChunk
 
+from .. import ask_trace
 from ..engine import catalog
 
 INSTRUCTIONS = """You are Hub, a private household dashboard. You answer the owner's questions about today's list,
@@ -58,6 +61,7 @@ class Turn:
     text: str
     login: str | None = None
     handed: set = field(default_factory=set)   # hand-offs already made this turn: each passes the message on once
+    trace: object = None                       # the turn's ask_trace.Trace on the /ask route; None in golden runs
 
 
 def _citation(lookup):
@@ -77,16 +81,31 @@ def cite(history):
     return history
 
 
+def _signed(run, source, slug, hidden=()):
+    """Give `run(ctx, **kwargs)` the tool signature of `source` without its `hidden` parameters, so the model sees
+    the same schema whatever wraps the tool."""
+    signature = inspect.signature(source).parameters
+    params = [p for p in signature.values() if p.name not in hidden]
+    ctx = inspect.Parameter('ctx', inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=RunContext[Turn])
+    run.__signature__ = inspect.Signature([ctx, *[p.replace(kind=inspect.Parameter.KEYWORD_ONLY) for p in params]],
+                                          return_annotation=ToolReturn)
+    hints = {k: v for k, v in getattr(source, '__annotations__', {}).items() if k not in (*hidden, 'return')}
+    run.__annotations__ = {'ctx': RunContext[Turn], **hints, 'return': ToolReturn}
+    run.__doc__, run.__name__ = source.__doc__, slug
+    return Tool(run, name=slug, takes_ctx=True)
+
+
 def _tool(lookup):
-    @functools.wraps(lookup.run)
-    def run(*args, **kwargs):
-        try:
-            found = lookup.run(*args, **kwargs)
-        except Exception:  # noqa: BLE001 - a broken source is an answer the model can pass on, not a failed chat
-            found = dict(catalog.UNAVAILABLE)
+    def run(ctx: RunContext[Turn], **kwargs) -> ToolReturn:
+        with ask_trace.call(ctx.deps.trace, lookup.slug, 'lookup', kwargs, getattr(ctx, 'tool_call_id', None)) as call:
+            try:
+                found = lookup.run(**kwargs)
+            except Exception as error:  # noqa: BLE001 - a broken source is an answer the model can pass on, not a failed chat
+                call.failed(error)
+                found = dict(catalog.UNAVAILABLE)
+            call.returned(found)
         return ToolReturn(return_value=found, metadata=[_citation(lookup)])
-    run.__annotations__ = {**getattr(lookup.run, '__annotations__', {}), 'return': ToolReturn}
-    return Tool(run, name=lookup.slug, takes_ctx=False)
+    return _signed(run, lookup.run, lookup.slug)
 
 
 def _handoff(handoff):
@@ -94,12 +113,16 @@ def _handoff(handoff):
         if handoff.slug in ctx.deps.handed:
             return {'already': f'This message is already with {handoff.name}.'}
         ctx.deps.handed.add(handoff.slug)
-        try:
-            sent = handoff.send(ctx.deps.text, ctx.deps.login)
-        except Exception:  # noqa: BLE001 - the chat says so plainly; nothing was passed on
-            return {'unavailable': f'{handoff.name} isn’t answering right now. Nothing was sent.'}
-        return {'asked': handoff.name, 'message': sent['message'],
-                'note': f'{handoff.name} answers in this chat by itself. You will see its answer on the next turn.'}
+        with ask_trace.call(ctx.deps.trace, handoff.slug, 'handoff', {}, getattr(ctx, 'tool_call_id', None)) as call:
+            try:
+                sent = handoff.send(ctx.deps.text, ctx.deps.login)
+                found = {'asked': handoff.name, 'message': sent['message'],
+                         'note': f'{handoff.name} answers in this chat by itself. You will see its answer on the next turn.'}
+            except Exception as error:  # noqa: BLE001 - the chat says so plainly; nothing was passed on
+                call.failed(error)
+                found = {'unavailable': f'{handoff.name} isn’t answering right now. Nothing was sent.'}
+            call.returned(found)
+        return found
     run.__doc__ = (f'Pass the owner\'s latest message, exactly as typed, to {handoff.name}: {handoff.reads} '
                    'Takes no arguments: the words are the owner\'s own.')
     return Tool(run, name=handoff.slug, takes_ctx=True)
@@ -111,23 +134,19 @@ HIDDEN = ('login', 'said')    # filled in from the turn, never by the model
 def _control(control):
     """A tool that changes the house when asked. Who asked comes from the turn, never from the model, and so does
     `said`, the owner's latest message as typed, for a control that checks the owner really asked."""
-    signature = inspect.signature(control.run).parameters
-    hears = 'said' in signature
+    hears = 'said' in inspect.signature(control.run).parameters
 
     def run(ctx: RunContext[Turn], **kwargs) -> ToolReturn:
-        try:
-            found = control.run(ctx.deps.login, **kwargs, **({'said': ctx.deps.text} if hears else {}))
-        except Exception:  # noqa: BLE001 - an unexpected failure is reported, never claimed as done
-            found = {'unavailable': f'{control.name} didn’t work just now. Nothing may have changed; check Home changes.'}
+        with ask_trace.call(ctx.deps.trace, control.slug, 'control', kwargs, getattr(ctx, 'tool_call_id', None)) as call:
+            try:
+                found = control.run(ctx.deps.login, **kwargs, **({'said': ctx.deps.text} if hears else {}))
+            except Exception as error:  # noqa: BLE001 - an unexpected failure is reported, never claimed as done
+                call.failed(error)
+                found = {'unavailable': f'{control.name} didn’t work just now. Nothing may have changed; check Home changes.'}
+            call.returned(found)
         return ToolReturn(return_value=found, metadata=[_citation(control)])
-    params = [p for p in list(signature.values())[1:] if p.name not in HIDDEN]
-    ctx = inspect.Parameter('ctx', inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=RunContext[Turn])
-    run.__signature__ = inspect.Signature([ctx, *[p.replace(kind=inspect.Parameter.KEYWORD_ONLY) for p in params]],
-                                          return_annotation=ToolReturn)
-    hints = {k: v for k, v in control.run.__annotations__.items() if k not in (*HIDDEN, 'return')}
-    run.__annotations__ = {'ctx': RunContext[Turn], **hints, 'return': ToolReturn}
-    run.__doc__, run.__name__ = control.run.__doc__, control.slug
-    return Tool(run, name=control.slug, takes_ctx=True)
+    first = next(iter(inspect.signature(control.run).parameters))       # who asked: filled in from the turn
+    return _signed(run, control.run, control.slug, hidden=(first, *HIDDEN))
 
 
 RECALLED = 3          # hand-offs whose answers the model is reminded of: the most recent in the thread
@@ -154,13 +173,49 @@ def recall(history):
             'anything that changes the cart or an order still goes to Kitchen.\n\n' + '\n\n'.join(answers))
 
 
-def settings(text, login, shown):
+class Traced(WrapperModel):
+    """The chat model, with each call's time, tokens, cost or error written to the turn's trace."""
+
+    def __init__(self, wrapped, trace):
+        super().__init__(wrapped)
+        self.trace = trace
+
+    async def request(self, *args, **kwargs):
+        started = time.time()
+        try:
+            response = await super().request(*args, **kwargs)
+        except Exception as error:
+            self.trace.model(started, error=error)
+            raise
+        self.trace.model(started, response)
+        return response
+
+    @asynccontextmanager
+    async def request_stream(self, *args, **kwargs):
+        started, streamed = time.time(), None
+        try:
+            async with super().request_stream(*args, **kwargs) as streamed:
+                yield streamed
+        except Exception as error:
+            self.trace.model(started, _so_far(streamed), error)
+            raise
+        self.trace.model(started, _so_far(streamed))
+
+
+def _so_far(streamed):
+    try:
+        return streamed.get() if streamed is not None else None
+    except Exception:  # noqa: BLE001 - a response that broke midway has no usage to count
+        return None
+
+
+def settings(text, login, shown, trace=None):
     """What one turn runs with besides the model and the history: who asked, the owner's own notes (saved by
     their tap), their saved recipes, what other assistants answered earlier (as data) and the limits. The /ask route and the golden
-    tests both use this, so they run alike."""
+    tests both use this, so they run alike; only the /ask route passes a `trace`."""
     from ..engine import notes, recipes
     extra = '\n\n'.join(filter(None, (notes.for_ask(), recipes.for_ask(), recall(shown))))
-    return {'deps': Turn(text=text, login=login), 'instructions': extra or None,
+    return {'deps': Turn(text=text, login=login, trace=trace), 'instructions': extra or None,
             'usage_limits': UsageLimits(request_limit=REQUESTS_PER_TURN)}
 
 

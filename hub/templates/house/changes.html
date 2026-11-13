@@ -12,7 +12,7 @@
 {% if rows %}
 <ul class="checks">
 {% for r in rows %}
-  <li><span class="dot {{ 'bad' if r.not_sent or r.unknown else 'ok' }}" aria-hidden="true">●</span>
+  <li id="batch-{{ r.batch }}"><span class="dot {{ 'bad' if r.not_sent or r.unknown else 'ok' }}" aria-hidden="true">●</span>
     <div><strong>{{ (r.done + r.unknown + r.not_sent)|join(', ') }}</strong>
       <small>{{ r.when }} · {{ {'ask': 'from Ask', 'today': 'from Today', 'tap': 'from Today', 'undo': 'Undo'}.get(r.via, r.via) }}{% if r.undone %} · undone{% endif %}</small>
       {% if r.unknown %}<small class="warn-text">Home Assistant didn’t confirm: {{ r.unknown|join(', ') }}</small>{% endif %}

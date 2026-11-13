@@ -470,7 +470,10 @@ def test_a_failed_answer_shows_one_fixed_line_never_the_providers_words_and_stil
     assert errors == [routes.FAILED] and 'provider' not in reply.text and '12345' not in reply.text
     run = state.runs(routes.KIND)[0]
     assert (run['status'], run['luna_calls'], run['cost']) == ('error', 1, 0)
-    assert ready.get(f'/ask/threads/{THREAD}/messages').json() == []          # nothing half-finished is saved
+    saved = ready.get(f'/ask/threads/{THREAD}/messages').json()              # kept as a failed answer, never half an answer
+    assert [m['role'] for m in saved] == ['user', 'assistant']
+    said = ''.join(p.get('text', '') for p in saved[1]['parts'])
+    assert said == '**This answer failed.** ' + routes.FAILED and '12345' not in json.dumps(saved)
     monkeypatch.setattr(model, 'build', lambda: SCRIPTED)
     assert ask(ready, 'hello again')[0].status_code == 200                    # the thread is free again
 

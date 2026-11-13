@@ -1,0 +1,12 @@
+#!/bin/sh
+# Read Ask Hub's turn traces from the shell (read-only): the last turns, failed ones, or one turn by id.
+#   tools/ask-trace --last 5        tools/ask-trace --failed        tools/ask-trace TURN_ID --traceback
+# Needs only the system Python. The trace is ask-trace.db in Hub's data folder: $HUB_DATA_DIR, or else the
+# deployed Hub's folder (~/Developer/hub/var) when it exists, or else this checkout's var/.
+set -eu
+cd "$(dirname "$0")/.."
+if [ -z "${HUB_DATA_DIR:-}" ] && [ -d "$HOME/Developer/hub/var" ]; then
+  HUB_DATA_DIR="$HOME/Developer/hub/var"
+  export HUB_DATA_DIR
+fi
+exec /usr/bin/python3 -B -m hub.ask_trace "$@"

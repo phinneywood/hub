@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Ask activity · Hub{% endblock %}
+{% block body %}
+<p class="eyebrow">Settings</p>
+<h1 class="status-head">Ask activity</h1>
+<p class="note">Each Ask turn of the last {{ keep_days }} days: its model calls, every lookup and change it tried, how each answered,
+and any error. Messages, answers and what lookups returned are never kept here. From the shell: <code>tools/ask-trace --last 5</code>.</p>
+<p class="page-acts"><a class="btn small{{ ' primary' if not only_failed }}" href="/engine/ask-activity">All turns</a>
+<a class="btn small{{ ' primary' if only_failed }}" href="/engine/ask-activity?failed=1">Failed or with a tool error</a></p>
+{% if turns %}
+<ul class="checks trace">
+{% for t in turns %}
+  <li id="turn-{{ t.id }}"><span class="dot {{ 'ok' if t.status == 'ok' and not t.tool_errors else ('bad' if t.status != 'running' else '') }}" aria-hidden="true">●</span>
+  <div>
+    <strong>{{ t.when }} · {{ {'ok': 'Answered', 'failed': 'Failed', 'stopped': 'Stopped', 'running': 'Running'}.get(t.status, t.status) }}{% if t.tool_errors %} · {{ t.tool_errors }} tool error{{ 's' if t.tool_errors != 1 }}{% endif %}</strong>
+    <small>Turn {{ t.id }} · chat {{ t.thread }} · {{ t.seconds }} · {{ t.model_calls }} model call{{ 's' if t.model_calls != 1 }} ({{ t.model_ms }} ms, {{ t.tokens_in }} in / {{ t.tokens_out }} out, ${{ '%.4f' % t.cost }})</small>
+    {% if t.error_type %}<small class="warn-text">{{ t.error_type }}{% if t.error_message %}: {{ t.error_message }}{% endif %}</small>{% endif %}
+    {% for m in t.model_calls_list if m.error_type %}<small class="warn-text">Model call {{ m.seq }} failed after {{ m.ms }} ms: {{ m.error_type }}{% if m.error_message %}: {{ m.error_message }}{% endif %}</small>{% endfor %}
+    {% if t.tool_calls %}
+    <ol class="trace-tools">
+    {% for c in t.tool_calls %}
+      <li><b>{{ c.tool }}</b> <span class="trace-out {{ 'bad' if c.error_type or c.outcome in bad else '' }}">{{ c.outcome|replace('_', ' ') }}</span> <small>{{ c.ms }} ms</small>
+        {% if c.args != '{}' %}<code>{{ c.args }}</code>{% endif %}
+        {% if c.detail %}<small>{{ c.detail }}</small>{% endif %}
+        {% if c.error_type %}<small class="warn-text">{{ c.error_type }}{% if c.error_message %}: {{ c.error_message }}{% endif %}</small>{% endif %}
+        {% for ch in c.changes %}<small><a href="{{ ch.href }}">{{ 'Home change' if ch.table == 'house_changes' else 'Playlist change' }} {{ ch.batch }}</a>: {{ ch.action }} {{ ch.name }} → {{ ch.outcome }}{% if ch.undone %} · undone{% endif %}</small>{% endfor %}
+        {% if c.traceback %}<details><summary>Traceback</summary><pre>{{ c.traceback }}</pre></details>{% endif %}
+      </li>
+    {% endfor %}
+    </ol>
+    {% endif %}
+    {% for m in t.model_calls_list if m.traceback %}<details><summary>Model call {{ m.seq }} traceback</summary><pre>{{ m.traceback }}</pre></details>{% endfor %}
+    {% if t.traceback %}<details><summary>Turn traceback</summary><pre>{{ t.traceback }}</pre></details>{% endif %}
+  </div></li>
+{% endfor %}
+</ul>
+{% else %}<p class="note">{{ 'No failed turns.' if only_failed else 'No Ask turns yet.' }}</p>{% endif %}
+{% endblock %}

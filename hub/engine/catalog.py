@@ -3,7 +3,7 @@ import re
 from datetime import date, timedelta
 from typing import Literal
 
-from .. import home, today
+from .. import ask_trace, home, today
 from .waiting import card as chat_card
 from .recipes import Step as RecipeStep
 from .registry import Action, Control, Handoff, Lookup, Source
@@ -139,6 +139,12 @@ MAIL_KINDS = ('needs', 'calendar', 'record', 'expires', 'reading', 'noise')
 UNAVAILABLE = {'unavailable': 'Hub could not read this just now.'}
 
 
+def _unavailable(error):
+    """The answer for a source that couldn't be read. Its error goes on the Ask turn's trace, never to the model."""
+    ask_trace.noted(error)
+    return UNAVAILABLE
+
+
 def today_lookup() -> dict:
     """The owner's "Needs you" list for today: the few things that want attention, most urgent first."""
     from . import judge
@@ -180,24 +186,24 @@ def calendar_lookup() -> dict:
     """Events on the owner's main calendar for the next 7 days: titles, times and places."""
     try:
         return calendar_evidence()
-    except Exception:  # noqa: BLE001 - a lapsed sign-in or a quiet helper is an answer, not a crash
-        return UNAVAILABLE
+    except Exception as error:  # noqa: BLE001 - a lapsed sign-in or a quiet helper is an answer, not a crash
+        return _unavailable(error)
 
 
 def trip_lookup() -> dict:
     """The trip plan saved in Hub: its dates and whether flights are chosen."""
     try:
         return trip_evidence()
-    except Exception:  # noqa: BLE001
-        return UNAVAILABLE
+    except Exception as error:  # noqa: BLE001
+        return _unavailable(error)
 
 
 def network_lookup() -> dict:
     """The home network right now, in one line: whether the internet is up and what the readings say."""
     try:
         return network_evidence()
-    except Exception:  # noqa: BLE001
-        return UNAVAILABLE
+    except Exception as error:  # noqa: BLE001
+        return _unavailable(error)
 
 
 def house_items():
@@ -248,8 +254,8 @@ def home_lookup(room: str | None = None) -> dict:
     from ..tools.house import broker, read
     try:
         found = read.snapshot()
-    except broker.HomeDown:
-        return UNAVAILABLE
+    except broker.HomeDown as error:
+        return _unavailable(error)
     answer = {'read_at': found['read_at'].strftime('%H:%M'), 'lights_on': found['lights_on'],
               'thermostat': [_thing(d) for d in found['climate']], 'doors_and_alarm': [_thing(d) for d in found['security']],
               'scenes': [_thing(d)['name'] for d in found['scenes']]}
@@ -271,8 +277,8 @@ def music_lookup() -> dict:
     from ..tools.house import broker, read, zones
     try:
         found = read.snapshot()
-    except broker.HomeDown:
-        return UNAVAILABLE
+    except broker.HomeDown as error:
+        return _unavailable(error)
     players = {d['id']: d for d in found['speakers']}
 
     def zone(d):
@@ -317,8 +323,8 @@ def library_lookup(search: str | None = None, playlist: str | None = None) -> di
                 'recently_played': [name(r['name']) for r in music.recent()]}
     except control.Refused as error:
         return {'error': luna.clip(judge.scrub(str(error)), 600)}       # it may list playlist names
-    except music.MusicDown:
-        return UNAVAILABLE
+    except music.MusicDown as error:
+        return _unavailable(error)
 
 
 # ---- Controls: what Ask Hub may change when the owner asks. Recorded, with Undo on the Home changes page. ----
@@ -434,6 +440,7 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
         except control.Refused as error:
             return {'nothing_matched': f'{safe(error)} Nothing was played.'}
         except music.MusicDown as error:
+            ask_trace.noted(error)
             return {'unavailable': f'{error} Hub couldn’t look that up, so nothing was played.'}
         mates = [] if group_too is False else zones.mates(target, players)
         outside = [players[m] for m in here['members'] if m in players and m not in mates]
@@ -448,6 +455,7 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
     except control.Refused as error:
         return {'refused': safe(error)}
     except broker.HomeDown as error:
+        ask_trace.noted(error)
         return {'unavailable': str(error)}
     out = _changed(result)
     out['picked'] = f'{name}, {"a playlist of yours" if picked["mine"] and picked["kind"] == "playlist" else "from your library" if picked["mine"] else "from Apple Music"} ({picked["kind"]}). Tell the owner what you picked.'
@@ -526,6 +534,7 @@ def edit_playlist(login, action: Literal['create', 'add', 'remove', 'move', 'ren
     except music.Refused as error:
         return {'refused': safe(error)}
     except music.MusicDown as error:
+        ask_trace.noted(error)
         return {'unavailable': f'{error} Nothing was changed.' if isinstance(error, music.NotSent) else str(error)}
     out = _changed(result, 'Music Assistant')
     if out.get('undo'):
@@ -561,6 +570,7 @@ def remember(login, note: str, speakers: list[str] | None = None, *, said: str =
     except (notes.Refused, control.Refused) as error:
         return {'refused': safe(error)}
     except broker.HomeDown as error:
+        ask_trace.noted(error)
         return {'unavailable': f'{error} Nothing was proposed.'}
     out = {'needs_tap': f'Nothing is saved yet. The owner taps Save on the card below (or on the Notes page) to keep: '
                         f'“{safe(proposed["text"])}”. Say that.',
@@ -591,6 +601,7 @@ def propose_recipe(login, name: str, steps: list[RecipeStep], *, said: str = '')
     except recipes.Refused as error:
         return {'refused': safe(error)}
     except broker.HomeDown as error:
+        ask_trace.noted(error)
         return {'unavailable': f'{error} Nothing was proposed.'}
     lines = [safe(recipes.describe(s)) for s in proposed['steps']]
     return {'needs_tap': f'Nothing is saved yet. The owner taps Save on the card below (or on the Recipes page) to keep '
@@ -615,6 +626,7 @@ def run_recipe(login, name: str, *, said: str = '') -> dict:
     except recipes.Refused as error:
         return {'refused': safe(error)}
     except broker.HomeDown as error:
+        ask_trace.noted(error)
         return {'unavailable': str(error)}
     out = {'ran': safe(ran['ran']), 'steps': [{'step': safe(s['step']), **s['result']} for s in ran['steps']]}
     if ran.get('stopped'):
@@ -660,8 +672,8 @@ def spend_lookup() -> dict:
     from .. import insights
     try:
         spend = insights.spend()
-    except Exception:  # noqa: BLE001
-        return UNAVAILABLE
+    except Exception as error:  # noqa: BLE001
+        return _unavailable(error)
     return {'month': spend['month'],
             'limits': [{'covers': m['label'], 'spent': m['spent'], 'limit': m['cap'], 'percent_used': m['percent']} for m in spend['meters']],
             'runs_last_30_days': [{'kind': r['name'], 'runs': r['runs'], 'did_not_finish': r['failed'], 'model_calls': r['calls'],

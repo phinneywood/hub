@@ -277,3 +277,9 @@ textarea { width:100%; padding:.7rem .8rem; font:inherit; border:1px solid var(-
 .home-change { display:flex; align-items:center; justify-content:space-between; gap:.8rem; }
 .home-change form { margin:0; flex:none; }
 .page-acts { display:flex; flex-wrap:wrap; gap:.5rem; margin:0 0 1.25rem; }
+.trace-tools { margin:.35rem 0 0; padding-left:1.2rem; display:flex; flex-direction:column; gap:.35rem; }
+.trace-tools li { display:block; padding:0; border:0; overflow-wrap:anywhere; }
+.trace-tools small { display:block; }
+.trace code, .trace pre { font-size:.8rem; color:var(--mut); overflow-wrap:anywhere; white-space:pre-wrap; }
+.trace-out { font-size:.85rem; color:var(--ok); } .trace-out.bad { color:var(--bad); font-weight:600; }
+.trace details summary { cursor:pointer; color:var(--mut); font-size:.85rem; }

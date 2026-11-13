@@ -11,10 +11,10 @@ import threading
 from fastapi import APIRouter, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic_ai.messages import ModelResponse
+from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 
-from .. import home, luna
+from .. import ask_trace, home, luna
 from ..engine import friction, state
 from ..templating import render
 from . import agent, model, store
@@ -27,6 +27,7 @@ MESSAGE_LENGTH = 2000
 TURNS_SHOWN = 12              # how much of a long thread the model is shown
 THREAD_ID = re.compile(r'[A-Za-z0-9-]{8,64}')
 FAILED = 'Hub couldn’t finish that answer. Nothing was changed. Try again.'
+FAILED_CHANGED = 'Hub couldn’t finish that answer. Something may have changed: check Home changes before trying again.'
 _running, _lock = set(), threading.Lock()
 
 
@@ -108,7 +109,8 @@ def _turns(history):
 @router.post('/threads/{thread_id}/improve')
 async def improve(thread_id: str, request: Request):
     """“Improve this” under an answer: files a brief of what Hub could and couldn't do on that turn, at once.
-    `turn` counts the owner's messages before that answer, from 0. No message or answer text is kept."""
+    `turn` counts the owner's messages before that answer, from 0. No message or answer text is kept. A failed
+    answer is saved too, so it can be improved; its trace adds how it failed and how each tool answered."""
     from ..engine import improve as improvements
     if not _thread(thread_id):
         return _error(404, 'No such chat.')
@@ -122,7 +124,9 @@ async def improve(thread_id: str, request: Request):
     turns = _turns(await run_in_threadpool(store.history, thread_id))
     if not 0 <= turn < len(turns):
         return _error(404, 'Hub can’t find that answer any more.')
-    entry = await run_in_threadpool(lambda: improvements.file(improvements.brief_for(turns[turn]), source='ask', login=login))
+    traced = await run_in_threadpool(lambda: ask_trace.turn(trace_id(turns[turn])) if trace_id(turns[turn]) else None)
+    entry = await run_in_threadpool(lambda: improvements.file(improvements.brief_for(turns[turn], trace=traced),
+                                                              source='ask', login=login))
     return {'ok': True, 'said': 'Filed for the next building session. It’s on Today and the Engine page.', 'id': entry['id']}
 
 
@@ -133,14 +137,68 @@ def delete(thread_id: str):
     return {'ok': True}
 
 
-def _record(day, status, result=None):
-    """Counts and cost only. A run that failed still counts one call against the day."""
+def trace_id(messages):
+    """The trace of a saved turn, from its answer, or None for turns saved before traces."""
+    return next((m.provider_details['hub_turn'] for m in reversed(messages) if isinstance(m, ModelResponse)
+                 and isinstance(m.provider_details, dict) and m.provider_details.get('hub_turn')), None)
+
+
+def failed_turn(text, trace):
+    """What a failed turn leaves in its thread: the owner's message and an answer that says it failed, what Hub
+    tried and whether anything may have changed, so the thread shows what happened and “Improve this” finds it.
+    Tool names and outcome kinds only, never what a lookup returned."""
+    names = agent.describe()
+    words = {'read': 'read', 'unavailable': 'couldn’t read it', 'error': 'broke', 'done': 'done', 'asked': 'asked'}
+    tried = [f'{names.get(c.tool, {}).get("name", c.tool)} ({words.get(c.outcome, c.outcome.replace("_", " "))})'
+             for c in trace.calls]
+    said = '**This answer failed.** ' + (FAILED_CHANGED if trace.changed() else FAILED)
+    if tried:
+        said += '\n\nWhat Hub tried: ' + ', '.join(tried) + '.'
+    return [ModelRequest(parts=[UserPromptPart(content=text)]),
+            ModelResponse(parts=[TextPart(content=said)], finish_reason='error',
+                          provider_details={'hub_turn': trace.id, 'hub_failed': True})]
+
+
+def _record(day, status, result=None, trace=None):
+    """Counts and cost only. A run that failed counts the model calls it made, and at least one, against the day."""
     if result is None:
-        return state.record_run(day, KIND, status, luna_calls=1)
+        calls = max(1, trace.model_calls if trace else 0)
+        return state.record_run(day, KIND, status, luna_calls=calls, tokens_in=trace.tokens_in if trace else 0,
+                                tokens_out=trace.tokens_out if trace else 0, cost=trace.cost if trace else 0)
     usage = result.usage
     cost = sum(float((m.provider_details or {}).get('cost') or 0) for m in result.new_messages() if isinstance(m, ModelResponse))
     state.record_run(day, KIND, status, luna_calls=usage.requests, tokens_in=usage.input_tokens or 0,
                      tokens_out=usage.output_tokens or 0, cost=cost)
+
+
+def _watched(adapter, trace):
+    """The adapter, with the error that ends a run kept on the turn's trace before the page gets its fixed line."""
+    build = adapter.build_event_stream
+
+    def build_event_stream():
+        events = build()
+        report = events.on_error
+
+        async def on_error(error):
+            trace.fail(error)
+            async for chunk in report(error):
+                yield chunk
+        events.on_error = on_error
+        return events
+    adapter.build_event_stream = build_event_stream
+    return adapter
+
+
+def _end_failed(thread_id, history, text, day, trace):
+    """A turn that didn't finish: saved as a failed answer, counted, and traced. Never raises."""
+    try:
+        store.save(thread_id, history + failed_turn(text, trace))
+    except Exception as error:  # noqa: BLE001 - the trace still says what happened
+        trace.fail(error)
+    try:
+        _record(day, 'error', trace=trace)
+    finally:
+        trace.finish('failed' if trace.error else 'stopped')
 
 
 @router.post('/threads/{thread_id}/chat')
@@ -177,29 +235,37 @@ async def chat(thread_id: str, request: Request):
         return _error(400, 'That message couldn’t be read.')
     day = _day()
     older, shown = store.recent(await run_in_threadpool(store.history, thread_id), TURNS_SHOWN)
+    trace = await run_in_threadpool(ask_trace.Trace, thread_id)
     done = []
 
     def on_complete(result):
-        store.save(thread_id, older + result.all_messages())
+        messages = result.all_messages()
+        answer = next((m for m in reversed(messages) if isinstance(m, ModelResponse)), None)
+        if answer is not None:
+            answer.provider_details = {**(answer.provider_details or {}), 'hub_turn': trace.id}
+        store.save(thread_id, older + messages)
         _record(day, 'ok', result)
         friction.from_turn(text, result.new_messages(), shown)   # scrubbed one-liners for the morning's fix cards
         done.append(True)
 
-    adapter = VercelAIAdapter(agent=agent.build(), run_input=run_input, accept=request.headers.get('accept'),
-                              sdk_version=7, manage_message_history='server')
-    # Who asked, the owner's saved notes, what Kitchen answered before (as data) and the limits.
-    settings = await run_in_threadpool(agent.settings, text, request.headers.get('tailscale-user-login'), shown)
-    events = adapter.run_stream(model=chat_model, message_history=shown, on_complete=on_complete, **settings)
+    adapter = _watched(VercelAIAdapter(agent=agent.build(), run_input=run_input, accept=request.headers.get('accept'),
+                                       sdk_version=7, manage_message_history='server'), trace)
+    # Who asked, the owner's saved notes, what Kitchen answered before (as data), the limits and the turn's trace.
+    settings = await run_in_threadpool(agent.settings, text, request.headers.get('tailscale-user-login'), shown, trace)
+    events = adapter.run_stream(model=agent.Traced(chat_model, trace), message_history=shown, on_complete=on_complete,
+                                **settings)
 
     async def stream():
         try:
             async for chunk in events:
-                if getattr(chunk, 'type', '') == 'error':
-                    chunk = chunk.model_copy(update={'error_text': FAILED})   # never a provider's or library's own words
+                if getattr(chunk, 'type', '') == 'error':   # never a provider's or library's own words
+                    chunk = chunk.model_copy(update={'error_text': FAILED_CHANGED if trace.changed() else FAILED})
                 yield chunk
         finally:
             _running.discard(thread_id)
-            if not done:
-                _record(day, 'error')
+            if done:
+                trace.finish('ok')
+            else:
+                _end_failed(thread_id, older + shown, text, day, trace)
 
     return adapter.streaming_response(stream())

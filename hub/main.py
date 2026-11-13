@@ -320,6 +320,21 @@ def engine_forget(instruction_id: int = Form(...)):
     return RedirectResponse("/engine", status_code=303)
 
 
+@app.get("/engine/ask-activity", response_class=HTMLResponse)
+def ask_activity(request: Request, failed: str = ""):
+    """Recent Ask turns from the trace: tool calls, outcomes, errors and the change rows they made. Reads only."""
+    from datetime import datetime
+    from . import ask_trace, home as summaries
+    rows = ask_trace.turns(500 if failed else 60)
+    if failed:
+        rows = [r for r in rows if r["status"] != "ok" or r["tool_errors"]][:60]
+    for r in rows:
+        r["when"] = datetime.fromtimestamp(r["started"], summaries.PACIFIC).strftime("%b %d, %H:%M:%S")
+        r["seconds"] = f"{r['ended'] - r['started']:.1f} s" if r["ended"] else "still running"
+    return render(request, "ask/activity.html", active="engine", turns=rows, only_failed=bool(failed),
+                  keep_days=ask_trace.KEEP_DAYS, bad=ask_trace.NOT_DONE)
+
+
 NOTE_WORDS = {"saved": "Saved. Ask Hub and the overnight review follow it from now on.", "skipped": "Not saved."}
 
 

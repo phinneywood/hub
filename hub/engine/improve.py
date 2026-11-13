@@ -2,7 +2,8 @@
 
 "Improve this" under an Ask answer files one right away. The brief is one paragraph about what Hub could and
 couldn't do on that turn: which tools it used, how each control or hand-off answered, in Hub's own words, and
-whether the answer said it couldn't. It never holds the owner's message, the reply, mail, or anything a lookup
+whether the answer said it couldn't. When the turn has a trace (hub/ask_trace.py), it adds each tool's outcome and
+exception type and, for a failed answer, how it failed; an exception's own words only when Hub wrote them to be shown. It never holds the owner's message, the reply, mail, or anything a lookup
 returned, so it is safe to show on Today and to hand to a coding session. The owner adds what they wanted when
 the Manager asks.
 
@@ -105,8 +106,9 @@ def _outcome(tool, content, controls):
     return f'{tool} ({"done" if kind else "answered"})'
 
 
-def brief_for(turn_messages, when=None):
-    """One paragraph for an Ask turn (its model messages), or None when there is nothing to say."""
+def brief_for(turn_messages, when=None, trace=None):
+    """One paragraph for an Ask turn (its model messages), or None when there is nothing to say. With the turn's
+    trace (ask_trace.turn), the tools and their outcomes come from it, and a failed answer says how it failed."""
     from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart
     from . import catalog
     controls = {c.slug for c in catalog.controls()} | {h.slug for h in catalog.handoffs()}
@@ -117,9 +119,16 @@ def brief_for(turn_messages, when=None):
     reply = ''.join(p.content for m in turn_messages if isinstance(m, ModelResponse) for p in m.parts if isinstance(p, TextPart))
     when = when or datetime.now(home.PACIFIC)
     can = ', '.join(sorted(controls))
+    from .. import ask_trace
+    traced = ask_trace.failure(trace)
+    failed = bool(trace and trace['status'] in ('failed', 'stopped'))
+    if trace and trace['tool_calls']:
+        used_line = ''                        # the trace names every tool and how it answered
+    else:
+        used_line = ('Hub used: ' + '; '.join(dict.fromkeys(used)) + '.') if used else 'Hub answered without using a tool.'
     parts = [f'From Ask on {when:%b} {when.day}: the owner tapped “Improve this” on an answer.',
-             ('Hub used: ' + '; '.join(dict.fromkeys(used)) + '.') if used else 'Hub answered without using a tool.',
-             'The answer said Hub couldn’t do something.' if SAYS_CANT.search(reply) else '',
+             used_line, traced or '',
+             'The answer said Hub couldn’t do something.' if SAYS_CANT.search(reply) and not failed else '',
              f'Ask can change things only through: {can}.',
              'The owner’s message and the answer are not included; ask the owner what they wanted.']
     return ' '.join(p for p in parts if p)

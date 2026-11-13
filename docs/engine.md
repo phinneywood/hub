@@ -244,7 +244,27 @@ question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page 
   can change. It never holds the owner's message, the answer, mail or anything a lookup returned. Briefs
   go to `improvement-requests.json` in the private data folder (owner-only), where the Manager reads them;
   each shows on Today for a day and on the Engine page until removed. Hub never edits or deploys its own
-  code.
+  code. With the turn's trace (below), the brief also lists each tool's outcome and exception type and, for a
+  failed answer, how it failed; an exception's own message only for Hub's own show-safe errors (`SAFE_TYPES`).
+- **Failed answers are kept**: a turn that doesn't finish (a model call fails, a limit is hit, the page closes)
+  is saved in its thread as the owner's message and an answer that starts "This answer failed.", names what
+  Hub tried (tool names and outcome kinds, never what a lookup returned) and says "Nothing was changed" only
+  when no control or hand-off went through; otherwise it points to Home changes. The model sees that answer on
+  later turns, and "Improve this" works on it.
+- **Ask trace** (`hub/ask_trace.py`): one record per turn in `ask-trace.db` in the private data folder
+  (owner-only, kept 14 days): thread, timings, each model call's time, tokens, cost or error, and each tool
+  call with its arguments (scrubbed of links and addresses, clipped), how it answered (read, done,
+  unavailable, refused, … plus Hub's own words for anything not done) and, on an error, the exception type,
+  a one-line message and the traceback. A source that catches its own failure and answers "unavailable"
+  (`catalog._unavailable`, `ask_trace.noted`) still leaves its exception on the call. Never the owner's
+  message, the answer or what a lookup returned; tracebacks live only in that file. `hub.log` gets one line
+  per turn: `ask turn=… thread=… status=ok|failed|stopped ms=… model_ms=… model_calls=… tools=… tool_errors=…`
+  and an exception type, never text. **Ask activity** (`/engine/ask-activity`, from Settings and the Engine
+  page, signed-in only) lists recent turns, their tool calls, outcomes, errors and tracebacks, with links to
+  the Home changes and Playlists rows each control made (matched by time, `via='ask'`). From the shell,
+  read-only and with the system Python: `tools/ask-trace --last 5`, `tools/ask-trace --failed`,
+  `tools/ask-trace TURN_ID --traceback` (`--json` for scripts; the turn id is in `hub.log`). It reads
+  `$HUB_DATA_DIR`, or the deployed Hub's `~/Developer/hub/var` when that exists.
 - **Friction and fix cards** (`hub/engine/friction.py`): during the day Hub keeps short, scrubbed lines about
   where it got in the way: a control or hand-off that refused, wasn't available, matched nothing or wasn't
   confirmed (in Hub's own words), an answer that said Hub couldn't (none of its words), an Ask change undone
