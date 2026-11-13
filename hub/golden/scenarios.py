@@ -123,7 +123,7 @@ SCENARIOS = (
         tags=('recipes',), given=(('great room music', GREAT_ROOM),)),
     Scenario(
         'lights-room-off',
-        'Turning a room’s lights off touches that room’s lights and nothing else.',
+        'Turning a room’s lights off touches every light in that room, even one named like the room, and nothing else.',
         ('turn off the lights in the {living_room}',),
         (c.Called('home_control', device='{living_room}', action='off'),
          c.Changed('light/turn_off', room='living_room'),
@@ -131,7 +131,8 @@ SCENARIOS = (
          c.NotCalled('play_music', 'edit_playlist', 'kitchen'), c.PlainReply()),
         ((Use('home_status'), Use('home_control', device='{living_room}', action='off'),
           Say('The {living_room} lights are off.')),),
-        harmless=True, tags=('lights',)),
+        harmless=True, tags=('lights',),
+        seed='A light named like its room was taken for the whole room, so only that one light went off.'),
     Scenario(
         'lights-dim-one-lamp',
         'Dimming one lamp sets that lamp’s brightness and nothing else.',

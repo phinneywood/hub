@@ -16,6 +16,7 @@ AREAS = [{'area_id': 'living', 'name': 'Living Room'}, {'area_id': 'kitchen', 'n
 ENTITIES = [
     ('light.reading_lamp', 'living', 'Reading Lamp', 'on', {'brightness': 200}),
     ('light.living_ceiling', 'living', 'Ceiling Light', 'on', {'brightness': 255}),
+    ('light.living_room', 'living', 'Living room', 'on', {'brightness': 120}),     # a light named like its room
     ('light.kitchen_pendant', 'kitchen', 'Kitchen Pendant', 'on', {'brightness': 180}),
     ('light.bedside', 'bedroom', 'Bedside Lamp', 'off', {}),
     ('switch.coffee', 'kitchen', 'Coffee Maker', 'off', {}),

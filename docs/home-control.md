@@ -56,6 +56,9 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   `play_music` (play, pause, skip, volume, group). The model names a device, room or speaker from
   `home_status` and `music_now`; Hub resolves it to an entity it keeps and checks the action twice
   (`control.py`, then `broker.WRITES`). Who asked comes from the signed-in request, never from the model.
+  A name that is both a room and a device means the room (owner, 2026-11-13): "turn off the living room"
+  turns off every light there, even one that is itself called "Living room", and "play in the living room"
+  uses that room's speaker. A device is reached by a name no room has, or by its entity id.
   The owner can set the "Change lights, plugs, scenes and speakers" action to Suggest only on the Engine
   page, and then Ask changes nothing.
 - **"As well" means in sync** (2026-11-13). "Play it in the kitchen as well", "there too" or "in both" joins

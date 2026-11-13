@@ -303,22 +303,41 @@ def recent(limit=30):
     return [{**summary(b), 'ts': whens[b][0], 'login': whens[b][1], 'via': whens[b][2]} for b in batches]
 
 
+ALL_LIGHTS = ('all lights', 'all the lights', 'every light', 'lights')
+
+
+def _in_room(wanted, kinds, found):
+    """Entity ids for a room the owner named, or []: its lights, or its speakers (the one named like the room first).
+    A room wins over a device with the same name (owner, 2026-11-13): "turn off the living room" means every light
+    there, even when one light is itself called "Living room"."""
+    names = {r['name'].lower(): r['name'] for r in found['rooms']}
+    names.update({d['room'].lower(): d['room'] for d in found['speakers'] if d.get('room')})
+    out = []
+    if 'light' in kinds:
+        room = names.get(wanted.removesuffix(' lights').removesuffix(' light').strip())
+        rows = next((r['devices'] for r in found['rooms'] if r['name'] == room), [])
+        out += [d['id'] for d in rows if d['kind'] == 'light']
+    if 'media_player' in kinds and wanted in names:
+        speakers = [d for d in found['speakers'] if d.get('room') == names[wanted]]
+        out += [d['id'] for d in sorted(speakers, key=lambda d: d['name'].lower() != wanted)]
+    return out
+
+
 def resolve(target, kinds, found=None):
-    """Entity ids for what the owner named: a device, a room (its lights) or "all lights". Raises Refused."""
+    """Entity ids for what the owner named: a room (its lights, or its speakers), "all lights", or a device by
+    its name. A name that is both a room and a device means the room; a device is reached by a name no room has.
+    Raises Refused."""
     found = found if found is not None else read.snapshot()
     pool = [d for d in devices(found).values() if d['kind'] in kinds]
-    wanted = ' '.join(str(target or '').lower().split())
+    wanted = ' '.join(str(target or '').lower().split()).removeprefix('the ')
+    if 'light' in kinds and wanted in ALL_LIGHTS:
+        return [d['id'] for d in pool if d['kind'] == 'light']
+    room = _in_room(wanted, kinds, found)
+    if room:
+        return room
     exact = [d['id'] for d in pool if wanted in (d['name'].lower(), d['id'])]
     if exact:
         return exact
-    if 'light' in kinds:
-        if wanted in ('all lights', 'all the lights', 'every light', 'lights'):
-            return [d['id'] for d in pool if d['kind'] == 'light']
-        room = next((r for r in found['rooms'] if r['name'].lower() == wanted.removesuffix(' lights').strip()), None)
-        if room:
-            lights = [d['id'] for d in room['devices'] if d['kind'] == 'light']
-            if lights:
-                return lights
     near = [d['name'] for d in pool if wanted and wanted in d['name'].lower()]
     if len(near) == 1:
         return [d['id'] for d in pool if d['name'] == near[0]]
