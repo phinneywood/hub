@@ -308,7 +308,7 @@ def library_lookup(search: str | None = None, playlist: str | None = None) -> di
                                if p['editable'] and p['where'] != 'other' else 'no'} for p in lists[:LIBRARY_ITEMS]],
                 'recently_played': [name(r['name']) for r in music.recent()]}
     except control.Refused as error:
-        return {'error': str(error)}
+        return {'error': luna.clip(judge.scrub(str(error)), 600)}       # it may list playlist names
     except music.MusicDown:
         return UNAVAILABLE
 
@@ -325,11 +325,11 @@ def _refusal(login):
     return None
 
 
-def _changed(result):
+def _changed(result, service='Home Assistant'):
     out = {'done': result['done']}
     if result['unknown']:
         out['not_confirmed'] = result['unknown']
-        out['note'] = 'Home Assistant didn’t confirm these. Say so; never say they were done.'
+        out['note'] = f'{service} didn’t confirm these. Say so; never say they were done.'
     if result['not_sent']:
         out['not_done'] = result['not_sent']
     if result['undo']:
@@ -371,10 +371,9 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
         found = read.snapshot()
         [target] = control.resolve(speaker, ('media_player',), found)[:1]
         members = [m for name in with_speakers or () for m in control.resolve(name, ('media_player',), found)[:1]]
-        if action == 'play_media' and kind == 'playlist' and what:
-            what = music.playlist_uri(what) or what     # a library playlist by its exact name, not a search hit
-        return _changed(control.change([target], action, login=login, via='ask', value=volume_percent, query=what,
-                                       kind=kind, members=members))
+        address = music.playlist_uri(what) if action == 'play_media' and kind == 'playlist' and what else None
+        return _changed(control.change([target], action, login=login, via='ask', value=volume_percent,
+                                       query=address or what, label=what, kind=kind, members=members))
     except control.Refused as error:
         return {'refused': str(error)}
 
@@ -386,8 +385,12 @@ def edit_playlist(login, action: Literal['create', 'add', 'remove', 'move', 'ren
     ("Title – Artist"). `action`: create (a new Music Assistant playlist, with songs if given), add (songs to
     the end), remove (songs), move (songs[0] to `position`, 1 = first), rename (to new_name) or delete.
     Apple Music playlists can only gain songs. Delete never happens here: Hub shows the owner a page to confirm it."""
+    from .. import luna
     from ..tools.house import music
-    from . import state
+    from . import judge, state
+
+    def safe(text):
+        return luna.clip(judge.scrub(str(text)), 600)     # refusals may carry playlist and song names
     if login is None:
         return {'refused': 'Changes to playlists need the owner signed in on their phone or laptop.'}
     if state.trust(next(a for a in ACTIONS if a.slug == 'house.playlists')) == 'suggest':  # `action` is the argument here
@@ -399,7 +402,7 @@ def edit_playlist(login, action: Literal['create', 'add', 'remove', 'move', 'ren
         if action == 'delete':
             chosen = music.find(playlist)
             music.check_editable(chosen)
-            return {'needs_tap': f'Nothing is deleted yet. The owner confirms deleting “{chosen["name"]}” on the '
+            return {'needs_tap': f'Nothing is deleted yet. The owner confirms deleting “{safe(chosen["name"])}” on the '
                                  'Playlists page linked below; it can’t be undone.'}
         if action == 'create':
             result = music.create(playlist, songs, login=login, via='ask')
@@ -412,15 +415,16 @@ def edit_playlist(login, action: Literal['create', 'add', 'remove', 'move', 'ren
         else:
             result = music.rename(playlist, new_name, login=login, via='ask')
     except music.Refused as error:
-        return {'refused': str(error)}
+        return {'refused': safe(error)}
     except music.MusicDown as error:
         return {'unavailable': f'{error} Nothing was changed.' if isinstance(error, music.NotSent) else str(error)}
-    out = _changed(result)
+    out = _changed(result, 'Music Assistant')
     if out.get('undo'):
         out['undo'] = 'The owner can undo this for a day on the Playlists page.'
-    for key in ('missing', 'note'):
-        if result.get(key):
-            out['songs_not_found' if key == 'missing' else key] = result[key]
+    if result.get('missing'):
+        out['songs_not_found'] = [safe(m) for m in result['missing']]
+    if result.get('note'):
+        out['note'] = ' '.join(filter(None, (out.get('note'), result['note'])))
     return out
 
 

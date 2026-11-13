@@ -61,7 +61,7 @@ def devices(found):
     return {d['id']: d for d in rows}
 
 
-def _steps(d, action, value=None, query=None, kind=None, members=()):
+def _steps(d, action, value=None, query=None, kind=None, members=(), label=None):
     """(steps, words): the broker requests for one device, and what was done in plain words."""
     e, name = d['id'], d['name']
     if action not in ACTIONS.get(d['kind'], ()):
@@ -96,13 +96,17 @@ def _steps(d, action, value=None, query=None, kind=None, members=()):
             level = QUIET if value is None else max(0, min(100, int(value))) / 100
             steps.append(('media_player', 'volume_set', {'entity_id': e, 'volume_level': level}))
         steps.append(('music_assistant', 'play_media', {'entity_id': e, 'media_id': query, 'media_type': kind, 'enqueue': 'replace'}))
-        return steps, f'{name} playing “{query}”'
+        return steps, f'{name} playing “{_clip(label) or query}”'   # a playlist's name, not its library address
     if action == 'group':
         others = [m for m in members if m != e]
         if not others:
             raise Refused('Say which speakers to group with it.')
         return [('media_player', 'join', {'entity_id': e, 'group_members': others})], f'{name} grouped'
     return [('media_player', 'unjoin', {'entity_id': e})], f'{name} on its own'
+
+
+def _clip(text):
+    return ' '.join(str(text or '').split())[:200]
 
 
 def _level(value):
@@ -160,7 +164,7 @@ def _report(batch, rows):
             'undo': any(r['undoable'] and r['outcome'] != 'not_sent' for r in rows)}
 
 
-def change(targets, action, *, login, via, value=None, query=None, kind=None, members=()):
+def change(targets, action, *, login, via, value=None, query=None, kind=None, members=(), label=None):
     """Make one kind of change to one or more devices (entity ids). Returns what happened, per device."""
     if not targets:
         raise Refused('Nothing to change.')
@@ -173,7 +177,7 @@ def change(targets, action, *, login, via, value=None, query=None, kind=None, me
         if entity not in found:
             raise Refused('Hub can’t control that. It changes lights, plugs, fans, scenes and speakers only.')
         chosen.append(found[entity])
-    plans = [(d, *_steps(d, action, value, query, kind, members)) for d in chosen]
+    plans = [(d, *_steps(d, action, value, query, kind, members, label)) for d in chosen]
     _spend(len(plans))
     batch, now, rows = uuid.uuid4().hex[:12], time.time(), []
     for d, steps, words in plans:

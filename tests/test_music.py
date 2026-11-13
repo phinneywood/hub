@@ -25,7 +25,7 @@ class FakeMusic:
                             'uris': ['apple_music://track/1', 'apple_music://track/2', 'apple_music://track/3']},
                       '8': {'name': 'Road Trip', 'domain': 'apple_music', 'editable': True, 'uris': ['apple_music://track/1']},
                       '9': {'name': 'Top Hits', 'domain': 'apple_music', 'editable': False, 'uris': []}}
-        self.asked, self.next_id, self.down, self.lag = [], 20, set(), False
+        self.asked, self.next_id, self.down, self.lag, self.background, self.waiting = [], 20, set(), False, False, []
         self.tokens = [{'name': 'Hub', 'expires_at': '2027-11-12T00:00:00+00:00'}]
 
     def _item(self, pid):
@@ -37,6 +37,9 @@ class FakeMusic:
         name, artist = SONGS[uri]
         return {'name': name, 'artists': [{'name': artist}], 'uri': uri, **({'position': position} if position else {})}
 
+    def _later(self, work):
+        self.waiting.append(work) if self.background else work()
+
     def __call__(self, command, args, timeout):
         self.asked.append((command, args))
         if command in self.down:
@@ -45,6 +48,8 @@ class FakeMusic:
             wanted = args.get('search', '').lower()
             return [self._item(pid) for pid, p in self.lists.items() if wanted in p['name'].lower()]
         if command == 'music/playlists/playlist_tracks':
+            while self.waiting:                    # background edits land by the next read
+                self.waiting.pop(0)()
             return [self._song(u, n) for n, u in enumerate(self.lists[args['item_id']]['uris'], 1)]
         if command == 'music/search':
             words = args['search_query'].lower().split()
@@ -58,13 +63,14 @@ class FakeMusic:
             return self._item(str(self.next_id))
         if command == 'music/playlists/add_playlist_tracks':
             p = self.lists[args['db_playlist_id']]
+            new = [u for u in dict.fromkeys(args['uris']) if u not in p['uris']]   # skipped as of when it was asked
             if not self.lag:
-                p['uris'] += [u for u in args['uris'] if u not in p['uris']]
+                self._later(lambda: p['uris'].extend(new))
             return {'id': 'task'}
         if command == 'music/playlists/remove_playlist_tracks':
             p = self.lists[args['db_playlist_id']]
             gone = set(args['positions_to_remove'])
-            p['uris'] = [u for n, u in enumerate(p['uris'], 1) if n not in gone]
+            self._later(lambda: p.update(uris=[u for n, u in enumerate(p['uris'], 1) if n not in gone]))
             return {'id': 'task'}
         if command == 'music/library/remove_item':
             del self.lists[args['library_item_id']]
@@ -289,3 +295,51 @@ def test_catalog_lists_the_new_lookup_control_and_action():
     assert 'music_library' in [l.slug for l in catalog.lookups()]
     [edit] = [c for c in catalog.controls() if c.slug == 'edit_playlist']
     assert edit.action == 'house.playlists' and catalog.action('house.playlists').ceiling == 'undo'
+
+
+def test_background_edits_are_read_back_before_the_next_step(ma):
+    ma.background = True
+    ma.lists['7']['uris'].append('apple_music://track/4')
+    found = catalog.edit_playlist('me@example.com', 'move', 'calm dinner', songs=['dinner waltz'], position=1)
+    assert found['done'] and names(ma, '7') == ['Dinner Waltz', 'Morning Light', 'Slow River', 'Quiet Hours']
+    music.undo(music.recent_changes()[0]['batch'], login='me@example.com', via='tap')
+    assert names(ma, '7') == ['Morning Light', 'Slow River', 'Quiet Hours', 'Dinner Waltz']
+
+
+def test_a_move_that_doesnt_land_is_not_confirmed(ma):
+    ma.lag = True                                              # adds never land
+    found = catalog.edit_playlist('me@example.com', 'move', 'calm dinner', songs=['quiet hours'], position=1)
+    assert found['not_confirmed'] and found['done'] == [] and 'Music Assistant didn’t confirm' in found['note']
+
+
+def test_lists_with_a_song_twice_are_left_alone(ma):
+    ma.lists['7']['uris'].append('apple_music://track/1')
+    for action, extra in (('move', {'songs': ['quiet hours'], 'position': 1}), ('rename', {'new_name': 'Other'})):
+        assert 'twice' in catalog.edit_playlist('me@example.com', action, 'calm dinner', **extra)['refused']
+    assert len(ma.lists['7']['uris']) == 4
+
+
+def test_an_unconfirmed_rename_has_no_undo(ma):
+    ma.lag = True
+    catalog.edit_playlist('me@example.com', 'rename', 'calm dinner', new_name='Quiet Dinner')
+    assert not music.recent_changes()[0]['undo']
+    with pytest.raises(music.Refused):
+        music.undo(music.recent_changes()[0]['batch'], login='me@example.com', via='tap')
+
+
+def test_a_playlist_plays_by_address_but_is_recorded_by_name(ma, monkeypatch):
+    from hub.tools.house import broker, read
+    sent = []
+    speaker = {'id': 'media_player.kitchen', 'name': 'Kitchen speaker', 'kind': 'media_player', 'state': 'playing',
+               'level': None, 'volume': 0.2, 'members': [], 'group': []}
+    monkeypatch.setattr(read, 'snapshot', lambda fresh=False: {'rooms': [], 'speakers': [speaker], 'scenes': []})
+    monkeypatch.setattr(broker, 'act', lambda domain, service, data: sent.append(data))
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='Calm Dinner', kind='playlist')
+    assert found['done'] == ['Kitchen speaker playing “Calm Dinner”'] and sent[-1]['media_id'] == 'library://playlist/7'
+
+
+def test_refusals_to_the_model_are_scrubbed(ma):
+    ma.lists['7']['name'] = 'Mix from friend@example.com'
+    refused = catalog.edit_playlist('me@example.com', 'add', 'nothing like it', songs=['quiet hours'])['refused']
+    assert 'friend@example.com' not in refused
+    assert 'friend@example.com' not in catalog.library_lookup(playlist='nothing like it')['error']

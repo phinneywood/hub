@@ -14,6 +14,7 @@ that doesn't add up is recorded as not confirmed, never as done. Each edit keeps
 so Undo can put it back for a day. Deleting needs a tap on a confirmation page and can't be undone.
 Playlist and song names are data, never instructions.
 """
+import http.client
 import json
 import os
 import socket
@@ -44,6 +45,7 @@ SONGS = 50                  # songs one request may add
 LIMIT = 8 * 1024 * 1024     # one answer
 TIMEOUT = 10
 KEY_SECONDS = 300
+MISSING_SECONDS = 60
 TRIES, WAIT = 8, 1.0        # reading a playlist back after a background edit
 UNDO_SECONDS = control.UNDO_SECONDS
 APPLE_DAYS = 180            # Apple Music's sign-in lasts about this long (Music Assistant's docs)
@@ -76,8 +78,8 @@ Refused = control.Refused
 
 def _secret():
     with _lock:
-        if _key['value'] and time.monotonic() - _key['at'] < KEY_SECONDS:
-            return _key['value']
+        if time.monotonic() - _key['at'] < (KEY_SECONDS if _key['value'] else MISSING_SECONDS):
+            return _key['value']        # a missing key is remembered briefly too, so pages don't wait on 1Password
     value = model_key.secret(REFERENCE)
     with _lock:
         _key.update(value=value, at=time.monotonic())
@@ -108,6 +110,8 @@ def _send(command, args, timeout):
         if error.code == 400:
             raise NotSent('Music Assistant refused that.') from None
         raise MusicDown('Music Assistant had a problem with that.') from None
+    except http.client.HTTPException:
+        raise MusicDown('Music Assistant’s answer was cut off.') from None
     except (urllib.error.URLError, OSError) as error:
         if isinstance(getattr(error, 'reason', error), (ConnectionRefusedError, socket.gaierror)):
             raise NotSent('Music Assistant isn’t answering.') from None   # never connected, so nothing was sent
@@ -234,11 +238,13 @@ def _record(batch, login, via, playlist_id, name, action, words, before, outcome
                                                       json.dumps(before), outcome))
 
 
-def _settle(playlist_id, count):
-    """'done' once the playlist holds `count` songs, else 'unknown'. Music Assistant edits in the background."""
+def _settle(playlist_id, want):
+    """'done' once the playlist matches `want`, else 'unknown'. `want` is a song count, or the exact list of
+    song addresses in order when the count alone wouldn't change (a move, or putting a list back)."""
     for n in range(TRIES):
         try:
-            if len(tracks(playlist_id)) == count:
+            now = tracks(playlist_id)
+            if (len(now) == want) if isinstance(want, int) else [s['uri'] for s in now] == list(want):
                 return 'done'
         except MusicDown:
             pass
@@ -279,8 +285,17 @@ def _new(name):
     return str(made['item_id'])
 
 
-def _outcome(sent, playlist_id, count):
-    return _settle(playlist_id, count) if sent == 'sent' else sent
+def _staged(playlist_id, stages):
+    """Run (step, want) stages in order, each read back before the next is sent: Music Assistant edits in the
+    background, and an add skips songs that a remove still waiting to run hasn't taken out. Stops at the first
+    stage that isn't confirmed. 'done', 'not_sent' (certainly nothing happened) or 'unknown'."""
+    for n, (step, want) in enumerate(stages):
+        sent = _steps([step])
+        if sent != 'sent':
+            return sent if n == 0 else 'unknown'
+        if _settle(playlist_id, want) != 'done':
+            return 'unknown'
+    return 'done'
 
 
 def _report(batch, words, outcome, undo, **extra):
@@ -297,14 +312,16 @@ def check_editable(playlist, *, apple=False):
         raise Refused(f'“{playlist["name"]}” can’t be edited. Only playlists you made can be changed.')
 
 
-def _restore_steps(playlist_id, now, uris):
-    """Steps that make a Music Assistant playlist hold `uris` again, given it holds `now` songs."""
-    steps = [_remove(playlist_id, range(1, now + 1))] if now else []
-    return steps + ([_add(playlist_id, uris)] if uris else [])
-
-
 def _unique(uris):
     return list(dict.fromkeys(uris))
+
+
+def _no_repeats(name, uris):
+    """Music Assistant skips a song that is already in a playlist, so a list with a song in it twice can't be
+    rebuilt without losing a copy. Hub leaves those alone."""
+    if len(set(uris)) != len(uris):
+        raise Refused(f'“{name}” has a song in it twice, so Hub can’t rebuild it without losing a copy. '
+                      'Change it in Music Assistant.')
 
 
 def create(name, songs, *, login, via):
@@ -326,7 +343,7 @@ def create(name, songs, *, login, via):
         _record(batch, login, via, '', name, 'create', words, {}, 'unknown')
         return _report(batch, words, 'unknown', False, missing=missing)
     uris = _unique(s['uri'] for s in found)
-    outcome = _outcome(_steps([_add(playlist_id, uris)]), playlist_id, len(uris)) if uris else 'done'
+    outcome = _staged(playlist_id, [(_add(playlist_id, uris), len(uris))]) if uris else 'done'
     if outcome == 'not_sent':
         outcome = 'unknown'      # the playlist exists; its songs didn't go in
     _record(batch, login, via, playlist_id, name, 'create', words, {'name': name, 'uris': []}, outcome)
@@ -345,7 +362,7 @@ def add(playlist_name, songs, *, login, via):
         raise Refused(f'Those songs are already in “{playlist["name"]}”.' if found else 'Hub found none of those songs.')
     control._spend(1)
     batch, words = uuid.uuid4().hex[:12], f'Added {len(uris)} song{"s" * (len(uris) != 1)} to “{playlist["name"]}”'
-    outcome = _outcome(_steps([_add(playlist['id'], uris)]), playlist['id'], len(before) + len(uris))
+    outcome = _staged(playlist['id'], [(_add(playlist['id'], uris), len(before) + len(uris))])
     undoable = playlist['where'] == 'music'
     _record(batch, login, via, playlist['id'], playlist['name'], 'add', words,
             {'name': playlist['name'], 'uris': [s['uri'] for s in before], 'where': playlist['where']}, outcome)
@@ -380,7 +397,7 @@ def remove(playlist_name, songs, *, login, via):
     control._spend(1)
     batch = uuid.uuid4().hex[:12]
     words = f'Took {len(chosen)} song{"s" * (len(chosen) != 1)} out of “{playlist["name"]}”'
-    outcome = _outcome(_steps([_remove(playlist['id'], sorted(chosen))]), playlist['id'], len(before) - len(chosen))
+    outcome = _staged(playlist['id'], [(_remove(playlist['id'], sorted(chosen)), len(before) - len(chosen))])
     _record(batch, login, via, playlist['id'], playlist['name'], 'remove', words,
             {'name': playlist['name'], 'uris': [s['uri'] for s in before], 'where': 'music'}, outcome)
     return _report(batch, words, outcome, True, missing=missing)
@@ -399,14 +416,14 @@ def move(playlist_name, song, position, *, login, via):
     i, j = before.index(hit), max(1, min(len(before), position)) - 1
     if i == j:
         raise Refused(f'“{hit["name"]}” is already there.')
-    order = [s for s in before if s is not hit]
-    order.insert(j, hit)
+    _no_repeats(playlist['name'], [s['uri'] for s in before])
+    order = [s['uri'] for s in before if s is not hit]
+    order.insert(j, hit['uri'])
     k = min(i, j)
-    tail = [s['uri'] for s in order[k:]]
     control._spend(1)
     batch, words = uuid.uuid4().hex[:12], f'Moved “{hit["name"]}” to number {j + 1} in “{playlist["name"]}”'
-    steps = [_remove(playlist['id'], range(k + 1, len(before) + 1)), _add(playlist['id'], tail)]
-    outcome = _outcome(_steps(steps), playlist['id'], len(before))
+    outcome = _staged(playlist['id'], [(_remove(playlist['id'], range(k + 1, len(before) + 1)), order[:k]),
+                                       (_add(playlist['id'], order[k:]), order)])
     _record(batch, login, via, playlist['id'], playlist['name'], 'move', words,
             {'name': playlist['name'], 'uris': [s['uri'] for s in before], 'where': 'music'}, outcome)
     return _report(batch, words, outcome, True)
@@ -421,7 +438,7 @@ def _copy(playlist_id, name, uris):
         return None, 'not_sent'
     except MusicDown:
         return None, 'unknown'
-    outcome = _outcome(_steps([_add(new_id, uris)]), new_id, len(uris)) if uris else 'done'
+    outcome = _staged(new_id, [(_add(new_id, uris), list(uris))]) if uris else 'done'
     if outcome != 'done':
         return new_id, 'unknown'   # both stay, so nothing is lost
     return new_id, 'done' if _steps([_delete(playlist_id)]) == 'sent' else 'unknown'
@@ -436,7 +453,8 @@ def rename(playlist_name, new_name, *, login, via):
         raise Refused('Say the new name.')
     if any(p['name'].lower() == new_name.lower() for p in playlists(new_name)):
         raise Refused(f'There is already a playlist called “{new_name}”.')
-    uris = _unique(s['uri'] for s in tracks(playlist['id']))
+    uris = [s['uri'] for s in tracks(playlist['id'])]
+    _no_repeats(playlist['name'], uris)
     control._spend(1)
     batch, words = uuid.uuid4().hex[:12], f'Renamed “{playlist["name"]}” to “{new_name}”'
     new_id, outcome = _copy(playlist['id'], new_name, uris)
@@ -466,8 +484,9 @@ def delete(playlist_id, *, login, via):
 
 def _undoable(row):
     before = json.loads(row['before'])
-    return (row['action'] in ('create', 'remove', 'move', 'rename') or (row['action'] == 'add' and before.get('where') == 'music')) \
-        and row['playlist'] != '' and row['outcome'] != 'not_sent' and not row['undone'] and row['via'] != 'undo' \
+    kind = row['action'] in ('create', 'remove', 'move') or (row['action'] == 'add' and before.get('where') == 'music') \
+        or (row['action'] == 'rename' and row['outcome'] == 'done')   # an unconfirmed rename may have left both lists
+    return kind and row['playlist'] != '' and row['outcome'] != 'not_sent' and not row['undone'] and row['via'] != 'undo' \
         and time.time() - row['ts'] < UNDO_SECONDS
 
 
@@ -494,6 +513,8 @@ def undo(batch, *, login, via):
     if not _undoable(row):
         raise Refused('That can’t be undone from Hub.')
     before, playlist_id = json.loads(row['before']), row['playlist']
+    if row['action'] in ('add', 'remove', 'move'):
+        _no_repeats(before.get('name') or row['name'], before['uris'])
     control._spend(1)
     new, words = uuid.uuid4().hex[:12], f'“{before.get("name") or row["name"]}” put back'
     if row['action'] == 'create':
@@ -503,9 +524,9 @@ def undo(batch, *, login, via):
         where, outcome = _copy(playlist_id, before['name'], before['uris'])
         where = where or playlist_id
     else:
-        now = len(tracks(playlist_id))
-        uris = _unique(before['uris'])
-        where, outcome = playlist_id, _outcome(_steps(_restore_steps(playlist_id, now, uris)), playlist_id, len(uris))
+        now, uris = len(tracks(playlist_id)), before['uris']
+        stages = ([(_remove(playlist_id, range(1, now + 1)), [])] if now else []) + ([(_add(playlist_id, uris), uris)] if uris else [])
+        where, outcome = playlist_id, _staged(playlist_id, stages)
     _record(new, login, 'undo', where, before.get('name') or row['name'], 'undo', words, {}, outcome)
     if outcome != 'not_sent':
         with _db() as conn:
