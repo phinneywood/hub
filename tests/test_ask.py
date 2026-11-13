@@ -180,12 +180,13 @@ def test_every_lookup_is_complete_and_the_agent_has_exactly_these_tools():
     built = agent.build()
     tools = built._function_toolset.tools
     controls = catalog.controls()
-    assert [c.slug for c in controls] == ['home_control', 'play_music', 'edit_playlist']
+    assert [c.slug for c in controls] == ['home_control', 'play_music', 'edit_playlist', 'remember']
     assert set(tools) == {l.slug for l in found} | {h.slug for h in handoffs} | {c.slug for c in controls}
     assert not tools['kitchen'].function_schema.json_schema.get('properties')   # the model can't put words in the owner's mouth
     for c in controls:   # the model never says who asked: that comes from the signed-in request
         assert 'login' not in tools[c.slug].function_schema.json_schema['properties'] and c.run.__doc__
-        assert catalog.action(c.action).ceiling == 'undo'
+        assert 'said' not in tools[c.slug].function_schema.json_schema['properties']   # the owner's words come from the turn
+        assert catalog.action(c.action).ceiling == ('suggest' if c.slug == 'remember' else 'undo')   # a note needs a tap
     assert not any(tool.requires_approval for tool in tools.values())   # house changes are undoable; Kitchen's cart needs its own tap
     assert set(agent.describe()) == set(tools) and agent.describe()['kitchen']['handoff']
 
@@ -537,3 +538,12 @@ def test_the_engine_record_holds_counts_and_cost_never_text(ready):
     with closing(hub_store.db()) as conn:
         rows = [dict(r) for r in conn.execute('select * from engine_runs')] + [dict(r) for r in conn.execute('select * from activity')]
     assert rows and 'emails need me' not in json.dumps(rows) and 'Dental' not in json.dumps(rows)
+
+
+def test_saved_notes_reach_the_model_on_later_chats(ready):
+    ask(ready, 'What needs me today?', headers={**ORIGIN, **OWNER})
+    assert 'Standing notes' not in ''.join(m.instructions or '' for m in SEEN[-1] if isinstance(m, ModelRequest))
+    state.add_instruction('Kitchen and Living room are one space: play music there together')
+    ask(ready, 'What needs me today?', headers={**ORIGIN, **OWNER})
+    given = ''.join(m.instructions or '' for m in SEEN[-1] if isinstance(m, ModelRequest))
+    assert 'Standing notes the owner saved' in given and 'one space: play music there together' in given

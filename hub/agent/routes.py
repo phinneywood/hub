@@ -16,7 +16,7 @@ from pydantic_ai.messages import ModelResponse
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 
 from .. import home, luna
-from ..engine import state
+from ..engine import notes, state
 from ..templating import render
 from . import agent, model, store
 
@@ -149,8 +149,9 @@ async def chat(thread_id: str, request: Request):
                               sdk_version=7, manage_message_history='server')
     turn = agent.Turn(text=text, login=request.headers.get('tailscale-user-login'))
     earlier = await run_in_threadpool(agent.recall, shown)     # what Kitchen answered before, as data
+    saved = await run_in_threadpool(notes.for_ask)             # the owner's own standing notes, saved by their tap
     events = adapter.run_stream(model=chat_model, message_history=shown, on_complete=on_complete, deps=turn,
-                                instructions=earlier or None,
+                                instructions='\n\n'.join(filter(None, (saved, earlier))) or None,
                                 usage_limits=UsageLimits(request_limit=agent.REQUESTS_PER_TURN))
 
     async def stream():

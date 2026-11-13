@@ -374,8 +374,11 @@ def test_ask_controls(fake, monkeypatch):
         'done': ['Kettle off'], 'undo': 'The owner can undo this for a day on the Home changes page.'}
     assert catalog.home_control('me@example.com', 'counter lights', 'brightness', 30)['done'] == ['Counter lights at 30%']
     assert 'Which one?' in catalog.home_control('me@example.com', 'front door', 'off')['refused']
+    assert 'already play together' in catalog.play_music('me@example.com', 'living room', 'group', with_speakers=['kitchen speaker'])['refused']
+    fake['states'][6]['attributes']['group_members'] = []                   # the living room plays on its own
     found = catalog.play_music('me@example.com', 'living room', 'group', with_speakers=['kitchen speaker'])
-    assert found['done'] == ['Living room grouped']
-    assert sent(fake)[-1] == ('media_player/join', {'entity_id': 'media_player.living_room', 'group_members': ['media_player.kitchen']})
+    assert found['done'] == ['Kitchen speaker joined Living room at 15%']   # an idle speaker joins at the group's volume
+    assert sent(fake)[-2:] == [('media_player/volume_set', {'entity_id': 'media_player.kitchen', 'volume_level': 0.15}),
+                               ('media_player/join', {'entity_id': 'media_player.living_room', 'group_members': ['media_player.kitchen']})]
     state.set_trust(catalog.action('house.control'), 'suggest')
     assert 'Suggest only' in catalog.home_control('me@example.com', 'kettle', 'on')['refused']

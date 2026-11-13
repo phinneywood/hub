@@ -12,11 +12,13 @@ What can change (Music Assistant 2.10.9, docs/home-control.md):
 Adds and removes run in the background in Music Assistant, so Hub reads the playlist back to confirm; one
 that doesn't add up is recorded as not confirmed, never as done. Each edit keeps the track list from before,
 so Undo can put it back for a day. Deleting needs a tap on a confirmation page and can't be undone.
+Making a playlist from Ask waits for a tap too (`propose`), and a name that reads like a sentence is refused.
 Playlist and song names are data, never instructions.
 """
 import http.client
 import json
 import os
+import re
 import socket
 import threading
 import time
@@ -56,7 +58,14 @@ create table if not exists music_changes(
   id integer primary key autoincrement, batch text not null, ts real not null, login text, via text not null,
   playlist text not null, name text not null, action text not null, words text not null, before text not null,
   outcome text not null, undone integer not null default 0);
+create table if not exists music_proposals(
+  id text primary key, ts real not null, login text, name text not null, songs text not null,
+  status text not null default 'waiting');
 """
+NAME_WORDS = 6               # a playlist name longer than this reads like a sentence
+SENTENCE = re.compile(r"[.?;]$|\b(remember|from now on|you should|should you|please|could you|can you|would you|"
+                      r"i want|i'd like|make sure|keep in mind|when you|so that)\b", re.I)
+PROPOSAL_SECONDS = 24 * 3600
 
 _lock = threading.Lock()
 _key = {'value': None, 'at': float('-inf')}
@@ -358,11 +367,51 @@ def _no_repeats(name, uris):
                       'Change it in Music Assistant.')
 
 
-def create(name, songs, *, login, via):
-    """A new Music Assistant playlist, with these songs. Undo deletes it."""
+def check_name(name):
+    """A playlist name, or Refused when it is empty or reads like a sentence or an instruction rather than a name."""
     name = _clip(name)
     if not name:
         raise Refused('Say what to call the playlist.')
+    if len(name.split()) > NAME_WORDS or SENTENCE.search(name):
+        raise Refused('That reads like a sentence, not a playlist name, so Hub made no playlist. Ask the owner for a short name.')
+    return name
+
+
+def propose(name, songs, *, login):
+    """Keep a playlist the owner asked Ask to make, for their tap on the Playlists page. Returns its id."""
+    name = check_name(name)
+    phrases = [_clip(p, 200) for p in songs or () if _clip(p, 200)]
+    if len(phrases) > SONGS:
+        raise Refused(f'At most {SONGS} songs at a time.')
+    if any(p['name'].lower() == name.lower() for p in playlists(name)):
+        raise Refused(f'There is already a playlist called “{name}”.')
+    proposal_id = uuid.uuid4().hex[:12]
+    with _db() as conn:
+        conn.execute('insert into music_proposals(id, ts, login, name, songs) values (?,?,?,?,?)',
+                     (proposal_id, time.time(), login, name, json.dumps(phrases)))
+    return proposal_id
+
+
+def proposals():
+    """Playlists waiting for the owner's tap, newest first."""
+    with _db() as conn:
+        rows = conn.execute("select * from music_proposals where status = 'waiting' and ts > ? order by ts desc",
+                            (time.time() - PROPOSAL_SECONDS,)).fetchall()
+    return [{**dict(r), 'songs': json.loads(r['songs'])} for r in rows]
+
+
+def proposal(proposal_id):
+    return next((p for p in proposals() if p['id'] == str(proposal_id)[:12]), None)
+
+
+def settle(proposal_id, status):
+    with _db() as conn:
+        conn.execute("update music_proposals set status = ? where id = ? and status = 'waiting'", (status, str(proposal_id)[:12]))
+
+
+def create(name, songs, *, login, via):
+    """A new Music Assistant playlist, with these songs. Undo deletes it."""
+    name = check_name(name)
     found, missing = _songs(songs) if songs else ([], [])
     if any(p['name'].lower() == name.lower() for p in playlists(name)):
         raise Refused(f'There is already a playlist called “{name}”.')
@@ -482,8 +531,8 @@ def rename(playlist_name, new_name, *, login, via):
     """Rename a Music Assistant playlist. Hub copies it to the new name and removes the old one."""
     playlist = find(playlist_name)
     check_editable(playlist)
-    new_name = _clip(new_name)
-    if not new_name or new_name.lower() == playlist['name'].lower():
+    new_name = check_name(new_name)
+    if new_name.lower() == playlist['name'].lower():
         raise Refused('Say the new name.')
     if any(p['name'].lower() == new_name.lower() for p in playlists(new_name)):
         raise Refused(f'There is already a playlist called “{new_name}”.')

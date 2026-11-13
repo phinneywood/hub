@@ -14,7 +14,7 @@ Code: `hub/engine/`. Owner's page: `/engine`.
 | Record and limits | Every run with its calls and cost; daily and monthly stops | `state.py` |
 
 Standing instructions (“What you’ve asked for” on the Engine page) are the owner's plain-words
-guidance. They steer judgement. They cannot add a source or an action.
+guidance. They steer judgement and are given to Ask Hub on every turn. They cannot add a source or an action.
 
 ## Adding something
 
@@ -26,7 +26,8 @@ guidance. They steer judgement. They cannot add a source or an action.
   It starts at “suggest”. Raise `ceiling` only when the code has a reversible one-tap route (`undo`):
   a `post` route for Today, or an Ask `Control` that names the action and records each run with Undo.
   `auto` needs an `auto` function as well, and stays a separate owner decision per action.
-- **A standing instruction**: typed by the owner in “Ask Hub” on the Engine page. No code.
+- **A standing instruction**: typed by the owner in “Ask Hub” on the Engine page, or saved with a tap from
+  a note Ask proposed (see “Remember by tap”). No code.
 - **A hand-off**: one `Handoff(...)` in `HANDOFFS`, for another assistant Ask Hub may pass the owner's
   message to (see “Hand-offs” under Ask Hub). Adding one is an owner decision: it sends chat text
   somewhere new.
@@ -202,8 +203,19 @@ question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page 
 - **What it can change** (`Control` entries in `CONTROLS`, docs/home-control.md): lights, plugs and
   scenes (`home_control`), the speakers (`play_music`) and playlists (`edit_playlist`), only when the
   owner's latest message asks, only for a signed-in owner, and never when the control's action is set to
-  Suggest only. Each change is recorded with Undo for a day. Deleting a playlist never happens in the chat:
-  it points to a confirmation page instead.
+  Suggest only. Each change is recorded with Undo for a day. Making or deleting a playlist never happens in
+  the chat: the owner taps Make playlist or Delete on the Playlists page. A control can be given the owner's
+  message exactly as typed (`said`, from the turn, never from the model) to check that the owner asked:
+  making, renaming or deleting a playlist needs the message to ask for one, and "as well" in a play request
+  joins the playing room.
+- **Remember by tap** (`remember`, `hub/engine/notes.py`): when the owner asks Hub to remember something or
+  to do something from now on, Ask proposes one short note (at most 160 characters). Hub refuses it unless
+  the owner's typed message asks to remember and most of the note's words come from that message, so text
+  from mail, pages or device names can't become a note. It waits a day on the Notes page (`/engine/notes`),
+  with the owner's message beside it; only a tap on Save from a signed-in device puts it into the standing
+  instructions. A note about speakers playing together keeps them as a zone (docs/home-control.md). Saved
+  notes are listed and removed on the Notes page and the Engine page. The chat page has no card of its own
+  for this yet (its rebuild needs Node); the answer links to the Notes page.
 - **What the model sees**: what each lookup's `sends` says and no more. Mail is sender names and subject
   lines with links and addresses taken out, one kind at a time, at most 10, never from a sender with AI
   switched off. Today's list passes a mail item's title only, because its second line names senders.

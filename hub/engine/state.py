@@ -40,12 +40,12 @@ def instructions():
 
 
 def add_instruction(text):
+    """Save one standing instruction. Its id, or False when it is empty or the list is full."""
     text = ' '.join(str(text).split())[:INSTRUCTION_LENGTH]
     if not text or len(instructions()) >= MAX_INSTRUCTIONS:
         return False
     with closing(store.db()) as conn, conn:
-        conn.execute('insert into engine_instructions(text, created_at) values(?,?)', (text, time.time()))
-    return True
+        return conn.execute('insert into engine_instructions(text, created_at) values(?,?)', (text, time.time())).lastrowid
 
 
 def remove_instruction(instruction_id):

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Notes · Hub{% endblock %}
+{% block body %}
+<p class="eyebrow">Engine</p>
+<h1 class="status-head">Notes</h1>
+{% if problem %}<p class="banner warn">{{ problem }}</p>{% endif %}
+{% if said %}<p class="banner ok">{{ said }}</p>{% endif %}
+<h2>Waiting for you</h2>
+{% if waiting %}
+<ul class="checks">
+{% for p in waiting %}
+  <li><div><strong>{{ p.text }}</strong>
+      <small>Ask Hub proposed this from your message: “{{ p.said }}”</small>
+      {% if p.zone %}<small>These speakers will play music together: {{ p.zone|join(', ') }}</small>{% endif %}
+    </div>
+    <form method="post" action="/engine/notes/{{ p.id }}/save"><button class="btn small primary"{% if full %} disabled{% endif %}>Save</button></form>
+    <form method="post" action="/engine/notes/{{ p.id }}/skip"><button class="btn small quiet">Not now</button></form>
+  </li>
+{% endfor %}
+</ul>
+{% if full %}<p class="note">The list holds at most 12 notes. Remove one below first.</p>{% endif %}
+{% else %}<p class="note">Nothing waiting. Ask Hub proposes a note when you ask it to remember something; it waits here for a day.</p>{% endif %}
+<h2>Saved</h2>
+<ul class="checks">
+{% for i in saved %}
+  <li><div><strong>{{ i.text }}</strong>
+      {% if i.zone %}<small>Speakers that play together: {{ i.zone|join(', ') }}</small>{% endif %}</div>
+    <form method="post" action="/engine/notes/remove"><input type="hidden" name="instruction_id" value="{{ i.id }}"><button class="btn small quiet">Remove</button></form></li>
+{% else %}<li><div><small>Nothing saved yet.</small></div></li>
+{% endfor %}
+</ul>
+<p class="note">Saved notes guide Ask Hub and the overnight review. They can’t give Hub new powers. Removing a note removes its speaker zone too.</p>
+{% endblock %}

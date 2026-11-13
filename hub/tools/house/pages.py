@@ -88,7 +88,7 @@ def _playlists(request, problem='', done=''):
         r['when'] = datetime.fromtimestamp(r['ts'], home.PACIFIC).strftime('%a %-I:%M %p')
     return render(request, "house/playlists.html", active="house", lists=lists, rows=rows, links=read.links(),
                   where=music.WHERE_WORDS, problem=problem[:200], unreadable=unreadable,
-                  banner=music.summary(done) if done else None)
+                  banner=music.summary(done) if done else None, waiting=music.proposals())
 
 
 @router.get("/playlists", response_class=HTMLResponse)
@@ -133,3 +133,27 @@ def undo_playlist(batch: str, request: Request):
     except (music.Refused, music.MusicDown) as error:
         return _playlists(request, problem=str(error))
     return RedirectResponse(f'/house/playlists?done={result["batch"]}', status_code=303)
+
+
+@router.post("/playlists/make/{proposal_id}")
+def make_playlist(proposal_id: str, request: Request):
+    """The owner's tap on a playlist Ask proposed: only now is it made."""
+    from . import music
+    if _login(request) is None:
+        return HTMLResponse("Make playlists from your phone or laptop.", status_code=403)
+    found = music.proposal(proposal_id)
+    if found is None:
+        return _playlists(request, problem='That playlist isn’t waiting any more. Ask again in the chat.')
+    try:
+        result = music.create(found['name'], found['songs'], login=_login(request), via='tap')
+    except (music.Refused, music.MusicDown) as error:
+        return _playlists(request, problem=str(error))
+    music.settle(found['id'], 'made')
+    return RedirectResponse(f'/house/playlists?done={result["batch"]}', status_code=303)
+
+
+@router.post("/playlists/skip/{proposal_id}")
+def skip_playlist(proposal_id: str):
+    from . import music
+    music.settle(proposal_id, 'skipped')
+    return RedirectResponse('/house/playlists', status_code=303)

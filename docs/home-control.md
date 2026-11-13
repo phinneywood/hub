@@ -57,7 +57,20 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   `home_status` and `music_now`; Hub resolves it to an entity it keeps and checks the action twice
   (`control.py`, then `broker.WRITES`). Who asked comes from the signed-in request, never from the model.
   The owner can set the "Change lights, plugs, scenes and speakers" action to Suggest only on the Engine
-  page, and then Ask changes nothing. For security devices Ask will show an approval card instead
+  page, and then Ask changes nothing.
+- **"As well" means in sync** (2026-11-13). "Play it in the kitchen as well", "there too" or "in both" joins
+  that speaker to the group already playing, never a second stream. Hub checks the owner's typed message
+  itself (the model never supplies it), so a `play_media` call for such a message becomes a join; with two
+  different rooms playing, Ask asks which one. A joining speaker that was silent starts at the playing
+  room's volume. Each joined speaker is its own row in the change record: Undo takes it out of the group
+  and puts its volume back, and leaves the first room playing.
+- **Speaker zones** (2026-11-13). Speakers in one space (an open-plan room) can be a zone. A zone comes from
+  a note the owner saved with a tap (see "Remember by tap" in docs/engine.md), which keeps the speakers beside
+  the note, or from the private `household.json` → `home.speaker_zones` (a list of zones, each a list of
+  speaker entity ids or names). Playing in one room of a zone plays in all of them, joined and at the same
+  volume, in one change with one Undo, unless the owner says "only here". Zones never bring in a speaker
+  outside the zone: a speaker grouped with others outside it still plays alone or asks first, as before.
+  `music_now` tells the model each speaker's zone mates. Removing the note removes its zone. For security devices Ask will show an approval card instead
   (step 5). Device names and states reach Ask's model only over its zero-retention route.
 - **No Home page of its own.** Home Assistant already has dashboards, so `/house` opens Home Assistant
   (its address is in the private settings file, `household.json` → `home.assistant_url`, with
@@ -168,9 +181,11 @@ Apple Music on the web can do the edits its API can't, in the owner's signed-in 
 4. **Automations.** Ask drafts one in plain words; nothing is created until the owner taps Create.
    Hub marks the ones it makes and only edits or deletes those; one that touches locks, the garage or
    the alarm is flagged on the card.
-5. **Playlists by API.** Built on a branch: the `music_library` lookup, the `edit_playlist` control
+5. **Playlists by API.** Built: the `music_library` lookup, the `edit_playlist` control
    (create, add, remove, move, rename; add only for Apple Music), the Playlists page with Undo and the
-   delete confirmation, playing a library playlist by its exact name, and "Needs you" lines a month
+   delete confirmation, making a playlist only on the owner's tap there (2026-11-13: Ask had made one named
+   with the owner's sentence; now create, rename and delete need the owner's message to ask for a playlist,
+   checked in code, and a name that reads like a sentence is refused), playing a library playlist by its exact name, and "Needs you" lines a month
    before the Apple Music sign-in or Hub's key run out. Trust: "Edit playlists" on the Engine page.
 6. **Thermostat**, once its Home Assistant setup is finished and reads are checked.
 7. **Apple Music edits through Chrome**, only if the owner wants them.

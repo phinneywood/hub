@@ -163,11 +163,11 @@ def test_library_lookup(ma, monkeypatch):
 
 
 def test_create_and_undo(ma):
-    found = catalog.edit_playlist('me@example.com', 'create', 'Sunday', songs=['dinner waltz', 'no such song'])
-    assert found['done'] == ['Made playlist “Sunday” with 1 songs'] and found['songs_not_found'] == ['no such song']
+    found = music.create('Sunday', ['dinner waltz', 'no such song'], login='me@example.com', via='tap')
+    assert found['done'] == ['Made playlist “Sunday” with 1 songs'] and found['missing'] == ['no such song']
     new = next(pid for pid, p in ma.lists.items() if p['name'] == 'Sunday')
     assert names(ma, new) == ['Dinner Waltz']
-    assert 'already a playlist' in catalog.edit_playlist('me@example.com', 'create', 'sunday')['refused']
+    assert 'already a playlist' in catalog.edit_playlist('me@example.com', 'create', 'sunday', said='make a playlist Sunday')['refused']
     batch = music.recent_changes()[0]['batch']
     music.undo(batch, login='me@example.com', via='tap')
     assert new not in ma.lists
@@ -191,7 +191,7 @@ def test_add_remove_move_and_undo_put_the_list_back(ma):
 
 
 def test_rename_copies_then_removes_the_old_one(ma):
-    found = catalog.edit_playlist('me@example.com', 'rename', 'calm dinner', new_name='Quiet Dinner')
+    found = catalog.edit_playlist('me@example.com', 'rename', 'calm dinner', new_name='Quiet Dinner', said='Rename the Calm Dinner playlist')
     assert found['done'] == ['Renamed “Calm Dinner” to “Quiet Dinner”'] and '7' not in ma.lists
     new = next(pid for pid, p in ma.lists.items() if p['name'] == 'Quiet Dinner')
     assert names(ma, new) == ['Morning Light', 'Slow River', 'Quiet Hours']
@@ -201,7 +201,7 @@ def test_rename_copies_then_removes_the_old_one(ma):
 
 def test_a_copy_that_doesnt_fill_keeps_both_and_is_not_confirmed(ma):
     ma.lag = True
-    found = catalog.edit_playlist('me@example.com', 'rename', 'calm dinner', new_name='Quiet Dinner')
+    found = catalog.edit_playlist('me@example.com', 'rename', 'calm dinner', new_name='Quiet Dinner', said='Rename the Calm Dinner playlist')
     assert found['not_confirmed'] == ['Renamed “Calm Dinner” to “Quiet Dinner”'] and 'Both playlists' in found['note']
     assert '7' in ma.lists and found['done'] == []
 
@@ -212,12 +212,13 @@ def test_apple_playlists_only_gain_songs(ma):
     assert not music.recent_changes()[0]['undo']
     for action, extra in (('remove', {'songs': ['morning light']}), ('rename', {'new_name': 'X'}), ('delete', {}),
                           ('move', {'songs': ['morning light'], 'position': 1})):
-        assert 'Apple Music playlist' in catalog.edit_playlist('me@example.com', action, 'road trip', **extra)['refused']
+        assert 'Apple Music playlist' in catalog.edit_playlist('me@example.com', action, 'road trip', **extra,
+                                                               said='rename or delete the road trip playlist')['refused']
     assert 'can’t be edited' in catalog.edit_playlist('me@example.com', 'add', 'top hits', songs=['quiet hours'])['refused']
 
 
 def test_ask_never_deletes_and_needs_a_signed_in_owner_and_trust(ma):
-    found = catalog.edit_playlist('me@example.com', 'delete', 'calm dinner')
+    found = catalog.edit_playlist('me@example.com', 'delete', 'calm dinner', said='Delete the Calm Dinner playlist')
     assert 'Nothing is deleted yet' in found['needs_tap'] and '7' in ma.lists
     assert 'signed in' in catalog.edit_playlist(None, 'add', 'calm dinner', songs=['dinner waltz'])['refused']
     state.set_trust(catalog.action('house.playlists'), 'suggest')
@@ -315,13 +316,13 @@ def test_a_move_that_doesnt_land_is_not_confirmed(ma):
 def test_lists_with_a_song_twice_are_left_alone(ma):
     ma.lists['7']['uris'].append('apple_music://track/1')
     for action, extra in (('move', {'songs': ['quiet hours'], 'position': 1}), ('rename', {'new_name': 'Other'})):
-        assert 'twice' in catalog.edit_playlist('me@example.com', action, 'calm dinner', **extra)['refused']
+        assert 'twice' in catalog.edit_playlist('me@example.com', action, 'calm dinner', **extra, said='rename it')['refused']
     assert len(ma.lists['7']['uris']) == 4
 
 
 def test_an_unconfirmed_rename_has_no_undo(ma):
     ma.lag = True
-    catalog.edit_playlist('me@example.com', 'rename', 'calm dinner', new_name='Quiet Dinner')
+    catalog.edit_playlist('me@example.com', 'rename', 'calm dinner', new_name='Quiet Dinner', said='Rename the Calm Dinner playlist')
     assert not music.recent_changes()[0]['undo']
     with pytest.raises(music.Refused):
         music.undo(music.recent_changes()[0]['batch'], login='me@example.com', via='tap')
@@ -392,7 +393,9 @@ def house(ma, monkeypatch):
                 world[m]['members'] = [x for x in world[m]['members'] if x != data['entity_id']]
             s['members'] = []
         elif service == 'join':
-            s['members'] = list(data['group_members'])
+            s['members'] = sorted(set(s['members']) | set(data['group_members']))
+            for m in data['group_members']:
+                world[m]['members'] = sorted({data['entity_id'], *s['members']} - {m})
         elif service == 'volume_set':
             s['volume'] = data['volume_level']
         elif service in ('play_media', 'media_play'):
@@ -459,3 +462,157 @@ def test_music_that_did_not_start_is_said_plainly(house):
     house['media_player.living_room']['members'] = house['media_player.kitchen']['members'] = []
     found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='calm piano')
     assert found['not_confirmed'] and 'isn’t playing' in found['note']
+
+
+# ---- "As well" joins the music already playing; zones play together; playlists only when asked ----
+
+def _apart(house, playing=None, volume=0.15):
+    """The two rooms on their own, one of them playing."""
+    house['media_player.living_room']['members'] = house['media_player.kitchen']['members'] = []
+    if playing:
+        house[playing].update(state='playing', volume=volume)
+
+
+def _zone(house):
+    """The owner says the living room and the kitchen are one space, and taps Save."""
+    from hub.engine import notes
+    proposed = notes.propose('Living room and Kitchen are one space: play music there together',
+                             'Remember from now on that the living room and the kitchen are one space, play music in sync',
+                             login='me@example.com', zone=['media_player.living_room', 'media_player.kitchen'])
+    notes.save(proposed['id'])
+
+
+def test_as_well_joins_the_playing_room_in_sync_instead_of_a_second_stream(house):
+    _apart(house, 'media_player.living_room')
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='Gentle Guitar',
+                               said='Could you play it in the kitchen as well')
+    assert house['sent'] == [('media_player/volume_set', {'entity_id': 'media_player.kitchen', 'volume_level': 0.15}),
+                             ('media_player/join', {'entity_id': 'media_player.living_room',
+                                                    'group_members': ['media_player.kitchen']})]    # no second play_media
+    assert found['done'] == ['Kitchen speaker joined Living room at 15%'] and 'in sync' in found['joined']
+    assert house['media_player.living_room']['members'] == ['media_player.kitchen']
+    control.undo(control.recent()[0]['batch'], login='me@example.com', via='tap')
+    assert house['sent'][2:] == [('media_player/unjoin', {'entity_id': 'media_player.kitchen'}),
+                                 ('media_player/volume_set', {'entity_id': 'media_player.kitchen', 'volume_level': 0.3})]
+    assert house['media_player.living_room']['state'] == 'playing'          # Undo leaves the first room playing
+
+
+def test_as_well_with_a_second_stream_already_playing_joins_and_keeps_its_volume(house):
+    _apart(house, 'media_player.living_room')
+    house['media_player.kitchen'].update(state='playing', volume=0.2)
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='calm piano', said='play that there too')
+    assert [p for p, _ in house['sent']] == ['media_player/join'] and found['done'] == ['Kitchen speaker joined Living room']
+
+
+def test_as_well_with_two_rooms_playing_asks_which(house):
+    _apart(house, 'media_player.living_room')
+    house['media_player.patio'] = {'state': 'playing', 'volume': 0.4, 'members': [], 'name': 'Patio'}
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='calm piano', said='in the kitchen too')
+    assert 'Living room' in found['ask_first'] and 'Patio' in found['ask_first'] and house['sent'] == []
+
+
+def test_as_well_with_nothing_playing_just_plays_there(house):
+    _apart(house)
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='calm piano', said='play calm piano too')
+    assert 'music_assistant/play_media' in [p for p, _ in house['sent']] and 'joined' not in found
+
+
+def test_a_zone_plays_together_softly_and_one_undo_puts_it_all_back(house):
+    _apart(house)
+    _zone(house)
+    found = catalog.play_music('me@example.com', 'living room', 'play_media', what='calm piano', soft=True,
+                               said='play some soft music in the living room')
+    assert house['sent'] == [
+        ('media_player/volume_set', {'entity_id': 'media_player.living_room', 'volume_level': 0.15}),
+        ('music_assistant/play_media', {'entity_id': 'media_player.living_room', 'media_id': 'apple_music://playlist/p1',
+                                        'media_type': 'playlist', 'enqueue': 'replace'}),
+        ('media_player/volume_set', {'entity_id': 'media_player.kitchen', 'volume_level': 0.15}),
+        ('media_player/join', {'entity_id': 'media_player.living_room', 'group_members': ['media_player.kitchen']})]
+    assert 'Kitchen speaker' in found['zone'] and len(found['done']) == 2
+    [batch] = {r['batch'] for r in control.recent()[:1]}
+    control.undo(batch, login='me@example.com', via='tap')
+    assert house['media_player.living_room']['state'] == 'paused' and house['media_player.living_room']['volume'] == 0.14
+    assert house['media_player.living_room']['members'] == [] and house['media_player.kitchen']['volume'] == 0.3
+
+
+def test_a_zone_already_grouped_plays_in_its_group_without_splitting(house):
+    _zone(house)                       # the fixture's two speakers are grouped already
+    found = catalog.play_music('me@example.com', 'living room', 'play_media', what='calm piano', soft=True)
+    assert [p for p, _ in house['sent']] == ['media_player/volume_set', 'music_assistant/play_media', 'media_player/volume_set']
+    assert house['media_player.kitchen']['volume'] == 0.15 and 'grouping' not in found
+    control.undo(control.recent()[0]['batch'], login='me@example.com', via='tap')
+    assert house['media_player.kitchen']['volume'] == 0.3 and house['media_player.living_room']['members'] == ['media_player.kitchen']
+
+
+def test_only_here_keeps_a_zone_room_on_its_own(house):
+    _apart(house)
+    _zone(house)
+    found = catalog.play_music('me@example.com', 'living room', 'play_media', what='calm piano', group_too=False)
+    assert 'media_player/join' not in [p for p, _ in house['sent']] and 'zone' not in found
+    assert house['media_player.kitchen']['state'] == 'idle'
+
+
+def test_a_zone_never_brings_in_rooms_outside_it(house):
+    _zone(house)
+    house['media_player.living_room']['members'] = ['media_player.patio']
+    house['media_player.kitchen']['members'] = []
+    house['media_player.patio'] = {'state': 'idle', 'volume': 0.6, 'members': ['media_player.living_room'], 'name': 'Patio'}
+    catalog.play_music('me@example.com', 'living room', 'play_media', what='calm piano')
+    assert not [d for _, d in house['sent'] if 'media_player.patio' in (d.get('entity_id'), *d.get('group_members', ()))]
+    assert house['sent'][0] == ('media_player/unjoin', {'entity_id': 'media_player.living_room'})   # out of the patio's group
+    assert house['media_player.living_room']['members'] == ['media_player.kitchen']
+    house['sent'].clear()
+    house['media_player.patio'].update(state='playing', members=['media_player.living_room'])
+    house['media_player.living_room'].update(members=['media_player.patio'], state='playing')
+    assert 'Patio' in catalog.play_music('me@example.com', 'living room', 'play_media', what='calm piano')['ask_first']
+    assert house['sent'] == []
+
+
+def test_removing_the_note_removes_the_zone_and_a_household_setting_makes_one(house):
+    from hub.tools.house import zones
+    _zone(house)
+    speakers = {e: {'name': s['name']} for e, s in house.items() if e.startswith('media_player.')}
+    assert zones.mates('media_player.kitchen', speakers) == ['media_player.living_room']
+    state.remove_instruction(state.instructions()[0]['id'])
+    assert zones.mates('media_player.kitchen', speakers) == []
+    (config.DATA_DIR / 'household.json').write_text(json.dumps({'home': {
+        'music_url': 'https://music.example:8095', 'speaker_zones': [['Living room', 'media_player.kitchen'], ['nowhere']]}}))
+    assert zones.mates('media_player.kitchen', speakers) == ['media_player.living_room']
+
+
+def test_a_sentence_never_becomes_a_playlist(ma):
+    said = ('You should remember from now on that the kitchen and the living room are in the same great room, '
+            'so when you play music, you should play it sync')
+    found = catalog.edit_playlist('me@example.com', 'create', said, said=said)
+    assert 'doesn’t ask to create a playlist' in found['refused']
+    found = catalog.edit_playlist('me@example.com', 'create', said, said='make a playlist ' + said)
+    assert 'reads like a sentence' in found['refused']
+    assert 'reads like a sentence' in catalog.edit_playlist('me@example.com', 'rename', 'calm dinner',
+                                                            new_name='Please remember to play it in sync',
+                                                            said='rename the calm dinner playlist')['refused']
+    for action in ('rename', 'delete'):
+        assert 'doesn’t ask' in catalog.edit_playlist('me@example.com', action, 'calm dinner', new_name='Quiet',
+                                                      said='play calm dinner in the kitchen')['refused']
+    assert music.proposals() == [] and len(ma.lists) == 3 and music.recent_changes() == []
+
+
+def test_making_a_playlist_waits_for_a_signed_in_tap(ma):
+    before = dict(ma.lists)
+    found = catalog.edit_playlist('me@example.com', 'create', 'Sunday', songs=['dinner waltz'],
+                                  said='Make a playlist called Sunday with Dinner Waltz')
+    assert 'Nothing is made yet' in found['needs_tap'] and ma.lists == before
+    client = TestClient(app)
+    page = client.get('/house/playlists', headers=SIGNED_IN).text
+    [waiting] = music.proposals()
+    assert 'Make “Sunday”?' in page and f'/house/playlists/make/{waiting["id"]}' in page
+    assert client.post(f'/house/playlists/make/{waiting["id"]}', headers={'sec-fetch-site': 'same-origin'}).status_code == 403
+    assert ma.lists == before
+    reply = client.post(f'/house/playlists/make/{waiting["id"]}', headers=SIGNED_IN, follow_redirects=False)
+    assert reply.status_code == 303 and music.proposals() == []
+    new = next(pid for pid, p in ma.lists.items() if p['name'] == 'Sunday')
+    assert names(ma, new) == ['Dinner Waltz'] and music.recent_changes()[0]['via'] == 'tap'
+    again = client.post(f'/house/playlists/make/{waiting["id"]}', headers=SIGNED_IN)
+    assert 'isn’t waiting any more' in again.text and len(ma.lists) == len(before) + 1
+    catalog.edit_playlist('me@example.com', 'create', 'Later', said='make a playlist called Later')
+    client.post(f'/house/playlists/skip/{music.proposals()[0]["id"]}', headers=SIGNED_IN)
+    assert music.proposals() == []

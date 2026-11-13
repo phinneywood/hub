@@ -102,12 +102,21 @@ def _steps(d, action, value=None, query=None, kind=None, members=(), label=None,
         steps.append(('music_assistant', 'play_media', {'entity_id': e, 'media_id': query, 'media_type': kind, 'enqueue': 'replace'}))
         words = f'{name}{" on its own" if split else ""} playing “{_clip(label) or query}”'   # a name, not a library address
         return steps, words + (f' at {round(level * 100)}%' if level is not None and (soft or value is not None) else '')
-    if action == 'group':
-        others = [m for m in members if m != e]
-        if not others:
-            raise Refused('Say which speakers to group with it.')
-        return [('media_player', 'join', {'entity_id': e, 'group_members': others})], f'{name} grouped'
-    return [('media_player', 'unjoin', {'entity_id': e})], f'{name} on its own'
+    if action == 'ungroup':
+        return [('media_player', 'unjoin', {'entity_id': e})], f'{name} on its own'
+    raise Refused(f'Hub can’t do “{action}” with {name}.')
+
+
+def _join_steps(leader, d, level=None):
+    """(steps, words): one speaker joining the leader's group, so both play the same music in sync. It starts at
+    `level` when given, else at the leader's volume when it was silent, so a joining room is never louder."""
+    steps = []
+    if level is None and d['state'] not in ('playing', 'buffering') and isinstance(leader['volume'], (int, float)):
+        level = float(leader['volume'])
+    if level is not None:
+        steps.append(('media_player', 'volume_set', {'entity_id': d['id'], 'volume_level': level}))
+    steps.append(('media_player', 'join', {'entity_id': leader['id'], 'group_members': [d['id']]}))
+    return steps, f'{d["name"]} joined {leader["name"]}' + (f' at {round(level * 100)}%' if level is not None else '')
 
 
 def _clip(text):
@@ -142,8 +151,12 @@ def _inverse(entity, kind, action, before):
         steps.append(('media_player', 'volume_set', {'entity_id': entity, 'volume_level': float(before['volume'])}))
     if action == 'play_media' and before.get('alone') and before.get('members'):
         steps.append(('media_player', 'join', {'entity_id': entity, 'group_members': list(before['members'])}))
-    if action == 'group':
+    if action == 'group':               # recorded before joins were kept per speaker
         steps.append(('media_player', 'unjoin', {'entity_id': entity}))
+    if action == 'join':                # a speaker that joined a group leaves it again; the group plays on
+        steps.append(('media_player', 'unjoin', {'entity_id': entity}))
+        if isinstance(before.get('volume'), (int, float)):
+            steps.append(('media_player', 'volume_set', {'entity_id': entity, 'volume_level': float(before['volume'])}))
     if action == 'ungroup' and before.get('members'):
         steps.append(('media_player', 'join', {'entity_id': entity, 'group_members': list(before['members'])}))
     return steps or None
@@ -171,31 +184,64 @@ def _report(batch, rows):
             'undo': any(r['undoable'] and r['outcome'] != 'not_sent' for r in rows)}
 
 
-def change(targets, action, *, login, via, value=None, query=None, kind=None, members=(), label=None, alone=False, soft=False):
-    """Make one kind of change to one or more devices (entity ids). Returns what happened, per device."""
+def _known(found, entity):
+    if entity not in found:
+        raise Refused('Hub can’t control that. It changes lights, plugs, fans, scenes and speakers only.')
+    return found[entity]
+
+
+def _joins(leader, others, found, level=None):
+    """Plans for speakers joining the leader's group; those already in it are left as they are."""
+    plans = []
+    for entity in dict.fromkeys(others):
+        d = _known(found, entity)
+        if d['kind'] != 'media_player':
+            raise Refused(f'{d["name"]} isn’t a speaker.')
+        if entity != leader['id'] and entity not in leader['members']:
+            plans.append((d, 'join', *_join_steps(leader, d, level)))
+    return plans
+
+
+def change(targets, action, *, login, via, value=None, query=None, kind=None, members=(), label=None, alone=False, soft=False,
+           together=()):
+    """Make one kind of change to one or more devices (entity ids). Returns what happened, per device.
+
+    `group` joins `members` to the one target's group. `together` (play_media, one target): speakers of the same zone
+    that join it once it plays, at the same volume, in the same batch, so one Undo puts all of it back."""
     if not targets:
         raise Refused('Nothing to change.')
     try:
         found = devices(read.snapshot(fresh=True))
     except broker.HomeDown as error:
         raise Refused(str(error)) from None
-    chosen = []
-    for entity in dict.fromkeys(targets):
-        if entity not in found:
-            raise Refused('Hub can’t control that. It changes lights, plugs, fans, scenes and speakers only.')
-        chosen.append(found[entity])
-    plans = [(d, *_steps(d, action, value, query, kind, members, label, alone, soft)) for d in chosen]
+    chosen = [_known(found, entity) for entity in dict.fromkeys(targets)]
+    if action == 'group':
+        if len(chosen) != 1 or chosen[0]['kind'] != 'media_player':
+            raise Refused('Say which speaker the others should join.')
+        plans = _joins(chosen[0], [m for m in members if m != chosen[0]['id']], found)
+        if not plans:
+            raise Refused('Say which other speakers to group with it.' if not [m for m in members if m != chosen[0]['id']]
+                          else f'Those speakers already play together with {chosen[0]["name"]}.')
+    else:
+        plans = [(d, action, *_steps(d, action, value, query, kind, members, label, alone, soft)) for d in chosen]
+    if together and action == 'play_media' and len(chosen) == 1:
+        leader = dict(chosen[0], members=[] if alone else chosen[0]['members'])
+        level = next((data['volume_level'] for _, service, data in plans[0][2] if service == 'volume_set'), None)
+        for entity in leader['members']:             # already grouped: only the volume follows, when one was set
+            if entity in together and level is not None:
+                plans.append((found[entity], 'volume', *_steps(found[entity], 'volume', round(level * 100))))
+        plans += _joins(leader, together, found, level)
     _spend(len(plans))
     batch, now, rows = uuid.uuid4().hex[:12], time.time(), []
-    for d, steps, words in plans:
+    for d, act, steps, words in plans:
         before = {'state': d['state'], 'level': d['level'], 'volume': d['volume'], 'members': d['members'],
-                  'alone': bool(alone and action == 'play_media' and d['members'])}
+                  'alone': bool(alone and act == 'play_media' and d['members'])}
         outcome = _run(steps)
         rows.append({'entity': d['id'], 'name': d['name'], 'words': words, 'outcome': outcome,
-                     'undoable': _inverse(d['id'], d['kind'], action, before) is not None})
+                     'undoable': _inverse(d['id'], d['kind'], act, before) is not None})
         with _db() as conn:
             conn.execute('insert into house_changes(batch, ts, login, via, entity, name, action, words, before, outcome) '
-                         'values (?,?,?,?,?,?,?,?,?,?)', (batch, now, login, via, d['id'], d['name'], action, words,
+                         'values (?,?,?,?,?,?,?,?,?,?)', (batch, now, login, via, d['id'], d['name'], act, words,
                                                           json.dumps(before), outcome))
     read.forget_states()
     return _report(batch, rows)

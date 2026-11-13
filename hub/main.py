@@ -316,6 +316,56 @@ def engine_forget(instruction_id: int = Form(...)):
     return RedirectResponse("/engine", status_code=303)
 
 
+NOTE_WORDS = {"saved": "Saved. Ask Hub and the overnight review follow it from now on.", "skipped": "Not saved."}
+
+
+@app.get("/engine/notes", response_class=HTMLResponse)
+def engine_notes(request: Request, done: str = "", problem: str = ""):
+    """Notes Ask Hub proposed, waiting for the owner's tap, and the notes already saved."""
+    from .engine import notes, state
+    from .tools.house import zones
+    names = {}
+    try:
+        from .tools.house import read
+        names = {d["id"]: d["name"] for d in read.snapshot()["speakers"]}
+    except Exception:  # noqa: BLE001 - speaker names are a nicety; the notes stand without them
+        pass
+    by_note = zones.by_note()
+    saved = [{**i, "zone": [names.get(e, e.partition(".")[2]) for e in by_note.get(i["id"], ())]} for i in state.instructions()]
+    waiting = [{**p, "zone": [names.get(e, e.partition(".")[2]) for e in p["zone"]]} for p in notes.waiting()]
+    return render(request, "notes.html", active="engine", waiting=waiting, saved=saved,
+                  said=NOTE_WORDS.get(done, ""), problem=problem[:200], full=len(saved) >= state.MAX_INSTRUCTIONS)
+
+
+@app.post("/engine/notes/{proposal_id}/save")
+def engine_note_save(proposal_id: str, request: Request):
+    """Only a tap from a signed-in device saves a note: never the chat's model, never a program on this Mac."""
+    from urllib.parse import quote
+    from .engine import notes
+    if request.headers.get("tailscale-user-login") is None:
+        return HTMLResponse("Save notes from your phone or laptop.", status_code=403)
+    try:
+        notes.save(proposal_id)
+    except notes.Refused as error:
+        return RedirectResponse("/engine/notes?problem=" + quote(str(error)), status_code=303)
+    return RedirectResponse("/engine/notes?done=saved", status_code=303)
+
+
+@app.post("/engine/notes/{proposal_id}/skip")
+def engine_note_skip(proposal_id: str):
+    from .engine import notes
+    notes.skip(proposal_id)
+    return RedirectResponse("/engine/notes?done=skipped", status_code=303)
+
+
+@app.post("/engine/notes/remove")
+def engine_note_remove(instruction_id: int = Form(...)):
+    from .engine import state
+    state.remove_instruction(instruction_id)
+    store_log("engine_instruction", "removed")
+    return RedirectResponse("/engine/notes", status_code=303)
+
+
 def store_log(action, detail):
     from . import store
     store.log(action, detail)

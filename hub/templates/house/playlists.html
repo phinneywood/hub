@@ -13,6 +13,16 @@
 {% if links.music_url %}<a class="btn small primary" href="{{ links.music_url }}">Open Music Assistant</a>{% endif %}
 <a class="btn small" href="/house/changes">Home changes</a>
 </p>
+{% if waiting %}<h2>Waiting for your tap</h2>
+<ul class="checks">
+{% for w in waiting %}
+  <li><div><strong>Make “{{ w.name }}”?</strong>
+      <small>Asked for in Ask Hub{% if w.songs %} · {{ w.songs|length }} song{{ 's' if w.songs|length != 1 }}: {{ w.songs|join(', ') }}{% endif %}</small></div>
+    <form method="post" action="/house/playlists/make/{{ w.id }}"><button class="btn small primary">Make playlist</button></form>
+    <form method="post" action="/house/playlists/skip/{{ w.id }}"><button class="btn small quiet">Not now</button></form>
+  </li>
+{% endfor %}
+</ul>{% endif %}
 <h2>In the library</h2>
 {% if unreadable %}<p class="note">{{ unreadable }}</p>
 {% elif lists %}
@@ -42,5 +52,5 @@
 {% endfor %}
 </ul>
 {% else %}<p class="note">Hub hasn’t changed any playlists yet.</p>{% endif %}
-<p class="note">Ask Hub makes and edits Music Assistant playlists and adds songs to your Apple Music playlists. Each edit can be undone here for a day. Apple Music can’t remove, reorder, rename or delete by API; do that in the Music app.</p>
+<p class="note">Ask Hub proposes new Music Assistant playlists for your tap here, edits them and adds songs to your Apple Music playlists. Each edit can be undone here for a day. Apple Music can’t remove, reorder, rename or delete by API; do that in the Music app.</p>
 {% endblock %}
