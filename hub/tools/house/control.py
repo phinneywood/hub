@@ -61,7 +61,7 @@ def devices(found):
     return {d['id']: d for d in rows}
 
 
-def _steps(d, action, value=None, query=None, kind=None, members=(), label=None):
+def _steps(d, action, value=None, query=None, kind=None, members=(), label=None, alone=False, soft=False):
     """(steps, words): the broker requests for one device, and what was done in plain words."""
     e, name = d['id'], d['name']
     if action not in ACTIONS.get(d['kind'], ()):
@@ -92,11 +92,16 @@ def _steps(d, action, value=None, query=None, kind=None, members=(), label=None)
         if not query or kind not in broker.MEDIA_TYPES:
             raise Refused('Say what to play, and whether it is a track, album, artist, playlist or radio station.')
         steps, start = [], d['state'] not in ('playing', 'paused', 'buffering')
-        if value is not None or start:
+        split = alone and bool(d['members'])
+        if split:                   # play only here: out of its group first, and Undo puts it back
+            steps.append(('media_player', 'unjoin', {'entity_id': e}))
+        level = None
+        if value is not None or soft or start:
             level = QUIET if value is None else max(0, min(100, int(value))) / 100
             steps.append(('media_player', 'volume_set', {'entity_id': e, 'volume_level': level}))
         steps.append(('music_assistant', 'play_media', {'entity_id': e, 'media_id': query, 'media_type': kind, 'enqueue': 'replace'}))
-        return steps, f'{name} playing “{_clip(label) or query}”'   # a playlist's name, not its library address
+        words = f'{name}{" on its own" if split else ""} playing “{_clip(label) or query}”'   # a name, not a library address
+        return steps, words + (f' at {round(level * 100)}%' if level is not None and (soft or value is not None) else '')
     if action == 'group':
         others = [m for m in members if m != e]
         if not others:
@@ -135,6 +140,8 @@ def _inverse(entity, kind, action, before):
         steps.append(('media_player', 'media_play' if state == 'playing' else 'media_pause', {'entity_id': entity}))
     if action in ('volume', 'play_media') and isinstance(before.get('volume'), (int, float)):
         steps.append(('media_player', 'volume_set', {'entity_id': entity, 'volume_level': float(before['volume'])}))
+    if action == 'play_media' and before.get('alone') and before.get('members'):
+        steps.append(('media_player', 'join', {'entity_id': entity, 'group_members': list(before['members'])}))
     if action == 'group':
         steps.append(('media_player', 'unjoin', {'entity_id': entity}))
     if action == 'ungroup' and before.get('members'):
@@ -164,7 +171,7 @@ def _report(batch, rows):
             'undo': any(r['undoable'] and r['outcome'] != 'not_sent' for r in rows)}
 
 
-def change(targets, action, *, login, via, value=None, query=None, kind=None, members=(), label=None):
+def change(targets, action, *, login, via, value=None, query=None, kind=None, members=(), label=None, alone=False, soft=False):
     """Make one kind of change to one or more devices (entity ids). Returns what happened, per device."""
     if not targets:
         raise Refused('Nothing to change.')
@@ -177,11 +184,12 @@ def change(targets, action, *, login, via, value=None, query=None, kind=None, me
         if entity not in found:
             raise Refused('Hub can’t control that. It changes lights, plugs, fans, scenes and speakers only.')
         chosen.append(found[entity])
-    plans = [(d, *_steps(d, action, value, query, kind, members, label)) for d in chosen]
+    plans = [(d, *_steps(d, action, value, query, kind, members, label, alone, soft)) for d in chosen]
     _spend(len(plans))
     batch, now, rows = uuid.uuid4().hex[:12], time.time(), []
     for d, steps, words in plans:
-        before = {'state': d['state'], 'level': d['level'], 'volume': d['volume'], 'members': d['members']}
+        before = {'state': d['state'], 'level': d['level'], 'volume': d['volume'], 'members': d['members'],
+                  'alone': bool(alone and action == 'play_media' and d['members'])}
         outcome = _run(steps)
         rows.append({'entity': d['id'], 'name': d['name'], 'words': words, 'outcome': outcome,
                      'undoable': _inverse(d['id'], d['kind'], action, before) is not None})

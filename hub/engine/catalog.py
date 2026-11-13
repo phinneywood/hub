@@ -357,13 +357,24 @@ def home_control(login, device: str, action: Literal['on', 'off', 'brightness', 
 
 def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause', 'next', 'previous', 'volume', 'group', 'ungroup'],
                what: str | None = None, kind: Literal['track', 'album', 'artist', 'playlist', 'radio'] | None = None,
-               volume_percent: int | None = None, with_speakers: list[str] | None = None) -> dict:
+               volume_percent: int | None = None, with_speakers: list[str] | None = None, soft: bool = False,
+               group_too: bool | None = None) -> dict:
     """Control the Music Assistant speakers right away, when the owner asks. `speaker` is a speaker name from
-    music_now. `action`: play_media (search Apple Music for `what`, of `kind`, and play it; a speaker that
-    was silent starts quietly unless volume_percent is given), play, pause, next, previous, volume (with
-    volume_percent 0-100), group (with with_speakers, names from music_now) or ungroup. To play one of the
-    owner's playlists, use its name from music_library with kind playlist."""
-    from ..tools.house import control, music, read
+    music_now. `action`: play_media, play, pause, next, previous, volume (with volume_percent 0-100), group (with
+    with_speakers, names from music_now) or ungroup.
+    play_media: `what` is a few search words, not a sentence: one of the owner's playlist names from music_library,
+    or a genre, mood or artist ("calm piano", "jazz for dinner"). Hub picks a real playlist, album, artist or song,
+    the owner's own playlists first, and says what it picked; `kind` limits the pick to one kind. `soft` (for
+    "softly", "quietly", "in the background") starts at about 15% unless volume_percent is given; a silent speaker
+    starts there anyway. A speaker grouped with others plays only where asked: Hub takes it out of its group first
+    (Undo puts it back), or, when the group is already playing, asks first; then call again with group_too true
+    (play in the whole group) or false (only here)."""
+    from .. import luna
+    from ..tools.house import broker, control, music, read
+    from . import judge
+
+    def safe(text):
+        return luna.clip(judge.scrub(str(text)), 600)
     refused = _refusal(login)
     if refused:
         return refused
@@ -371,11 +382,49 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
         found = read.snapshot()
         [target] = control.resolve(speaker, ('media_player',), found)[:1]
         members = [m for name in with_speakers or () for m in control.resolve(name, ('media_player',), found)[:1]]
-        address = music.playlist_uri(what) if action == 'play_media' and kind == 'playlist' and what else None
-        return _changed(control.change([target], action, login=login, via='ask', value=volume_percent,
-                                       query=address or what, label=what, kind=kind, members=members))
+        if action != 'play_media':
+            return _changed(control.change([target], action, login=login, via='ask', value=volume_percent,
+                                           query=what, label=what, kind=kind, members=members))
+        if not ' '.join(str(what or '').split()):
+            return {'refused': 'Say what to play.'}
+        picked = None
+        if music.ready():
+            try:
+                picked = music.pick(what, kind)
+            except control.Refused as error:
+                return {'nothing_matched': f'{safe(error)} Nothing was played.'}
+            except music.MusicDown as error:
+                return {'unavailable': f'{error} Hub couldn’t look that up, so nothing was played.'}
+        speakers = control.devices(found)
+        here = speakers[target]
+        others = [speakers[m] for m in here['members'] if m in speakers]
+        alone = bool(here['members']) and group_too is not True
+        if here['members'] and group_too is None and any(d['state'] in ('playing', 'buffering') for d in [here, *others]):
+            return {'ask_first': f'{safe(here["name"])} is grouped with {safe(", ".join(d["name"] for d in others))}, '
+                                 'and the group is playing. Nothing was changed. Ask the owner whether to play in all of '
+                                 f'them or only in {safe(here["name"])}, then call again with group_too.'}
+        name = safe(picked['name']) if picked else what
+        result = control.change([target], action, login=login, via='ask', value=volume_percent, soft=soft, alone=alone,
+                                query=picked['uri'] if picked else what, label=name,
+                                kind=picked['kind'] if picked else kind)
     except control.Refused as error:
-        return {'refused': str(error)}
+        return {'refused': safe(error)}
+    except broker.HomeDown as error:
+        return {'unavailable': str(error)}
+    out = _changed(result)
+    if picked:
+        out['picked'] = f'{name}, {"a playlist of yours" if picked["mine"] and picked["kind"] == "playlist" else "from your library" if picked["mine"] else "from Apple Music"} ({picked["kind"]}). Tell the owner what you picked.'
+    if alone and here['members']:
+        out['grouping'] = f'{safe(here["name"])} was taken out of its group so it plays only there; Undo puts it back.'
+    if result['unknown']:
+        try:
+            now = control.devices(read.snapshot(fresh=True)).get(target)
+        except broker.HomeDown:
+            now = None
+        if now and now['state'] not in ('playing', 'buffering'):
+            out['note'] = (f'Home Assistant didn’t confirm it, and {safe(here["name"])} isn’t playing now. '
+                           'Say the music didn’t start; never say it is playing.')
+    return out
 
 
 def edit_playlist(login, action: Literal['create', 'add', 'remove', 'move', 'rename', 'delete'], playlist: str,

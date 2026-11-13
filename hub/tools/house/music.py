@@ -176,7 +176,8 @@ def search(query, kinds=('track',), limit=5):
     found = _call('music/search', {'search_query': _clip(query, 200), 'media_types': list(kinds), 'limit': limit})
     out = {}
     for kind in kinds:
-        out[kind] = [_song(i) for i in (found or {}).get(f'{kind}s', ()) if isinstance(i, dict)][:limit]
+        items = (found or {}).get(f'{kind}s') or (found or {}).get(kind) or ()     # radio has no plural
+        out[kind] = [_song(i) for i in items if isinstance(i, dict)][:limit]
     return out
 
 
@@ -195,6 +196,39 @@ def find(name, pool=None):
         return near[0]
     names = [p['name'] for p in near or pool]
     raise Refused(f'Which playlist? {", ".join(names[:12])}' if names else 'There are no playlists in the library yet.')
+
+
+PLAY_ORDER = ('playlist', 'album', 'artist', 'track')
+
+
+def _mine(uri):
+    return uri.startswith('library://')
+
+
+def pick(what, kind=None):
+    """Something concrete to play for the owner's words, never the words themselves: Music Assistant can't play
+    a description. The owner's own playlists come first (an exact name, then one whose name has the words), then
+    a search: the asked kind only, or playlists, albums, artists and songs in that order, the owner's library
+    before Apple Music's catalog. {'uri', 'name', 'kind', 'mine'}. Refused when nothing matched; MusicDown passes."""
+    words = _clip(what, 200)
+    if not words:
+        raise Refused('Say what to play.')
+    if kind in (None, 'playlist'):
+        own = [p for p in playlists(words) if p['uri']]
+        exact = [p for p in own if p['name'].lower() == words.lower()]
+        if own:
+            chosen = (exact or own)[0]
+            return {'uri': chosen['uri'], 'name': chosen['name'], 'kind': 'playlist', 'mine': True}
+    kinds = (kind,) if kind else PLAY_ORDER
+    found = search(words, kinds, limit=5)
+    for k in kinds:
+        hits = sorted((h for h in found.get(k, ()) if h['uri']), key=lambda h: not _mine(h['uri']))
+        if hits:
+            h = hits[0]
+            return {'uri': h['uri'], 'name': f'{h["name"]} – {h["artist"]}' if h['artist'] and k != 'playlist' else h['name'],
+                    'kind': k, 'mine': _mine(h['uri'])}
+    raise Refused(f'Nothing matched “{words}” in the library or Apple Music. Try a few words: a genre, a mood, '
+                  'an artist or a playlist name.')
 
 
 def playlist_uri(name):
