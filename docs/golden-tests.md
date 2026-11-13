@@ -43,14 +43,15 @@ it should refuse or leave alone.
   them to the house's own names under `"golden": {"names": {"living_room": "…"}}`. No real name is ever
   in the repository.
 - **Checks** (`hub/golden/checks.py`) read the trace: `Called`, `NotCalled`, `NoChanges`, `ReadOnly`,
-  `ChangesOnly`, `Changed`, `ConcretePick`, `ShortSearch`, `QuietFirst`, `SaysPick`, `Joined`, `HandedOff`,
+  `ChangesOnly`, `Changed`, `Proposed`, `ConcretePick`, `ShortSearch`, `QuietFirst`, `SaysPick`, `Joined`, `HandedOff`,
   `ReplySays`, `ReplyNot`, `PlainReply`. Each returns one plain sentence when it fails.
 - **The dry-run layer** (`hub/golden/dryrun.py`) stands in the three doors through which Ask can change
   anything. Reads go through. A change that passes Hub's checks is recorded and answered as if it worked;
   one that fails them is refused as it would be live. Later reads see the recorded changes laid over the
-  real state, so a second turn knows what the first one started. Undo records go to a scratch database,
-  so a dry run leaves nothing on the Home changes or Playlists pages. A test fails if the catalog gains a
-  control or hand-off the layer doesn't cover.
+  real state, so a second turn knows what the first one started. Undo records, and proposals that wait
+  for the owner's tap (a note to save, a playlist to make), go to a scratch database, so a dry run leaves
+  nothing on the Home changes, Playlists or Notes pages; proposals are recorded as `to: 'proposal'`.
+  A test fails if the catalog gains a control or hand-off the layer doesn't cover.
 - **Live writes** exist only for scenarios marked `harmless`, only from the command line with
   `--live-writes`, and only after the owner types "yes" at the prompt. None is marked harmless yet; the
   owner chooses which.
@@ -92,14 +93,15 @@ after 80 model calls in any case. Skipped scenarios are listed as skipped.
 | --- | --- |
 | `music-softly-in-one-room` | the whole sentence sent as a search (the music free-text bug); loud start; other rooms |
 | `music-as-well-joins` | "as well" starting a second stream instead of joining speakers |
-| `remember-is-not-a-playlist` | a "remember …" sentence turned into a playlist |
+| `remember-is-a-note-not-a-playlist` | a "remember …" sentence turned into a playlist instead of a note for the owner's tap |
 | `lights-room-off`, `lights-dim-one-lamp` | lights in other rooms, the wrong service |
 | `what-needs-me-today`, `calendar-free-tomorrow` | a read that changes something |
 | `grocery-goes-to-kitchen` | a grocery ask not passed to Kitchen word for word, or passed twice |
 | `gmail-filing-is-not-here` | claiming to file mail Ask can't file |
 
-When notes, speaker zones and recipes arrive, `remember-is-not-a-playlist` and `music-as-well-joins` are
-updated to expect them, and new capabilities add their own.
+Both already expect the ask-zones behaviour: "remember …" proposes a note for the owner's tap, and Hub
+itself turns a second play for "as well" into a join (`tests/test_golden.py` replays the old model mistake
+and checks Hub's guard). New capabilities, recipes first, add their own.
 
 ## Writing a scenario
 

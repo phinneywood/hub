@@ -10,8 +10,9 @@ Reads go through untouched, so a golden run sees the real house, library and lis
 Hub's checks is recorded in `Ledger.changes` and answered as if it had worked; one that fails them is
 refused exactly as it would be live. Home Assistant reads are then shown with the recorded changes laid
 over them, so a second turn ("play it in the kitchen as well") sees the music the first turn started.
-Undo records (house_changes, music_changes) go to a scratch database, never Hub's own, so a dry run leaves
-nothing on the Home changes or Playlists pages.
+Undo records (house_changes, music_changes) and proposals waiting for the owner's tap (a note to save, a
+playlist to make) go to a scratch database, never Hub's own, so a dry run leaves nothing on the Home changes,
+Playlists or Notes pages. Proposals are recorded too, as `to: 'proposal'`: they change nothing until a tap.
 
 `COVERED` names every Ask tool that can change something. A test fails if the catalog gains a control or a
 hand-off this layer doesn't stand in front of, so a new capability can't skip the dry run by accident.
@@ -23,7 +24,8 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 
-COVERED = {'home_control': 'home', 'play_music': 'home', 'edit_playlist': 'music', 'kitchen': 'kitchen'}
+COVERED = {'home_control': 'home', 'play_music': 'home', 'edit_playlist': 'music', 'remember': 'proposal',
+           'kitchen': 'kitchen'}
 DRY_ID = -1                     # the message number a held-back Kitchen hand-off is given
 
 
@@ -101,6 +103,7 @@ def layer(enabled=True):
     """Stand in Hub's three doors for the length of the block. Yields the Ledger. With enabled=False (live
     writes, for scenarios marked harmless and only when the owner asks) changes really happen and are
     recorded in Hub's own change log, with Undo; the Ledger stays empty."""
+    from ..engine import notes
     from ..tools.house import broker, control, music
     from ..tools.kitchen import client
     ledger = Ledger()
@@ -109,7 +112,8 @@ def layer(enabled=True):
         return
     real_exchange, real_send, real_call = broker._exchange, music._send, client.call
     saved = {'broker': real_exchange, 'music_send': real_send, 'settle': music._settle, 'kitchen': real_call,
-             'control_db': control._db, 'music_db': music._db}
+             'control_db': control._db, 'music_db': music._db, 'notes_db': notes._db,
+             'note': notes.propose, 'playlist': music.propose}
 
     def exchange(message, timeout):
         if message.get('op') == 'ws':
@@ -148,17 +152,30 @@ def layer(enabled=True):
         ledger.add('kitchen', f'{method} {path.split("?")[0]}', body)
         return 200, {'id': DRY_ID}
 
+    def note(text, said, *, login, zone=()):
+        found = saved['note'](text, said, login=login, zone=zone)
+        ledger.add('proposal', 'note', {'text': found['text'], 'zone': found['zone']})
+        return found
+
+    def playlist(name, songs, *, login):
+        found = saved['playlist'](name, songs, login=login)
+        ledger.add('proposal', 'playlist', {'name': name, 'songs': list(songs or ())})
+        return found
+
     with tempfile.TemporaryDirectory(prefix='hub-golden-') as folder:
         broker._exchange, music._send, client.call = exchange, send, kitchen
         music._settle = lambda playlist_id, want: 'done'     # nothing was sent, so there is nothing to read back
         control._db = _with_schema(_scratch_db(Path(folder)), control.SCHEMA)
         music._db = _with_schema(_scratch_db(Path(folder)), music.SCHEMA)
+        notes._db = _with_schema(_scratch_db(Path(folder)), notes.SCHEMA)
+        notes.propose, music.propose = note, playlist
         try:
             yield ledger
         finally:
             broker._exchange, music._send, music._settle, client.call = (
                 saved['broker'], saved['music_send'], saved['settle'], saved['kitchen'])
-            control._db, music._db = saved['control_db'], saved['music_db']
+            control._db, music._db, notes._db = saved['control_db'], saved['music_db'], saved['notes_db']
+            notes.propose, music.propose = saved['note'], saved['playlist']
 
 
 def _with_schema(db, schema):

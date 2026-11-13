@@ -54,18 +54,27 @@ def test_free_text_reaching_the_speaker_is_caught():
     assert 'free text' in checks.ConcretePick()(trace)
 
 
-def test_as_well_starting_a_second_stream_is_caught(world):
-    found = _failed(_bad('music-as-well-joins', (
+def test_as_well_starting_a_second_stream_is_caught():
+    trace = checks.Trace(texts=['play it in the kitchen as well'], replies=['ok'], names=dict(scenarios.ALIASES),
+                         devices={'media_player.kitchen': 'Kitchen Speaker'}, changes=[
+        {'turn': 0, 'to': 'home', 'what': 'music_assistant/play_media',
+         'data': {'entity_id': 'media_player.kitchen', 'media_id': 'apple_music://playlist/p1', 'media_type': 'playlist'}}])
+    assert 'second stream' in checks.Joined('living_room_speaker', 'kitchen_speaker')(trace)
+
+
+def test_hub_itself_turns_a_second_play_for_as_well_into_a_join(world):
+    """The model replays the old mistake (a second play_media for "as well"); Hub's own guard joins instead."""
+    _, failures = runner.offline(_bad('music-as-well-joins', (
         (Use('play_music', speaker='{living_room_speaker}', action='play_media', what='calm piano'), Say('Playing {picked}.')),
-        (Use('play_music', speaker='{kitchen_speaker}', action='play_media', what='calm piano'), Say('Playing {picked}.')))))
-    assert 'second stream' in found
+        (Use('play_music', speaker='{kitchen_speaker}', action='play_media', what='calm piano'), Say('Done.')))))
+    assert failures == []
 
 
 def test_remember_becoming_a_playlist_is_caught(world):
-    found = _failed(_bad('remember-is-not-a-playlist', ((
+    found = _failed(_bad('remember-is-a-note-not-a-playlist', ((
         Use('edit_playlist', action='create', playlist='the kitchen and living room are one room'),
         Say('I made the playlist.')),)))
-    assert 'Called edit_playlist' in found and 'Would have changed' in found and 'playlist' in found
+    assert 'Called edit_playlist' in found and 'No note was proposed' in found
 
 
 def test_loud_music_and_a_stray_room_are_caught(world):
@@ -113,14 +122,19 @@ def test_dry_run_lays_changes_over_later_reads(world):
     assert {d['state'] for d in read.snapshot(fresh=True)['speakers']} == {'idle'}   # gone once the layer is
 
 
-def test_dry_run_holds_back_music_edits_and_kitchen(world):
+def test_dry_run_holds_back_music_edits_proposals_and_kitchen(world):
+    from hub.engine import notes
     from hub.tools.house import music
     with dryrun.layer() as ledger:
-        made = catalog.edit_playlist('me@example.com', 'create', 'Sunday Morning')
+        added = catalog.edit_playlist('me@example.com', 'add', 'Calm Dinner', songs=['Morning Light'])
+        made = catalog.edit_playlist('me@example.com', 'create', 'Sunday Morning', said='make a playlist called Sunday Morning')
+        noted = catalog.remember('me@example.com', 'the kitchen lights stay on at dinner',
+                                 said='remember the kitchen lights stay on at dinner')
         sent = catalog.kitchen_send('add oat milk', 'me@example.com')
-    assert made['done'] and sent == {'message': dryrun.DRY_ID}
-    assert [c['to'] for c in ledger.changes] == ['music', 'kitchen'] and world.sent == []
-    assert music.recent_changes() == []
+    assert added['done'] and made['needs_tap'] and noted['needs_tap'] and sent == {'message': dryrun.DRY_ID}
+    assert [(c['to'], c['what']) for c in ledger.changes] == [
+        ('music', 'music/playlists/add_playlist_tracks'), ('proposal', 'playlist'), ('proposal', 'note'), ('kitchen', 'POST /messages')]
+    assert world.sent == [] and music.recent_changes() == [] and music.proposals() == [] and notes.waiting() == []
 
 
 def test_live_writes_only_for_harmless_scenarios(world, monkeypatch):
@@ -213,7 +227,7 @@ def test_scenarios_are_well_formed():
             text.format(**scenarios.ALIASES)
     assert runner.REQUESTS_PER_TURN == agent.REQUESTS_PER_TURN
     seeded = {s.id for s in scenarios.SCENARIOS if s.seed}
-    assert {'music-softly-in-one-room', 'music-as-well-joins', 'remember-is-not-a-playlist'} <= seeded
+    assert {'music-softly-in-one-room', 'music-as-well-joins', 'remember-is-a-note-not-a-playlist'} <= seeded
 
 
 # ---- the Settings page and Insights ----

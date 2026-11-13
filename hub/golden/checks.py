@@ -8,7 +8,7 @@ aliases ("living_room_speaker"), which the trace resolves to the names Hub actua
 import re
 from dataclasses import dataclass, field
 
-CONTROLS = ('home_control', 'play_music', 'edit_playlist')
+CONTROLS = ('home_control', 'play_music', 'edit_playlist', 'remember')
 HANDOFFS = ('kitchen',)
 
 
@@ -38,9 +38,10 @@ class Trace:
         t = None if turn is None else self.turn(turn)
         return [c for c in self.calls if (t is None or c.turn == t) and (tool is None or c.tool == tool)]
 
-    def changes_in(self, turn=None):
+    def changes_in(self, turn=None, proposals=False):
+        """Recorded changes; with proposals=True also what waits for the owner's tap (a note, a playlist)."""
         t = None if turn is None else self.turn(turn)
-        return [c for c in self.changes if t is None or c['turn'] == t]
+        return [c for c in self.changes if (t is None or c['turn'] == t) and (proposals or c['to'] != 'proposal')]
 
     def name(self, alias):
         return self.names.get(alias, alias)
@@ -113,10 +114,28 @@ class NoChanges(Check):
 
 
 class ReadOnly(Check):
-    says = 'only reads: no control, no hand-off, no change'
+    says = 'only reads: no control, no hand-off, no change, nothing proposed'
 
     def __call__(self, trace):
-        return NotCalled(*CONTROLS, *HANDOFFS)(trace) or NoChanges()(trace)
+        found = trace.changes_in(proposals=True)
+        return NotCalled(*CONTROLS, *HANDOFFS)(trace) or (f'Would have changed: {[c["what"] for c in found]}' if found else None)
+
+
+class Proposed(Check):
+    """Something waits for the owner's tap: a note (whose text has these words) or a playlist."""
+
+    def __init__(self, what, *words, turn=None):
+        self.what, self.words, self.turn = what, words, turn
+        self.says = f'proposes a {what} for the owner’s tap' + (f' about {", ".join(words)}' if words else '')
+
+    def __call__(self, trace):
+        found = [c for c in trace.changes_in(self.turn, proposals=True) if c['to'] == 'proposal' and c['what'] == self.what]
+        if not found:
+            return f'No {self.what} was proposed.'
+        text = ' '.join(str(v) for c in found for v in c['data'].values()).lower()
+        missing = [w for w in self.words if w.format(**trace.names).lower() not in text]
+        if missing:
+            return f'The proposed {self.what} doesn’t mention {missing}.'
 
 
 class ChangesOnly(Check):
