@@ -9,7 +9,7 @@
   {% if banner.unknown %}Music Assistant didn’t confirm: {{ banner.unknown|join(', ') }}.{% endif %}
   {% if banner.not_sent %}Not done: {{ banner.not_sent|join(', ') }}.{% endif %}
 </p>{% endif %}
-<p>
+<p class="page-acts">
 {% if links.music_url %}<a class="btn small primary" href="{{ links.music_url }}">Open Music Assistant</a>{% endif %}
 <a class="btn small" href="/house/changes">Home changes</a>
 </p>

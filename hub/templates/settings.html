@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Settings · Hub{% endblock %}
+{% from "_icons.html" import icon %}
 {% block body %}
 <p class="eyebrow">Settings</p>
 <h1 class="status-head">How Hub runs</h1>
 <nav class="menu" aria-label="Settings">
-  <a href="/engine"><strong>Engine</strong><small>What Hub reads, what it may do by itself, its limits, and updates</small><span class="menu-go" aria-hidden="true">›</span></a>
-  <a href="/engine/recipes"><strong>Recipes</strong><small>Routines you saved from Ask Hub: rename, trim or remove them</small><span class="menu-go" aria-hidden="true">›</span></a>
-  <a href="/golden"><strong>Golden tests</strong><small>Real requests run through Ask as a dry run, and how the last run went</small><span class="menu-go" aria-hidden="true">›</span></a>
-  <a href="/status"><strong>Status</strong><small>Whether each connection is working, and the model checks</small><span class="menu-go" aria-hidden="true">›</span></a>
+  <a href="/engine">{{ icon('engine') }}<strong>Engine</strong><small>What Hub reads, what it may do by itself, its limits, and updates</small><span class="menu-go" aria-hidden="true">›</span></a>
+  <a href="/engine/recipes">{{ icon('recipes') }}<strong>Recipes</strong><small>Routines you saved from Ask Hub: rename, trim or remove them</small><span class="menu-go" aria-hidden="true">›</span></a>
+  <a href="/golden">{{ icon('golden') }}<strong>Golden tests</strong><small>Real requests run through Ask as a dry run, and how the last run went</small><span class="menu-go" aria-hidden="true">›</span></a>
+  <a href="/status">{{ icon('status') }}<strong>Status</strong><small>Whether each connection is working, and the model checks</small><span class="menu-go" aria-hidden="true">›</span></a>
 </nav>
 {% endblock %}
