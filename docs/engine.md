@@ -198,7 +198,7 @@ permission to deploy, restart, schedule or connect anything.
 question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page source: `web/ask/`.
 
 - **What it can do**: only the catalog's lookups (`Lookup` entries on a `Source`): today's list, sorted
-  mail, the inbox's size by day, the calendar week, the trip, the network's one-line status and Hub's
+  mail, the inbox's size by day, the calendar week, the trip, the network's status and the devices on it, and Hub's
   own AI spend. A lookup returns a small bounded dict and changes nothing. Apart from the Kitchen
   hand-off below there is no tool that does anything, so a request to change something gets a plain
   "read-only for now".

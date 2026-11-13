@@ -127,9 +127,51 @@ def trip_evidence():
             'flights_chosen': bool(data.get('selected_flight'))}
 
 
+NETWORK_DEVICES = 60       # devices shown to the chat's model at once
+NETWORK_MATCHES = 10
+NETWORK_WATCHED = 5        # devices the owner expects online but aren't, passed to the overnight review
+
+
+def _network_devices():
+    """Every Deco and client Home Assistant reports, as the Network → Devices page shows them. [] if not connected."""
+    from ..tools.network import ha, pages
+    return pages._device_rows(ha.states())[0] if ha.configured() else []
+
+
+def _network_device(d, full=False):
+    """One device for a model: its name, state, band and Deco. The address only when asked about it; never the MAC."""
+    from .. import luna
+    from . import judge
+    out = {'name': luna.clip(judge.scrub(d['name']), 80), 'status': d['status']}
+    if d['kind'] == 'node':
+        out['mesh_node'] = True
+    if d['connection']:
+        out['connection'] = d['connection']
+    if d['node']:
+        out['via'] = luna.clip(judge.scrub(d['node']), 80)
+    if d['download_text'] not in ('—', 'Not reported'):
+        out['download'], out['upload'] = d['download_text'], d['upload_text']
+    if d['expected'] and d['kind'] == 'client':
+        out['expected_online'] = True
+    if full:
+        out['ip'] = d['ip'] or None
+        out['last_report'] = d['updated_text']
+        out['diagnostics'] = {x['label']: x['value'] for x in d['diagnostics']}
+    return out
+
+
 def network_evidence():
     tile = home.network()
-    return {'headline': tile['headline'], 'detail': tile['detail']}
+    found = {'headline': tile['headline'], 'detail': tile['detail']}
+    try:
+        devices = _network_devices()
+    except Exception:  # noqa: BLE001 - the headline stands without the device list
+        return found
+    if devices:
+        found['devices_online'] = sum(d['status'] == 'Online' for d in devices if d['kind'] == 'client')
+        found['expected_but_not_online'] = [_network_device(d)['name'] for d in devices
+                                            if d['attention'] and d['kind'] == 'client'][:NETWORK_WATCHED]
+    return found
 
 
 # ---- Lookups: what Ask Hub may read on request. Each returns a small dict; none changes anything. ----
@@ -199,11 +241,45 @@ def trip_lookup() -> dict:
 
 
 def network_lookup() -> dict:
-    """The home network right now, in one line: whether the internet is up and what the readings say."""
+    """The home network right now: whether the internet is up, the ping, how many devices are online, and any
+    device the owner expects online that isn't. For which devices are on the Wi-Fi, use network_devices."""
     try:
         return network_evidence()
     except Exception as error:  # noqa: BLE001
         return _unavailable(error)
+
+
+def network_devices_lookup(name: str | None = None, show: Literal['online', 'all', 'attention'] = 'online') -> dict:
+    """Devices on the home network (Wi-Fi and wired), from the Deco mesh in Home Assistant. Without `name`: counts,
+    each Deco with how many devices it serves, and the devices (`show`: online, all, or attention = expected online
+    but not), each with its status, band, Deco and current speed. With `name` (part of a device's name, its Deco or
+    its address): up to 10 matching devices with their local IP address, last report and details."""
+    try:
+        devices = _network_devices()
+    except Exception:  # noqa: BLE001
+        return UNAVAILABLE
+    if not devices:
+        return {'unavailable': 'Home Assistant isn’t connected to Hub’s Network tool, or reports no devices.'}
+    clients = [d for d in devices if d['kind'] == 'client']
+    if name:
+        q = str(name).strip().casefold()[:100]
+        found = [d for d in devices if q in ' '.join((d['name'], d['ip'], d['node'])).casefold()]
+        if not found:
+            return {'error': 'No device matches that. Ask without a name for the list.'}
+        return {'matches': len(found), 'devices': [_network_device(d, full=True) for d in found[:NETWORK_MATCHES]]}
+    if show not in ('online', 'all', 'attention'):
+        return {'error': 'show must be one of: online, all, attention'}
+    chosen = {'online': [d for d in clients if d['status'] == 'Online'], 'all': clients,
+              'attention': [d for d in clients if d['attention']]}[show]
+    nodes = []
+    for node in (d for d in devices if d['kind'] == 'node'):
+        aliases = {node['name'].casefold(), node['entity_id'].split('.', 1)[-1].casefold()}
+        nodes.append({**_network_device(node), 'devices_online': sum(d['status'] == 'Online' and d['node'].casefold() in aliases
+                                                                     for d in clients)})
+    return {'online': sum(d['status'] == 'Online' for d in clients), 'offline': sum(d['status'] == 'Offline' for d in clients),
+            'unknown': sum(d['status'] == 'Unknown / old report' for d in clients), 'mesh': nodes, 'showing': show,
+            'devices': [_network_device(d) for d in chosen[:NETWORK_DEVICES]],
+            **({'not_shown': len(chosen) - NETWORK_DEVICES} if len(chosen) > NETWORK_DEVICES else {})}
 
 
 def house_items():
@@ -808,11 +884,18 @@ SOURCES = [
            items=(today.trip,), evidence=trip_evidence,
            lookups=(Lookup('trip_status', 'Trip', 'The trip plan saved in Hub.', 'Trip dates and whether flights are chosen.',
                            '/trip', 'Open trip', trip_lookup),)),
-    Source('network', 'Network', 'Internet and device readings from Home Assistant.', 'The one-line status only.',
+    Source('network', 'Network', 'Internet and device readings from Home Assistant.',
+           'The one-line status, how many devices are online, and the names of up to 5 you expect online that aren’t. '
+           'To Ask Hub when you ask: device names, their status, band, Deco and speed. Never MAC addresses.',
            evidence=network_evidence,
            lookups=(Lookup('network_status', 'Network', 'Internet and device readings from Home Assistant.',
-                           'The one-line status only: whether the internet is up, and the ping.',
-                           '/network', 'Open Network', network_lookup),)),
+                           'Whether the internet is up, the ping, how many devices are online, and any you expect '
+                           'online that aren’t.',
+                           '/network', 'Open Network', network_lookup),
+                    Lookup('network_devices', 'Network devices', 'The Deco mesh and the devices on it, from Home Assistant.',
+                           'Device and Deco names, online or offline, Wi-Fi band, which Deco, and current speed; a '
+                           'device’s local IP address only when you ask about it. Never MAC addresses.',
+                           '/network/devices', 'Open devices', network_devices_lookup))),
     Source('house', 'Home', 'Lights, plugs, speakers, the thermostat, locks, the garage door and the alarm, from Home '
            'Assistant through the HA broker on this Mac. Never cameras, location or automations. Read-only for now.',
            'Nothing to the overnight review. To Ask Hub when you ask: room and device names and their states, the '

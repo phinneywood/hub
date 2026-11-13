@@ -18,6 +18,7 @@ from hub.agent import agent, model, routes, store
 from hub.engine import catalog, overnight, state
 from hub.main import app
 from hub.tools.gmail import triage
+from tests.test_network import network_states  # noqa: F401 - the fictional network fixture
 
 ORIGIN = {'origin': 'http://testserver'}
 OWNER = {'tailscale-user-login': 'me@example.com'}
@@ -550,3 +551,27 @@ def test_saved_notes_reach_the_model_on_later_chats(ready):
     ask(ready, 'What needs me today?', headers={**ORIGIN, **OWNER})
     given = ''.join(m.instructions or '' for m in SEEN[-1] if isinstance(m, ModelRequest))
     assert 'Standing notes the owner saved' in given and 'one space: play music there together' in given
+
+
+def test_network_devices_lookup_lists_devices_by_deco_and_never_passes_a_mac(monkeypatch, network_states):
+    from hub.tools.network import ha
+    monkeypatch.setattr(ha, 'configured', lambda: True)
+    monkeypatch.setattr(ha, 'states', lambda: network_states)
+    listed = catalog.network_devices_lookup()
+    assert (listed['online'], listed['offline']) == (1, 0)
+    assert listed['mesh'] == [{'name': 'Hall Deco', 'status': 'Online', 'mesh_node': True, 'devices_online': 1}]
+    assert listed['devices'] == [{'name': 'Family phone', 'status': 'Online', 'connection': '5 GHz', 'via': 'Hall Deco',
+                                  'download': '2.00 Mbit/s', 'upload': '400 kbit/s'}]
+    assert 'ip' not in json.dumps(listed['devices'])                       # the address only when asked about one device
+    one = catalog.network_devices_lookup('phone')
+    assert one['devices'][0]['ip'] == '192.168.68.33'
+    assert 'error' in catalog.network_devices_lookup('toaster')
+    assert catalog.network_devices_lookup(show='attention')['devices'] == []
+    sent = json.dumps([listed, one, catalog.network_devices_lookup(show='all')])
+    assert '33:44:55' not in sent and 'location' not in sent               # never a MAC or a phone's GPS tracker
+
+
+def test_network_devices_lookup_says_so_when_home_assistant_is_not_connected(monkeypatch):
+    from hub.tools.network import ha
+    monkeypatch.setattr(ha, 'configured', lambda: False)
+    assert 'unavailable' in catalog.network_devices_lookup()
