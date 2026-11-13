@@ -1,6 +1,7 @@
 # Golden tests
 
 Status: framework and seed scenarios built (2026-11-13). No live run yet; the first one is arranged with the owner.
+Run by hand for now; whether a live run gates Deploy is revisited after a week (owner, 2026-11-13).
 
 ## The idea
 
@@ -54,9 +55,11 @@ it should refuse or leave alone.
   A test fails if the catalog gains a control or hand-off the layer doesn't cover.
 - **Givens.** A scenario may start with recipes of its own (`given`, made-up, checked like any other). They
   live in the dry run's scratch database, so the owner's real recipes are neither used nor touched.
-- **Live writes** exist only for scenarios marked `harmless`, only from the command line with
-  `--live-writes`, and only after the owner types "yes" at the prompt. None is marked harmless yet; the
-  owner chooses which.
+- **Live writes** (owner, 2026-11-13) are for light and music scenarios only (`harmless`), only from the
+  command line with `--live-writes`, and only after the owner types "yes" at the prompt. Their Home
+  Assistant changes go out after the same checks and are recorded in Hub's change log; right after the
+  scenario's checks the runner undoes each one, and a change it couldn't put back fails the scenario.
+  Music Assistant edits, Kitchen, notes, recipes and playlists stay held back even then.
 
 ## Two modes
 
@@ -64,9 +67,9 @@ it should refuse or leave alone.
 | --- | --- | --- |
 | Model | scripted, from each scenario's `script` | the real one, on Ask's zero-retention route |
 | Data | a made-up household (`tests/golden_world.py`) | the owner's real Hub data, read only |
-| Writes | dry run | dry run (live only for harmless scenarios, on request) |
+| Writes | dry run | dry run (lights and music live on request, undone after) |
 | When | every `pytest` run and CI | on demand: Settings → Golden tests, or the command line |
-| Cost | none | at most $0.50 a run and $5 a month; recorded as "golden" in the engine's runs |
+| Cost | none | at most $0.50 a run and $5 a month (owner, 2026-11-13); recorded as "golden" in the engine's runs |
 | Results | the test report | `golden/runs/*.json` in Hub's private data folder; a summary on Insights |
 
 Offline, the checks test Hub's side: what a tool does with a given call, what it would change, what it

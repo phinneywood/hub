@@ -191,11 +191,35 @@ def run(scenario, make_model, *, aliases, spend=None, writes=False):
     read.clear_cache()
     spend = spend or Spend()
     given = [(name, _fill(steps, aliases)) for name, steps in scenario.given]
-    with dryrun.layer(enabled=not (writes and scenario.harmless), recipes=given) as ledger:
-        trace = asyncio.run(_turns(scenario, make_model, aliases, ledger, spend))
-        trace.changes = list(ledger.changes)
-        _house(trace)
-    return trace, evaluate(scenario, trace)
+    live = bool(writes and scenario.harmless)
+    started = time.time()
+    with dryrun.layer(house_writes=live, recipes=given) as ledger:
+        try:
+            trace = asyncio.run(_turns(scenario, make_model, aliases, ledger, spend))
+            trace.changes = list(ledger.changes)
+            _house(trace)
+            failures = evaluate(scenario, trace)
+        finally:
+            undone = _put_back(started) if live else []
+    if undone:
+        trace.undone = undone
+        failures += [{'check': 'is put back afterwards', 'why': u['why']} for u in undone if u.get('why')]
+    return trace, failures
+
+
+def _put_back(since):
+    """Undo every house change a live-writes scenario made, newest first. [{'batch', 'why'?}]."""
+    from ..tools.house import control
+    out = []
+    for row in control.recent():
+        if row['login'] != LOGIN or row['ts'] < since or row['via'] == 'undo' or row.get('undone'):
+            continue
+        try:
+            control.undo(row['batch'], login=LOGIN, via='golden')
+            out.append({'batch': row['batch']})
+        except control.Refused as error:
+            out.append({'batch': row['batch'], 'why': f'Couldn’t put back: {error}'})
+    return out
 
 
 def offline(scenario):
@@ -263,6 +287,7 @@ def live(only=(), cap=RUN_COST_CAP, writes=False, model_for=None):
     aliases, spend, out, stopped, broke = names(live=True), Spend(cap, RUN_CALLS_CAP), [], None, False
     try:
         for scenario in chosen:
+            put_back = 0
             if stopped:
                 out.append({'id': scenario.id, 'about': scenario.about, 'status': 'skipped', 'failures': [], 'turns': []})
                 continue
@@ -271,13 +296,14 @@ def live(only=(), cap=RUN_COST_CAP, writes=False, model_for=None):
                 trace, failures = run(scenario, make, aliases=aliases, spend=spend, writes=writes)
                 status = 'fail' if failures else 'pass'
                 turns = [_turn_view(trace, n) for n in range(len(trace.texts))]
+                put_back = len(trace.undone)
             except Stopped as error:
                 stopped, status, failures, turns = str(error), 'skipped', [], []
             except Exception as error:  # noqa: BLE001 - one broken scenario is reported, the rest still run
                 broke, status, turns = True, 'error', []
                 failures = [{'check': 'runs to the end', 'why': f'It stopped with {type(error).__name__}.'}]
             out.append({'id': scenario.id, 'about': scenario.about, 'status': status, 'failures': failures, 'turns': turns,
-                        'live_writes': bool(writes and scenario.harmless)})
+                        'live_writes': bool(writes and scenario.harmless), 'put_back': put_back})
     finally:
         lock.unlink(missing_ok=True)
         state.record_run(home.today().isoformat(), KIND, 'error' if broke else 'ok', luna_calls=spend.calls,

@@ -4,11 +4,12 @@ Source for Hub's `/ask` chat page: React, assistant-ui primitives and the AI SDK
 It is the only Hub page with a build step. The built files are committed in `hub/static/ask/`, so
 the Mac that runs Hub and the deployer need no Node.
 
-To change the page, with Node 24:
+To change the page, on the Mac mini, from the repository root:
 
-    cd web/ask
-    npm ci --ignore-scripts
-    npm run build
+    tools/build-ask-page
+
+It keeps the pinned Node (`.node-version`) in `.tools/`, ignored by Git, then runs `npm ci --ignore-scripts`
+and `npm run build` here. Elsewhere, with Node 24, run those two commands in this folder.
 
 Commit `src/`, `package-lock.json` and the three files in `hub/static/ask/` together.
 `tests/test_ask_page.py` fails if the built files and this source don't match.

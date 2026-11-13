@@ -6,7 +6,8 @@
 Offline runs (scripted model, made-up household) are part of the test suite: pytest tests/test_golden.py.
 
 A live run reads the live Hub's data, so HUB_DATA_DIR must point at it. Writes are a dry run. --live-writes
-lets scenarios marked harmless change the house for real, and only after the owner types "yes" at the prompt.
+lets the light and music scenarios (marked harmless) change the house for real, only after the owner types "yes"
+at the prompt, and undoes each one right after its checks.
 """
 import argparse
 import os
@@ -40,7 +41,8 @@ def main(argv=None):
         if not sys.stdin.isatty():
             print('--live-writes needs the owner at a terminal.')
             return 2
-        print('These scenarios will really change the house: ' + (', '.join(harmless) or 'none') + '. Everything else is a dry run.')
+        print('These light and music scenarios will really change the house, and each is undone right after its checks: '
+              + (', '.join(harmless) or 'none') + '. Everything else is a dry run.')
         if input('Type yes to go on: ').strip().lower() != 'yes':
             print('Nothing ran.')
             return 1

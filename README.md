@@ -84,6 +84,24 @@ git config core.hooksPath githooks   # turn on the commit-time privacy check
 To see a change running on real data before it is deployed, the owner runs a dev Hub from this
 checkout: `deploy/dev-hub setup`, then `deploy/dev-hub start` (see docs/dev-hub.md).
 
+Golden tests (real requests through Ask, with a dry run for every change) run offline in the suite;
+live runs are on demand from Settings → Golden tests (see docs/golden-tests.md).
+
+## Rebuild the Ask chat page
+
+The chat page (`web/ask`, React) is the only part with a build step, and its built files are committed in
+`hub/static/ask/`, so the running Hub and the deployer never need Node. To change it, on the Mac mini:
+
+```sh
+tools/build-ask-page
+```
+
+The first run downloads the official Node release pinned in `.node-version` (24.22.2, the same as the
+personal site) into `.tools/` inside this checkout, which Git ignores, and checks its SHA-256. Then it
+installs the locked packages and builds. Commit `web/ask/src`, `package-lock.json` and the three files in
+`hub/static/ask/` together; `tests/test_ask_page.py` fails if the bundle and the source don't match. The
+browser check is in `web/ask/check/README.md`.
+
 ## More detail
 
 Preschool includes the class-guide design at `/preschool/`, with maintenance behind its Manage

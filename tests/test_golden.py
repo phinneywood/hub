@@ -137,16 +137,27 @@ def test_dry_run_holds_back_music_edits_proposals_and_kitchen(world):
     assert world.sent == [] and music.recent_changes() == [] and music.proposals() == [] and notes.waiting() == []
 
 
-def test_live_writes_only_for_harmless_scenarios(world, monkeypatch):
-    harmless = Scenario('t', 't', ('dim the {reading_lamp} to 30%',), (), scenarios.find('lights-dim-one-lamp').script,
-                        harmless=True)
-    risky = Scenario('r', 'r', harmless.turns, (), harmless.script)
+def test_live_writes_only_for_light_and_music_scenarios_and_put_back_after(world):
+    from hub.tools.house import control
+    harmless = Scenario('t', 't', ('dim the {reading_lamp} to 30%',), scenarios.find('lights-dim-one-lamp').checks,
+                        scenarios.find('lights-dim-one-lamp').script, harmless=True)
+    risky = Scenario('r', 'r', harmless.turns, harmless.checks, harmless.script)
     aliases = runner.names()
     runner.run(risky, lambda: runner.scripted(risky, aliases), aliases=aliases, writes=True)
-    assert world.sent == []
+    assert world.sent == []                                    # not marked harmless: a dry run even with --live-writes
     model = runner.scripted(harmless, aliases)
-    trace, _ = runner.run(harmless, lambda: model, aliases=aliases, writes=True)
-    assert [m[1]['path'] for m in world.sent] == ['/api/services/light/turn_on'] and trace.changes == []
+    trace, failures = runner.run(harmless, lambda: model, aliases=aliases, writes=True)
+    assert failures == [] and [c['what'] for c in trace.changes] == ['light/turn_on']
+    assert [(m[1]['path'], m[1]['body']) for m in world.sent] == [
+        ('/api/services/light/turn_on', {'entity_id': 'light.reading_lamp', 'brightness_pct': 30}),
+        ('/api/services/light/turn_on', {'entity_id': 'light.reading_lamp', 'brightness_pct': 78})]   # put back at once
+    assert len(trace.undone) == 1 and all(r['undone'] for r in control.recent() if r['via'] != 'undo')
+
+
+def test_only_lights_and_music_may_write_live():
+    assert {s.id for s in scenarios.SCENARIOS if s.harmless} == {
+        'music-softly-in-one-room', 'music-as-well-joins', 'lights-room-off', 'lights-dim-one-lamp'}
+    assert all(set(s.tags) <= {'lights', 'music'} and not s.given for s in scenarios.SCENARIOS if s.harmless)
 
 
 # ---- live runs: names, cost cap, ledger, private results ----

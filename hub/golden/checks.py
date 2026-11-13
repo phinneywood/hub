@@ -29,6 +29,7 @@ class Trace:
     names: dict = field(default_factory=dict)       # alias -> the name Hub sees
     devices: dict = field(default_factory=dict)     # entity id -> name
     rooms: dict = field(default_factory=dict)       # room name -> entity ids of its lights
+    undone: list = field(default_factory=list)      # live writes put back afterwards: [{'batch', 'why'?}]
 
     def turn(self, n):
         """Turn `n` counted like a list index (-1 is the last), as a plain number."""

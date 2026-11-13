@@ -13,7 +13,7 @@ from pathlib import Path
 scratch = tempfile.mkdtemp(prefix='hub-ask-check-')
 os.environ.update(HUB_DATA_DIR=scratch, HUB_BACKGROUND_JOBS='disabled', HUB_BRIDGE_URL='http://127.0.0.1:9',
                   HUB_BRIDGE_TOKEN_FILE=str(Path(scratch) / 'absent'), HUB_KITCHEN_SOCKET=str(Path(scratch) / 'absent.sock'),
-                  HUB_ALLOWED_LOGINS='', PYDANTIC_AI_NO_BANNER='1')
+                  HUB_ALLOWED_LOGINS='me@example.com', PYDANTIC_AI_NO_BANNER='1')
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -36,8 +36,24 @@ test_ask.fictional(patch)
 patch.setattr(luna, 'key', lambda: None if os.environ.get('ASK_CHECK_NO_KEY') else 'synthetic-key')
 
 
+async def remembering(messages, info):
+    """“Remember …” proposes a note (its card has Save and Not now); everything else is the Ask tests' script."""
+    import json
+    from pydantic_ai.models.function import DeltaToolCall
+    text, results = test_ask._turn(messages)
+    if 'remember' in text and 'remember' not in results:
+        note = text.removeprefix('remember').strip(' .')
+        yield {0: DeltaToolCall(name='remember', json_args=json.dumps({'note': note}), tool_call_id='call_remember')}
+    elif 'remember' in results:
+        for piece in test_ask._say('Nothing is saved yet. Tap Save on the card to keep it.'):
+            yield piece
+    else:
+        async for piece in test_ask.scripted(messages, info):
+            yield piece
+
+
 async def paced(messages, info):
-    async for piece in test_ask.scripted(messages, info):
+    async for piece in remembering(messages, info):
         await asyncio.sleep(0.03 if isinstance(piece, str) else 0.3)
         yield piece
 

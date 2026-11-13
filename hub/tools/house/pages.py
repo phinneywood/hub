@@ -8,7 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from ... import home
+from ... import home, taps
 from ...templating import render
 from . import control, read
 
@@ -111,16 +111,27 @@ def confirm_delete(playlist_id: str, request: Request):
     return render(request, "house/delete_playlist.html", active="house", playlist=chosen, count=count)
 
 
+def _signed_out(request, words):
+    return taps.refused(request, words, lambda: HTMLResponse(words, status_code=403), status=403)
+
+
+def _result(request, result, words):
+    """After a tap that changed a playlist: back to the page with its banner, or the words for a chat card."""
+    said = words if result['done'] else 'Music Assistant didn’t confirm it. Check the Playlists page.'
+    return taps.done(request, f'/house/playlists?done={result["batch"]}', said)
+
+
 @router.post("/playlists/delete/{playlist_id}")
 def delete_playlist(playlist_id: str, request: Request):
+    """The confirmation page and the chat's delete card both post here."""
     from . import music
     if _login(request) is None:
-        return HTMLResponse("Delete playlists from your phone or laptop.", status_code=403)
+        return _signed_out(request, "Delete playlists from your phone or laptop.")
     try:
         result = music.delete(playlist_id[:40], login=_login(request), via='tap')
     except (music.Refused, music.MusicDown) as error:
-        return _playlists(request, problem=str(error))
-    return RedirectResponse(f'/house/playlists?done={result["batch"]}', status_code=303)
+        return taps.refused(request, error, lambda: _playlists(request, problem=str(error)))
+    return _result(request, result, 'Deleted.')
 
 
 @router.post("/playlists/undo/{batch}")
@@ -140,20 +151,21 @@ def make_playlist(proposal_id: str, request: Request):
     """The owner's tap on a playlist Ask proposed: only now is it made."""
     from . import music
     if _login(request) is None:
-        return HTMLResponse("Make playlists from your phone or laptop.", status_code=403)
+        return _signed_out(request, "Make playlists from your phone or laptop.")
     found = music.proposal(proposal_id)
     if found is None:
-        return _playlists(request, problem='That playlist isn’t waiting any more. Ask again in the chat.')
+        gone = 'That playlist isn’t waiting any more. Ask again in the chat.'
+        return taps.refused(request, gone, lambda: _playlists(request, problem=gone))
     try:
         result = music.create(found['name'], found['songs'], login=_login(request), via='tap')
     except (music.Refused, music.MusicDown) as error:
-        return _playlists(request, problem=str(error))
+        return taps.refused(request, error, lambda: _playlists(request, problem=str(error)))
     music.settle(found['id'], 'made')
-    return RedirectResponse(f'/house/playlists?done={result["batch"]}', status_code=303)
+    return _result(request, result, 'Made. Undo is on the Playlists page for a day.')
 
 
 @router.post("/playlists/skip/{proposal_id}")
-def skip_playlist(proposal_id: str):
+def skip_playlist(proposal_id: str, request: Request):
     from . import music
     music.settle(proposal_id, 'skipped')
-    return RedirectResponse('/house/playlists', status_code=303)
+    return taps.done(request, '/house/playlists', 'Not made.')

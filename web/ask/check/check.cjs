@@ -6,15 +6,17 @@ const base = process.argv[3] || "http://127.0.0.1:8792";
 if (!out) { console.error("usage: node check.cjs <output-folder> [base-url]"); process.exit(2); }
 
 (async () => {
-  const browser = await chromium.launch();
+  // ASK_CHECK_CHROME: a Chrome or Chromium to use instead of Playwright's own download.
+  const browser = await chromium.launch(process.env.ASK_CHECK_CHROME ? { executablePath: process.env.ASK_CHECK_CHROME } : {});
   const failures = [], hosts = new Set();
   const expect = (ok, what) => { if (!ok) failures.push(what); };
   for (const scheme of ["light", "dark"]) {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: scheme });
     const page = await ctx.newPage();
-    page.on("console", (m) => m.type() === "error" && failures.push("console: " + m.text()));
+    page.on("console", (m) => m.type() === "error" && !/\/favicon\.ico$/.test(m.location()?.url || "") && failures.push("console: " + m.text() + " " + (m.location()?.url || "")));
     page.on("pageerror", (e) => failures.push("page error: " + e));
     page.on("request", (r) => hosts.add(new URL(r.url()).host));
+    page.on("response", (r) => r.status() >= 400 && failures.push(`${r.status()} ${new URL(r.url()).pathname}`));
     const shot = (name) => page.screenshot({ path: `${out}/${scheme}-${name}.png` });
     const idle = async () => { await page.waitForSelector(".ask-send:not(.stop)"); await page.waitForTimeout(700); };
     const say = async (text) => { await page.fill(".ask-input", text); await page.click(".ask-send"); };
@@ -47,6 +49,32 @@ if (!out) { console.error("usage: node check.cjs <output-folder> [base-url]"); p
     expect((await page.locator(".ask-sources").count()) === 2, "citations come back after a reload");
     await page.click('.ask-pill:has-text("Chats")'); await page.waitForSelector(".ask-sheet"); await page.waitForTimeout(300); await shot("8-chats");
     expect((await page.locator(".ask-open").count()) >= 1, "the saved chat is listed");
+    await ctx.close();
+  }
+  {
+    // Signed in, as through Tailscale: a note proposed in the chat is saved from its card, and an answer is filed with Improve this.
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
+      extraHTTPHeaders: { "tailscale-user-login": "me@example.com" } });
+    const page = await ctx.newPage();
+    page.on("console", (m) => m.type() === "error" && !/\/favicon\.ico$/.test(m.location()?.url || "") && failures.push("console: " + m.text() + " " + (m.location()?.url || "")));
+    page.on("pageerror", (e) => failures.push("page error: " + e));
+    page.on("request", (r) => hosts.add(new URL(r.url()).host));
+    page.on("response", (r) => r.status() >= 400 && failures.push(`${r.status()} ${new URL(r.url()).pathname}`));
+    const shot = (name) => page.screenshot({ path: `${out}/signed-in-${name}.png` });
+    await page.goto(base + "/ask"); await page.waitForSelector(".ask-empty");
+    await page.fill(".ask-input", "remember the kitchen and living room play music together"); await page.click(".ask-send");
+    await page.waitForSelector(".ask-tap .k-go"); await page.waitForSelector(".ask-send:not(.stop)"); await page.waitForTimeout(500); await shot("9-note-card");
+    expect((await page.locator(".ask-tap").innerText()).includes("kitchen and living room"), "the note card shows the note");
+    await page.click(".ask-tap .k-go"); await page.waitForSelector(".ask-tap .k-plan-status.ok"); await shot("10-note-saved");
+    await page.click(".ask-improve-go"); await page.waitForSelector(".ask-improve .ask-fine"); await shot("11-improve-filed");
+    expect((await page.locator(".ask-improve").innerText()).includes("Filed"), "Improve this files a brief");
+    await page.reload(); await page.waitForSelector(".ask-tap .k-plan-status"); await page.waitForTimeout(300); await shot("12-after-reload");
+    expect((await page.locator(".ask-tap .k-plan-status").innerText()).includes("Saved"), "a reopened card says it was saved");
+    await page.locator(".ask-improve-go").last().click(); await page.waitForSelector(".ask-improve .ask-fine");
+    const filed = await (await page.request.get(base + "/engine")).text();
+    expect(filed.includes("remember (left something waiting"), "Improve this after a reload files the right answer");
+    const engine = await (await page.request.get(base + "/engine/notes")).text();
+    expect(engine.includes("kitchen and living room play music together"), "the saved note is on the Notes page");
     await ctx.close();
   }
   expect([...hosts].every((h) => h === new URL(base).host), "the page contacted another host: " + [...hosts].join(", "));

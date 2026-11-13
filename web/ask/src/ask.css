@@ -112,3 +112,12 @@ main.ask { flex:1; min-height:0; width:100%; max-width:none; margin:0; padding:0
 .ask-kitchen { display: grid; gap: 8px; }
 .ask-kitchen-msg p { margin: 0 0 8px; white-space: pre-wrap; }
 .ask-kitchen-notice { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--mut); font-size: 0.9em; }
+
+/* Cards waiting for a tap, and “Improve this” */
+.ask-tap-lines { margin:.1rem 0 0; padding-left:1.2rem; font-size:.85rem; color:var(--mut); }
+.k-plan-acts button.k-go.ask-danger { background:var(--bad, #b3261e); border-color:var(--bad, #b3261e); }
+.ask-tap .k-small { align-self:flex-start; }
+.ask-improve { display:flex; gap:.5rem; align-items:center; margin-top:.35rem; }
+.ask-improve-go { font:inherit; font-size:.78rem; padding:.2rem .6rem; border-radius:999px; border:1px solid var(--line);
+  background:transparent; color:var(--mut); cursor:pointer; }
+.ask-improve-go:disabled { opacity:.6; }

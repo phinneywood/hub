@@ -60,6 +60,106 @@ function Lookup({ toolName, status }) {
   );
 }
 
+/* ---- Cards: something Ask left waiting for the owner's tap. The buttons post to the same signed-in Hub routes
+   as the Notes, Recipes and Playlists pages; those routes still check the tap. Asked again on a reopened chat,
+   a card shows what became of it. ---- */
+
+const TAP = {
+  note: { title: "Save this note?", go: "Save", ended: "saved", post: (id) => `/engine/notes/${id}/save`,
+    skip: (id) => `/engine/notes/${id}/skip`, page: ["/engine/notes", "Notes"] },
+  recipe: { title: "Save this recipe?", go: "Save", ended: "saved", post: (id) => `/engine/recipes/${id}/save`,
+    skip: (id) => `/engine/recipes/${id}/skip`, page: ["/engine/recipes", "Recipes"] },
+  playlist: { title: "Make this playlist?", go: "Make playlist", ended: "made", post: (id) => `/house/playlists/make/${id}`,
+    skip: (id) => `/house/playlists/skip/${id}`, page: ["/house/playlists", "Playlists"] },
+  delete: { title: "Delete this playlist?", go: "Delete", ended: "deleted", danger: true, warn: "It can’t be undone.",
+    post: (id) => `/house/playlists/delete/${id}`, page: ["/house/playlists", "Playlists"] },
+};
+const ENDED = { saved: "Saved", skipped: "Not now", made: "Made", deleted: "Deleted", expired: "Expired: ask again in the chat",
+  gone: "No longer waiting" };
+
+const tap = (path) => fetch(path, { method: "POST", headers: { Accept: "application/json" } }).then(async (r) => {
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || DOWN);
+  return body;
+});
+
+function TapCard({ card }) {
+  const kind = TAP[card.kind];
+  const id = encodeURIComponent(card.id);
+  const [state, setState] = useState(null);       // null while checking, then "waiting" or how it ended
+  const [said, setSaid] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    api(`/card/${card.kind}/${id}`).then((d) => setState(d.status), () => setState("waiting"));
+  }, [card.kind, id]);
+  if (!kind) return null;
+  const decide = (path, ended) => {
+    setBusy(true); setError("");
+    tap(path).then((d) => { setSaid(d.said || ""); setState(ended); }, (e) => { setError(e.message); setBusy(false); });
+  };
+  return (
+    <div className="k-card k-plan ask-tap">
+      <strong className="k-card-title">{kind.title}</strong>
+      <div className="k-line"><b>{card.text}</b></div>
+      {card.lines?.length > 0 && <ol className="ask-tap-lines">{card.lines.map((line, i) => <li key={i}>{line}</li>)}</ol>}
+      <div className="k-plan-acts">
+        {state === "waiting" ? (
+          <>
+            <button type="button" className={"k-go" + (kind.danger ? " ask-danger" : "")} disabled={busy}
+              onClick={() => decide(kind.post(id), kind.ended)}>{kind.go}</button>
+            {kind.skip && <button type="button" disabled={busy} onClick={() => decide(kind.skip(id), "skipped")}>Not now</button>}
+          </>
+        ) : state && (
+          <span className={"k-plan-status" + (state === kind.ended ? " ok" : "")}>{said || ENDED[state] || state}</span>
+        )}
+      </div>
+      {error && <p className="ask-fine bad">{error}</p>}
+      {state === "waiting" && kind.warn && <span className="k-small">{kind.warn}</span>}
+      <a className="k-small" href={kind.page[0]}>Open {kind.page[1]} ›</a>
+    </div>
+  );
+}
+
+// A tool's chip, and its card when it left something waiting for a tap.
+const Tool = (props) => (
+  <>
+    <Lookup {...props} />
+    {props.result?.card && props.status?.type !== "running" && <TapCard card={props.result.card} />}
+  </>
+);
+
+/* “Improve this”: files a short brief of what Hub could and couldn't do on this answer, for the next building
+   session. The brief never holds the message or the answer; Hub builds it from the tools it used. */
+const ThreadId = createContext("");
+
+function Improve() {
+  const threadId = useContext(ThreadId);
+  // Which of the owner's messages this answers: the server finds that turn in the saved thread.
+  const turn = useAuiState((s) => {
+    const all = s.thread.messages, at = all.findIndex((m) => m.id === s.message.id);
+    return all.slice(0, at).filter((m) => m.role === "user").length - 1;
+  });
+  const running = useAuiState((s) => s.message.status?.type === "running");
+  const [said, setSaid] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  if (running) return null;
+  const file = () => {
+    setBusy(true); setError("");
+    fetch(`/ask/threads/${threadId}/improve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ turn }) })
+      .then(async (r) => { const body = await r.json().catch(() => ({})); if (!r.ok) throw new Error(body.error || DOWN); return body; })
+      .then((d) => setSaid(d.said), (e) => { setError(e.message); setBusy(false); });
+  };
+  return (
+    <div className="ask-improve">
+      {said ? <span className="ask-fine">{said}</span>
+        : <button type="button" className="ask-improve-go" disabled={busy} onClick={file}>Improve this</button>}
+      {error && <span className="ask-fine bad">{error}</span>}
+    </div>
+  );
+}
+
 /* ---- Kitchen: Ask passes a message on; the reply, cards and buttons come straight from the kitchen service ---- */
 
 const KDOWN = "Cooking and groceries aren’t answering right now. Try again in a minute.";
@@ -316,9 +416,10 @@ const UserMessage = () => (
 
 const AssistantMessage = () => (
   <MessagePrimitive.Root className="ask-msg hub">
-    <MessagePrimitive.Parts components={{ Text, Source: () => null, tools: { by_name: { kitchen: KitchenReply }, Fallback: Lookup } }} />
+    <MessagePrimitive.Parts components={{ Text, Source: () => null, tools: { by_name: { kitchen: KitchenReply }, Fallback: Tool } }} />
     <MessagePrimitive.Error><p className="ask-fine bad">Hub couldn’t finish that answer. Nothing was changed. Try again.</p></MessagePrimitive.Error>
     <Sources />
+    <Improve />
   </MessagePrimitive.Root>
 );
 
@@ -339,6 +440,7 @@ function Chat({ threadId, initial, about, onDrop, onActivity, onRefused }) {
   const drop = () => { runtime.thread.composer.setText(""); onDrop(); };
   const say = useCallback((text) => runtime.thread.append({ role: "user", content: [{ type: "text", text }] }), [runtime]);
   return (
+    <ThreadId.Provider value={threadId}>
     <Say.Provider value={say}>
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadPrimitive.Root className="ask-thread">
@@ -381,6 +483,7 @@ function Chat({ threadId, initial, about, onDrop, onActivity, onRefused }) {
       </ThreadPrimitive.Root>
     </AssistantRuntimeProvider>
     </Say.Provider>
+    </ThreadId.Provider>
   );
 }
 

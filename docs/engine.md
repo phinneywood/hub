@@ -218,8 +218,8 @@ question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page 
   from mail, pages or device names can't become a note. It waits a day on the Notes page (`/engine/notes`),
   with the owner's message beside it; only a tap on Save from a signed-in device puts it into the standing
   instructions. A note about speakers playing together keeps them as a zone (docs/home-control.md). Saved
-  notes are listed and removed on the Notes page and the Engine page. The chat page has no card of its own
-  for this yet (its rebuild needs Node); the answer links to the Notes page.
+  notes are listed and removed on the Notes page and the Engine page. The chat page shows it as a
+  card under the answer (see “Cards in the chat”); the Notes page is the other way to save.
 - **Recipes** (`propose_recipe`, `run_recipe`, `hub/engine/recipes.py`): named routines made only of steps
   Ask can already take, each one a `home_control` or `play_music` call with that control's own arguments
   ("great room music": the kitchen speaker joins the living room's, both at 15%, a calm pick). A recipe can't
@@ -232,6 +232,19 @@ question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page 
   step runs through its control like a typed request (trust level, limits, record and Undo), stopping at the
   first step that isn't done. The Recipes page lists, renames, trims and removes them. Golden scenarios:
   `recipe-is-proposed-not-run`, `recipe-runs-by-name`.
+- **Cards in the chat** (`hub/engine/waiting.py`): a control that leaves something waiting for the owner's tap
+  (a note, a recipe, a playlist to make, a playlist to delete) puts a small `card` in its answer, and the chat
+  page draws it under the answer with its buttons: Save / Not now, Make playlist / Not now, or Delete. The
+  buttons post to the same signed-in routes the Notes, Recipes and Playlists pages use, asking for JSON
+  (`hub/taps.py`), so the same checks apply: a signed-in device, same origin, and the proposal still
+  waiting. A reopened chat asks `/ask/card/<kind>/<id>` what became of each card.
+- **Improve this** (`hub/engine/improve.py`): a button under every answer. One tap files a one-paragraph
+  brief for the next building session: which tools Hub used on that turn, how each control or hand-off
+  answered (in Hub's own words for anything not done), whether the answer said Hub couldn't, and what Ask
+  can change. It never holds the owner's message, the answer, mail or anything a lookup returned. Briefs
+  go to `improvement-requests.json` in the private data folder (owner-only), where the Manager reads them;
+  each shows on Today for a day and on the Engine page until removed. Hub never edits or deploys its own
+  code.
 - **What the model sees**: what each lookup's `sends` says and no more. Mail is sender names and subject
   lines with links and addresses taken out, one kind at a time, at most 10, never from a sender with AI
   switched off. Today's list passes a mail item's title only, because its second line names senders.
@@ -270,7 +283,7 @@ titles, cart plans and changes with their state, and an order's total and time. 
 instructions, marked as data that may come from web pages, so "how long does the first one take?" makes
 sense. It is fetched fresh each turn, so a cart result or a placed order shows up as it is now.
 
-Not built yet: approval cards for actions, saving a reply that was cut off mid-stream, notifications.
+Not built yet: approval cards for locks, the garage and the alarm, saving a reply that was cut off mid-stream, notifications.
 
 ## Versions and the Deploy button
 

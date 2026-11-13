@@ -42,7 +42,8 @@ class Scenario:
     script: tuple               # per turn, the steps a well-behaved model takes (offline only)
     tags: tuple = ()
     seed: str = ''              # the real failure this guards against, if any
-    harmless: bool = False      # may run with live writes when the owner asks; nothing else ever does
+    harmless: bool = False      # lights and music only: may change the house when the owner runs --live-writes,
+                                # and is undone right after its checks. Everything else is always a dry run.
     given: tuple = ()           # recipes the scenario starts with: (name, steps), steps as {'tool', 'args'} with {alias}
 
     def __post_init__(self):
@@ -71,7 +72,7 @@ SCENARIOS = (
         ((Use('music_now'), Use('play_music', speaker='{living_room_speaker}', action='play_media', what='calm piano',
                                 soft=True),
           Say('Playing {picked} softly on the {living_room_speaker}.')),),
-        tags=('music',), seed='Ask passed the whole sentence to the speaker as a search, and it played nothing or noise.'),
+        harmless=True, tags=('music',), seed='Ask passed the whole sentence to the speaker as a search, and it played nothing or noise.'),
     Scenario(
         'music-as-well-joins',
         '“Play it in the kitchen as well” joins the kitchen to what is playing; it doesn’t start a second stream.',
@@ -86,7 +87,7 @@ SCENARIOS = (
          (Use('music_now'), Use('play_music', speaker='{living_room_speaker}', action='group',
                                 with_speakers=['{kitchen_speaker}']),
           Say('The {kitchen_speaker} is playing the same music now.'))),
-        tags=('music',), seed='“As well” started a second, separate stream in the kitchen.'),
+        harmless=True, tags=('music',), seed='“As well” started a second, separate stream in the kitchen.'),
     Scenario(
         'remember-is-a-note-not-a-playlist',
         '“Remember …” proposes a note in the owner’s words for their tap; never a playlist, never a change.',
@@ -130,7 +131,7 @@ SCENARIOS = (
          c.NotCalled('play_music', 'edit_playlist', 'kitchen'), c.PlainReply()),
         ((Use('home_status'), Use('home_control', device='{living_room}', action='off'),
           Say('The {living_room} lights are off.')),),
-        tags=('lights',)),
+        harmless=True, tags=('lights',)),
     Scenario(
         'lights-dim-one-lamp',
         'Dimming one lamp sets that lamp’s brightness and nothing else.',
@@ -141,7 +142,7 @@ SCENARIOS = (
          c.NotCalled('play_music', 'edit_playlist', 'kitchen'), c.PlainReply()),
         ((Use('home_control', device='{reading_lamp}', action='brightness', brightness_percent=30),
           Say('The {reading_lamp} is at 30%.')),),
-        tags=('lights',)),
+        harmless=True, tags=('lights',)),
     Scenario(
         'what-needs-me-today',
         '“What needs me today?” reads Today’s list and changes nothing.',

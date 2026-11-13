@@ -22,6 +22,15 @@ It can’t give Hub a new ability by itself.</p>
 {% endfor %}
 </ul>
 
+{% if improvements %}<h2 id="improvements">Improvement requests</h2>
+<p class="note">Filed by your “Improve this” taps, for the next building session. What Hub could and couldn’t do; never your messages.</p>
+<ul class="checks">
+{% for r in improvements %}
+  <li><div><strong>{{ r.brief }}</strong><small>{{ r.at | when }}{% if r.status != 'new' %} · {{ r.status }}{% endif %}</small></div>
+    <form method="post" action="/engine/improvements/remove"><input type="hidden" name="request_id" value="{{ r.id }}"><button class="btn small quiet">Remove</button></form></li>
+{% endfor %}
+</ul>{% endif %}
+
 {% if requests %}<h2>Asked for, not built yet</h2>
 <p class="note">Notes for the next building session. Nothing here runs.</p>
 <ul class="checks">

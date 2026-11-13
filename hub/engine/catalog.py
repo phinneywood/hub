@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from typing import Literal
 
 from .. import home, today
+from .waiting import card as chat_card
 from .recipes import Step as RecipeStep
 from .registry import Action, Control, Handoff, Lookup, Source
 
@@ -500,14 +501,17 @@ def edit_playlist(login, action: Literal['create', 'add', 'remove', 'move', 'ren
         return {'refused': 'Music Assistant isn’t set up in Hub yet.'}
     try:
         if action == 'create':
-            music.propose(playlist, songs, login=login)
-            return {'needs_tap': f'Nothing is made yet. The owner taps Make playlist for “{safe(music.check_name(playlist))}” '
-                                 'on the Playlists page linked below.'}
+            proposal_id = music.propose(playlist, songs, login=login)
+            name = safe(music.check_name(playlist))
+            return {'needs_tap': f'Nothing is made yet. The owner taps Make playlist for “{name}” on the card below '
+                                 '(or on the Playlists page).',
+                    'card': chat_card('playlist', proposal_id, name, [safe(x) for x in songs or ()])}
         if action == 'delete':
             chosen = music.find(playlist)
             music.check_editable(chosen)
             return {'needs_tap': f'Nothing is deleted yet. The owner confirms deleting “{safe(chosen["name"])}” on the '
-                                 'Playlists page linked below; it can’t be undone.'}
+                                 'card below (or on the Playlists page); it can’t be undone.',
+                    'card': chat_card('delete', chosen['id'], safe(chosen['name']))}
         if action == 'add':
             result = music.add(playlist, songs, login=login, via='ask')
         elif action == 'remove':
@@ -555,8 +559,10 @@ def remember(login, note: str, speakers: list[str] | None = None, *, said: str =
         return {'refused': safe(error)}
     except broker.HomeDown as error:
         return {'unavailable': f'{error} Nothing was proposed.'}
-    out = {'needs_tap': f'Nothing is saved yet. The owner taps Save on the Notes page linked below to keep: '
-                        f'“{safe(proposed["text"])}”. Say that.'}
+    out = {'needs_tap': f'Nothing is saved yet. The owner taps Save on the card below (or on the Notes page) to keep: '
+                        f'“{safe(proposed["text"])}”. Say that.',
+           'card': chat_card('note', proposed['id'], safe(proposed['text']),
+                             ['Those speakers will play music together.'] if proposed['zone'] else [])}
     if proposed['zone']:
         out['zone'] = 'Once saved, those speakers play music together by default.'
     return out
@@ -583,9 +589,10 @@ def propose_recipe(login, name: str, steps: list[RecipeStep], *, said: str = '')
         return {'refused': safe(error)}
     except broker.HomeDown as error:
         return {'unavailable': f'{error} Nothing was proposed.'}
-    return {'needs_tap': f'Nothing is saved yet. The owner taps Save on the Recipes page linked below to keep '
-                         f'“{safe(proposed["name"])}”: ' + safe('; '.join(recipes.describe(s) for s in proposed['steps']))
-                         + '. Say that.'}
+    lines = [safe(recipes.describe(s)) for s in proposed['steps']]
+    return {'needs_tap': f'Nothing is saved yet. The owner taps Save on the card below (or on the Recipes page) to keep '
+                         f'“{safe(proposed["name"])}”: ' + '; '.join(lines) + '. Say that.',
+            'card': chat_card('recipe', proposed['id'], safe(proposed['name']), lines)}
 
 
 def run_recipe(login, name: str, *, said: str = '') -> dict:
@@ -664,6 +671,12 @@ MORNING_HOUR = 6           # after this, a morning with no review counts as miss
 def _hour():
     from datetime import datetime
     return datetime.now(home.PACIFIC).hour
+
+
+def improvement_items():
+    """Improvement requests the owner filed in the last day, so they see it was kept."""
+    from . import improve
+    return improve.today_items()
 
 
 def hub_faults():
@@ -772,7 +785,7 @@ SOURCES = [
                            '/house/playlists', 'Playlists', library_lookup))),
     Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
            'What is already on your list and what you said “Not today” to this week. To Ask Hub when you ask: what its '
-           'runs cost against each limit and how many finished.', items=(hub_faults, hub_release),
+           'runs cost against each limit and how many finished.', items=(hub_faults, hub_release, improvement_items),
            prepare=old_key_reminder,
            lookups=(Lookup('today_list', 'Needs you', 'Today’s list, as the Today page shows it.',
                            'Each item’s title, and its second line unless it is about mail. No addresses or links.',

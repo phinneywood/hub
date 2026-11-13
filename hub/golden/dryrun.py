@@ -101,20 +101,18 @@ def _scratch_db(folder):
 
 
 @contextmanager
-def layer(enabled=True, recipes=()):
-    """Stand in Hub's three doors for the length of the block. Yields the Ledger. With enabled=False (live
-    writes, for scenarios marked harmless and only when the owner asks) changes really happen and are
-    recorded in Hub's own change log, with Undo; the Ledger stays empty. `recipes`: (name, steps) pairs a scenario
-    starts with, saved in the scratch database after the usual checks."""
+def layer(house_writes=False, recipes=()):
+    """Stand in Hub's doors for the length of the block. Yields the Ledger.
+
+    house_writes (owner's decision, 2026-11-13: light and music scenarios only, and only when the owner runs them
+    with --live-writes): Home Assistant changes really go out, after the same checks, and are recorded both here
+    and in Hub's own change log, so the runner can undo them right after the scenario's checks. Everything else
+    (Music Assistant edits, Kitchen, notes, recipes, playlists to make) is still held back.
+    `recipes`: (name, steps) pairs a scenario starts with, saved in the scratch database after the usual checks."""
     from ..engine import notes, recipes as recipe_book
     from ..tools.house import broker, control, music
     from ..tools.kitchen import client
     ledger = Ledger()
-    if not enabled:
-        if recipes:
-            raise ValueError('A scenario that brings its own recipes only runs as a dry run.')
-        yield ledger
-        return
     real_exchange, real_send, real_call = broker._exchange, music._send, client.call
     saved = {'broker': real_exchange, 'music_send': real_send, 'settle': music._settle, 'kitchen': real_call,
              'control_db': control._db, 'music_db': music._db, 'notes_db': notes._db,
@@ -135,6 +133,8 @@ def layer(enabled=True, recipes=()):
                 raise broker.NotSent('The dry run refused a request it doesn’t know.')
             domain, service = parts[2:]
             ledger.add('home', f'{domain}/{service}', message['body'])
+            if house_writes:
+                return real_exchange(message, timeout)
             ledger._apply(domain, service, message['body'])
             return []
         raise broker.NotSent('The dry run refused a request it doesn’t know.')
@@ -175,7 +175,8 @@ def layer(enabled=True, recipes=()):
     with tempfile.TemporaryDirectory(prefix='hub-golden-') as folder:
         broker._exchange, music._send, client.call = exchange, send, kitchen
         music._settle = lambda playlist_id, want: 'done'     # nothing was sent, so there is nothing to read back
-        control._db = _with_schema(_scratch_db(Path(folder)), control.SCHEMA)
+        if not house_writes:      # live house writes keep Hub's own change log, so Undo puts them back
+            control._db = _with_schema(_scratch_db(Path(folder)), control.SCHEMA)
         music._db = _with_schema(_scratch_db(Path(folder)), music.SCHEMA)
         notes._db = _with_schema(_scratch_db(Path(folder)), notes.SCHEMA)
         recipe_book._db = _with_schema(_scratch_db(Path(folder)), recipe_book.SCHEMA)

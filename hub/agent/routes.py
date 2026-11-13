@@ -86,6 +86,46 @@ def messages(thread_id: str):
             for m in VercelAIAdapter.dump_messages(agent.cite(store.history(thread_id)), sdk_version=7)]
 
 
+@router.get('/card/{kind}/{proposal_id}')
+def card_status(kind: str, proposal_id: str):
+    """What became of something a chat card offered: waiting, saved, skipped, made, deleted, expired or gone."""
+    from ..engine import waiting
+    return {'status': waiting.status(kind, proposal_id)}
+
+
+def _turns(history):
+    """The thread's model messages, one list per owner message."""
+    from pydantic_ai.messages import ModelRequest, UserPromptPart
+    turns = []
+    for message in history:
+        if isinstance(message, ModelRequest) and any(isinstance(p, UserPromptPart) for p in message.parts):
+            turns.append([])
+        if turns:
+            turns[-1].append(message)
+    return turns
+
+
+@router.post('/threads/{thread_id}/improve')
+async def improve(thread_id: str, request: Request):
+    """“Improve this” under an answer: files a brief of what Hub could and couldn't do on that turn, at once.
+    `turn` counts the owner's messages before that answer, from 0. No message or answer text is kept."""
+    from ..engine import improve as improvements
+    if not _thread(thread_id):
+        return _error(404, 'No such chat.')
+    login = request.headers.get('tailscale-user-login')
+    if login is None:
+        return _error(403, 'Send this from your phone or laptop.')
+    try:
+        turn = int(json.loads(await request.body())['turn'])
+    except (ValueError, KeyError, TypeError):
+        return _error(400, 'That couldn’t be read.')
+    turns = _turns(await run_in_threadpool(store.history, thread_id))
+    if not 0 <= turn < len(turns):
+        return _error(404, 'Hub can’t find that answer any more.')
+    entry = await run_in_threadpool(lambda: improvements.file(improvements.brief_for(turns[turn]), source='ask', login=login))
+    return {'ok': True, 'said': 'Filed for the next building session. It’s on Today and the Engine page.', 'id': entry['id']}
+
+
 @router.delete('/threads/{thread_id}')
 def delete(thread_id: str):
     if _thread(thread_id):

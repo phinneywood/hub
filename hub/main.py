@@ -227,6 +227,7 @@ def today_prepare(request: Request):
 
 @app.get("/engine", response_class=HTMLResponse)
 def engine_page(request: Request, ran: str = "", asked: str = "", deploy: str = ""):
+    from .engine import improve
     from . import home as summaries
     from .engine import ask, catalog, overnight, registry, release, state
     day = summaries.today().isoformat()
@@ -238,7 +239,7 @@ def engine_page(request: Request, ran: str = "", asked: str = "", deploy: str = 
     version = {"on": release.folder() is not None, "running": release.running(), "pending": release.pending(),
                "last": release.last(), "requested": release.requested()}
     return render(request, "engine.html", active="engine", sources=catalog.SOURCES, acts=acts, words=registry.TRUST_WORDS,
-                  instructions=state.instructions(), requests=state.requests(), version=version,
+                  instructions=state.instructions(), requests=state.requests(), improvements=improve.requests(), version=version,
                   runs=state.runs(overnight.KIND), used=state.used(day, overnight.KIND), limits=limits, said=said,
                   sort_runs=state.runs(triage.KIND, limit=7), sort_used=state.used(day, triage.KIND),
                   said_ok=ran in ("ok", "already") or asked in ("instruction", "request", "unsorted") or deploy == "asked",
@@ -340,25 +341,40 @@ def engine_notes(request: Request, done: str = "", problem: str = ""):
                   said=NOTE_WORDS.get(done, ""), problem=problem[:200], full=len(saved) >= state.MAX_INSTRUCTIONS)
 
 
+def _signed_out(request, words):
+    from . import taps
+    return taps.refused(request, words, lambda: HTMLResponse(words, status_code=403), status=403)
+
+
 @app.post("/engine/notes/{proposal_id}/save")
 def engine_note_save(proposal_id: str, request: Request):
-    """Only a tap from a signed-in device saves a note: never the chat's model, never a program on this Mac."""
+    """Only a tap from a signed-in device saves a note: never the chat's model, never a program on this Mac.
+    The Notes page and the chat's card both post here."""
     from urllib.parse import quote
+    from . import taps
     from .engine import notes
     if request.headers.get("tailscale-user-login") is None:
-        return HTMLResponse("Save notes from your phone or laptop.", status_code=403)
+        return _signed_out(request, "Save notes from your phone or laptop.")
     try:
         notes.save(proposal_id)
     except notes.Refused as error:
-        return RedirectResponse("/engine/notes?problem=" + quote(str(error)), status_code=303)
-    return RedirectResponse("/engine/notes?done=saved", status_code=303)
+        return taps.refused(request, error, lambda: RedirectResponse("/engine/notes?problem=" + quote(str(error)), status_code=303))
+    return taps.done(request, "/engine/notes?done=saved", NOTE_WORDS["saved"])
 
 
 @app.post("/engine/notes/{proposal_id}/skip")
-def engine_note_skip(proposal_id: str):
+def engine_note_skip(proposal_id: str, request: Request):
+    from . import taps
     from .engine import notes
     notes.skip(proposal_id)
-    return RedirectResponse("/engine/notes?done=skipped", status_code=303)
+    return taps.done(request, "/engine/notes?done=skipped", NOTE_WORDS["skipped"])
+
+
+@app.post("/engine/improvements/remove")
+def engine_improvement_remove(request_id: str = Form(...)):
+    from .engine import improve
+    improve.remove(request_id)
+    return RedirectResponse("/engine#improvements", status_code=303)
 
 
 @app.post("/engine/notes/remove")
@@ -384,47 +400,49 @@ def engine_recipes(request: Request, done: str = "", problem: str = ""):
                   saved=[shown(r) for r in recipes.saved()], said=RECIPE_WORDS.get(done, ""), problem=problem[:200])
 
 
-def _recipe_change(change, done):
+def _recipe_change(request, change, done):
     from urllib.parse import quote
+    from . import taps
     from .engine import recipes
     try:
         change()
     except recipes.Refused as error:
-        return RedirectResponse("/engine/recipes?problem=" + quote(str(error)), status_code=303)
-    return RedirectResponse(f"/engine/recipes?done={done}", status_code=303)
+        return taps.refused(request, error, lambda: RedirectResponse("/engine/recipes?problem=" + quote(str(error)), status_code=303))
+    return taps.done(request, f"/engine/recipes?done={done}", RECIPE_WORDS[done])
 
 
 @app.post("/engine/recipes/{proposal_id}/save")
 def engine_recipe_save(proposal_id: str, request: Request):
-    """Only a tap from a signed-in device saves a recipe: never the chat's model, never a program on this Mac."""
+    """Only a tap from a signed-in device saves a recipe: never the chat's model, never a program on this Mac.
+    The Recipes page and the chat's card both post here."""
     from .engine import recipes
     if request.headers.get("tailscale-user-login") is None:
-        return HTMLResponse("Save recipes from your phone or laptop.", status_code=403)
-    return _recipe_change(lambda: recipes.save(proposal_id), "saved")
+        return _signed_out(request, "Save recipes from your phone or laptop.")
+    return _recipe_change(request, lambda: recipes.save(proposal_id), "saved")
 
 
 @app.post("/engine/recipes/{proposal_id}/skip")
-def engine_recipe_skip(proposal_id: str):
+def engine_recipe_skip(proposal_id: str, request: Request):
     from .engine import recipes
-    return _recipe_change(lambda: recipes.skip(proposal_id), "skipped")
+    return _recipe_change(request, lambda: recipes.skip(proposal_id), "skipped")
 
 
 @app.post("/engine/recipes/rename")
-def engine_recipe_rename(recipe_id: int = Form(...), name: str = Form(...)):
+def engine_recipe_rename(request: Request, recipe_id: int = Form(...), name: str = Form(...)):
     from .engine import recipes
-    return _recipe_change(lambda: recipes.rename(recipe_id, name), "renamed")
+    return _recipe_change(request, lambda: recipes.rename(recipe_id, name), "renamed")
 
 
 @app.post("/engine/recipes/drop-step")
-def engine_recipe_drop_step(recipe_id: int = Form(...), index: int = Form(...)):
+def engine_recipe_drop_step(request: Request, recipe_id: int = Form(...), index: int = Form(...)):
     from .engine import recipes
-    return _recipe_change(lambda: recipes.drop_step(recipe_id, index), "trimmed")
+    return _recipe_change(request, lambda: recipes.drop_step(recipe_id, index), "trimmed")
 
 
 @app.post("/engine/recipes/remove")
-def engine_recipe_remove(recipe_id: int = Form(...)):
+def engine_recipe_remove(request: Request, recipe_id: int = Form(...)):
     from .engine import recipes
-    return _recipe_change(lambda: recipes.remove(recipe_id), "removed")
+    return _recipe_change(request, lambda: recipes.remove(recipe_id), "removed")
 
 
 def store_log(action, detail):
