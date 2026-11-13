@@ -472,11 +472,11 @@ function Chat({ threadId, initial, about, onDrop, onActivity, onRefused }) {
               </div>
             </ThreadPrimitive.Empty>
           )}
-          <ThreadPrimitive.ScrollToBottom asChild><button type="button" className="ask-to-bottom" aria-label="Scroll to the latest">↓</button></ThreadPrimitive.ScrollToBottom>
+          <ThreadPrimitive.ScrollToBottom asChild><button type="button" className="ask-to-bottom" aria-label="Scroll to the latest"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 5v14M6 13l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></button></ThreadPrimitive.ScrollToBottom>
           {/* The page's own script dims the page on any form submit; this form doesn't navigate. */}
           <ComposerPrimitive.Root className="ask-composer" onSubmit={(e) => e.stopPropagation()}>
             <ComposerPrimitive.Input className="ask-input" rows={1} maxLength={2000} placeholder="Message Hub" enterKeyHint="send" aria-label="Message" />
-            <ThreadPrimitive.If running={false}><ComposerPrimitive.Send className="ask-send" aria-label="Send">↑</ComposerPrimitive.Send></ThreadPrimitive.If>
+            <ThreadPrimitive.If running={false}><ComposerPrimitive.Send className="ask-send" aria-label="Send"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg></ComposerPrimitive.Send></ThreadPrimitive.If>
             <ThreadPrimitive.If running><ComposerPrimitive.Cancel className="ask-send stop" aria-label="Stop"><i /></ComposerPrimitive.Cancel></ThreadPrimitive.If>
           </ComposerPrimitive.Root>
         </div>
