@@ -72,7 +72,7 @@ if (!out) { console.error("usage: node check.cjs <output-folder> [base-url]"); p
     expect((await page.locator(".ask-tap .k-plan-status").innerText()).includes("Saved"), "a reopened card says it was saved");
     await page.locator(".ask-improve-go").last().click(); await page.waitForSelector(".ask-improve .ask-fine");
     const filed = await (await page.request.get(base + "/engine")).text();
-    expect(filed.includes("remember (left something waiting"), "Improve this after a reload files the right answer");
+    expect(filed.includes("remember (needs_tap)"), "Improve this after a reload files the right answer");
     const engine = await (await page.request.get(base + "/engine/notes")).text();
     expect(engine.includes("kitchen and living room play music together"), "the saved note is on the Notes page");
     await ctx.close();
@@ -121,6 +121,24 @@ if (!out) { console.error("usage: node check.cjs <output-folder> [base-url]"); p
     expect((await page.locator(".np").count()) === 2 && (await page.locator(".np-old").innerText()).includes("Replaced"), "an older card folds to Replaced");
     await shot("5-replaced");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the music card scrolls sideways");
+    expect((await page.locator(`${card} .np-links`).innerText()).includes("Open in Music Assistant"), "the card opens Music Assistant");
+    // Stage 2: the mini-player on another page, opening to the same controls.
+    await page.goto(base + "/today"); await page.waitForSelector("#mp-bar:not([hidden]) .mp-open");
+    expect((await page.locator(".mp-open").innerText()).includes("Bedroom Speaker"), "the bar says where music plays");
+    await shot("6-bar");
+    await page.click(".mp-open"); await page.waitForSelector(".mp-sheet .mp-panel");
+    await page.click('.mp-sheet .mp-panel .mp-go[aria-label="Pause"]');
+    await page.waitForSelector('.mp-sheet .mp-panel .mp-go[aria-label="Play"]', { timeout: 8000 });
+    expect((await page.locator(".mp-sheet .mp-said").innerText()).includes("paused"), "a tap in the bar says what it did");
+    await shot("7-bar-open");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the mini-player scrolls sideways");
+    // Stage 3: the Music screen, every speaker with the same controls.
+    await page.goto(base + "/house/music"); await page.waitForSelector(".mp-screen .mp-panel");
+    expect((await page.locator(".mp-screen .mp-panel").count()) >= 2, "every speaker group has a panel");
+    await page.click('.mp-screen .mp-panel >> nth=0 >> .mp-room:has-text("Kitchen Speaker")');
+    await page.waitForSelector('.mp-screen .mp-panel >> nth=0 >> .mp-room.in:has-text("Kitchen Speaker")', { timeout: 8000 });
+    await page.waitForTimeout(400); await shot("8-music-screen");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the Music screen scrolls sideways");
     await ctx.close();
   }
   expect([...hosts].every((h) => h === new URL(base).host), "the page contacted another host: " + [...hosts].join(", "));

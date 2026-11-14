@@ -245,7 +245,10 @@ function NowPlaying({ card, toolCallId }) {
           {said.batch && <button type="button" className="np-undo" disabled={busy} onClick={undo}>Undo</button>}</p>
       )}
       {(error || down) && <p className="ask-fine bad">{error || down}</p>}
-      <a className="k-small" href="/house/changes">Home changes ›</a>
+      <span className="np-links">
+        <a className="k-small" href="/house/changes">Home changes ›</a>
+        {/^https?:\/\//.test(now?.open || "") && <a className="k-small" href={now.open} target="_blank" rel="noopener">Open in Music Assistant ↗</a>}
+      </span>
     </section>
   );
 }

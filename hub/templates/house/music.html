@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Music · Hub{% endblock %}
+{% from "_away.html" import open_in %}
+{% block body %}
+<p class="eyebrow">Home</p>
+<h1 class="status-head">Music</h1>
+<p class="page-acts">
+{{ open_in(links.music_url, 'Open in Music Assistant', primary=True) }}
+<a class="btn small" href="/house/playlists">Playlists</a>
+<a class="btn small" href="/house/changes">Home changes</a>
+</p>
+<div class="mp-screen" data-music-screen aria-live="polite"><p class="note">Reading the speakers…</p></div>
+<p class="note">Every speaker, as Home Assistant has it now. A tap goes through the same checks as Ask, at most 30 changes a minute, and shows on Home changes with Undo for a day. To start new music, ask in Ask.</p>
+{% endblock %}

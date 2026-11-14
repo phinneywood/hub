@@ -86,24 +86,41 @@ def _said(result):
                          'batch': result['batch'] if result['undo'] else None})
 
 
-@router.get("/now/{speaker}")
-def now_playing(speaker: str):
+@router.get("/now")
+def now_playing_all():
+    """Every speaker group, for the mini-player across Hub's pages and the Music screen."""
     from . import nowplaying
     try:
-        return nowplaying.state(speaker[:140])
+        return {'groups': nowplaying.groups(), 'open': read.links().get('music_url')}
     except read.broker.HomeDown as error:
         return JSONResponse({'error': str(error)}, status_code=503)
 
 
+@router.get("/now/{speaker}")
+def now_playing(speaker: str):
+    from . import nowplaying
+    try:
+        return {**nowplaying.state(speaker[:140]), 'open': read.links().get('music_url')}
+    except read.broker.HomeDown as error:
+        return JSONResponse({'error': str(error)}, status_code=503)
+
+
+@router.get("/music", response_class=HTMLResponse)
+def music_screen(request: Request):
+    """Every speaker with the same controls as Ask's card. The page draws itself from /house/now (music.js)."""
+    return render(request, "house/music.html", active="house", links=read.links())
+
+
 @router.post("/now/{speaker}")
 def now_playing_tap(speaker: str, request: Request, action: str = Form(...), target: str = Form(''),
-                    value: int | None = Form(None)):
+                    value: int | None = Form(None), via: str = Form('card')):
     """One tap on the card: play, pause, next, a speaker's or the group's volume, or a room in or out."""
     from . import nowplaying
     if _login(request) is None:
         return JSONResponse({'error': 'Change the music from your phone or laptop.'}, status_code=403)
     try:
-        result = nowplaying.tap(speaker[:140], action, login=_login(request), target=target[:140] or None, value=value)
+        result = nowplaying.tap(speaker[:140], action, login=_login(request), target=target[:140] or None, value=value,
+                                 via=via)
     except (control.Refused, read.broker.HomeDown) as error:
         return JSONResponse({'error': str(error)[:300]}, status_code=409)
     return _said(result)

@@ -528,14 +528,14 @@ def edit_playlist(login, action: Literal['create', 'add', 'remove', 'move', 'ren
         if action == 'create':
             proposal_id = music.propose(playlist, songs, login=login)
             name = safe(music.check_name(playlist))
-            return {'needs_tap': f'Nothing is made yet. The owner taps Make playlist for “{name}” on the card below '
+            return {'needs_tap': f'Nothing is made yet. The owner taps Make playlist for “{name}” on the card in the chat '
                                  '(or on the Playlists page).',
                     'card': chat_card('playlist', proposal_id, name, [safe(x) for x in songs or ()])}
         if action == 'delete':
             chosen = music.find(playlist)
             music.check_editable(chosen)
             return {'needs_tap': f'Nothing is deleted yet. The owner confirms deleting “{safe(chosen["name"])}” on the '
-                                 'card below (or on the Playlists page); it can’t be undone.',
+                                 'card in the chat (or on the Playlists page); it can’t be undone.',
                     'card': chat_card('delete', chosen['id'], safe(chosen['name']))}
         if action == 'add':
             result = music.add(playlist, songs, login=login, via='ask')
@@ -586,7 +586,7 @@ def remember(login, note: str, speakers: list[str] | None = None, *, said: str =
     except broker.HomeDown as error:
         ask_trace.noted(error)
         return {'unavailable': f'{error} Nothing was proposed.'}
-    out = {'needs_tap': f'Nothing is saved yet. The owner taps Save on the card below (or on the Notes page) to keep: '
+    out = {'needs_tap': f'Nothing is saved yet. The owner taps Save on the card in the chat (or on the Notes page) to keep: '
                         f'“{safe(proposed["text"])}”. Say that.',
            'card': chat_card('note', proposed['id'], safe(proposed['text']),
                              ['Those speakers will play music together.'] if proposed['zone'] else [])}
@@ -618,7 +618,7 @@ def propose_recipe(login, name: str, steps: list[RecipeStep], *, said: str = '')
         ask_trace.noted(error)
         return {'unavailable': f'{error} Nothing was proposed.'}
     lines = [safe(recipes.describe(s)) for s in proposed['steps']]
-    return {'needs_tap': f'Nothing is saved yet. The owner taps Save on the card below (or on the Recipes page) to keep '
+    return {'needs_tap': f'Nothing is saved yet. The owner taps Save on the card in the chat (or on the Recipes page) to keep '
                          f'“{safe(proposed["name"])}”: ' + '; '.join(lines) + '. Say that.',
             'card': chat_card('recipe', proposed['id'], safe(proposed['name']), lines)}
 

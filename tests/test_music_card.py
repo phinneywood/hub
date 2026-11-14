@@ -144,3 +144,38 @@ def test_a_down_broker_says_so(world, monkeypatch):
     read.clear_cache()
     reply = TestClient(app).get(f'/house/now/{LIVING}', headers=SIGNED_IN)
     assert reply.status_code == 503 and 'broker' in reply.json()['error']
+
+
+# ---- Stage 2 and 3: the mini-player on Hub's pages and the Music screen ----
+
+def test_every_group_is_listed_playing_first_with_the_music_assistant_link(world, monkeypatch):
+    monkeypatch.setattr(read, 'links', lambda: {'music_url': 'https://music.example:8095'})
+    found = TestClient(app).get('/house/now', headers=SIGNED_IN).json()
+    assert [g['leader'] for g in found['groups']] == [LIVING, KITCHEN]      # two groups; the playing one first
+    assert found['groups'][0]['playing'] and not found['groups'][1]['playing']
+    assert found['open'] == 'https://music.example:8095'
+    nowplaying.tap(LIVING, 'add', login='me@example.com', target=KITCHEN)
+    assert [g['leader'] for g in nowplaying.groups()] == [LIVING]            # one group once the kitchen joins
+    assert TestClient(app).get(f'/house/now/{LIVING}', headers=SIGNED_IN).json()['open'] == 'https://music.example:8095'
+
+
+def test_taps_from_the_bar_and_the_music_screen_are_recorded_as_theirs(world):
+    client = TestClient(app)
+    for via in ('bar', 'music'):
+        assert client.post(f'/house/now/{LIVING}', data={'action': 'pause', 'via': via}, headers=JSON).json()['ok']
+    assert [r['via'] for r in control.recent()] == ['music', 'bar']
+    assert client.post(f'/house/now/{LIVING}', data={'action': 'pause', 'via': 'ask'}, headers=JSON).status_code == 409
+    page = client.get('/house/changes', headers=SIGNED_IN).text
+    assert 'from the mini-player' in page and 'from Music' in page and 'href="/house/music"' in page
+
+
+def test_the_music_screen_and_the_mini_player_are_on_hubs_pages_but_not_ask(world, monkeypatch):
+    monkeypatch.setattr(read, 'links', lambda: {'music_url': 'https://music.example:8095'})
+    client = TestClient(app)
+    screen = client.get('/house/music', headers=SIGNED_IN).text
+    assert 'data-music-screen' in screen and 'Open in Music Assistant' in screen and 'target="_blank" rel="noopener"' in screen
+    assert 'id="mp-bar"' in screen and '/static/music.js' in screen
+    ask = client.get('/ask', headers=SIGNED_IN).text
+    assert 'mp-bar' not in ask and 'music.js' not in ask                      # Ask has its own card
+    script = (__import__('pathlib').Path(__file__).parents[1] / 'hub/static/music.js').read_text()
+    assert 'innerHTML' not in script                                           # names are data, set as text only
