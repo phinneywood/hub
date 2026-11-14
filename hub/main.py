@@ -210,7 +210,9 @@ def insights_page(request: Request):
 @app.get("/tools", response_class=HTMLResponse)
 def all_tools(request: Request):
     """The secondary menu: every tool's own page."""
-    return render(request, "tools.html", active="tools", listed=[t for t in TOOLS if t["slug"] != "ask"])
+    from .tools.house import read
+    return render(request, "tools.html", active="tools", listed=[t for t in TOOLS if t["slug"] != "ask"],
+                  elsewhere=read.elsewhere())
 
 
 @app.get("/settings", response_class=HTMLResponse)

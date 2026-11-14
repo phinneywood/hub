@@ -1,0 +1,5 @@
+{# Links that leave Hub for Home Assistant or Music Assistant. Always a new tab without a window.opener, never a frame.
+   `away(href)` gives the attributes for any link that might point outside Hub; `open_in(href, label)` is a button.
+   The addresses come from the private household.json (read.links()); a caller shows nothing when one isn't set. #}
+{% macro away(href) %}{% if href and href.startswith(('https://', 'http://')) %} target="_blank" rel="noopener"{% endif %}{% endmacro %}
+{% macro open_in(href, label, primary=False) %}{% if href %}<a class="btn small{% if primary %} primary{% endif %}" href="{{ href }}" target="_blank" rel="noopener">{{ label }}<span class="sr"> (opens in a new tab)</span></a>{% endif %}{% endmacro %}

@@ -210,7 +210,7 @@ def test_house_opens_home_assistant_when_its_address_is_set(monkeypatch):
     (config.DATA_DIR / 'household.json').write_text(json.dumps({'home': {'assistant_url': 'https://ha.example:8123',
                                                                          'music_url': 'javascript:alert(1)'}}))
     assert client.get('/house', follow_redirects=False).headers['location'] == 'https://ha.example:8123'
-    assert read.links() == {'assistant_url': 'https://ha.example:8123'}          # only web addresses
+    assert read.links() == {'ha_url': 'https://ha.example:8123'}          # only web addresses; the older key still counts
 
 
 def test_tile_and_today_items(fake, monkeypatch):

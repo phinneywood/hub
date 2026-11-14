@@ -2,6 +2,7 @@
 {% block title %}Today · Hub{% endblock %}
 {% block main_class %}home{% endblock %}
 {% from "_icons.html" import icon %}
+{% from "_away.html" import away %}
 {% block body %}
 <div class="home-head">
   <p class="home-date">{{ date_text }}</p>
@@ -23,8 +24,8 @@
       {% if n.acts %}{% for a in n.acts %}<form method="post" action="{{ a.post }}"><button class="btn small{{ ' primary' if a.primary else ' quiet' }}">{{ a.label }}</button></form>{% endfor %}
       {% else %}
       {% if n.post %}<form method="post" action="{{ n.post }}"><button class="btn small primary">{{ n.cta }}</button></form>
-      <a class="btn small" href="{{ n.href }}">Details</a>
-      {% else %}<a class="btn small primary" href="{{ n.href }}">{{ n.cta }}</a>{% endif %}
+      <a class="btn small" href="{{ n.href }}"{{ away(n.href) }}>Details</a>
+      {% else %}<a class="btn small primary" href="{{ n.href }}"{{ away(n.href) }}>{{ n.cta }}</a>{% endif %}
       <form method="post" action="/today/snooze"><input type="hidden" name="key" value="{{ n.key }}"><button class="btn small quiet">{{ n.later or 'Not today' }}</button></form>
       {% endif %}
       <a class="ask-about" href="/ask?about={{ n.ask | urlencode }}">Ask about this<span class="sr"> ({{ n.title }})</span></a>
@@ -39,14 +40,14 @@
   {% for t in tools %}
     <article class="tile tone-{{ t.tone }}">
       <span class="tile-name">{{ icon(t.slug) }}{{ t.name }}</span>
-      <a class="tile-headline" href="{{ t.href }}">{{ t.headline }}</a>
+      <a class="tile-headline" href="{{ t.href }}"{{ away(t.href) }}>{{ t.headline }}</a>
       {% if t.detail %}<span class="tile-detail">{{ t.detail }}</span>{% endif %}
       {% if t.lines %}<ul class="tile-items">{% for i in t.lines %}
         <li{% if i.struck %} class="struck"{% endif %}><span>{{ i.label }}</span><small>{{ i.note }}</small></li>{% endfor %}
       </ul>{% endif %}
       {% if t.acts %}<span class="tile-acts">{% for a in t.acts %}<form method="post" action="{{ a.post }}">{% for k, v in a.fields.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}<button class="btn small">{{ a.label }}</button></form>{% endfor %}</span>{% endif %}
       <span class="tile-foot">
-        <a class="tile-cta" href="{{ t.href }}">{{ t.cta or 'Open' }}<span class="sr"> {{ t.name }}</span><span aria-hidden="true"> →</span></a>
+        <a class="tile-cta" href="{{ t.href }}"{{ away(t.href) }}>{{ t.cta or 'Open' }}<span class="sr"> {{ t.name }}</span><span aria-hidden="true"> →</span></a>
         {% if t.ask %}<a class="ask-about" href="/ask?about={{ t.ask | urlencode }}">Ask about this<span class="sr"> ({{ t.name }})</span></a>{% endif %}
         {% if t.as_of %}<small class="tile-asof">{{ t.as_of }}</small>{% endif %}
       </span>

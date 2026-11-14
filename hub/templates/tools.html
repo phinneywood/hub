@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 {% block title %}All tools · Hub{% endblock %}
 {% from "_icons.html" import icon %}
+{% from "_away.html" import away %}
 {% block body %}
 <p class="eyebrow">All tools</p>
 <h1 class="status-head">Every tool’s own page</h1>
 <nav class="menu" aria-label="All tools">
   {% for t in listed %}<a href="/{{ t.slug }}">{{ icon(t.slug) }}<strong>{{ t.name }}</strong>{% if t.description %}<small>{{ t.description }}</small>{% endif %}<span class="menu-go" aria-hidden="true">›</span></a>
+  {% endfor %}
+  {% for e in elsewhere %}<a href="{{ e.href }}"{{ away(e.href) }}>{{ icon(e.icon) }}<strong>{{ e.name }}</strong><small>{{ e.description }} Opens in a new tab.</small><span class="menu-go" aria-hidden="true">↗</span></a>
   {% endfor %}
 </nav>
 <p class="note">Today shows a card for each of these. Engine and Status are under <a href="/settings">Settings</a>.</p>

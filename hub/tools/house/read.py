@@ -241,18 +241,32 @@ def attention(found, now=None):
     return sorted(out, key=lambda x: x[0] != 'bad')
 
 
+ELSEWHERE = (('ha_url', 'Home Assistant', 'home-assistant', 'Devices, rooms, automations and dashboards.'),
+             ('music_url', 'Music Assistant', 'music-assistant', 'Speakers, the queue, the library and playlists.'))
+
+
 def links():
     """Where Home Assistant and Music Assistant open for the owner, from the private settings file
-    (household.json, section "home": "assistant_url", "music_url"). Never written into Git."""
+    (household.json, section "home": "ha_url", "music_url"; the older "assistant_url" still counts for
+    Home Assistant). Never written into Git. A key is missing when its address isn't set or isn't a web address."""
     from ... import household
     try:
         home_settings = household.section('home')
     except ValueError:
         home_settings = {}
+    home_settings = {**home_settings, 'ha_url': home_settings.get('ha_url') or home_settings.get('assistant_url')}
     found = {}
-    for key in ('assistant_url', 'music_url'):
+    for key in ('ha_url', 'music_url'):
         value = home_settings.get(key)
         if isinstance(value, str) and value.startswith(('https://', 'http://')) and len(value) < 300 \
                 and not any(c in value for c in '"\'<> '):
             found[key] = value
     return found
+
+
+def elsewhere():
+    """Home Assistant and Music Assistant as All tools entries, each {'name', 'icon', 'description', 'href'},
+    only those whose address is set. They open in a new tab, never inside Hub."""
+    found = links()
+    return [{'name': name, 'icon': icon, 'description': words, 'href': found[key]}
+            for key, name, icon, words in ELSEWHERE if key in found]

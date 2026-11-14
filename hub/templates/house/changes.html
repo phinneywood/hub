@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Home changes · Hub{% endblock %}
+{% from "_away.html" import open_in %}
 {% block body %}
 <p class="eyebrow">Home</p>
 <h1 class="status-head">What Hub changed</h1>
 {% if problem %}<p class="banner warn">{{ problem }}</p>{% endif %}
 <p class="page-acts">
-{% if links.assistant_url %}<a class="btn small primary" href="{{ links.assistant_url }}">Open Home Assistant</a>{% endif %}
-{% if links.music_url %}<a class="btn small" href="{{ links.music_url }}">Open Music Assistant</a>{% endif %}
+{{ open_in(links.ha_url, 'Open Home Assistant', primary=True) }}
+{{ open_in(links.music_url, 'Open in Music Assistant') }}
 <a class="btn small" href="/house/playlists">Playlists</a>
 </p>
 {% if rows %}

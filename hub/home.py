@@ -206,7 +206,7 @@ def kitchen():
 
 def house():
     from .tools.house import broker, read
-    link = read.links().get('assistant_url')
+    link = read.links().get('ha_url')
     where = {'href': link or '/house/changes', 'cta': 'Open Home Assistant' if link else 'Changes'}
     try:
         found = read.snapshot()

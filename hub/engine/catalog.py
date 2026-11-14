@@ -213,7 +213,7 @@ def house_items():
         found = read.snapshot()
     except broker.HomeDown:
         return []  # the Home tile already says it can't be read
-    link = read.links().get('assistant_url') or '/house/changes'
+    link = read.links().get('ha_url') or '/house/changes'
     return [today.rec(f'house-{d["id"]}', tone, words, 'From Home Assistant just now.' if tone == 'bad' else
                       'It’s night. Check it in Home Assistant.', href=link, cta='Open Home Assistant')
             for tone, d, words in read.attention(found)]

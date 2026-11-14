@@ -27,7 +27,7 @@ def _back(back, batch=None):
 
 @router.get("")
 def house():
-    return RedirectResponse(read.links().get('assistant_url') or '/house/changes', status_code=302)
+    return RedirectResponse(read.links().get('ha_url') or '/house/changes', status_code=302)
 
 
 @router.get("/changes", response_class=HTMLResponse)

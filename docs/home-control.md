@@ -87,9 +87,14 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   `music_now` tells the model each speaker's zone mates. Removing the note removes its zone. For security devices Ask will show an approval card instead
   (step 5). Device names and states reach Ask's model only over its zero-retention route.
 - **No Home page of its own.** Home Assistant already has dashboards, so `/house` opens Home Assistant
-  (its address is in the private settings file, `household.json` → `home.assistant_url`, with
+  (its address is in the private settings file, `household.json` → `home.ha_url`; the older `home.assistant_url` still counts, with
   `home.music_url` for Music Assistant's player). Hub keeps only `/house/changes`: what it changed,
   with Undo.
+- **One tap away** (2026-11-13). All tools lists Home Assistant and Music Assistant, with their own icons; the
+  Home page and the Home card on Today have "Open Home Assistant", and the Playlists page "Open in Music
+  Assistant". Each opens in a new tab (`target="_blank" rel="noopener"`), never in a frame, and is hidden while its
+  address isn't set. Templates use `_away.html` (`open_in(href, label)` for a button, `away(href)` for any link that
+  may leave Hub); Python uses `read.links()` and `read.elsewhere()`.
 - **Today.** A Home card with the lights and music in one line and one-tap buttons ("All lights off",
   "Pause"), a banner with Undo after a tap, and a "Needs you" line for the alarm going off or a jammed
   lock at any hour, and an unlocked door or open garage at night.
@@ -237,7 +242,8 @@ The first live check of each step is the owner trying it.
 The HA broker already has access, so steps 1 to 4 and 6 need nothing more.
 
 1. **For the links:** add the Home Assistant and Music Assistant addresses to `household.json` in Hub's
-   private data folder, under `"home": {"assistant_url": "…", "music_url": "…"}`.
+   private data folder, under `"home": {"ha_url": "…", "music_url": "…"}`. Use the Tailscale addresses (Home
+   Assistant's route on 9443, Music Assistant's on 8095) so the links work from the phone anywhere.
 2. **In Music Assistant** (for step 5): add a non-admin user for Hub, sign in as it, create a long-lived
    key named `Hub`, and save it in 1Password's `Hub` vault as item `Music Assistant`, field `credential`.
    Add `"apple_music_signed_in": "YYYY-MM-DD"` (the last Apple Music sign-in) to the same `home` section.
