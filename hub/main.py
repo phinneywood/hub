@@ -3,7 +3,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import actions, bridge, config, delayed, luna, worker
@@ -160,10 +160,26 @@ def luna_test(request: Request):
 @app.get("/manifest.webmanifest")
 def manifest():
     return JSONResponse({"name": "Hub", "short_name": "Hub", "start_url": "/", "display": "standalone",
-                         "background_color": "#141417", "theme_color": "#141417",
-                         "icons": [{"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
-                                   {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"}]},
+                         "background_color": "#3050c4", "theme_color": "#3050c4",
+                         "icons": [{"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+                                   {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+                                   {"src": "/static/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+                                   {"src": "/static/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+                                   {"src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]},
                         media_type="application/manifest+json")
+
+
+def _icon_at_the_root(name):
+    """An icon at an address browsers and phones ask for without being told. Plain routes, so they are
+    answered like the files under /static: no page dependencies, the same headers."""
+    async def serve(request: Request):
+        return FileResponse(HERE / "static" / name)
+    return serve
+
+
+for _address, _name in (("/favicon.ico", "favicon.ico"), ("/apple-touch-icon.png", "apple-touch-icon.png"),
+                        ("/apple-touch-icon-precomposed.png", "apple-touch-icon.png")):
+    app.add_route(_address, _icon_at_the_root(_name), methods=["GET", "HEAD"])
 
 
 @app.get("/", response_class=HTMLResponse)

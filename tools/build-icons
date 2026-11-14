@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Rebuild Hub's icons from the one drawing, hub/static/icon.svg. Development only: Hub never runs this.
+
+    tools/build-icons
+
+Needs macOS with Google Chrome (it draws the SVG, headless, with a throwaway profile) and sips (it
+scales the drawing down). Writes, into hub/static:
+
+    apple-touch-icon.png            180, the full square; iOS rounds the corners itself
+    icon-192.png, icon-512.png      the full square, for the web manifest
+    icon-maskable-192/512.png       the mark drawn smaller, inside the safe zone launchers may crop to
+    favicon.svg                     the square with rounded corners, for browser tabs
+    favicon.ico                     16, 32 and 48 of the rounded square
+    icons.json                      a fingerprint of the drawing and of each file made from it
+
+tests/test_icons.py recomputes the fingerprints, so a changed drawing without a rebuild, or an icon
+changed by hand, fails the tests. Commit the drawing and everything above together.
+"""
+import hashlib
+import json
+import struct
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+STATIC = Path(__file__).resolve().parents[1] / 'hub' / 'static'
+CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+MASTER = 1024
+MASKABLE_SCALE = 0.8      # the mark already sits inside the safe circle; this leaves a wider margin
+CORNER = 115              # of 512: about the corner an iPhone gives a Home Screen icon
+BUILT = ('apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-192.png', 'icon-maskable-512.png',
+         'favicon.svg', 'favicon.ico')
+
+
+def variants(source):
+    """The drawing as it is, with the mark smaller, and with rounded corners."""
+    mark, field = '<g id="mark">', '<rect id="field" '
+    if source.count(mark) != 1 or source.count(field) != 1:
+        sys.exit('icon.svg needs exactly one <g id="mark"> and one <rect id="field" …>.')
+    shift = 256 * (1 - MASKABLE_SCALE)
+    maskable = source.replace(mark, f'<g id="mark" transform="translate({shift:g} {shift:g}) scale({MASKABLE_SCALE})">')
+    rounded = source.replace(field, f'<rect id="field" rx="{CORNER}" ')
+    return {'square': source, 'maskable': maskable, 'rounded': rounded}
+
+
+def draw(svg, png, scratch):
+    """One SVG as a MASTER-pixel PNG with a see-through background."""
+    page = scratch / (png.stem + '.html')
+    page.write_text('<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:transparent}'
+                    f'svg{{display:block;width:{MASTER}px;height:{MASTER}px}}</style>' + svg)
+    subprocess.run([CHROME, '--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run',
+                    f'--user-data-dir={scratch / "profile"}', '--force-device-scale-factor=1',
+                    '--default-background-color=00000000', f'--window-size={MASTER},{MASTER}',
+                    f'--screenshot={png}', page.as_uri()], check=True, capture_output=True, timeout=120)
+    if size(png) != (MASTER, MASTER):
+        sys.exit(f'Chrome drew {size(png)}, not {MASTER} square; nothing was written.')
+
+
+def size(png):
+    data = png.read_bytes()
+    return struct.unpack('>II', data[16:24])
+
+
+def scaled(master, pixels, to):
+    subprocess.run(['/usr/bin/sips', '-s', 'format', 'png', '-z', str(pixels), str(pixels), str(master), '--out', str(to)],
+                   check=True, capture_output=True)
+    if size(to) != (pixels, pixels):
+        sys.exit(f'sips made {size(to)} for {to.name}; nothing was written.')
+    return to
+
+
+def ico(pngs):
+    """An .ico holding each PNG as it is (every current browser reads PNG entries)."""
+    blobs = [p.read_bytes() for p in pngs]
+    offset = 6 + 16 * len(blobs)
+    out = struct.pack('<HHH', 0, 1, len(blobs))
+    for png, blob in zip(pngs, blobs):
+        side = size(png)[0]
+        out += struct.pack('<BBBBHHII', side % 256, side % 256, 0, 0, 1, 32, len(blob), offset)
+        offset += len(blob)
+    return out + b''.join(blobs)
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def main():
+    source = (STATIC / 'icon.svg').read_text()
+    kinds = variants(source)
+    with tempfile.TemporaryDirectory(prefix='hub-icons-') as folder:
+        scratch = Path(folder)
+        masters = {}
+        for kind, svg in kinds.items():
+            masters[kind] = scratch / f'{kind}.png'
+            draw(svg, masters[kind], scratch)
+        made = {
+            'apple-touch-icon.png': scaled(masters['square'], 180, scratch / 'apple-touch-icon.png').read_bytes(),
+            'icon-192.png': scaled(masters['square'], 192, scratch / 'icon-192.png').read_bytes(),
+            'icon-512.png': scaled(masters['square'], 512, scratch / 'icon-512.png').read_bytes(),
+            'icon-maskable-192.png': scaled(masters['maskable'], 192, scratch / 'icon-maskable-192.png').read_bytes(),
+            'icon-maskable-512.png': scaled(masters['maskable'], 512, scratch / 'icon-maskable-512.png').read_bytes(),
+            'favicon.svg': kinds['rounded'].encode(),
+            'favicon.ico': ico([scaled(masters['rounded'], n, scratch / f'favicon-{n}.png') for n in (16, 32, 48)]),
+        }
+    for name in BUILT:   # only once everything was made
+        (STATIC / name).write_bytes(made[name])
+    record = {'source': {'icon.svg': sha(STATIC / 'icon.svg')}, 'built': {name: sha(STATIC / name) for name in BUILT}}
+    (STATIC / 'icons.json').write_text(json.dumps(record, indent=2) + '\n')
+    print('Built. Commit hub/static/icon.svg, icons.json and the', len(BUILT), 'files made from it together.')
+
+
+if __name__ == '__main__':
+    main()

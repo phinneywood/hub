@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Hub</title>
+  <defs><linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3d5fd6"/><stop offset="1" stop-color="#2540a8"/></linearGradient></defs>
+  <rect id="field" rx="115" width="512" height="512" fill="url(#tile)"/>
+  <g id="mark">
+    <path d="M120 262 256 142l136 120" fill="none" stroke="#f5f4f0" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="256" cy="330" r="58" fill="#f5f4f0"/>
+  </g>
+</svg>

@@ -42,9 +42,7 @@ body > header.shell {
   border-bottom:1px solid color-mix(in srgb, var(--line) 70%, transparent);
 }
 .shell .brand { display:flex; align-items:center; gap:.55rem; font-weight:700; font-size:1.06rem; color:var(--fg); text-decoration:none; letter-spacing:-.015em; flex:none; }
-.brand-mark { position:relative; width:24px; height:24px; border-radius:8px; background:linear-gradient(140deg, var(--acc), color-mix(in srgb, var(--acc) 55%, var(--ok)));
-  box-shadow:inset 0 0 0 1px color-mix(in srgb, #fff 18%, transparent), 0 1px 2px color-mix(in srgb, var(--acc) 35%, transparent); }
-.brand-mark::after { content:""; position:absolute; inset:7px; border-radius:50%; background:var(--acc-fg); opacity:.95; }
+.brand-mark { display:block; width:24px; height:24px; }
 body > header.shell nav.shell-nav { display:flex; gap:2px; flex:0 1 auto; min-width:0; overflow-x:auto; scrollbar-width:none; order:0; width:auto; flex-wrap:nowrap;
   padding:3px; border-radius:99px; background:var(--card); }
 .shell-nav::-webkit-scrollbar { display:none; }

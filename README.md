@@ -137,3 +137,18 @@ only) for the inbox chart on Insights.
 - **Clean up** plans inbox-wide archives by age or Gmail category, or marks old unread mail read.
   Queries come only from fixed choices (`actions.sweep`), starred mail is never touched, and each
   1,000-message batch has its own undo.
+
+## Rebuild the icons
+
+The logo is one drawing, `hub/static/icon.svg`. Every icon is made from it and committed: the Home
+Screen icon, the web manifest's icons (plain and maskable), `favicon.svg` and `favicon.ico`. To change
+the logo, edit the drawing and, on the Mac mini:
+
+```sh
+tools/build-icons
+```
+
+It needs Google Chrome and `sips`, both already on the Mac; the running Hub needs neither. Commit the
+drawing, `hub/static/icons.json` and the seven files made from it together; `tests/test_icons.py` fails
+if they don't match. Phones keep a Home Screen icon as it was when it was added: to see a new one,
+remove Hub from the Home Screen and add it again.
