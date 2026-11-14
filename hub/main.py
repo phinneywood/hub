@@ -45,10 +45,10 @@ app.include_router(live_router, prefix="/checks")
 
 @app.on_event("startup")
 def startup():
-    if not config.BACKGROUND_JOBS_ENABLED:
-        return
     from . import door
     door.start()        # Home Assistant inside Hub; nothing listens until the owner sets the door up (docs/door.md)
+    if not config.BACKGROUND_JOBS_ENABLED:
+        return
     threading.Thread(target=warm_cache, daemon=True).start()
     worker.resume_if_interrupted()
     delayed.start()

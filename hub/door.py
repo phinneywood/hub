@@ -264,8 +264,11 @@ async def app(scope, receive, send):
 
 def start():
     """Serve the door beside Hub, on a thread with a loop of its own, when it is set up. Returns the thread or None.
-    Loopback only: Tailscale Serve is the one way in, and it adds the login the door checks."""
-    if not configured():
+    Loopback only: Tailscale Serve is the one way in, and it adds the login the door checks.
+    Only the deployed Hub opens it (or one started with HUB_DOOR=on): a preview Hub on a copy of the live settings
+    must not take the door's port from the real one."""
+    from .engine import release
+    if not configured() or not (release.folder() or os.environ.get('HUB_DOOR') == 'on'):
         return None
     import uvicorn
     server = uvicorn.Server(uvicorn.Config(app, host=config.HOST, port=PORT, log_level='warning', access_log=False,

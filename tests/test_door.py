@@ -67,6 +67,9 @@ def ask(method, path, headers, content=None):
 
 def test_the_door_refuses_everything_until_it_is_set_up(house):
     assert not door.configured() and door.start() is None
+    set_up()
+    assert door.configured() and door.start() is None           # set up, but this isn't the deployed Hub: nothing listens
+    settings()
     assert ask('GET', '/', OWNER).status_code == 503
     for broken in ({'upstream': 'http://192.0.2.10:8123'}, {'upstream': 'http://192.0.2.10:8123', 'logins': []},
                    {'upstream': 'ftp://192.0.2.10', 'logins': ['me@example.com']},

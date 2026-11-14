@@ -75,7 +75,8 @@ Private `household.json` in Hub's data folder (placeholders here; nothing real i
   Assistant.
 - `home.music_api` is where Hub itself calls Music Assistant. Only needed once the separate Music Assistant port is
   closed; until then `home.music_url` serves for both.
-- `HUB_DOOR_PORT` (environment, default 8781) is the loopback port the door listens on.
+- `HUB_DOOR_PORT` (environment, default 8781) is the loopback port the door listens on. Only the deployed Hub
+  opens the door; a preview Hub (docs/dev-hub.md) shows the Home and Music screens through the deployed one's door.
 
 ## Switching it on (owner; in this order)
 
@@ -102,9 +103,13 @@ Private `household.json` in Hub's data folder (placeholders here; nothing real i
    (`<door port>` is the port Home Assistant has on the tailnet today):
 
    ```sh
-   tailscale serve --https=<door port> off
+   tailscale serve status
    tailscale serve --bg --https=<door port> http://127.0.0.1:8781
    ```
+
+   Remove the entry that port has today first (`status` shows whether it is an `--https` or a
+   `--tls-terminated-tcp` one; turn that one `off`). It must be an HTTPS entry afterwards: only those add the login
+   the door checks.
 
 5. **Look**: open Hub, tap Home. Home Assistant should appear with no login. Tap Music. Then Settings → Checks → Run:
    `door.gate` and `door.sign_in` should pass.
