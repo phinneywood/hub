@@ -69,11 +69,28 @@ def _degrees(value):
         return None
 
 
-def _registry(areas, devices, entities):
-    rooms = {a['area_id']: _clip(a.get('name')) for a in areas or () if isinstance(a, dict) and a.get('area_id')}
+def _registry(areas, devices, entities, labels=()):
+    """Rooms are Home Assistant's own areas. An area's labels (e.g. one floor's open-plan spaces) let a room word
+    reach every area that carries it."""
+    areas = [a for a in areas or () if isinstance(a, dict) and isinstance(a.get('area_id'), str)]
+    label_names = {lab['label_id']: _clip(lab.get('name')) for lab in labels or ()
+                   if isinstance(lab, dict) and lab.get('label_id')}
+    rooms = {a['area_id']: _clip(a.get('name')) for a in areas}
+    room_labels = {rooms[a['area_id']]: [label_names[x] for x in a.get('labels') or () if label_names.get(x)]
+                   for a in areas if rooms[a['area_id']]}
     device_room = {d['id']: d.get('area_id') for d in devices or () if isinstance(d, dict) and d.get('id')}
-    return {'rooms': rooms, 'device_room': device_room,
+    return {'rooms': rooms, 'room_labels': room_labels, 'device_room': device_room,
             'entities': {e['entity_id']: e for e in entities or () if isinstance(e, dict) and e.get('entity_id')}}
+
+
+def _room_id(entity_id, entry, registry):
+    """The entity's own area, else its device's, else the area whose id starts its object id
+    (light.kitchen_counter is in kitchen), the longest such id winning."""
+    found = entry.get('area_id') or registry['device_room'].get(entry.get('device_id'))
+    if found:
+        return found
+    object_id = entity_id.partition('.')[2]
+    return max((a for a in registry['rooms'] if object_id.startswith(a + '_')), key=len, default=None)
 
 
 def _fetch():
@@ -81,9 +98,10 @@ def _fetch():
     with _lock:
         registry = _cache['registry'] if time.monotonic() - _cache['registry_at'] < REGISTRY_SECONDS else None
     if registry is None:
-        areas, devices, entities, states = broker.read('config/area_registry/list', 'config/device_registry/list',
-                                                       'config/entity_registry/list', 'get_states')
-        registry = _registry(areas, devices, entities)
+        areas, devices, entities, labels, states = broker.read(
+            'config/area_registry/list', 'config/device_registry/list', 'config/entity_registry/list',
+            'config/label_registry/list', 'get_states')
+        registry = _registry(areas, devices, entities, labels)
         with _lock:
             _cache.update(registry=registry, registry_at=time.monotonic())
     else:
@@ -129,7 +147,7 @@ def _device(entity_id, item, registry, players_only):
     if domain == 'media_player' and players_only and entry.get('platform') != 'music_assistant':
         return None
     state = str(item.get('state') or 'unknown')
-    room_id = entry.get('area_id') or registry['device_room'].get(entry.get('device_id'))
+    room_id = _room_id(entity_id, entry, registry)
     label = OFFLINE.get(state) or WORDS.get(domain, {}).get(state) or ('On' if state == 'on' else 'Off' if state == 'off'
                                                                        else state.replace('_', ' ').capitalize())
     return {'id': entity_id, 'kind': domain, 'name': _clip(entry.get('name') or attrs.get('friendly_name')
@@ -140,7 +158,31 @@ def _device(entity_id, item, registry, players_only):
             'offline': state in OFFLINE, 'open': state in OPEN.get(domain, ()), 'detail': _detail(domain, state, attrs),
             'level': _percent(attrs.get('brightness'), 255) if domain == 'light' and state == 'on' else None,
             'volume': attrs.get('volume_level') if isinstance(attrs.get('volume_level'), (int, float)) else None,
-            'members': [m for m in attrs.get('group_members') or () if isinstance(m, str) and m != entity_id]}
+            'members': [m for m in attrs.get('group_members') or () if isinstance(m, str) and m != entity_id],
+            'colours': _colours(attrs) if domain == 'light' else None,
+            'colour': _colour_now(attrs) if domain == 'light' and state == 'on' else None}
+
+
+COLOUR_MODES = {'hs', 'xy', 'rgb', 'rgbw', 'rgbww'}
+
+
+def _colours(attrs):
+    """What a light can show: 'colour' (any colour and white), 'white' (warm to cool white) or None (dimming only)."""
+    modes = set(attrs.get('supported_color_modes') or ())
+    return 'colour' if modes & COLOUR_MODES else 'white' if 'color_temp' in modes else None
+
+
+def _colour_now(attrs):
+    """The light's colour now as one Home Assistant argument, so Undo can put it back, or None."""
+    mode = attrs.get('color_mode')
+    if mode == 'color_temp' and isinstance(attrs.get('color_temp_kelvin'), (int, float)):
+        low, high = broker.KELVIN
+        return {'color_temp_kelvin': max(low, min(high, int(attrs['color_temp_kelvin'])))}
+    hs = attrs.get('hs_color')
+    if mode in COLOUR_MODES and isinstance(hs, (list, tuple)) and len(hs) == 2 \
+            and all(isinstance(v, (int, float)) for v in hs):
+        return {'hs_color': [round(max(0, min(360, float(hs[0]))), 1), round(max(0, min(100, float(hs[1]))), 1)]}
+    return None
 
 
 def _build(registry, states):
@@ -156,8 +198,10 @@ def _build(registry, states):
     for d in devices:
         if d['kind'] in POWER:
             rooms.setdefault(d['room'], []).append(d)
-    return {'rooms': [{'name': name, 'devices': rows, 'on': sum(r['on'] for r in rows)}
+    labels = registry.get('room_labels', {})
+    return {'rooms': [{'name': name, 'labels': labels.get(name, []), 'devices': rows, 'on': sum(r['on'] for r in rows)}
                       for name, rows in sorted(rooms.items(), key=lambda kv: (kv[0] == OTHER_ROOM, kv[0].lower()))],
+            'room_labels': labels,
             'climate': [d for d in devices if d['kind'] == 'climate'],
             'security': [d for d in devices if d['kind'] in SECURITY],
             'speakers': [d for d in devices if d['kind'] == 'media_player'],

@@ -42,7 +42,7 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
 
   | Class | Domains | Actions | How it runs |
   | --- | --- | --- | --- |
-  | Lights and power | `light`, `switch`, `fan`, `scene` | on, off, brightness, colour, activate scene | Right away on the owner's request; Undo puts back the previous state |
+  | Lights and power | `light`, `switch`, `fan`, `scene` | on, off, brightness, colour (bounded), activate scene | Right away on the owner's request; Undo puts back the previous state |
   | Speakers and music | `media_player` (Music Assistant and Sonos) | search, play, pause, next, volume, join and unjoin rooms | Right away; playback that starts from idle starts at about 15% |
   | Thermostat | `climate` | set temperature within fixed bounds, set mode | Right away, within bounds; Undo puts back the previous setting |
   | Security | `lock`, `cover` (garage only), `alarm_control_panel` | lock and unlock, open and close, arm and disarm | Only a tap on an approval card from a signed-in device. A typed message never acts alone |
@@ -59,6 +59,17 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   A name that is both a room and a device means the room (owner, 2026-11-13): "turn off the living room"
   turns off every light there, even one that is itself called "Living room", and "play in the living room"
   uses that room's speaker. A device is reached by a name no room has, or by its entity id.
+  **Rooms are Home Assistant's areas** (2026-11-13). A device's room is its own area, else its device's area,
+  else the area whose id starts its entity id (`light.kitchen_strip` is in `kitchen`). A room word reaches, in
+  order: a room's exact name or an area label's (a label such as a floor reaches every area that carries it);
+  then a device's exact name; then rooms or labels containing all the words said ("sun room" for an area named
+  "Upper Sun Room"), never by filler words such as "room" alone. Hub reads the areas and labels each time
+  (`config/label_registry/list` joined the reads), so nothing about rooms is kept in Git or in settings.
+  **Colour** (2026-11-13): `home_control` action `colour` takes a named colour (red, blue, warm white, …) or a
+  white from 2000 to 6500 K, never free numbers from the model. A room's dim-only lights are left alone; one light
+  that can't show it is refused. The broker client allows at most one of `rgb_color`, `hs_color`, `xy_color` or
+  `color_temp_kelvin` on `light.turn_on`, each within bounds, and Undo puts back the brightness and colour before.
+  Effects, flashing and timed light shows are not allowed (see "Compared with the agents' home-control skill").
   The owner can set the "Change lights, plugs, scenes and speakers" action to Suggest only on the Engine
   page, and then Ask changes nothing.
 - **"As well" means in sync** (2026-11-13). "Play it in the kitchen as well", "there too" or "in both" joins
@@ -92,6 +103,25 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   recorded as not confirmed, with what was sent (2026-11-13: a play Home Assistant accepted stayed silent,
   and Ask had said it was playing). Grouping a silent speaker with one that is playing makes the playing
   one lead, so the music isn't stopped.
+
+## Compared with the agents' home-control skill
+
+home-ops has a `home-control` skill (`ha.py`) for Claude Code sessions on the Mac. Both go through the same
+broker. Where they stand (2026-11-13):
+
+| Ability | Skill | Hub |
+| --- | --- | --- |
+| Rooms from HA areas (entity, device, id prefix) and area labels | yes | yes |
+| On, off, brightness, scenes, switches, fans | yes | yes, with a record and Undo |
+| Colour and white temperature | any value | named colours and 2000–6500 K only |
+| Transition times | yes | no |
+| Light effects (`effect`), flashing | any the light lists | no |
+| Timed light show, put back afterwards | yes, up to 60 s | no |
+| Speakers and music | no | yes |
+
+Not added to Hub, on purpose: a show is dozens of changes in a minute, which Hub's limit of 30 a minute and its
+one-row-per-change Undo don't fit, and it needs a timer running after the chat answer. Effects differ per
+light and have no common "off" to put back. Either would need its own design and the owner's decision.
 
 ## Music: Music Assistant's own API
 

@@ -244,14 +244,22 @@ def _thing(d):
     out = {'name': luna.clip(judge.scrub(d['name']), 80), 'state': d['label']}
     if d['detail']:
         out['detail'] = luna.clip(judge.scrub(d['detail']), 160)
+    if d.get('kind') == 'light':
+        out['can_show'] = {'colour': 'colours and whites', 'white': 'warm to cool white'}.get(d.get('colours'), 'brightness only')
     return out
+
+
+def _label(text):
+    from .. import luna
+    from . import judge
+    return luna.clip(judge.scrub(text), 80)
 
 
 def home_lookup(room: str | None = None) -> dict:
     """The house right now, from Home Assistant. Without `room`: each room with the lights and plugs that are
-    on, the thermostat, and the locks, garage door and alarm. With `room` (a room name from that answer):
-    every light and plug in that room and its state. Read-only: Hub can't switch anything yet."""
-    from ..tools.house import broker, read
+    on (and the room's Home Assistant labels, such as a floor), the thermostat, and the locks, garage door and alarm.
+    With `room` (a room name or label from that answer): every light and plug there, its state and colour. Read-only."""
+    from ..tools.house import broker, control, read
     try:
         found = read.snapshot()
     except broker.HomeDown as error:
@@ -260,13 +268,15 @@ def home_lookup(room: str | None = None) -> dict:
               'thermostat': [_thing(d) for d in found['climate']], 'doors_and_alarm': [_thing(d) for d in found['security']],
               'scenes': [_thing(d)['name'] for d in found['scenes']]}
     if room is None:
-        answer['rooms'] = [{'room': r['name'], 'on': [_thing(d)['name'] for d in r['devices'] if d['on']]} for r in found['rooms']]
+        answer['rooms'] = [{'room': r['name'], **({'labels': [_label(x) for x in r['labels']]} if r.get('labels') else {}),
+                            'on': [_thing(d)['name'] for d in r['devices'] if d['on']]} for r in found['rooms']]
         return answer
-    match = next((r for r in found['rooms'] if r['name'].lower() == str(room).strip().lower()), None)
-    if not match:
+    named = control.rooms_named(room, found, loose=True)
+    matches = [r for r in found['rooms'] if r['name'] in named]
+    if not matches:
         return {'error': 'No room by that name. Rooms: ' + ', '.join(r['name'] for r in found['rooms'])}
-    answer['room'] = match['name']
-    answer['devices'] = [_thing(d) for d in match['devices']]
+    answer['room'] = ', '.join(r['name'] for r in matches)
+    answer['devices'] = [_thing(d) for r in matches for d in r['devices']]
     return answer
 
 
@@ -351,20 +361,22 @@ def _changed(result, service='Home Assistant'):
     return out
 
 
-def home_control(login, device: str, action: Literal['on', 'off', 'brightness', 'activate'],
-                 brightness_percent: int | None = None) -> dict:
+def home_control(login, device: str, action: Literal['on', 'off', 'brightness', 'colour', 'activate'],
+                 brightness_percent: int | None = None, colour: str | None = None) -> dict:
     """Change lights, plugs, fans or scenes in the house right away, when the owner asks. `device` is a name
-    from home_status: a light, plug, fan or scene, or a room name (all its lights), or "all lights".
-    `action`: on, off, brightness (a light, with brightness_percent 1-100) or activate (a scene).
+    from home_status: a light, plug, fan or scene, a room name or one of its labels (all its lights), or "all lights".
+    `action`: on, off, brightness (a light, with brightness_percent 1-100), colour (a light or room, with `colour`:
+    a colour name such as red, blue or warm white, or a white such as 2700 K) or activate (a scene).
     Locks, the garage door, the alarm, the thermostat and automations can't be changed here."""
     from ..tools.house import control, read
     refused = _refusal(login)
     if refused:
         return refused
-    kinds = ('scene',) if action == 'activate' else ('light',) if action == 'brightness' else read.POWER
+    kinds = ('scene',) if action == 'activate' else ('light',) if action in ('brightness', 'colour') else read.POWER
     try:
         targets = control.resolve(device, kinds)
-        return _changed(control.change(targets, action, login=login, via='ask', value=brightness_percent))
+        value = colour if action == 'colour' else brightness_percent
+        return _changed(control.change(targets, action, login=login, via='ask', value=value))
     except control.Refused as error:
         return {'refused': str(error)}
 
@@ -635,8 +647,8 @@ def run_recipe(login, name: str, *, said: str = '') -> dict:
 
 
 CONTROLS = [
-    Control('home_control', 'Home control', 'Turns lights, plugs and fans on or off, sets brightness and turns on '
-            'scenes, through the HA broker. Each change is recorded and can be undone for a day.',
+    Control('home_control', 'Home control', 'Turns lights, plugs and fans on or off, sets brightness and colour and '
+            'turns on scenes, by device or by Home Assistant room, through the HA broker. Each change is recorded and can be undone for a day.',
             'Device, room and scene names, and what happened.', '/house/changes', 'Home changes', 'house.control', home_control),
     Control('play_music', 'Music', 'Plays, pauses, skips, sets the volume and groups the Music Assistant speakers. '
             'A silent speaker starts at about 15%. Each change is recorded and can be undone for a day.',

@@ -6,6 +6,7 @@ the state before, so Undo can put it back. A change whose answer never came back
 never as done. Locks, the garage, the alarm, the thermostat and automations are not here.
 """
 import json
+import re
 import threading
 import time
 import uuid
@@ -22,7 +23,7 @@ CHECKS, CHECK_WAIT = 4, 1.0  # reading a speaker back after play: Home Assistant
 POWER = read.POWER
 MEDIA_KINDS = tuple(sorted(broker.MEDIA_TYPES))
 ACTIONS = {
-    'light': ('on', 'off', 'brightness'), 'switch': ('on', 'off'), 'fan': ('on', 'off'), 'scene': ('activate',),
+    'light': ('on', 'off', 'brightness', 'colour'), 'switch': ('on', 'off'), 'fan': ('on', 'off'), 'scene': ('activate',),
     'media_player': ('play', 'pause', 'next', 'previous', 'volume', 'play_media', 'group', 'ungroup'),
 }
 SCHEMA = """
@@ -77,6 +78,9 @@ def _steps(d, action, value=None, query=None, kind=None, members=(), label=None,
         if value is None:
             raise Refused('Say how bright, from 1 to 100.')
         return [('light', 'turn_on', {'entity_id': e, 'brightness_pct': _level(value)})], f'{name} at {_level(value)}%'
+    if action == 'colour':
+        colour, said = _colour(value, d)
+        return [('light', 'turn_on', {'entity_id': e, **colour})], f'{name} {said}'
     if action == 'activate':
         return [('scene', 'turn_on', {'entity_id': e})], f'{name} scene on'
     simple = {'play': ('media_play', 'playing'), 'pause': ('media_pause', 'paused'),
@@ -136,6 +140,47 @@ def _level(value):
         raise Refused('Brightness is a number from 1 to 100.') from None
 
 
+# Colours by name. Whites are colour temperatures; the rest are hue and saturation. Nothing else is accepted.
+WHITES = {'candlelight': 2000, 'warm white': 2700, 'warm': 2700, 'soft white': 3000, 'white': 4000,
+          'neutral white': 4000, 'cool white': 5000, 'cool': 5000, 'daylight': 6500}
+HUES = {'red': (0, 100), 'orange': (30, 100), 'amber': (40, 100), 'yellow': (55, 100), 'lime': (90, 100),
+        'green': (120, 100), 'teal': (175, 100), 'cyan': (185, 100), 'blue': (230, 100), 'indigo': (260, 100),
+        'purple': (280, 100), 'violet': (290, 90), 'magenta': (310, 100), 'pink': (330, 60)}
+KELVIN_WORDS = re.compile(r'^(\d{4})\s*k(elvin)?$')
+
+
+def colour_names():
+    return [*WHITES, *HUES]
+
+
+def _colour(value, d):
+    """({argument: value}, words) for a colour the owner named, checked against what the light can show."""
+    said = ' '.join(str(value or '').lower().split()).removesuffix(' light')
+    kelvin = KELVIN_WORDS.fullmatch(said)
+    if said in WHITES or kelvin:
+        number = WHITES.get(said) or int(kelvin.group(1))
+        low, high = broker.KELVIN
+        if not low <= number <= high:
+            raise Refused(f'A white is {low} to {high} K.')
+        if not d.get('colours'):
+            raise Refused(f'{d["name"]} only dims; it can’t change colour.')
+        return {'color_temp_kelvin': number}, f'{said} ({number} K)' if said in WHITES else f'at {number} K'
+    if said in HUES:
+        if not d.get('colours'):
+            raise Refused(f'{d["name"]} only dims; it can’t change colour.')
+        if d['colours'] != 'colour':
+            raise Refused(f'{d["name"]} can’t show colours, only warm to cool white.')
+        return {'hs_color': list(HUES[said])}, said
+    raise Refused('Say a colour: ' + ', '.join(colour_names()) + ', or a white such as 2700 K.')
+
+
+def _shows(value, d):
+    try:
+        return bool(_colour(value, d))
+    except Refused:
+        return False
+
+
 def _inverse(entity, kind, action, before):
     """The steps that put one change back, or None when there is nothing to put back."""
     state = before.get('state')
@@ -146,6 +191,9 @@ def _inverse(entity, kind, action, before):
             data = {'entity_id': entity}
             if kind == 'light' and before.get('level'):
                 data['brightness_pct'] = max(1, min(100, int(before['level'])))
+            if kind == 'light' and isinstance(before.get('colour'), dict) and len(before['colour']) == 1 \
+                    and set(before['colour']) <= broker.COLOURS:
+                data.update(before['colour'])
             return [(kind, 'turn_on', data)]
         return None
     if kind != 'media_player' or action in ('next', 'previous'):
@@ -236,6 +284,8 @@ def change(targets, action, *, login, via, value=None, query=None, kind=None, me
     except broker.HomeDown as error:
         raise Refused(str(error)) from None
     chosen = [_known(found, entity) for entity in dict.fromkeys(targets)]
+    if action == 'colour' and len(chosen) > 1:      # a room: the lights that can show it; dim-only ones are left alone
+        chosen = [d for d in chosen if _shows(value, d)] or chosen[:1]
     if action == 'group':
         if len(chosen) != 1 or chosen[0]['kind'] != 'media_player':
             raise Refused('Say which speaker the others should join.')
@@ -262,7 +312,7 @@ def change(targets, action, *, login, via, value=None, query=None, kind=None, me
     _spend(len(plans))
     batch, now, rows = uuid.uuid4().hex[:12], time.time(), []
     for d, act, steps, words in plans:
-        before = {'state': d['state'], 'level': d['level'], 'volume': d['volume'], 'members': d['members'],
+        before = {'state': d['state'], 'level': d['level'], 'colour': d.get('colour'), 'volume': d['volume'], 'members': d['members'],
                   'alone': bool(alone and act == 'play_media' and d['members'])}
         outcome, silent = _run(steps), False
         if act in ('play_media', 'play') and outcome != 'not_sent' and not _playing(d['id']):
@@ -336,20 +386,48 @@ def recent(limit=30):
 ALL_LIGHTS = ('all lights', 'all the lights', 'every light', 'lights')
 
 
-def _in_room(wanted, kinds, found):
-    """Entity ids for a room the owner named, or []: its lights, or its speakers (the one named like the room first).
+FILLER = {'the', 'room', 'rooms', 'area', 'light', 'lights', 'in', 'all', 'of'}
+
+
+def _words(text):
+    return set(re.sub(r'[^a-z0-9]+', ' ', str(text).lower()).split())
+
+
+def rooms_named(wanted, found, loose=False):
+    """The rooms (Home Assistant areas) the owner named, by name or by an area label, else []. Exact first: the
+    room's name, or a label's, so "upstairs" reaches every area labelled Upstairs. With `loose`, the words they
+    said found in a room's name or label ("sun room" for an area named Upper Sun Room), but never by
+    filler words alone."""
+    wanted = ' '.join(str(wanted or '').lower().split()).removeprefix('the ')
+    wanted = wanted.removesuffix(' lights').removesuffix(' light').strip()
+    labels = dict(found.get('room_labels') or {})
+    for r in found['rooms']:
+        labels.setdefault(r['name'], r.get('labels') or [])
+    for d in found['speakers']:
+        if d.get('room'):
+            labels.setdefault(d['room'], [])
+    names = [n for n in labels if n != read.OTHER_ROOM]
+    exact = [n for n in names if wanted == n.lower()] or [n for n in names if wanted in (x.lower() for x in labels[n])]
+    if exact or not loose:
+        return exact
+    words = _words(wanted)
+    if not words - FILLER:
+        return []
+    return [n for n in names if words <= _words(n) or any(words <= _words(x) for x in labels[n])]
+
+
+def _in_room(wanted, kinds, found, loose=False):
+    """Entity ids for rooms the owner named, or []: their lights, or their speakers (the one named like the room first).
     A room wins over a device with the same name (owner, 2026-11-13): "turn off the living room" means every light
     there, even when one light is itself called "Living room"."""
-    names = {r['name'].lower(): r['name'] for r in found['rooms']}
-    names.update({d['room'].lower(): d['room'] for d in found['speakers'] if d.get('room')})
+    rooms = rooms_named(wanted, found, loose)
     out = []
     if 'light' in kinds:
-        room = names.get(wanted.removesuffix(' lights').removesuffix(' light').strip())
-        rows = next((r['devices'] for r in found['rooms'] if r['name'] == room), [])
-        out += [d['id'] for d in rows if d['kind'] == 'light']
-    if 'media_player' in kinds and wanted in names:
-        speakers = [d for d in found['speakers'] if d.get('room') == names[wanted]]
-        out += [d['id'] for d in sorted(speakers, key=lambda d: d['name'].lower() != wanted)]
+        out += [d['id'] for r in found['rooms'] if r['name'] in rooms for d in r['devices'] if d['kind'] == 'light']
+    if 'media_player' in kinds:
+        speakers = [d for d in found['speakers'] if d.get('room') in rooms]
+        said = ' '.join(str(wanted or '').lower().split()).removeprefix('the ')
+        out += [d['id'] for d in sorted(speakers, key=lambda d: d['name'].lower() != said)]
     return out
 
 
@@ -368,6 +446,9 @@ def resolve(target, kinds, found=None):
     exact = [d['id'] for d in pool if wanted in (d['name'].lower(), d['id'])]
     if exact:
         return exact
+    room = _in_room(wanted, kinds, found, loose=True)
+    if room:
+        return room
     near = [d['name'] for d in pool if wanted and wanted in d['name'].lower()]
     if len(near) == 1:
         return [d['id'] for d in pool if d['name'] == near[0]]

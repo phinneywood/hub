@@ -87,7 +87,8 @@ def _devices(step, found):
     args = step['args']
     try:
         if step['tool'] == 'home_control':
-            kinds = ('scene',) if args['action'] == 'activate' else ('light',) if args['action'] == 'brightness' else read.POWER
+            kinds = ('scene',) if args['action'] == 'activate' else ('light',) if args['action'] in ('brightness', 'colour') \
+                else read.POWER
             control.resolve(args['device'], kinds, found)
         else:
             for name in [args['speaker'], *(args.get('with_speakers') or ())]:
@@ -132,7 +133,8 @@ def describe(step):
     a = step['args']
     if step['tool'] == 'home_control':
         return {'on': f'{a.get("device")} on', 'off': f'{a.get("device")} off', 'activate': f'{a.get("device")} scene',
-                'brightness': f'{a.get("device")} at {a.get("brightness_percent")}%'}.get(a.get('action'), str(a.get('action')))
+                'brightness': f'{a.get("device")} at {a.get("brightness_percent")}%',
+                'colour': f'{a.get("device")} {a.get("colour")}'}.get(a.get('action'), str(a.get('action')))
     speaker, action = a.get('speaker'), a.get('action')
     if action == 'play_media':
         return f'{speaker}: play “{a.get("what")}”' + (' softly' if a.get('soft') else '')

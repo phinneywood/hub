@@ -10,11 +10,14 @@ import socket
 
 from ... import config
 
-READS = ('config/area_registry/list', 'config/device_registry/list', 'config/entity_registry/list', 'get_states')
+READS = ('config/area_registry/list', 'config/device_registry/list', 'config/entity_registry/list',
+         'config/label_registry/list', 'get_states')
 # (domain, service) -> the data keys it may carry besides entity_id. Lights, power and speakers only;
-# locks, the garage, the alarm, the thermostat and automations are not here.
+# locks, the garage, the alarm, the thermostat and automations are not here. A light takes at most one colour.
+COLOURS = {'rgb_color', 'hs_color', 'xy_color', 'color_temp_kelvin'}
+KELVIN = (2000, 6500)
 WRITES = {
-    ('light', 'turn_on'): {'brightness_pct'}, ('light', 'turn_off'): set(),
+    ('light', 'turn_on'): {'brightness_pct', *COLOURS}, ('light', 'turn_off'): set(),
     ('switch', 'turn_on'): set(), ('switch', 'turn_off'): set(),
     ('fan', 'turn_on'): set(), ('fan', 'turn_off'): set(),
     ('scene', 'turn_on'): set(),
@@ -77,6 +80,28 @@ def read(*types, timeout=TIMEOUT):
     return results
 
 
+def _numbers(value, bounds):
+    return isinstance(value, list) and len(value) == len(bounds) and all(
+        isinstance(v, (int, float)) and not isinstance(v, bool) and low <= v <= high for v, (low, high) in zip(value, bounds))
+
+
+def _colour(data):
+    """A light's colour: one of rgb_color, hs_color, xy_color or color_temp_kelvin, each within bounds."""
+    keys = COLOURS & set(data)
+    if len(keys) > 1:
+        raise ValueError('One colour at a time.')
+    if 'rgb_color' in data and not (_numbers(data['rgb_color'], [(0, 255)] * 3)
+                                    and all(isinstance(v, int) for v in data['rgb_color'])):
+        raise ValueError('A colour is three numbers from 0 to 255.')
+    if 'hs_color' in data and not _numbers(data['hs_color'], [(0, 360), (0, 100)]):
+        raise ValueError('A colour is a hue from 0 to 360 and a saturation from 0 to 100.')
+    if 'xy_color' in data and not _numbers(data['xy_color'], [(0, 1), (0, 1)]):
+        raise ValueError('A colour is two numbers from 0 to 1.')
+    kelvin = data.get('color_temp_kelvin', KELVIN[0])
+    if not (isinstance(kelvin, int) and not isinstance(kelvin, bool) and KELVIN[0] <= kelvin <= KELVIN[1]):
+        raise ValueError(f'A white is {KELVIN[0]} to {KELVIN[1]} K.')
+
+
 def _checked(domain, service, data):
     allowed = WRITES.get((domain, service))
     if allowed is None or not isinstance(data, dict) or set(data) - allowed - {'entity_id'}:
@@ -86,6 +111,7 @@ def _checked(domain, service, data):
         raise ValueError('Hub may not do that in Home Assistant.')
     if 'brightness_pct' in data and not (isinstance(data['brightness_pct'], int) and 1 <= data['brightness_pct'] <= 100):
         raise ValueError('Brightness must be 1 to 100.')
+    _colour(data)
     if 'volume_level' in data and not (isinstance(data['volume_level'], (int, float)) and 0 <= data['volume_level'] <= 1):
         raise ValueError('Volume must be 0 to 1.')
     members = data.get('group_members', [])

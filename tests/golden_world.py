@@ -43,6 +43,7 @@ class World:
         answers = {
             'config/area_registry/list': AREAS,
             'config/device_registry/list': [],
+            'config/label_registry/list': [],
             'config/entity_registry/list': [{'entity_id': e, 'area_id': a, 'name': n,
                                              'platform': 'music_assistant' if e.startswith('media_player.') else 'demo'}
                                             for e, a, n, _, _ in ENTITIES],

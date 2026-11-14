@@ -51,6 +51,10 @@ class Ledger:
                 state['state'] = 'on' if service == 'turn_on' else 'off'
                 if 'brightness_pct' in data:
                     state['attributes']['brightness'] = round(data['brightness_pct'] * 255 / 100)
+                for key in ('hs_color', 'color_temp_kelvin', 'rgb_color', 'xy_color'):
+                    if key in data:
+                        state['attributes'].update({key: data[key], 'color_mode': 'color_temp' if key == 'color_temp_kelvin'
+                                                    else key.removesuffix('_color')})
             elif service == 'media_play' or (domain == 'music_assistant' and service == 'play_media'):
                 state['state'] = 'playing'
             elif service == 'media_pause':

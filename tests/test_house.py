@@ -12,6 +12,7 @@ from hub.main import app
 from hub.tools.house import broker, read
 
 AREAS = [{'area_id': 'kitchen', 'name': 'Kitchen'}, {'area_id': 'living', 'name': 'Living room'}]
+LABELS = []
 DEVICES = [{'id': 'dev-lamp', 'area_id': 'living'}]
 ENTITIES = [
     {'entity_id': 'light.counter', 'area_id': 'kitchen'},
@@ -57,7 +58,8 @@ def fake(monkeypatch):
     asked = []
     world = {'states': [dict(s, attributes=dict(s['attributes'])) for s in STATES]}
     answers = {'config/area_registry/list': lambda: AREAS, 'config/device_registry/list': lambda: DEVICES,
-               'config/entity_registry/list': lambda: ENTITIES, 'get_states': lambda: world['states']}
+               'config/entity_registry/list': lambda: ENTITIES, 'config/label_registry/list': lambda: LABELS,
+               'get_states': lambda: world['states']}
 
     def exchange(message, timeout):
         asked.append(message)
@@ -238,7 +240,7 @@ def test_home_lookup(fake):
     assert found['rooms'][0] == {'room': 'Kitchen', 'on': ['Counter lights', 'Kettle']}
     assert found['doors_and_alarm'][1] == {'name': 'Front door', 'state': 'Locked'}
     room = lookups['home_status'].run(room='living room')
-    assert room['devices'] == [{'name': 'Floor lamp', 'state': 'Off'}]
+    assert room['devices'] == [{'name': 'Floor lamp', 'state': 'Off', 'can_show': 'brightness only'}]
     assert 'Rooms: Kitchen' in lookups['home_status'].run(room='Attic')['error']
     music = lookups['music_now'].run()['speakers']
     assert music[1] == {'name': 'Living room', 'state': 'Playing', 'detail': 'Song A – Band B · volume 15%',
