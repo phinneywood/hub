@@ -222,7 +222,7 @@ question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page 
   card under the answer (see “Cards in the chat”); the Notes page is the other way to save.
 - **Recipes** (`propose_recipe`, `run_recipe`, `hub/engine/recipes.py`): named routines made only of steps
   Ask can already take, each one a `home_control` or `play_music` call with that control's own arguments
-  ("great room music": the kitchen speaker joins the living room's, both at 15%, a calm pick). A recipe can't
+  ("sun room music": the kitchen speaker joins the living room's, both at 15%, a calm pick). A recipe can't
   add a capability: its steps are checked against the catalog (the tool, its argument types, nothing extra,
   never who asked or the owner's words, and that each device exists) when it is proposed, when it is saved
   and every time it runs. Ask proposes one only when the owner's typed message asks for a recipe or routine,

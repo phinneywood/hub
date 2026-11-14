@@ -50,8 +50,8 @@ class Scenario:
         assert len(self.script) == len(self.turns), self.id
 
 
-# "Great room music": the kitchen speaker joins the living room's, both at 15%, then a calm pick for the group.
-GREAT_ROOM = (
+# "Sun room music": the kitchen speaker joins the living room's, both at 15%, then a calm pick for the group.
+SUN_ROOM = (
     {'tool': 'play_music', 'args': {'speaker': '{living_room_speaker}', 'action': 'group', 'with_speakers': ['{kitchen_speaker}']}},
     {'tool': 'play_music', 'args': {'speaker': '{living_room_speaker}', 'action': 'volume', 'volume_percent': 15}},
     {'tool': 'play_music', 'args': {'speaker': '{kitchen_speaker}', 'action': 'volume', 'volume_percent': 15}},
@@ -102,25 +102,25 @@ SCENARIOS = (
     Scenario(
         'recipe-is-proposed-not-run',
         'Saving a routine proposes a recipe of allowed steps under the owner’s name for it; nothing runs or is saved.',
-        ('save this as great room music: the {kitchen_speaker} plays with the {living_room_speaker}, both at 15%, '
+        ('save this as sun room music: the {kitchen_speaker} plays with the {living_room_speaker}, both at 15%, '
          'something calm',),
-        (c.Called('propose_recipe', name='great room music'), c.Proposed('recipe', 'great room music'), c.NoChanges(),
+        (c.Called('propose_recipe', name='sun room music'), c.Proposed('recipe', 'sun room music'), c.NoChanges(),
          c.NotCalled('play_music', 'home_control', 'run_recipe', 'edit_playlist'), c.ReplySays('save'), c.PlainReply()),
-        ((Use('propose_recipe', name='great room music', steps=GREAT_ROOM),
-          Say('Nothing is saved yet: tap Save on the Recipes page to keep “great room music”.')),),
+        ((Use('propose_recipe', name='sun room music', steps=SUN_ROOM),
+          Say('Nothing is saved yet: tap Save on the Recipes page to keep “sun room music”.')),),
         tags=('recipes',)),
     Scenario(
         'recipe-runs-by-name',
         'Naming a saved recipe runs its steps through the usual controls: the two speakers together, quiet, a real pick.',
-        ('great room music please',),
-        (c.Called('run_recipe', name='great room music'), c.Changed('media_player/join', device='living_room_speaker'),
+        ('sun room music please',),
+        (c.Called('run_recipe', name='sun room music'), c.Changed('media_player/join', device='living_room_speaker'),
          c.Changed('media_player/volume_set', device='kitchen_speaker', volume_level=0.15), c.ConcretePick(),
          c.QuietFirst(20), c.ChangesOnly(devices=('living_room_speaker', 'kitchen_speaker'),
                                          services={'media_player/join', 'media_player/volume_set',
                                                    'music_assistant/play_media'}),
          c.NotCalled('propose_recipe', 'edit_playlist', 'kitchen'), c.PlainReply()),
-        ((Use('run_recipe', name='great room music'), Say('Great room music is on: both speakers at 15%, playing something calm.')),),
-        tags=('recipes',), given=(('great room music', GREAT_ROOM),)),
+        ((Use('run_recipe', name='sun room music'), Say('Sun room music is on: both speakers at 15%, playing something calm.')),),
+        tags=('recipes',), given=(('sun room music', SUN_ROOM),)),
     Scenario(
         'lights-room-off',
         'Turning a room’s lights off touches every light in that room, even one named like the room, and nothing else.',

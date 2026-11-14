@@ -9,7 +9,7 @@ from hub.engine.registry import Control
 from hub.main import app
 
 SIGNED_IN = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
-SAID = ('You should remember from now on that the kitchen and the living room are in the same great room, '
+SAID = ('You should remember from now on that the kitchen and the living room are in the same sun room, '
         'so when you play music, you should play it sync')
 NOTE = 'Kitchen and Living room are one space: play music there together'
 
@@ -43,7 +43,7 @@ def test_only_a_signed_in_tap_saves_a_note_and_it_can_be_removed():
     proposed = notes.propose(NOTE, SAID, login='me@example.com', zone=['media_player.kitchen', 'media_player.living_room'])
     client = TestClient(app)
     page = client.get('/engine/notes', headers=SIGNED_IN).text
-    assert NOTE in page and 'same great room' in page and f'/engine/notes/{proposed["id"]}/save' in page
+    assert NOTE in page and 'same sun room' in page and f'/engine/notes/{proposed["id"]}/save' in page
     assert 'kitchen, living_room' in page                                   # Home Assistant is down here: ids stand in
     assert client.post(f'/engine/notes/{proposed["id"]}/save', headers={'sec-fetch-site': 'same-origin'}).status_code == 403
     assert client.post(f'/engine/notes/{proposed["id"]}/save', headers={'origin': 'https://elsewhere.example',

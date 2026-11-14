@@ -1,6 +1,6 @@
 """Recipes: named routines Ask proposes, made only of what Ask can already do, saved only by the owner's tap.
 
-"Great room music" might be: group the kitchen speaker with the living room's, set both to 15%, play a calm
+"Sun room music" might be: group the kitchen speaker with the living room's, set both to 15%, play a calm
 pick. Each step is one call of an existing Ask control (STEP_TOOLS) with its usual arguments, so a recipe can
 never add a capability: it is checked against the catalog (the tool exists, the arguments fit its signature,
 the devices exist) when it is proposed, when it is saved, and again every time it runs, and each step then runs

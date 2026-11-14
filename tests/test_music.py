@@ -628,7 +628,7 @@ def test_removing_the_note_removes_the_zone_and_a_household_setting_makes_one(ho
 
 
 def test_a_sentence_never_becomes_a_playlist(ma):
-    said = ('You should remember from now on that the kitchen and the living room are in the same great room, '
+    said = ('You should remember from now on that the kitchen and the living room are in the same sun room, '
             'so when you play music, you should play it sync')
     found = catalog.edit_playlist('me@example.com', 'create', said, said=said)
     assert 'doesn’t ask to create a playlist' in found['refused']

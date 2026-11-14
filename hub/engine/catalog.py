@@ -595,7 +595,7 @@ def remember(login, note: str, speakers: list[str] | None = None, *, said: str =
 
 def propose_recipe(login, name: str, steps: list[RecipeStep], *, said: str = '') -> dict:
     """Propose a recipe: a named routine of things Hub can already do, only when the owner's latest message asks to
-    save one ("save this as great room music: kitchen and living room together at 15%, play something calm").
+    save one ("save this as sun room music: kitchen and living room together at 15%, play something calm").
     `name`: the owner's own short name for it. `steps`: in order, each {"tool": "home_control" or "play_music",
     "args": {...the arguments you would give that tool}}, using names from home_status and music_now; at most 8.
     A recipe can only do what those two tools do. Nothing runs and nothing is saved here: Hub shows it on the
@@ -622,7 +622,7 @@ def propose_recipe(login, name: str, steps: list[RecipeStep], *, said: str = '')
 
 
 def run_recipe(login, name: str, *, said: str = '') -> dict:
-    """Run one of the owner's saved recipes, by its name, when their latest message names it ("great room music").
+    """Run one of the owner's saved recipes, by its name, when their latest message names it ("sun room music").
     Each step runs as if the owner had asked for it, with the usual limits and Undo. Say what was done, and if it
     stopped early, where and why."""
     from .. import luna
