@@ -2,11 +2,12 @@
 
 `/dev` (All tools → Dev) is the owner's one place to see how they develop on the Mac mini and the live
 state of every project. It keeps nothing: each visit reads the home repo, tmux and Git afresh. It is
-read-only and behind the same owner sign-in as every tool. Code: `hub/tools/dev/`.
+read-only and behind the same owner sign-in as every tool. It is listed under All tools but has no card on
+Today (`"today": False` on the tool). Code: `hub/tools/dev/`.
 
 | Section | Read from |
 | --- | --- |
-| How you work | The numbered list under "How the owner works" in the home repo's `README.md`, plus a keys table in the template |
+| How you work | The numbered list under "How the owner works" and the table under "Keys" (`| Key | What |`) in the home repo's `README.md` |
 | In progress | `tmux list-windows` for the Manager's session; "Claude running" means a `claude` process under the window's pane |
 | Projects | One card per pointer under "Other Repos" in the home repo's `AGENTS.md` (name, the text in brackets, then the `~/` path); Git branch, last commit, other local branches, uncommitted changes, worktrees. For `hub`, the running version and any pending deploy from the deployer's notes (`hub/engine/release.py`) |
 | Waiting on you | The numbered list under "## Waiting on the owner" in the Manager's private brief |

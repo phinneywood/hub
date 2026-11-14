@@ -74,6 +74,18 @@ def numbered(lines):
     return items
 
 
+def table(lines):
+    """The body rows of the first Markdown table in lines, as lists of cell texts (header and rule left out)."""
+    rows = []
+    for line in lines:
+        if not line.strip().startswith('|'):
+            if rows:
+                break
+            continue
+        rows.append([cell.strip() for cell in line.strip().strip('|').split('|')])
+    return [row for row in rows[1:] if not all(set(cell) <= set(':- ') for cell in row)]
+
+
 def inline(text):
     """Markdown's `code` and **bold** as HTML; everything else escaped."""
     html = str(escape(text))
@@ -141,11 +153,13 @@ def projects(home_repo):
 
 
 def how(home_repo):
-    """The numbered steps of "How the owner works" in the home repo's README, as HTML; None when unreadable."""
+    """From the home repo's README, as HTML: the steps of "How the owner works" and the rows of "Keys"
+    ([key, what]). None when the README can't be read."""
     text = _text(home_repo / 'README.md') if home_repo else None
     if text is None:
         return None
-    return [inline(item) for item in numbered(section(text, 'How the owner works'))]
+    return {'steps': [inline(item) for item in numbered(section(text, 'How the owner works'))],
+            'keys': [[inline(cell) for cell in row[:2]] for row in table(section(text, 'Keys')) if len(row) >= 2]}
 
 
 def waiting(brief):

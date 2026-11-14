@@ -54,9 +54,11 @@ def _slug(href):
 
 
 def tools(tiles, decided=()):
-    """One card per tool, from its home tile. Ask is a main view, not a card, and a tool that already has
-    a decision card (`decided`: those cards) is not shown twice."""
-    above = {_slug(d['href']) for d in decided}
+    """One card per tool, from its home tile. Ask is a main view, not a card, a tool marked `"today": False`
+    (Dev) is a place to look, not a card, and a tool that already has a decision card (`decided`: those cards)
+    is not shown twice."""
+    from .tools import TOOLS
+    above = {_slug(d['href']) for d in decided} | {x['slug'] for x in TOOLS if x.get('today') is False}
     found = []
     for t in tiles:
         if t['slug'] == 'ask' or t['slug'] in above:

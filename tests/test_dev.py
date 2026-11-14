@@ -20,6 +20,13 @@ README = """# Home repo
    Reach it from the app.
 2. **Say "go".** <script>x</script> stays text.
 
+## Keys
+
+| Key | What |
+| --- | --- |
+| `Ctrl-b w` | See all work |
+| `Ctrl-b 1` | Go to the **Manager** <b>now</b> |
+
 ## Layout
 
 1. Not this list.
@@ -89,6 +96,8 @@ def test_sections_and_lists_are_read_from_markdown():
         '**Talk to the Manager.** One session in tmux `manager`. Reach it from the app.',
         '**Say "go".** <script>x</script> stays text.']
     assert read.numbered(read.section(BRIEF, 'Waiting on the owner'))[1] == 'Approve `beta` going public.'
+    assert read.table(read.section(README, 'Keys')) == [['`Ctrl-b w`', 'See all work'],
+                                                         ['`Ctrl-b 1`', 'Go to the **Manager** <b>now</b>']]
     assert str(read.inline('**a** `b` <i>')) == '<strong>a</strong> <code>b</code> &lt;i&gt;'
     assert read.pointers(AGENTS) == [('alpha', "Alex's demo service; source is public-ready", '~/code/alpha'),
                                      ('beta', "Sam's notes", '~/code/beta'), ('gone', 'moved away', '~/code/gone')]
@@ -116,7 +125,8 @@ def test_git_is_only_asked_never_told(world, monkeypatch):
 def test_the_page_shows_all_four_sections(world):
     page = TestClient(app).get('/dev').text
     assert '<strong>Talk to the Manager.</strong>' in page and '&lt;script&gt;' in page and 'Not this list' not in page
-    assert 'Ctrl-b w' in page
+    assert '<td><code>Ctrl-b w</code></td><td>See all work</td>' in page
+    assert 'Go to the <strong>Manager</strong> &lt;b&gt;now&lt;/b&gt;' in page
     assert 'demo-task' in page and 'Claude running' in page
     assert 'First commit in alpha' in page and 'feature-x' in page and 'uncommitted changes' in page
     assert 'Folder missing or not a Git checkout' in page
@@ -145,3 +155,10 @@ def test_tmux_windows_and_claude_beneath_them(monkeypatch):
     monkeypatch.setattr(read, '_run', lambda args, cwd=None: out['ps' if args[0] == 'ps' else args[1]])
     assert read.windows('demo', now=1060) == [{'index': '1', 'name': 'manager', 'claude': True, 'active': 'just now'},
                                               {'index': '2', 'name': 'demo-task', 'claude': False, 'active': '11 min ago'}]
+
+
+def test_dev_is_in_all_tools_but_not_a_card_on_today(world):
+    client = TestClient(app)
+    assert 'href="/dev"' in client.get('/tools').text
+    today = client.get('/today').text
+    assert 'href="/dev"' not in today and 'windows in progress' not in today

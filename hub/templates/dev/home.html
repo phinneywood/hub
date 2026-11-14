@@ -7,19 +7,13 @@
 <p class="note">Read fresh each time this page opens, from the home repo, tmux and Git. Nothing here changes anything.</p>
 
 <h2 id="how">How you work</h2>
-{% if how %}<ol class="dev-steps">{% for step in how %}<li>{{ step }}</li>{% endfor %}</ol>
-{% elif not configured %}<p class="note">Not configured: set <code>dev.home_repo</code> in the private settings.</p>
-{% else %}<p class="note">The home repo’s README couldn’t be read.</p>{% endif %}
-<table class="dev-keys">
-  <tr><th>To</th><th>Do</th></tr>
-  <tr><td>Open the work from the laptop</td><td><code>mini</code> in a terminal</td></tr>
-  <tr><td>See all work</td><td><code>Ctrl-b w</code></td></tr>
-  <tr><td>Go to the Manager</td><td><code>Ctrl-b 1</code></td></tr>
-  <tr><td>Switch to a window</td><td>Click it in the bottom bar, or <code>Ctrl-b</code> and its number</td></tr>
-  <tr><td>Start a task</td><td>Tell the Manager <code>new: …</code></td></tr>
-  <tr><td>Leave, everything keeps running</td><td><code>Ctrl-b d</code></td></tr>
-  <tr><td>From the phone</td><td>The same names in the Claude app’s session list</td></tr>
-</table>
+{% if how is none %}<p class="note">{% if configured %}The home repo’s README couldn’t be read.{% else %}Not configured: set <code>dev.home_repo</code> in the private settings.{% endif %}</p>
+{% else %}{% if how.steps %}<ol class="dev-steps">{% for step in how.steps %}<li>{{ step }}</li>{% endfor %}</ol>{% endif %}
+{% if how['keys'] %}<table class="dev-keys">
+  <tr><th>Key</th><th>What</th></tr>
+  {% for key, what in how['keys'] %}<tr><td>{{ key }}</td><td>{{ what }}</td></tr>
+  {% endfor %}
+</table>{% endif %}{% endif %}
 
 <h2 id="windows">In progress</h2>
 {% if windows is none %}<p class="note">Not available: tmux session <code>{{ session }}</code> can’t be reached from Hub.</p>
