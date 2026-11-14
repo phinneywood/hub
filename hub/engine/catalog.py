@@ -795,12 +795,29 @@ def friction_items():
 
 
 def hub_prepare():
-    """With the morning job, no model: the old-key reminder, then recent friction ranked into fix cards."""
+    """With the morning job, no model here: the old-key reminder, recent friction ranked into fix cards, then the daily live checks."""
+    from ..live import routes as live
     from . import friction
     try:
         old_key_reminder()
     finally:
-        friction.prepare()
+        try:
+            friction.prepare()
+        finally:
+            live.morning()      # the daily live checks, in a process of their own; off unless the owner switched them on
+
+
+def live_items():
+    """Live checks that fail now (hub/live): one item, naming them and since when."""
+    from ..live import runner
+    failing = runner.failing()
+    if not failing:
+        return []
+    names = ', '.join(f['name'] for f in failing[:3]) + (f' and {len(failing) - 3} more' if len(failing) > 3 else '')
+    since = min(failing, key=lambda f: f['runs'])['since']
+    count = len(failing)
+    return [today.rec('hub-checks', 'warn', f'{count} live check{"s" * (count != 1)} failing',
+                      f'{names}. Since {since}.', href='/checks', cta='See checks')]
 
 
 def improvement_items():
@@ -922,7 +939,7 @@ SOURCES = [
                            '/house/playlists', 'Playlists', library_lookup))),
     Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
            'What is already on your list and what you said “Not today” to this week. To Ask Hub when you ask: what its '
-           'runs cost against each limit and how many finished.', items=(hub_faults, hub_release, improvement_items, friction_items),
+           'runs cost against each limit and how many finished.', items=(hub_faults, hub_release, live_items, improvement_items, friction_items),
            prepare=hub_prepare,
            lookups=(Lookup('today_list', 'Needs you', 'Today’s list, as the Today page shows it.',
                            'Each item’s title, and its second line unless it is about mail. No addresses or links.',

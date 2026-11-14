@@ -1,0 +1,5 @@
+/* The Checks page: one dot per past run of a check, oldest first. */
+.live-dots { display:flex; flex-wrap:wrap; gap:3px; margin-top:.35rem; }
+.live-dots i { width:8px; height:8px; border-radius:50%; background:var(--idle); }
+.live-dots i.pass { background:var(--ok); }
+.live-dots i.fail { background:var(--bad); }

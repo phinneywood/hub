@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Checks · Hub{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/live.css">{% endblock %}
+{% block body %}
+<p class="eyebrow">Settings</p>
+<h1 class="status-head">Checks</h1>
+{% if said %}<p class="banner ok">{{ said }}</p>{% endif %}
+<p class="note">Small tests of the real thing: the house, the speakers, mail, the calendar, Kitchen and the model, asked
+the way Hub asks them. They look and change nothing, apart from one light you can name to be switched and put straight
+back. Every result is kept for {{ keep_days }} days.</p>
+
+{% if latest %}
+<p class="note"><strong>{% if latest.failed %}{{ latest.failed }} failing{% else %}All passing{% endif %}</strong>
+ · {{ latest.passed }} passed{% if latest.skipped %}, {{ latest.skipped }} left out{% endif %} · {{ latest.when }}
+ · {{ {'manual': 'run by hand', 'morning': 'morning run', 'deploy': 'after a deploy', 'predeploy': 'before a deploy', 'shell': 'from the command line'}[latest.trigger] }}{% if latest.version %} · version {{ latest.version[:7] }}{% endif %}</p>
+{% else %}<p class="note">No run yet.</p>{% endif %}
+
+<ul class="checks live">
+{% for row in rows %}
+  <li><div>
+    <strong>{{ row.check.name }}</strong>
+    <small>{{ row.check.about }}</small>
+    {% if row.failing %}<small class="warn-text">{{ row.failing.words }}</small>
+    <small>Failing since {{ row.failing.since }}{% if row.failing.since_version %} (version {{ row.failing.since_version[:7] }}){% endif %}{% if row.failing.last_pass %}; last passed {{ row.failing.last_pass }}{% if row.failing.last_pass_version %} on version {{ row.failing.last_pass_version[:7] }}{% endif %}{% else %}; it has never passed{% endif %}.</small>
+    {% elif row.last %}<small>{{ row.last.words }}</small>
+    {% else %}<small>{{ {'undo': 'Off until you name a light for it.', 'spend': 'Not run yet.'}.get(row.check.effect, 'Not run yet.') }}</small>{% endif %}
+    {% if row.history %}<span class="live-dots" role="img" aria-label="Last {{ row.history | length }} runs: {{ row.history | selectattr('status', 'equalto', 'pass') | list | length }} passed">{% for h in row.history %}<i class="{{ h.status }}" title="{{ h.when }} · {{ h.ms }} ms{% if h.status == 'fail' %} · {{ h.words }}{% endif %}"></i>{% endfor %}</span>{% endif %}
+  </div></li>
+{% endfor %}
+</ul>
+
+<h2>Run now</h2>
+<form method="post" action="/checks/run"><button class="btn small primary"{% if running %} disabled{% endif %}>Run the checks</button></form>
+<p class="note">{% if running %}A run is going now. {% endif %}About a minute, and about a cent of model calls. A run from here never changes anything in the house.</p>
+<p class="note">Daily run with the morning job: <strong>{{ 'on' if daily else 'off' }}</strong>. The light that is switched and put back: <strong>{{ 'on' if undo else 'off' }}</strong>. Both are set in Hub’s private settings file; see docs/live-checks.md.</p>
+{% endblock %}

@@ -39,6 +39,8 @@ for tool in TOOLS:
 
 from .golden.routes import router as golden_router  # noqa: E402
 app.include_router(golden_router, prefix="/golden")
+from .live.routes import router as live_router  # noqa: E402
+app.include_router(live_router, prefix="/checks")
 
 
 @app.on_event("startup")

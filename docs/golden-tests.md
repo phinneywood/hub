@@ -72,6 +72,9 @@ it should refuse or leave alone.
 | Cost | none | at most $0.50 a run and $5 a month (owner, 2026-11-13); recorded as "golden" in the engine's runs |
 | Results | the test report | `golden/runs/*.json` in Hub's private data folder; a summary on Insights |
 
+A few scenarios also run daily as the live check `ask.golden` once the owner switches the daily checks on
+(docs/live-checks.md).
+
 Offline, the checks test Hub's side: what a tool does with a given call, what it would change, what it
 answers. Each seed failure also has a "known bad" script in `tests/test_golden.py` that replays what went
 wrong, to prove the checks catch it. Live, the same checks test the model's choices too.

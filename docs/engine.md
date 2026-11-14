@@ -35,6 +35,8 @@ guidance. They steer judgement and are given to Ask Hub on every turn. They cann
   what Hub would change and say, run offline in the suite and live on demand (`docs/golden-tests.md`).
   A new control or hand-off must also be covered by the dry-run layer (`hub/golden/dryrun.py`); a test fails
   until it is.
+- **A live check** for a new connection, or for a failure that only the real system could show
+  (`docs/live-checks.md`): one question asked of the running system, kept with its history.
 
 ## The overnight review
 
