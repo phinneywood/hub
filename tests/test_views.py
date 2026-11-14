@@ -294,7 +294,7 @@ def test_a_charts_question_is_answered_from_its_lookup_with_a_link_back_to_insig
 
 # ---- the demo servers ----
 
-def test_the_demo_guard_blocks_the_key_stores_and_other_machines_before_anything_is_served(monkeypatch):
+def test_the_demo_guard_blocks_the_key_stores_and_other_machines_before_anything_is_served(monkeypatch, tmp_path):
     import socket
     import subprocess
     import sys
@@ -310,6 +310,8 @@ def test_the_demo_guard_blocks_the_key_stores_and_other_machines_before_anything
     assert bridge.health() is False
     with pytest.raises(OSError, match='reaches no other machine'):
         socket.socket().connect(('192.0.2.1', 443))
+    with pytest.raises(OSError, match='no service on this machine'):   # the broker's and Kitchen's sockets: the real house
+        socket.socket(socket.AF_UNIX).connect(str(tmp_path / 'ha-broker.sock'))
     for name in ('ask', 'views'):                      # both servers apply it before Hub's app is imported
         text = (SOURCE.parent / name / 'check' / 'demo_server.py').read_text()
         assert 0 < text.index('check_guard.apply(patch)') < text.index('from hub.main import app')

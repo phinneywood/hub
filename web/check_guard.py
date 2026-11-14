@@ -2,7 +2,8 @@
 
 Call `apply(patch)` before the app is imported or anything is served. After it, Hub's model-key lookup
 (1Password, then the Keychain) finds nothing without looking, the mail bridge reports itself absent, and
-any connection to another machine is refused. A guard against accidents, not a sandbox.
+any connection to another machine or to a service's socket on this one (the Home Assistant broker, Kitchen)
+is refused, so a demo never shows or changes the real house. A guard against accidents, not a sandbox.
 """
 import socket
 
@@ -23,6 +24,8 @@ def apply(patch):
     def local_only(sock, address):
         if isinstance(address, tuple) and address[0] not in LOCAL:
             raise OSError('The demo server reaches no other machine.')
+        if isinstance(address, (str, bytes)):
+            raise OSError('The demo server reaches no service on this machine.')
         return connect(sock, address)
 
     patch.setattr(socket.socket, 'connect', local_only)
