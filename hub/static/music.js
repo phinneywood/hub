@@ -97,7 +97,9 @@
         text: "Undo", on: { click: function () { undo(g, note.batch); } } })));
     }
     if (note.error) box.append(h("p", { cls: "mp-said bad", text: note.error }));
-    if (link) box.append(h("a", { cls: "mp-away", href: link, target: "_blank", rel: "noopener", text: "Open in Music Assistant ↗" }));
+    // Hub's own Music screen when the door is set up (a path), else Music Assistant's address in a new tab.
+    if (link) box.append(/^https?:/.test(link) ? h("a", { cls: "mp-away", href: link, target: "_blank", rel: "noopener", text: "Open in Music Assistant ↗" })
+      : h("a", { cls: "mp-away", href: link, text: "Open in Music Assistant ›" }));
     return box;
   }
 
@@ -126,9 +128,22 @@
     bar.replaceChildren.apply(bar, parts);
   }
 
+  // What plays or is paused in full; the silent speakers folded away under one line, so the screen stays short.
+  var more = false;
   function drawScreen(d) {
-    screen.replaceChildren.apply(screen, d.groups.length ? d.groups.map(function (g) { return panel(g, "music", d.open); })
-      : [h("p", { cls: "note", text: "Hub doesn’t see any Music Assistant speakers." })]);
+    if (!d.groups.length) { screen.replaceChildren(h("p", { cls: "note", text: "Hub doesn’t see any Music Assistant speakers." })); return; }
+    var on = d.groups.filter(function (g) { return g.playing || g.state === "paused"; });
+    var rest = d.groups.filter(function (g) { return on.indexOf(g) < 0; });
+    var parts = on.map(function (g) { return panel(g, "music", d.open); });
+    if (!on.length) parts.push(h("p", { cls: "note", text: "Nothing is playing." }));
+    if (rest.length) {
+      var fold = h("details", { cls: "mp-more", on: { toggle: function () { more = fold.open; } } },
+        h("summary", { text: rest.length + (rest.length === 1 ? " silent speaker" : " silent speakers") }));
+      fold.open = more;
+      rest.forEach(function (g) { fold.append(panel(g, "music", d.open)); });
+      parts.push(fold);
+    }
+    screen.replaceChildren.apply(screen, parts);
   }
 
   function draw(d) {

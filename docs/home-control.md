@@ -98,7 +98,8 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   loads nothing from other hosts. Code: `hub/tools/house/nowplaying.py`.
 - **Mini-player and Music screen** (stages 2 and 3). On every Hub page but Ask (which has the card), a bar at the
   bottom shows what plays and where, with play/pause; tapping it opens the same controls for each playing group.
-  `/house/music` (Home → Music, linked from Home changes) shows every speaker group with those controls. Both are
+  `/house/music` (Home → Music, linked from Home changes) shows what plays or is paused with those controls, and
+  the silent speakers folded under one line (2026-11-14: with a dozen speakers the screen was eight phone screens long). Both are
   drawn by `hub/static/music.js` from `GET /house/now` (every group, playing first), read every 4 seconds while
   the page is visible, and post to the same `/house/now/<speaker>` route, recorded as `via` = `bar` or `music`.
   The card, the bar sheet and the Music screen link to Music Assistant (`read.links()` → `music_url`) when set.

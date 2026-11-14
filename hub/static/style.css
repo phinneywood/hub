@@ -294,6 +294,10 @@ body.mp-on main { padding-bottom:5.5rem; }
 .mp-open { flex:1; min-width:0; display:flex; align-items:center; gap:.7rem; padding:.2rem; border:0; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
 .mp-sheet { max-width:44rem; margin:.6rem auto 0; display:flex; flex-direction:column; gap:.8rem; }
 .mp-screen { display:flex; flex-direction:column; gap:.9rem; margin:1rem 0; }
+.mp-more { display:flex; flex-direction:column; gap:.9rem; }
+.mp-more > summary { cursor:pointer; color:var(--mut); font-weight:600; padding:.5rem .25rem; min-height:var(--tap); }
+.mp-more[open] > summary { margin-bottom:.9rem; }
+.mp-more > .mp-panel + .mp-panel { margin-top:.9rem; }
 .mp-panel { display:flex; flex-direction:column; gap:.6rem; padding:.95rem 1rem .85rem; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:var(--shadow); }
 .mp-head { display:flex; gap:.8rem; align-items:center; min-width:0; }
 .mp-art { flex:none; width:3.2rem; height:3.2rem; border-radius:var(--radius-sm); display:grid; place-items:center; font-size:1.4rem;
