@@ -1,7 +1,10 @@
 """The chat's Now playing card: live state through the broker, and taps through control.change. Fake broker only."""
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
+import hub
 from hub.main import app
 from hub.tools.house import broker, control, nowplaying, read, zones
 from tests.test_house import SIGNED_IN, fake  # noqa: F401 - the fixture
@@ -177,5 +180,5 @@ def test_the_music_screen_and_the_mini_player_are_on_hubs_pages_but_not_ask(worl
     assert 'id="mp-bar"' in screen and '/static/music.js' in screen
     ask = client.get('/ask', headers=SIGNED_IN).text
     assert 'mp-bar' not in ask and 'music.js' not in ask                      # Ask has its own card
-    script = (__import__('pathlib').Path(__file__).parents[1] / 'hub/static/music.js').read_text()
+    script = (Path(hub.__file__).parent / 'static/music.js').read_text()    # the installed package's, as deployed
     assert 'innerHTML' not in script                                           # names are data, set as text only
