@@ -182,3 +182,35 @@ def test_the_music_screen_and_the_mini_player_are_on_hubs_pages_but_not_ask(worl
     assert 'mp-bar' not in ask and 'music.js' not in ask                      # Ask has its own card
     script = (Path(hub.__file__).parent / 'static/music.js').read_text()    # the installed package's, as deployed
     assert 'innerHTML' not in script                                           # names are data, set as text only
+
+
+# ---- Today's Home card: the way to Music and Music Assistant ----
+
+def test_todays_home_card_leads_to_music_and_music_assistant(world, monkeypatch):
+    from hub import home
+    monkeypatch.setattr(read, 'links', lambda: {'music_url': 'https://music.example:8095'})
+    tile = home.house()
+    assert tile['links'] == [{'label': 'Music', 'href': '/house/music'},
+                             {'label': 'Open in Music Assistant', 'href': 'https://music.example:8095'}] and not tile['more']
+    page = TestClient(app).get('/today', headers=SIGNED_IN).text
+    assert '<a class="btn small" href="https://music.example:8095" target="_blank" rel="noopener">Open in Music Assistant' in page
+    world['by_id'][LIVING]['state'] = 'paused'                               # paused still counts: it can be resumed
+    read.clear_cache()
+    assert [l['label'] for l in home.house()['links']] == ['Music', 'Open in Music Assistant']
+    monkeypatch.setattr(read, 'links', lambda: {})
+    assert [l['label'] for l in home.house()['links']] == ['Music']          # no address set: no Music Assistant button
+    world['by_id'][LIVING]['state'] = 'idle'
+    read.clear_cache()
+    quiet = home.house()
+    assert quiet['links'] == [] and quiet['more'] == {'label': 'Music', 'href': '/house/music'}
+    assert 'class="tile-more" href="/house/music"' in TestClient(app).get('/today', headers=SIGNED_IN).text
+
+
+def test_todays_home_card_keeps_the_quiet_music_link_when_home_is_down(monkeypatch):
+    from hub import home
+
+    def refuse(message, timeout):
+        raise broker.NotSent('The Home Assistant broker on this Mac isn’t answering.')
+    monkeypatch.setattr(broker, '_exchange', refuse)
+    read.clear_cache()
+    assert home.house()['more'] == {'label': 'Music', 'href': '/house/music'}

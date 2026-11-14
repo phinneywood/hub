@@ -45,9 +45,11 @@
       {% if t.lines %}<ul class="tile-items">{% for i in t.lines %}
         <li{% if i.struck %} class="struck"{% endif %}><span>{{ i.label }}</span><small>{{ i.note }}</small></li>{% endfor %}
       </ul>{% endif %}
-      {% if t.acts %}<span class="tile-acts">{% for a in t.acts %}<form method="post" action="{{ a.post }}">{% for k, v in a.fields.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}<button class="btn small">{{ a.label }}</button></form>{% endfor %}</span>{% endif %}
+      {% if t.acts or t.links %}<span class="tile-acts">{% for a in t.acts %}<form method="post" action="{{ a.post }}">{% for k, v in a.fields.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}<button class="btn small">{{ a.label }}</button></form>{% endfor %}
+        {%- for l in t.links %}<a class="btn small" href="{{ l.href }}"{{ away(l.href) }}>{{ l.label }}{% if l.href.startswith(('https://', 'http://')) %}<span class="sr"> (opens in a new tab)</span>{% endif %}</a>{% endfor %}</span>{% endif %}
       <span class="tile-foot">
         <a class="tile-cta" href="{{ t.href }}"{{ away(t.href) }}>{{ t.cta or 'Open' }}<span class="sr"> {{ t.name }}</span><span aria-hidden="true"> →</span></a>
+        {% if t.more %}<a class="tile-more" href="{{ t.more.href }}">{{ t.more.label }}</a>{% endif %}
         {% if t.ask %}<a class="ask-about" href="/ask?about={{ t.ask | urlencode }}">Ask about this<span class="sr"> ({{ t.name }})</span></a>{% endif %}
         {% if t.as_of %}<small class="tile-asof">{{ t.as_of }}</small>{% endif %}
       </span>

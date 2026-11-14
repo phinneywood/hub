@@ -272,6 +272,8 @@ textarea { width:100%; padding:.7rem .8rem; font:inherit; border:1px solid var(-
 /* ---------- Home ---------- */
 .tile-acts { display:flex; flex-wrap:wrap; gap:.4rem; margin:.5rem 0 .2rem; }
 .tile-acts form { margin:0; }
+.tile-more { display:inline-flex; align-items:center; min-height:var(--tap); color:var(--mut); font-size:.88rem; font-weight:500; text-decoration:none; }
+.tile-more:hover { color:var(--fg); text-decoration:underline; }
 .home-change { display:flex; align-items:center; justify-content:space-between; gap:.8rem; }
 .home-change form { margin:0; flex:none; }
 .page-acts { display:flex; flex-wrap:wrap; gap:.5rem; margin:0 0 1.25rem; }

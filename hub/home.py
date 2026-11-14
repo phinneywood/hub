@@ -14,11 +14,12 @@ DEADLINE_SECONDS = 2.5
 _pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix='hub-home')
 
 
-def tile(slug, tone, headline, detail='', *, items=(), cta=None, href=None, as_of=None, acts=()):
+def tile(slug, tone, headline, detail='', *, items=(), cta=None, href=None, as_of=None, acts=(), links=(), more=None):
     """tone: ok | warn | bad | info | idle. as_of: how old the numbers are, e.g. 'Updated 12 min ago'.
-    acts: one-tap buttons, each {'label', 'post', 'fields'}; a signed-in tap only."""
-    return {'slug': slug, 'tone': tone, 'headline': headline, 'detail': detail,
-            'lines': list(items), 'cta': cta, 'href': href or '/' + slug, 'as_of': as_of, 'acts': list(acts)}
+    acts: one-tap buttons, each {'label', 'post', 'fields'}; a signed-in tap only. links: buttons that open a page,
+    each {'label', 'href'} (an outside address opens in a new tab). more: a quiet {'label', 'href'} in the foot."""
+    return {'slug': slug, 'tone': tone, 'headline': headline, 'detail': detail, 'lines': list(items), 'cta': cta,
+            'href': href or '/' + slug, 'as_of': as_of, 'acts': list(acts), 'links': list(links), 'more': more}
 
 
 def today():
@@ -206,12 +207,19 @@ def kitchen():
 
 def house():
     from .tools.house import broker, read
-    link = read.links().get('ha_url')
-    where = {'href': link or '/house/changes', 'cta': 'Open Home Assistant' if link else 'Changes'}
+    links = read.links()
+    link = links.get('ha_url')
+    music = {'label': 'Music', 'href': '/house/music'}
+    where = {'href': link or '/house/changes', 'cta': 'Open Home Assistant' if link else 'Changes', 'more': music}
     try:
         found = read.snapshot()
     except broker.HomeDown:
         return tile('house', 'idle', 'Home isn’t reachable', 'Hub couldn’t read Home Assistant through the broker.', **where)
+    if any(d['state'] in ('playing', 'buffering', 'paused') for d in found['speakers']):
+        # Music on: the Music screen and Music Assistant as buttons beside Pause, instead of the quiet link.
+        where['more'] = None
+        where['links'] = [music] + ([{'label': 'Open in Music Assistant', 'href': links['music_url']}]
+                                    if links.get('music_url') else [])
     issues = read.attention(found)
     playing = [d for d in found['speakers'] if d['on']]
     facts = [f'{d["name"]}: {d["detail"]}' if d['detail'] else d['name'] + ' playing' for d in playing[:1]]
