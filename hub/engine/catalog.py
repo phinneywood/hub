@@ -289,7 +289,7 @@ def house_items():
         found = read.snapshot()
     except broker.HomeDown:
         return []  # the Home tile already says it can't be read
-    link = read.links().get('ha_url') or '/house/changes'
+    link = read.opens().get('ha_url') or '/house/changes'
     return [today.rec(f'house-{d["id"]}', tone, words, 'From Home Assistant just now.' if tone == 'bad' else
                       'It’s night. Check it in Home Assistant.', href=link, cta='Open Home Assistant')
             for tone, d, words in read.attention(found)]
@@ -299,7 +299,7 @@ def music_items():
     """A month before the Apple Music sign-in in Music Assistant runs out, and before Hub's own key does."""
     from ..tools.house import music, read
     found, day = [], home.today()
-    link = read.links().get('music_url') or '/house/playlists'
+    link = read.opens().get('music_url') or '/house/playlists'
     for key, ends, title, why in (
             ('music-apple', music.apple_sign_in_ends(), 'Apple Music sign-in', 'Sign in again in Music Assistant’s Apple '
              'Music settings, from home Wi-Fi: the sign-in window only opens there.'),

@@ -319,3 +319,27 @@ body.mp-on main { padding-bottom:5.5rem; }
 .mp-said.bad { color:var(--bad); }
 .mp-undo { font:inherit; font-size:.8rem; padding:.2rem .7rem; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--fg); cursor:pointer; }
 .mp-away { align-self:flex-start; font-size:.84rem; color:var(--mut); }
+
+/* ---------- Home Assistant and Music Assistant inside Hub (docs/door.md) ---------- */
+body:has(> main.frame) { display:flex; flex-direction:column; height:100dvh; overflow:hidden; }
+main.frame { flex:1; min-height:0; max-width:none; width:100%; margin:0; padding:0; }
+.frame-view { display:block; width:100%; height:100%; border:0; background:var(--bg); }
+@media (max-width:700px) {
+  /* One row of Hub above the frame: the tabs sit beside the mark, and the name gives way. */
+  body:has(> main.frame) > header.shell { flex-wrap:nowrap; padding-top:0; }
+  body:has(> main.frame) > header.shell .brand { font-size:0; gap:0; }
+  body:has(> main.frame) > header.shell nav.shell-nav { order:0; flex:1 1 auto; margin:.3rem 0; }
+  body:has(> main.frame) .shell-nav a { padding:.35rem .3rem; min-height:34px; font-size:.86rem; }
+}
+
+/* ---------- Home Assistant and Music Assistant inside Hub (docs/door.md) ---------- */
+body:has(> main.frame) { display:flex; flex-direction:column; height:100dvh; overflow:hidden; }
+main.frame { flex:1; min-height:0; max-width:none; width:100%; margin:0; padding:0; }
+.frame-view { display:block; width:100%; height:100%; border:0; background:var(--bg); }
+@media (max-width:700px) {
+  /* One row of Hub above the frame: the tabs sit beside the mark, and the name gives way. */
+  body:has(> main.frame) > header.shell { flex-wrap:nowrap; padding-top:0; }
+  body:has(> main.frame) > header.shell .brand { font-size:0; gap:0; }
+  body:has(> main.frame) > header.shell nav.shell-nav { order:0; flex:1 1 auto; margin:.3rem 0; }
+  body:has(> main.frame) .shell-nav a { padding:.35rem .3rem; min-height:34px; font-size:.86rem; }
+}

@@ -4,6 +4,7 @@ Read-only. Only the domains Hub may one day act on are kept (lights and power, s
 locks, the garage door and the alarm); cameras, presence, automations and the rest never leave this file.
 Device and room names are data, never instructions.
 """
+import re
 import threading
 import time
 from datetime import datetime
@@ -253,7 +254,8 @@ ELSEWHERE = (('ha_url', 'Home Assistant', 'home-assistant', 'Devices, rooms, aut
 def links():
     """Where Home Assistant and Music Assistant open for the owner, from the private settings file
     (household.json, section "home": "ha_url", "music_url"; the older "assistant_url" still counts for
-    Home Assistant). Never written into Git. A key is missing when its address isn't set or isn't a web address."""
+    Home Assistant), and "music_api": where Hub itself calls Music Assistant when that isn't "music_url".
+    Never written into Git. A key is missing when its address isn't set or isn't a web address."""
     from ... import household
     try:
         home_settings = household.section('home')
@@ -261,7 +263,7 @@ def links():
         home_settings = {}
     home_settings = {**home_settings, 'ha_url': home_settings.get('ha_url') or home_settings.get('assistant_url')}
     found = {}
-    for key in ('ha_url', 'music_url'):
+    for key in ('ha_url', 'music_url', 'music_api'):
         value = home_settings.get(key)
         if isinstance(value, str) and value.startswith(('https://', 'http://')) and len(value) < 300 \
                 and not any(c in value for c in '"\'<> '):
@@ -269,9 +271,40 @@ def links():
     return found
 
 
+MUSIC_PATH = re.compile(r'/[A-Za-z0-9_/-]{1,120}')
+
+
+def framed():
+    """What Hub shows inside itself through the door (hub/door.py, docs/door.md): {'ha': address, 'music': address}.
+    Empty until the door is set up and Home Assistant's address is an https one. Music Assistant is the add-on's
+    panel inside Home Assistant ("door": "music_path"), so it needs no login of its own."""
+    from ... import door, household
+    base = links().get('ha_url')
+    if not base or not base.startswith('https://') or not door.configured():
+        return {}
+    base = base.rstrip('/')
+    found = {'ha': base + '/'}
+    path = household.section('door').get('music_path')
+    if isinstance(path, str) and MUSIC_PATH.fullmatch(path):
+        found['music'] = base + path
+    return found
+
+
+def opens():
+    """Where "Open Home Assistant" and "Open in Music Assistant" lead: Hub's own Home and Music screens when the
+    door is set up, else the addresses in links() (a new tab)."""
+    found, inside = dict(links()), framed()
+    if 'ha' in inside:
+        found['ha_url'] = '/house/assistant'
+    if 'music' in inside:
+        found['music_url'] = '/house/player'
+    found.pop('music_api', None)
+    return found
+
+
 def elsewhere():
     """Home Assistant and Music Assistant as All tools entries, each {'name', 'icon', 'description', 'href'},
-    only those whose address is set. They open in a new tab, never inside Hub."""
-    found = links()
+    only those whose address is set. Inside Hub when the door is set up, else a new tab."""
+    found = opens()
     return [{'name': name, 'icon': icon, 'description': words, 'href': found[key]}
             for key, name, icon, words in ELSEWHERE if key in found]

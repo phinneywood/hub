@@ -342,3 +342,38 @@ def test_the_calendar_and_kitchen_checks(world, monkeypatch, tmp_path):
     monkeypatch.setattr(client, 'call', down)
     with pytest.raises(checks.Failed, match='Kitchen'):
         checks.kitchen()
+
+
+def test_the_door_checks_are_skipped_until_the_door_is_set_up_then_test_the_gate_and_the_sign_in(monkeypatch):
+    import io
+    import urllib.error
+    from hub.live.checks import urllib as lib
+    with pytest.raises(checks.Skipped):
+        checks.door_gate()
+    with pytest.raises(checks.Skipped):
+        checks.door_sign_in()
+    (config.DATA_DIR / 'household.json').write_text(json.dumps({'door': {'upstream': 'http://192.0.2.10:8123', 'logins': ['me@example.com']}}))
+
+    class Opener:
+        def __init__(self, status):
+            self.status = status
+
+        def open(self, request, timeout=0):
+            assert 'Tailscale-user-login' not in request.headers            # the check itself carries no login
+            if self.status >= 400:
+                raise urllib.error.HTTPError(request.full_url, self.status, 'x', {}, io.BytesIO(b''))
+            return io.BytesIO(b'')
+    monkeypatch.setattr(lib.request, 'build_opener', lambda *a: Opener(403))
+    assert 'turns away' in checks.door_gate()
+    monkeypatch.setattr(lib.request, 'build_opener', lambda *a: Opener(502))
+    with pytest.raises(checks.Failed, match='502'):
+        checks.door_gate()
+
+    def providers(kinds):
+        body = io.BytesIO(json.dumps({'providers': [{'type': k} for k in kinds]}).encode())
+        monkeypatch.setattr(lib.request, 'urlopen', lambda url, timeout=0: body)
+    providers(['trusted_networks', 'homeassistant'])
+    assert 'without a password' in checks.door_sign_in()
+    providers(['homeassistant'])
+    with pytest.raises(checks.Failed, match='password'):
+        checks.door_sign_in()

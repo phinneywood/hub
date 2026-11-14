@@ -1,5 +1,5 @@
 """Home Assistant and Music Assistant are one tap away: All tools entries and page shortcuts, each opening in a
-new tab, from addresses in the private household.json only. Made-up addresses; nothing is framed."""
+new tab, from addresses in the private household.json only, while the door isn't set up. Made-up addresses."""
 import json
 import pathlib
 import re
@@ -87,5 +87,6 @@ def test_the_home_card_on_today_opens_home_assistant_in_a_new_tab(client, monkey
     assert all('target=' not in t for t in re.findall(r'<a [^>]*href="/[^"]*"[^>]*>', page))     # Hub's own pages stay
 
 
-def test_no_template_frames_another_site():
-    assert not [p.name for p in TEMPLATES.rglob('*.html') if '<iframe' in p.read_text()]
+def test_only_the_door_s_screen_holds_a_frame():
+    # Home Assistant and Music Assistant show inside Hub only through the door (tests/test_door.py); nothing else is framed.
+    assert [p.name for p in TEMPLATES.rglob('*.html') if '<iframe' in p.read_text()] == ['frame.html']

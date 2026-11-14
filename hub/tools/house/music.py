@@ -99,13 +99,19 @@ def _secret():
     return value
 
 
+def _base():
+    """Where Hub calls Music Assistant: "music_api" when set (its address on the home network), else "music_url"."""
+    found = read.links()
+    return found.get('music_api') or found.get('music_url')
+
+
 def ready():
     """Whether Music Assistant's address is set. Says nothing about the key."""
-    return bool(read.links().get('music_url'))
+    return bool(_base())
 
 
 def _send(command, args, timeout):
-    base = read.links().get('music_url')
+    base = _base()
     if not base:
         raise NotSent('Music Assistant’s address isn’t in Hub’s settings yet.')
     key = _secret()

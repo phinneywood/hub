@@ -44,7 +44,8 @@ class Check:
 # ---- Hub's own pages, asked of the running Hub ----
 
 SLOW_SECONDS = 8
-MAIN_PAGES = ('/', '/today', '/insights', '/tools', '/settings', '/engine', '/checks', '/house/music', '/house/changes')
+MAIN_PAGES = ('/', '/today', '/insights', '/tools', '/settings', '/engine', '/checks', '/house/music', '/house/changes',
+              '/house/assistant', '/house/player')
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -112,6 +113,47 @@ def speakers():
     if not there:
         raise Failed(f'All {len(players)} speakers are unavailable.')
     return f'{len(there)} of {len(players)} speakers are reachable.'
+
+
+# ---- The door: Home Assistant inside Hub ----
+
+def _door():
+    from .. import door
+    chosen = door.settings()
+    if chosen is None:
+        raise Skipped('The door to Home Assistant isn’t set up.')
+    return door, chosen
+
+
+def door_gate():
+    """The door is up, and a request with no Tailscale login (this check itself) is turned away."""
+    door, _ = _door()
+    request = urllib.request.Request(f'http://{config.HOST}:{door.PORT}/', headers={'Host': 'door.invalid'})
+    try:
+        with urllib.request.build_opener(_NoRedirect).open(request, timeout=8) as reply:
+            raise Failed(f'The door let a request with no login through ({reply.status}).')
+    except urllib.error.HTTPError as error:
+        if error.code != 403:
+            raise Failed(f'The door answered {error.code} to a request with no login; it should refuse with 403.') from None
+    except OSError:
+        raise Failed('The door isn’t listening on this Mac.') from None
+    return 'The door is up and turns away a request with no login.'
+
+
+def door_sign_in():
+    """Home Assistant offers this Mac its no-password sign-in first, so the Home screen never shows a login."""
+    import json
+    _, chosen = _door()
+    try:
+        with urllib.request.urlopen(chosen['upstream'] + '/auth/providers', timeout=8) as reply:
+            found = json.loads(reply.read(65536))
+    except (OSError, ValueError):
+        raise Failed('Home Assistant didn’t answer at the door’s address for it.') from None
+    providers = found.get('providers') if isinstance(found, dict) else found
+    kinds = [p.get('type') for p in providers or () if isinstance(p, dict)]
+    if not kinds or kinds[0] != 'trusted_networks':
+        raise Failed('Home Assistant would ask for a password: its trusted-address sign-in isn’t offered first to this Mac.')
+    return 'Home Assistant signs this Mac in without a password.'
 
 
 # ---- Music Assistant, through its own API ----
@@ -301,6 +343,9 @@ CHECKS = (
     Check('hub.pages', 'Hub’s pages', 'Every main page and tool page of the running Hub loads, none slowly.', 'read', pages, 180),
     Check('house.read', 'Home Assistant', 'Hub can read the house through the broker.', 'read', house),
     Check('house.speakers', 'Speakers', 'Home Assistant lists speakers and at least one is reachable.', 'read', speakers),
+    Check('door.gate', 'The door is shut to strangers', 'The door to Home Assistant is up and refuses a request with no login.', 'read', door_gate),
+    Check('door.sign_in', 'No second login', 'Home Assistant signs this Mac in without a password, so Home and Music open straight away.',
+          'read', door_sign_in),
     Check('music.search', 'Music search plays', 'Music Assistant finds music, and Hub would play what it finds.', 'read', music_search,
           seed='Hub refused every Apple Music item it had just found, so Ask could find a playlist but never play it.'),
     Check('music.key', 'Music Assistant key', 'Hub’s key is accepted and isn’t about to run out.', 'read', music_key),

@@ -9,6 +9,9 @@ the detail screens behind these three.
 | Today | `/today` | One card per decision from “Needs you”, then one card per tool | `hub/cards.py`, `hub/today.py`, `hub/home.py` |
 | Insights | `/insights` | Charts from numbers Hub already keeps, and the Network summary | `hub/insights.py`, `hub/tools/network/` |
 
+With the door set up (docs/door.md) the bar is **Ask**, **Today**, **Home** and **Music**: Home and Music are Home
+Assistant and Music Assistant themselves (`/house/assistant`, `/house/player`), and Insights is listed under All tools.
+
 Behind two icons in the header: **All tools** (`/tools`, every tool's own page) and **Settings**
 (`/settings`, which leads to Engine and Status). A tool page marks All tools as the current place;
 Engine and Status mark Settings. No address was removed: `/` still answers 200, now with Ask.

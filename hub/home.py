@@ -207,7 +207,7 @@ def kitchen():
 
 def house():
     from .tools.house import broker, read
-    links = read.links()
+    links = read.opens()
     link = links.get('ha_url')
     music = {'label': 'Music', 'href': '/house/music'}
     where = {'href': link or '/house/changes', 'cta': 'Open Home Assistant' if link else 'Changes', 'more': music}

@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Hub{% endblock %}
+{% block main_class %}frame{% endblock %}
+{% block body %}
+{# The real {{ title }}, through the door (hub/door.py): the door checks the same Tailscale login as this page. #}
+<iframe class="frame-view" src="{{ src }}" title="{{ title }}" allow="autoplay; fullscreen; clipboard-write; microphone; camera; picture-in-picture; encrypted-media"></iframe>
+{% endblock %}

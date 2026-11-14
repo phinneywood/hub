@@ -22,6 +22,8 @@ fails if Hub would refuse what comes back.
 | `hub.pages` | read | every main page and tool page of the running Hub answers, none slower than 8 s |
 | `house.read` | read | Home Assistant answers through the broker with its devices and rooms |
 | `house.speakers` | read | Home Assistant lists speakers and at least one is reachable |
+| `door.gate` | read | the door to Home Assistant is up and refuses a request with no login (docs/door.md) |
+| `door.sign_in` | read | Home Assistant offers this Mac its no-password sign-in first, so Home opens with no login |
 | `music.search` | read | Music Assistant finds music, and every item found has an address Hub would play |
 | `music.key` | read | Hub's Music Assistant key is accepted and has 30 days or more left |
 | `mail.read` | read | the mail helper answers, Gmail is signed in, and the helper still reports it can't send |

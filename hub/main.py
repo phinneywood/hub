@@ -47,6 +47,8 @@ app.include_router(live_router, prefix="/checks")
 def startup():
     if not config.BACKGROUND_JOBS_ENABLED:
         return
+    from . import door
+    door.start()        # Home Assistant inside Hub; nothing listens until the owner sets the door up (docs/door.md)
     threading.Thread(target=warm_cache, daemon=True).start()
     worker.resume_if_interrupted()
     delayed.start()
@@ -80,7 +82,8 @@ async def no_store(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'"
+    if "content-security-policy" not in response.headers:      # the Home and Music screens set their own, to hold one frame
+        response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'"
     return response
 
 

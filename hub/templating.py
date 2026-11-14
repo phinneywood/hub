@@ -19,4 +19,10 @@ templates.env.globals["gmail_pause"] = _gmail_pause  # why changes are held: the
 
 def render(request, name, active=None, status_code=200, **context):
     from .tools import TOOLS
-    return templates.TemplateResponse(request, name, {"tools": TOOLS, "active": active, **context}, status_code=status_code)
+    from .tools.house import read
+    try:
+        frames = read.framed()
+    except ValueError:      # a household.json that doesn't parse: the plain navigation
+        frames = {}
+    return templates.TemplateResponse(request, name, {"tools": TOOLS, "active": active, "frames": frames, "bare": False, **context},
+                                      status_code=status_code)

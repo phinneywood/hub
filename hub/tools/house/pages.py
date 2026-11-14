@@ -1,9 +1,12 @@
-"""Home's own pages: a link out to Home Assistant, the taps that change things, and Hub's record of changes.
+"""Home's own pages: Home Assistant and Music Assistant themselves, the taps that change things, and Hub's record
+of changes.
 
-Home Assistant has its own dashboards, so Hub doesn't copy them: /house opens Home Assistant. Changes need a
+Home Assistant has its own dashboards, so Hub doesn't copy them: /house opens Home Assistant, inside Hub when the
+door is set up (docs/door.md) and in a new tab otherwise. Changes need a
 tap from a signed-in device (a program on this Mac has no Tailscale login and can't change the house).
 """
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -27,7 +30,30 @@ def _back(back, batch=None):
 
 @router.get("")
 def house():
-    return RedirectResponse(read.links().get('ha_url') or '/house/changes', status_code=302)
+    return RedirectResponse(read.opens().get('ha_url') or '/house/changes', status_code=302)
+
+
+def _frame(request, which, title, active):
+    src = read.framed().get(which)
+    if not src:
+        return RedirectResponse('/house/changes', status_code=302)
+    origin = '{0.scheme}://{0.netloc}'.format(urlsplit(src))
+    page = render(request, "house/frame.html", active=active, bare=True, src=src, title=title)
+    # This page alone may hold a frame, and only of the door's address.
+    page.headers["Content-Security-Policy"] = f"default-src 'self'; frame-src {origin}; frame-ancestors 'none'"
+    return page
+
+
+@router.get("/assistant", response_class=HTMLResponse)
+def assistant(request: Request):
+    """The whole Home Assistant inside Hub, through the door (hub/door.py). No second sign-in."""
+    return _frame(request, 'ha', 'Home Assistant', 'home')
+
+
+@router.get("/player", response_class=HTMLResponse)
+def player(request: Request):
+    """The whole Music Assistant inside Hub: its panel in Home Assistant, through the same door."""
+    return _frame(request, 'music', 'Music Assistant', 'music')
 
 
 @router.get("/changes", response_class=HTMLResponse)
@@ -39,7 +65,7 @@ def _changes(request, problem=''):
     rows = control.recent()
     for r in rows:
         r['when'] = datetime.fromtimestamp(r['ts'], home.PACIFIC).strftime('%a %-I:%M %p')
-    return render(request, "house/changes.html", active="house", rows=rows, links=read.links(),
+    return render(request, "house/changes.html", active="house", rows=rows, links=read.opens(),
                   problem=problem[:200])
 
 
@@ -91,7 +117,7 @@ def now_playing_all():
     """Every speaker group, for the mini-player across Hub's pages and the Music screen."""
     from . import nowplaying
     try:
-        return {'groups': nowplaying.groups(), 'open': read.links().get('music_url')}
+        return {'groups': nowplaying.groups(), 'open': read.opens().get('music_url')}
     except read.broker.HomeDown as error:
         return JSONResponse({'error': str(error)}, status_code=503)
 
@@ -100,7 +126,7 @@ def now_playing_all():
 def now_playing(speaker: str):
     from . import nowplaying
     try:
-        return {**nowplaying.state(speaker[:140]), 'open': read.links().get('music_url')}
+        return {**nowplaying.state(speaker[:140]), 'open': read.opens().get('music_url')}
     except read.broker.HomeDown as error:
         return JSONResponse({'error': str(error)}, status_code=503)
 
@@ -108,7 +134,7 @@ def now_playing(speaker: str):
 @router.get("/music", response_class=HTMLResponse)
 def music_screen(request: Request):
     """Every speaker with the same controls as Ask's card. The page draws itself from /house/now (music.js)."""
-    return render(request, "house/music.html", active="house", links=read.links())
+    return render(request, "house/music.html", active="house", links=read.opens())
 
 
 @router.post("/now/{speaker}")
@@ -141,7 +167,7 @@ def _playlists(request, problem='', done=''):
     rows = music.recent_changes()
     for r in rows:
         r['when'] = datetime.fromtimestamp(r['ts'], home.PACIFIC).strftime('%a %-I:%M %p')
-    return render(request, "house/playlists.html", active="house", lists=lists, rows=rows, links=read.links(),
+    return render(request, "house/playlists.html", active="house", lists=lists, rows=rows, links=read.opens(),
                   where=music.WHERE_WORDS, problem=problem[:200], unreadable=unreadable,
                   banner=music.summary(done) if done else None, waiting=music.proposals())
 

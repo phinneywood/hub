@@ -106,6 +106,9 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   (its address is in the private settings file, `household.json` → `home.ha_url`; the older `home.assistant_url` still counts, with
   `home.music_url` for Music Assistant's player). Hub keeps only `/house/changes`: what it changed,
   with Undo.
+- **Inside Hub** (2026-11-14, built, not switched on). With the door set up (docs/door.md), `/house` and every
+  "Open Home Assistant" lead to Hub's Home screen, the whole Home Assistant under Hub's bar with no second login, and
+  "Open in Music Assistant" to the Music screen. Until then the next paragraph holds.
 - **One tap away** (2026-11-13). All tools lists Home Assistant and Music Assistant, with their own icons; the
   Home page and the Home card on Today have "Open Home Assistant", and the Playlists page "Open in Music
   Assistant". Each opens in a new tab (`target="_blank" rel="noopener"`), never in a frame, and is hidden while its
