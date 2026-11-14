@@ -75,8 +75,8 @@ main.ask { flex:1; min-height:0; width:100%; max-width:none; margin:0; padding:0
 @keyframes ask-dot { 0%, 60%, 100% { opacity:.25; transform:translateY(0); } 30% { opacity:1; transform:translateY(-3px); } }
 
 .ask-empty { margin-block:auto; padding:1rem 0 2rem; }
-.ask-empty::before { content:""; display:block; width:44px; height:44px; margin-bottom:.9rem; border-radius:14px;
-  background:radial-gradient(circle at 50% 50%, var(--acc-fg) 0 7px, transparent 7.5px), linear-gradient(140deg, var(--acc), color-mix(in srgb, var(--acc) 55%, var(--ok)));
+.ask-empty::before { content:""; display:block; width:44px; height:44px; margin-bottom:.9rem; border-radius:10px;
+  background:url(/static/favicon.svg) center / contain no-repeat;
   box-shadow:0 6px 16px -6px color-mix(in srgb, var(--acc) 55%, transparent); }
 .ask-empty h1 { margin:0 0 .35rem; font-size:1.85rem; line-height:1.15; letter-spacing:-.03em; font-weight:750; }
 .ask-empty p { margin:0; color:var(--mut); max-width:26rem; }
