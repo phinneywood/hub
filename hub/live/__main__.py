@@ -6,8 +6,12 @@
 
 A run reads the real system, so HUB_DATA_DIR must point at the live Hub's data folder. `--no-spend` leaves
 out the checks that call the model. `--with-undo` allows the one real change (a named light, put straight
-back), and only if the owner has switched it on in the private settings. `--gate` exits 1 when any check
-failed, for a deployer to stop on; `--skip hub.pages` is for a version that isn't running yet.
+back), and only if the owner has switched it on in the private settings. `--skip hub.pages` is for a version
+that isn't running yet.
+
+`--gate` is for a deployer: exit 1 when a check that passed the last time it ran fails now, so a new version
+that breaks something is stopped, and something that was already down (Kitchen switched off) doesn't block the
+fix for it. `--gate-all` exits 1 on any failure.
 """
 import argparse
 import sys
@@ -29,6 +33,7 @@ def main(argv=None):
     run.add_argument('--no-spend', action='store_true')
     run.add_argument('--with-undo', action='store_true')
     run.add_argument('--gate', action='store_true')
+    run.add_argument('--gate-all', action='store_true')
     args = parser.parse_args(argv)
     if args.command == 'list':
         for c in checks.CHECKS:
@@ -44,6 +49,7 @@ def main(argv=None):
     if unknown:
         print('No such check: ' + ', '.join(unknown), file=sys.stderr)
         return 2
+    passing = runner.passing()
     try:
         result = runner.run(args.trigger, only=args.only, skip=args.skip,
                             effects=runner.allowed(with_spend=not args.no_spend, with_undo=args.with_undo))
@@ -53,7 +59,10 @@ def main(argv=None):
     for r in result['results']:
         print(f'{MARK[r["status"]]} {r["id"]}  {r["ms"]} ms\n    {r["words"]}')
     print(f'{result["passed"]} passed, {result["failed"]} failed, {result["skipped"]} skipped.')
-    return 1 if args.gate and result['failed'] else 0
+    broke = [r['id'] for r in result['results'] if r['status'] == 'fail' and r['id'] in passing]
+    if broke:
+        print('Passed last time, fails now: ' + ', '.join(broke))
+    return 1 if (args.gate and broke) or (args.gate_all and result['failed']) else 0
 
 
 if __name__ == '__main__':

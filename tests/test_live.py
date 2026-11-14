@@ -260,13 +260,24 @@ def test_the_morning_job_runs_the_checks_only_when_the_owner_switched_them_on(mo
 
 
 def test_the_command_line_gates_on_a_failure(monkeypatch, capsys):
-    _only(monkeypatch, ('a.ok', 'read', lambda: 'Fine.'), ('b.fails', 'read', _fail('Wrong answer.')))
+    state = {'ok': True}
+
+    def flaky():
+        if not state['ok']:
+            raise checks.Failed('Wrong answer.')
+        return 'Fine.'
+    _only(monkeypatch, ('a.ok', 'read', lambda: 'Fine.'), ('b.fails', 'read', flaky), ('c.down', 'read', _fail('Switched off.')))
+    assert cli.main(['run', '--gate']) == 0                      # c.down has never passed: it was down before this version
+    assert cli.main(['run', '--gate-all']) == 1
+    state['ok'] = False
     assert cli.main(['run', '--gate', '--only', 'a.ok']) == 0
-    assert cli.main(['run']) == 0                                # without --gate a failure is reported, not an error
-    assert cli.main(['run', '--gate']) == 1
+    assert cli.main(['run', '--gate']) == 1                      # b.fails passed last time and fails now: the gate shuts
+    assert cli.main(['run', '--gate']) == 0                      # still failing is not newly failing
+    assert cli.main(['run']) == 0                                # without a gate a failure is reported, not an error
     assert cli.main(['run', '--only', 'no.such']) == 2
     out = capsys.readouterr().out
-    assert '✗ b.fails' in out and 'Wrong answer.' in out and '1 passed, 1 failed' in out
+    assert '✗ b.fails' in out and 'Wrong answer.' in out and '1 passed, 2 failed' in out
+    assert 'Passed last time, fails now: b.fails' in out
     assert cli.main(['failing']) == 0 and 'b.fails' in capsys.readouterr().out
     assert cli.main(['list']) == 0
 

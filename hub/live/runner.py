@@ -168,6 +168,11 @@ def history(limit=SHOWN):
     return out
 
 
+def passing():
+    """The ids of checks whose newest result (skips aside) is a pass."""
+    return {check_id for check_id, rows in history(limit=1).items() if rows and rows[-1]['status'] == 'pass'}
+
+
 def failing():
     """Checks whose newest result (skips aside) is a failure, each with when it last passed and since when it
     fails: [{'id', 'name', 'words', 'since', 'since_version', 'last_pass', 'new'}]. `new`: it passed before."""

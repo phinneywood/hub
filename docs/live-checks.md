@@ -62,7 +62,7 @@ it, the Hub version running) and one per check (pass, fail or skip, how long, on
 | Run on the Checks page | read and spend | any signed-in tap |
 | With the morning job | read and spend, and undo if switched on | the owner, in the private settings |
 | `python -m hub.live run` | read and spend; `--no-spend`, `--with-undo`, `--only`, `--skip` | whoever runs it |
-| The deployer, before and after a deploy | `run --gate` exits 1 on any failure | the owner (a change in home-ops; not built here) |
+| The deployer, before and after a deploy | `run --gate` exits 1 when a check that passed last time fails now | the owner, in the deployer's settings (home-ops) |
 
 The morning run adds no schedule of its own: the existing morning job starts it, in a process of its own.
 
@@ -86,7 +86,10 @@ HUB_DATA_DIR=<the live Hub's data folder> python -m hub.live run --no-spend
 ```
 
 Before a new version is live its pages aren't being served yet, so a deployer gates with
-`run --trigger predeploy --gate --skip hub.pages`, and after the switch with `run --trigger deploy --gate`.
+`run --trigger predeploy --gate --no-spend --skip hub.pages`, and after the switch with
+`run --trigger deploy --gate --no-spend`. `--gate` shuts only on a check that passed the last time it ran and fails
+now: a new version that breaks something is stopped, while something already down (Kitchen switched off for the
+evening) doesn't block a deploy, least of all the one that fixes it. `--gate-all` shuts on any failure.
 
 ## Adding a check
 
