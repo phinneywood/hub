@@ -9,7 +9,7 @@ The door holds no Home Assistant credential. Home Assistant itself signs this Ma
 (its `trusted_networks` provider, set up by the owner), which is why the door is the gate and is strict:
 - no login header, or a login not on the door's list: refused;
 - a request another site made the browser send (anything but a plain GET), or a WebSocket from another
-  origin: refused;
+  origin: refused (Home Assistant's phone app, which names no origin, passes with the owner's login);
 - a sign-in started for any site but the door's own address: refused, so no other page can be handed a code;
 - `X-Forwarded-*` and Tailscale's headers never reach Home Assistant, which would otherwise refuse the request
   or learn who asked.
@@ -78,14 +78,14 @@ def refusal(scope, headers, chosen):
         return 403, 'Not allowed'
     host = _first(headers, 'host') or ''
     origin = _first(headers, 'origin')
+    # A browser always names the page behind a WebSocket or a cross-site write (Origin), so one from another site is
+    # refused. A request with no Origin at all is no browser page: Home Assistant's own phone app, which still
+    # carried the owner's login to get here.
+    foreign = (origin is not None and urlsplit(origin).netloc != host) or _first(headers, 'sec-fetch-site') == 'cross-site'
     if scope['type'] == 'websocket':
-        if not origin or urlsplit(origin).netloc != host:
-            return 403, 'Not allowed'
-        return None
-    if scope['method'] not in ('GET', 'HEAD', 'OPTIONS'):
-        same = (origin and urlsplit(origin).netloc == host) or (not origin and _first(headers, 'sec-fetch-site') in ('same-origin', 'none'))
-        if not same:
-            return 403, 'Not allowed'
+        return (403, 'Not allowed') if foreign else None
+    if scope['method'] not in ('GET', 'HEAD', 'OPTIONS') and foreign:
+        return 403, 'Not allowed'
     if scope['path'].startswith('/auth/authorize'):
         client = (parse_qs(scope.get('query_string', b'').decode('latin-1')).get('client_id') or [''])[0]
         if urlsplit(client).netloc != host:

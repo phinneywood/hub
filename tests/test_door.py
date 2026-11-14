@@ -114,6 +114,7 @@ def test_another_site_can_t_make_the_browser_change_things_or_be_handed_a_sign_i
     assert house.seen == []
     assert ask('GET', f'/auth/authorize?client_id=https%3A%2F%2F{HOST.replace(":", "%3A")}%2F', OWNER).status_code == 200
     assert ask('POST', '/auth/login_flow', {**OWNER, 'origin': HA}, content=b'{}').status_code == 200
+    assert ask('POST', '/api/webhook/x', OWNER, content=b'{}').status_code == 200   # the phone app: no origin, the owner's login
 
 
 def test_only_this_machine_s_own_name_may_frame_the_door(house):
@@ -162,7 +163,7 @@ def test_a_live_connection_needs_the_login_and_the_door_s_own_origin(monkeypatch
     set_up()
     connect = [{'type': 'websocket.connect'}]
     for scope in (_socket({'host': HOST}), _socket({**OWNER, 'tailscale-user-login': 'sam@example.com'}),
-                  _socket(OWNER, origin='https://evil.example'), _socket(OWNER, origin=None)):
+                  _socket(OWNER, origin='https://evil.example'), _socket({'host': HOST}, origin=None)):
         assert _drive(scope, connect) == [{'type': 'websocket.close', 'code': 1008}]
 
 
@@ -207,6 +208,9 @@ def test_a_live_connection_is_passed_both_ways_without_who_asked(monkeypatch):
     assert sent[0] == {'type': 'websocket.accept', 'subprotocol': None}
     assert {'type': 'websocket.send', 'text': '{"type": "auth_required"}'} in sent
     assert made['up'].sent == ['{"type": "auth", "access_token": "t"}'] and made['up'].closed
+    # Home Assistant's phone app names no origin; with the owner's login it passes too.
+    sent = _drive(_socket(OWNER, origin=None), [{'type': 'websocket.connect'}, {'type': 'websocket.receive', 'text': 'x'}])
+    assert sent[0]['type'] == 'websocket.accept'
 
 
 # ---- Hub's side: the Home and Music screens ----
