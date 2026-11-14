@@ -1,0 +1,15 @@
+/* Dev page: phone first; the project cards sit two across on a wide screen. */
+.dev-steps { padding-left:1.4rem; }
+.dev-steps li { margin:.35rem 0; line-height:1.45; }
+.dev-keys { margin:.8rem 0 1.2rem; }
+.dev-keys td:first-child { color:var(--mut); width:45%; }
+.dev-index { min-width:1.6rem; text-align:center; font-weight:700; color:var(--mut); }
+.dev-projects { display:grid; gap:.7rem; grid-template-columns:repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+.dev-project { border:1px solid color-mix(in srgb, var(--line) 75%, transparent); border-radius:var(--radius-lg); background:var(--surface); box-shadow:var(--shadow); padding:.9rem 1rem; min-width:0; }
+.dev-project h3 { margin:0 0 .2rem; font-size:1.05rem; }
+.dev-project p { margin:.2rem 0 .5rem; font-size:.9rem; }
+.dev-project dl { display:grid; grid-template-columns:auto 1fr; gap:.3rem .8rem; margin:0; font-size:.9rem; }
+.dev-project dt { color:var(--mut); }
+.dev-project dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+.dev-project .muted { color:var(--mut); }
+.dev-project .tag.wait { border-color:var(--warn); color:var(--warn); }

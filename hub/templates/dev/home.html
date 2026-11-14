@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Dev · Hub{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/dev.css">{% endblock %}
+{% block body %}
+<p class="eyebrow">Dev</p>
+<h1 class="status-head">How you develop on the Mac mini</h1>
+<p class="note">Read fresh each time this page opens, from the home repo, tmux and Git. Nothing here changes anything.</p>
+
+<h2 id="how">How you work</h2>
+{% if how %}<ol class="dev-steps">{% for step in how %}<li>{{ step }}</li>{% endfor %}</ol>
+{% elif not configured %}<p class="note">Not configured: set <code>dev.home_repo</code> in the private settings.</p>
+{% else %}<p class="note">The home repo’s README couldn’t be read.</p>{% endif %}
+<table class="dev-keys">
+  <tr><th>To</th><th>Do</th></tr>
+  <tr><td>Open the work from the laptop</td><td><code>mini</code> in a terminal</td></tr>
+  <tr><td>See all work</td><td><code>Ctrl-b w</code></td></tr>
+  <tr><td>Go to the Manager</td><td><code>Ctrl-b 1</code></td></tr>
+  <tr><td>Switch to a window</td><td>Click it in the bottom bar, or <code>Ctrl-b</code> and its number</td></tr>
+  <tr><td>Start a task</td><td>Tell the Manager <code>new: …</code></td></tr>
+  <tr><td>Leave, everything keeps running</td><td><code>Ctrl-b d</code></td></tr>
+  <tr><td>From the phone</td><td>The same names in the Claude app’s session list</td></tr>
+</table>
+
+<h2 id="windows">In progress</h2>
+{% if windows is none %}<p class="note">Not available: tmux session <code>{{ session }}</code> can’t be reached from Hub.</p>
+{% elif not windows %}<p class="note">No windows open.</p>
+{% else %}<ul class="checks dev-windows">
+  {% for w in windows %}<li><span class="dev-index">{{ w.index }}</span><div><strong>{{ w.name }}</strong><small>{% if w.claude %}Claude running{% else %}No Claude{% endif %}{% if w.active %} · active {{ w.active }}{% endif %}</small></div></li>
+  {% endfor %}
+</ul>{% endif %}
+
+<h2 id="projects">Projects</h2>
+{% if projects is none %}<p class="note">{% if configured %}The home repo’s AGENTS.md couldn’t be read.{% else %}Not configured: set <code>dev.home_repo</code> in the private settings.{% endif %}</p>
+{% else %}<div class="dev-projects">
+  {% for p in projects %}<section class="dev-project">
+    <h3>{{ p.name }}{% if not p.missing %} <span class="tag">{{ p.branch }}</span>{% if p.changes %} <span class="tag wait">uncommitted changes</span>{% endif %}{% endif %}</h3>
+    {% if p.about %}<p class="muted">{{ p.about }}</p>{% endif %}
+    {% if p.missing %}<p class="warn">Folder missing or not a Git checkout.</p>
+    {% else %}<dl>
+      <dt>Last commit</dt><dd>{{ p.subject or '—' }}{% if p.when %} <span class="muted">· {{ p.when }}</span>{% endif %}</dd>
+      <dt>Other branches</dt><dd>{% if p.others %}{% for b in p.others %}<span class="tag">{{ b }}</span>{% endfor %}{% else %}none{% endif %}</dd>
+      <dt>Uncommitted</dt><dd>{{ 'unknown' if p.changes is none else ('yes' if p.changes else 'no') }}</dd>
+      <dt>Worktrees</dt><dd>{{ 'unknown' if p.worktrees is none else p.worktrees }}</dd>
+      {% if p.release %}<dt>Running</dt><dd>{% if not p.release.on %}not from a release{% elif p.release.running %}<code>{{ p.release.running[:7] }}</code>{% else %}unknown{% endif %}</dd>
+      <dt>Deploy</dt><dd>{% if p.release.pending %}<code>{{ p.release.pending.sha[:7] }}</code> waits for your tap{% if p.release.pending.subjects %}: {{ p.release.pending.subjects | join('; ') }}{% endif %}{% else %}nothing pending{% endif %}{% if p.release.last %} <span class="muted">· last attempt {{ p.release.last.sha[:7] }} {{ p.release.last.status | replace('_', ' ') }}</span>{% endif %}</dd>{% endif %}
+    </dl>{% endif %}
+  </section>
+  {% endfor %}
+</div>{% endif %}
+
+<h2 id="waiting">Waiting on you</h2>
+{% if waiting is none %}<p class="note">{% if brief_configured %}The Manager’s brief couldn’t be read.{% else %}Not configured: set <code>dev.manager_brief</code> in the private settings.{% endif %}</p>
+{% elif not waiting %}<p class="note">Nothing is waiting on you.</p>
+{% else %}<ol class="dev-steps">{% for item in waiting %}<li>{{ item }}</li>{% endfor %}</ol>{% endif %}
+{% endblock %}
