@@ -26,9 +26,15 @@ ENTITIES = [
     ('media_player.bedroom', 'bedroom', 'Bedroom Speaker', 'idle', {'volume_level': 0.3}),
 ]
 PLAYLISTS = {'7': ('Calm Dinner', 'builtin'), '8': ('Road Trip', 'apple_music')}
-CATALOG = {'playlists': [('Calm Piano Evening', 'apple_music://playlist/p1'), ('Gentle Piano Lullabies', 'apple_music://playlist/p2')],
+# Music Assistant names a provider instance <domain>--<random>; its catalog addresses carry that name.
+ERA = 'apple_music--Xy12Ab34://'
+CATALOG = {'playlists': [('Calm Piano Evening', 'apple_music://playlist/p1'), ('Gentle Piano Lullabies', 'apple_music://playlist/p2'),
+                         ('Rock Hits: 2011', ERA + 'playlist/pl.5ee8333dbe944d9f'),
+                         ('Hip-Hop/R&B Throwback', ERA + 'playlist/pl.u-AbC123xyz')],
            'albums': [('Quiet Hours', 'apple_music://album/a1')],
-           'tracks': [('Morning Light', 'apple_music://track/1'), ('Slow River', 'apple_music://track/2')]}
+           'artists': [('The Example Band', ERA + 'artist/1234567')],
+           'tracks': [('Morning Light', 'apple_music://track/1'), ('Slow River', 'apple_music://track/2'),
+                      ('Summer Lights', ERA + 'track/7654321')]}
 
 
 class World:
@@ -65,7 +71,7 @@ class World:
                     for pid, (name, where) in PLAYLISTS.items() if wanted in name.lower()]
         if command == 'music/search':
             words = args['search_query'].lower().split()
-            return {kind: [{'name': n, 'uri': u, 'artists': [{'name': 'The Example Band'}]}
+            return {kind: [{'name': n, 'uri': u, **({} if kind == 'artists' else {'artists': [{'name': 'The Example Band'}]})}
                            for n, u in items if all(w in n.lower() for w in words)] for kind, items in CATALOG.items()}
         if command == 'music/recently_played_items':
             return [{'name': 'Quiet Hours', 'media_type': 'album'}]

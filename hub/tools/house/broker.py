@@ -29,9 +29,12 @@ WRITES = {
 }
 ENTITY = re.compile(r'^(light|switch|fan|scene|media_player)\.[a-z0-9_]{1,120}$')
 MEDIA_TYPES = {'track', 'album', 'artist', 'playlist', 'radio'}
-# Something concrete Music Assistant can play: a library or provider address such as library://playlist/7, never words.
-# A description sent as media_id makes Music Assistant guess, and usually nothing plays.
-MEDIA_URI = re.compile(r'^[a-z][a-z0-9_]{0,40}://(track|album|artist|playlist|radio)/[A-Za-z0-9._:~%-]{1,160}$')
+# Something concrete Music Assistant can play: its own address for one item, never words. The provider part is
+# "library" or a provider instance, which Music Assistant names <domain>--<random>, such as apple_music--Ab3dE6fG;
+# the id is the provider's own and may hold dots, dashes or slashes. A description sent as media_id makes Music
+# Assistant guess, and usually nothing plays.
+MEDIA_URI = re.compile(r'^[a-z][a-z0-9_]{0,40}(?:--[A-Za-z0-9_]{1,40})?://(?P<kind>track|album|artist|playlist|radio)/'
+                       r'[^\s"\'<>\\]{1,240}$')
 LIMIT = 16 * 1024 * 1024      # one reply line; the broker caps Home Assistant's own answers at 8 MB each
 TIMEOUT = 8
 
@@ -121,11 +124,15 @@ def _checked(domain, service, data):
     if domain == 'music_assistant' and not (isinstance(data.get('media_id'), str) and data.get('media_type') in MEDIA_TYPES
                                             and data.get('enqueue') in ('replace', 'add', 'next')):
         raise ValueError('Say what to play and what kind of thing it is.')
-    if domain == 'music_assistant':
-        uri = MEDIA_URI.fullmatch(data['media_id'])
-        if not uri or uri.group(1) != data['media_type']:
-            raise ValueError('Hub plays only a playlist, album, artist, song or station it found, never a description.')
+    if domain == 'music_assistant' and not playable(data['media_id'], data['media_type']):
+        raise ValueError('Hub plays only a playlist, album, artist, song or station it found, never a description.')
     return data
+
+
+def playable(uri, kind):
+    """Whether `uri` is a Music Assistant address of that kind: something it found, never a description."""
+    found = MEDIA_URI.fullmatch(str(uri or ''))
+    return bool(found) and found.group('kind') == kind
 
 
 def act(domain, service, data, timeout=TIMEOUT):

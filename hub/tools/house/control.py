@@ -24,7 +24,7 @@ POWER = read.POWER
 MEDIA_KINDS = tuple(sorted(broker.MEDIA_TYPES))
 ACTIONS = {
     'light': ('on', 'off', 'brightness', 'colour'), 'switch': ('on', 'off'), 'fan': ('on', 'off'), 'scene': ('activate',),
-    'media_player': ('play', 'pause', 'next', 'previous', 'volume', 'play_media', 'group', 'ungroup'),
+    'media_player': ('play', 'pause', 'next', 'previous', 'volume', 'play_media', 'queue', 'group', 'ungroup'),
 }
 SCHEMA = """
 create table if not exists house_changes(
@@ -93,14 +93,19 @@ def _steps(d, action, value=None, query=None, kind=None, members=(), label=None,
             raise Refused('Say the volume, from 0 to 100.')
         level = max(0, min(100, int(value)))
         return [('media_player', 'volume_set', {'entity_id': e, 'volume_level': level / 100})], f'{name} volume {level}%'
-    if action == 'play_media':
-        query = ' '.join(str(query or '').split())[:200]
+    if action in ('play_media', 'queue'):
+        query = str(query or '').strip()[:300]
         if not query or kind not in broker.MEDIA_TYPES:
             raise Refused('Say what to play, and whether it is a track, album, artist, playlist or radio station.')
-        uri = broker.MEDIA_URI.fullmatch(query)
-        if not uri or uri.group(1) != kind:     # broker checks again; this refusal comes before anything is sent
+        if not broker.playable(query, kind):    # broker checks again; this refusal comes before anything is sent
             raise Refused('Hub plays only a playlist, album, artist, song or station it found in the library or Apple Music, '
                           'never a description. Nothing was played.')
+    if action == 'queue':                       # after what is playing; nothing to put back, so no Undo
+        if d['state'] not in ('playing', 'paused', 'buffering'):
+            raise Refused(f'Nothing is playing on {name} to add to. Play something first. Nothing was queued.')
+        return ([('music_assistant', 'play_media', {'entity_id': e, 'media_id': query, 'media_type': kind, 'enqueue': 'add'})],
+                f'{name}: “{_clip(label) or query}” added to the queue')
+    if action == 'play_media':
         steps, start = [], d['state'] not in ('playing', 'paused', 'buffering')
         split = alone and bool(d['members'])
         if split:                   # play only here: out of its group first, and Undo puts it back

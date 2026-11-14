@@ -381,7 +381,8 @@ LIBRARY_ITEMS = 50          # playlists or songs shown to the chat's model at on
 def library_lookup(search: str | None = None, playlist: str | None = None) -> dict:
     """The music library in Music Assistant. Without arguments: the playlists (each marked Music Assistant or
     Apple Music, and whether it can be edited) and what played recently. With `search`: songs, albums, artists
-    and playlists matching it. With `playlist` (a name from the list): its songs in order. Read-only."""
+    and playlists matching it, each with a handle (#1a2b3c) that play_music plays exactly. With `playlist` (a name
+    from the list): its songs in order. Read-only."""
     from .. import luna
     from ..tools.house import control, music
     from . import judge
@@ -401,7 +402,8 @@ def library_lookup(search: str | None = None, playlist: str | None = None) -> di
                     'songs': [f'{s["pos"]}. {song(s)}' for s in songs[:LIBRARY_ITEMS]]}
         if search:
             found = music.search(search, ('track', 'album', 'artist', 'playlist'), limit=8)
-            return {kind + 's': [song(s) for s in items] for kind, items in found.items()}
+            return {kind + 's': [song(s) + (f' {s["handle"]}' if s.get('handle') else '') for s in items]
+                    for kind, items in found.items()}
         lists = music.playlists()
         return {'playlists': [{'name': name(p['name']), 'where': music.WHERE_WORDS[p['where']],
                                'can_edit': ('everything' if p['where'] == 'music' else 'add songs only')
@@ -471,7 +473,8 @@ def _playing_groups(players, target):
     return [g for key, g in groups.items() if not any(key < other for other in groups)]
 
 
-def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause', 'next', 'previous', 'volume', 'group', 'ungroup'],
+def play_music(login, speaker: str, action: Literal['play_media', 'queue', 'play', 'pause', 'next', 'previous', 'volume', 'group',
+                                                     'ungroup'],
                what: str | None = None, kind: Literal['track', 'album', 'artist', 'playlist', 'radio'] | None = None,
                volume_percent: int | None = None, with_speakers: list[str] | None = None, soft: bool = False,
                group_too: bool | None = None, *, said: str = '') -> dict:
@@ -480,9 +483,11 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
     with_speakers, names from music_now: they join `speaker`'s group and play the same music in sync) or ungroup.
     "Play it in the kitchen as well", "there too", "in both": that is group, with `speaker` the one already playing and
     with_speakers the new room, never a second play_media. Hub does that by itself if play_media is called for it.
-    play_media: `what` is a few search words, not a sentence: one of the owner's playlist names from music_library,
-    or a genre, mood or artist ("calm piano", "jazz for dinner"). Hub picks a real playlist, album, artist or song,
-    the owner's own playlists first, and says what it picked; `kind` limits the pick to one kind. `soft` (for
+    play_media: `what` is something music_library found, by its handle ("#1a2b3c") or its name exactly as listed,
+    and Hub plays exactly that; or a few search words, not a sentence: a playlist name, a genre, mood or artist
+    ("calm piano", "jazz for dinner"). Then Hub picks a real playlist, album, artist or song, the owner's own
+    playlists first, and says what it picked; `kind` limits the pick to one kind. queue: the same `what`, added after
+    what the speaker is playing (play_media first), so several songs or artists can follow each other. `soft` (for
     "softly", "quietly", "in the background") starts at about 15% unless volume_percent is given; a silent speaker
     starts there anyway. Speakers in one zone (plays_together_with in music_now) play together, in sync and at the
     same volume, unless the owner says "only here": then group_too false. A speaker grouped with speakers outside its
@@ -515,7 +520,7 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
                 out['joined'] = (f'{safe(here["name"])} now plays the same music as {safe(leader["name"])}, in sync. '
                                  'Nothing new was picked. Tell the owner.')
                 return out
-        if action != 'play_media':
+        if action not in ('play_media', 'queue'):
             result = control.change([target], action, login=login, via='ask', value=volume_percent,
                                     query=what, label=what, kind=kind, members=members)
             return _silent(_changed(result), result)
@@ -530,6 +535,12 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
         except music.MusicDown as error:
             ask_trace.noted(error)
             return {'unavailable': f'{error} Hub couldn’t look that up, so nothing was played.'}
+        name = safe(picked['name'])
+        if action == 'queue':
+            result = control.change([target], 'queue', login=login, via='ask', query=picked['uri'], label=name,
+                                    kind=picked['kind'])
+            where = 'from your library' if picked['mine'] else 'from Apple Music'
+            return dict(_changed(result), picked=f'{name}, {where} ({picked["kind"]}), queued after what is playing. Tell the owner.')
         mates = [] if group_too is False else zones.mates(target, players)
         outside = [players[m] for m in here['members'] if m in players and m not in mates]
         alone = bool(here['members']) and (group_too is False or (bool(outside) and group_too is not True))
@@ -537,7 +548,6 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
             return {'ask_first': f'{safe(here["name"])} is grouped with {safe(", ".join(d["name"] for d in outside))}, '
                                  'and the group is playing. Nothing was changed. Ask the owner whether to play in all of '
                                  f'them or only in {safe(here["name"])}, then call again with group_too.'}
-        name = safe(picked['name'])
         result = control.change([target], action, login=login, via='ask', value=volume_percent, soft=soft, alone=alone,
                                 query=picked['uri'], label=name, kind=picked['kind'], together=mates)
     except control.Refused as error:

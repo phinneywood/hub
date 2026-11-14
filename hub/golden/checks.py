@@ -193,6 +193,19 @@ class ConcretePick(Check):
                     return f'Asked the speaker to play free text: “{media}”.'
 
 
+class Plays(Check):
+    says = 'ends in music: something real is sent to the speaker'
+
+    def __init__(self, turn=None):
+        self.turn = turn
+
+    def __call__(self, trace):
+        if not any(c['what'] == 'music_assistant/play_media' for c in trace.changes_in(self.turn)):
+            refused = [c.result.get('refused') or c.result.get('nothing_matched') for c in trace.calls_in(self.turn, 'play_music')
+                       if isinstance(c.result, dict) and (c.result.get('refused') or c.result.get('nothing_matched'))]
+            return 'Nothing was played' + (f': “{refused[0]}”' if refused else '') + '.'
+
+
 class ShortSearch(Check):
     says = 'asks for music in a few search words, not the sentence'
 

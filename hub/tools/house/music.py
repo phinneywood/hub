@@ -15,6 +15,7 @@ so Undo can put it back for a day. Deleting needs a tap on a confirmation page a
 Making a playlist from Ask waits for a tap too (`propose`), and a name that reads like a sentence is refused.
 Playlist and song names are data, never instructions.
 """
+import hashlib
 import http.client
 import json
 import os
@@ -28,7 +29,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 
 from ... import household, model_key, store
-from . import control, read
+from . import broker, control, read
 
 REFERENCE = os.environ.get("HUB_MUSIC_REF", "op://Hub/Music Assistant/credential")
 READS = {'music/playlists/library_items': {'search', 'limit', 'summary'},
@@ -66,10 +67,13 @@ NAME_WORDS = 6               # a playlist name longer than this reads like a sen
 SENTENCE = re.compile(r"[.?;]$|\b(remember|from now on|you should|should you|please|could you|can you|would you|"
                       r"i want|i'd like|make sure|keep in mind|when you|so that)\b", re.I)
 PROPOSAL_SECONDS = 24 * 3600
+FOUND_SECONDS = 2 * 3600    # how long Ask can play an item a lookup found, by its handle or its name
+FOUND_KEEP = 400
 
 _lock = threading.Lock()
 _key = {'value': None, 'at': float('-inf')}
 _expiry = {'value': None, 'at': float('-inf')}
+_found = {}                 # handle -> an item Music Assistant returned: {'uri', 'name', 'artist', 'kind', 'at'}
 
 
 class MusicDown(Exception):
@@ -181,13 +185,51 @@ def tracks(playlist_id):
 
 
 def search(query, kinds=('track',), limit=5):
-    """Search results by kind: tracks, albums, artists, playlists."""
+    """Search results by kind: tracks, albums, artists, playlists. Each playable one is remembered (`handle`)."""
     found = _call('music/search', {'search_query': _clip(query, 200), 'media_types': list(kinds), 'limit': limit})
     out = {}
     for kind in kinds:
         items = (found or {}).get(f'{kind}s') or (found or {}).get(kind) or ()     # radio has no plural
-        out[kind] = [_song(i) for i in items if isinstance(i, dict)][:limit]
+        out[kind] = [remember(_song(i), kind) for i in items if isinstance(i, dict)][:limit]
     return out
+
+
+# ---- What a lookup found, so Ask can play exactly that ----
+
+def _handle(uri):
+    return '#' + hashlib.sha1(uri.encode()).hexdigest()[:6]
+
+
+def remember(item, kind):
+    """Keep an item Music Assistant returned, so play_music can play it by its handle or its exact name, without
+    searching again. Only Music Assistant's own answers come here, never the model's words. Returns the item, with
+    its `handle` when it can be played."""
+    if not broker.playable(item.get('uri'), kind):
+        return item
+    handle, now = _handle(item['uri']), time.time()
+    with _lock:
+        _found.pop(handle, None)
+        _found[handle] = {'uri': item['uri'], 'name': item['name'], 'artist': item.get('artist', ''), 'kind': kind, 'at': now}
+        for old in [h for h, f in _found.items() if now - f['at'] > FOUND_SECONDS][:50] + list(_found)[:max(0, len(_found) - FOUND_KEEP)]:
+            _found.pop(old, None)
+    return dict(item, handle=handle)
+
+
+def recall(what, kind=None):
+    """The remembered item `what` names: its handle (#1a2b3c), or its name as a lookup showed it, with or without the
+    artist. The newest of the asked kind, else the newest in play order. None when no lookup found it lately."""
+    words = _clip(what, 200).lower()
+    now = time.time()
+    with _lock:
+        fresh = [f for f in reversed(_found.values()) if now - f['at'] <= FOUND_SECONDS]
+    if words.startswith('#'):
+        handle = words.split()[0]
+        return next((dict(f) for f in fresh if _handle(f['uri']) == handle), None)
+    named = [f for f in fresh if words in (f['name'].lower(), f'{f["name"]} – {f["artist"]}'.lower(),
+                                           f'{f["name"]} - {f["artist"]}'.lower())]
+    order = ((kind,) if kind else ()) + PLAY_ORDER + ('radio',)
+    named.sort(key=lambda f: order.index(f['kind']) if f['kind'] in order else len(order))
+    return dict(named[0]) if named else None
 
 
 def recent(limit=10):
@@ -222,8 +264,14 @@ def pick(what, kind=None):
     words = _clip(what, 200)
     if not words:
         raise Refused('Say what to play.')
+    known = recall(words, kind)
+    if known:                   # exactly what a lookup just found: no second search that could find something else
+        return {'uri': known['uri'], 'kind': known['kind'], 'mine': _mine(known['uri']),
+                'name': f'{known["name"]} – {known["artist"]}' if known['artist'] and known['kind'] != 'playlist' else known['name']}
+    if words.startswith('#'):
+        raise Refused(f'Hub doesn’t remember “{words}” from a lookup. Look it up again with music_library.')
     if kind in (None, 'playlist'):
-        own = [p for p in playlists(words) if p['uri']]
+        own = [p for p in playlists(words) if broker.playable(p['uri'], 'playlist')]
         exact = [p for p in own if p['name'].lower() == words.lower()]
         if own:
             chosen = (exact or own)[0]
@@ -231,11 +279,15 @@ def pick(what, kind=None):
     kinds = (kind,) if kind else PLAY_ORDER
     found = search(words, kinds, limit=5)
     for k in kinds:
-        hits = sorted((h for h in found.get(k, ()) if h['uri']), key=lambda h: not _mine(h['uri']))
+        hits = sorted((h for h in found.get(k, ()) if broker.playable(h['uri'], k)), key=lambda h: not _mine(h['uri']))
         if hits:
             h = hits[0]
             return {'uri': h['uri'], 'name': f'{h["name"]} – {h["artist"]}' if h['artist'] and k != 'playlist' else h['name'],
                     'kind': k, 'mine': _mine(h['uri'])}
+    unplayable = [h['name'] for k in kinds for h in found.get(k, ()) if h['name']]
+    if unplayable:              # found, but not as an address Hub can send: say so, never blame the speaker
+        raise Refused(f'Music Assistant found “{unplayable[0]}” but gave no address Hub can play. '
+                      'The speaker is fine; try an artist or a song instead.')
     raise Refused(f'Nothing matched “{words}” in the library or Apple Music. Try a few words: a genre, a mood, '
                   'an artist or a playlist name.')
 

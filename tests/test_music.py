@@ -1,6 +1,7 @@
 """Playlists through Music Assistant's own API. A fake Music Assistant and made-up songs only."""
 import io
 import json
+import re
 import urllib.error
 from datetime import date, timedelta
 
@@ -155,7 +156,9 @@ def test_library_lookup(ma, monkeypatch):
     assert found['playlists'][1]['can_edit'] == 'add songs only' and found['playlists'][2]['can_edit'] == 'no'
     assert found['recently_played'] == ['Quiet Hours']
     assert catalog.library_lookup(playlist='calm dinner')['songs'][1] == '2. Slow River – Sam Lake'
-    assert catalog.library_lookup(search='sam lake')['tracks'] == ['Slow River – Sam Lake', 'Dinner Waltz – Sam Lake']
+    tracks = catalog.library_lookup(search='sam lake')['tracks']
+    assert [t.rsplit(' #', 1)[0] for t in tracks] == ['Slow River – Sam Lake', 'Dinner Waltz – Sam Lake']
+    assert all(re.fullmatch(r'.+ #[0-9a-f]{6}', t) for t in tracks)       # a handle play_music plays exactly
     assert 'Which playlist?' in catalog.library_lookup(playlist='nothing like it')['error']
     ma.down.add('music/playlists/library_items')
     assert catalog.library_lookup() == catalog.UNAVAILABLE
@@ -670,3 +673,112 @@ def test_new_music_brings_a_now_playing_card_for_that_speaker(house):
     assert found['card'] == {'kind': 'music', 'id': 'media_player.kitchen', 'text': 'Calm Piano Evening', 'lines': []}
     paused = catalog.play_music('me@example.com', 'kitchen speaker', 'pause')
     assert 'card' not in paused                     # only new music starts a card; the live one shows the pause
+
+
+# ---- Playing what a lookup found (the "2011 throwback" turns): Music Assistant's own addresses, played exactly ----
+
+# Music Assistant names a provider instance <domain>--<random>, so its catalog addresses look like these.
+ERA = {'apple_music--Xy12Ab34://playlist/pl.5ee8333dbe944d9f': ('Rock Hits: 2011', 'playlist', ''),
+       'apple_music--Xy12Ab34://playlist/pl.u-AbC123xyz': ('Hip-Hop/R&B Throwback', 'playlist', ''),
+       'apple_music--Xy12Ab34://playlist/pl.9f00aa11': ('High School Throwback Songs', 'playlist', ''),
+       'apple_music--Xy12Ab34://artist/1234567': ('Alex Rivers', 'artist', ''),
+       'apple_music--Xy12Ab34://track/7654321': ('Summer Lights', 'track', 'Alex Rivers')}
+
+
+class EraMusic(PlayingMusic):
+    """Apple Music's catalog behind a provider instance, as a live Music Assistant answers a search."""
+
+    def __init__(self):
+        super().__init__()
+        self.era = dict(ERA)
+
+    def __call__(self, command, args, timeout):
+        found = super().__call__(command, args, timeout)
+        if command == 'music/search':
+            words = args['search_query'].lower().split()
+            for uri, (name, kind, artist) in self.era.items():
+                if all(w in f'{name} {artist}'.lower() for w in words):
+                    found.setdefault(kind + 's', []).append({'name': name, 'uri': uri, 'media_type': kind,
+                                                             **({'artists': [{'name': artist}]} if artist else {})})
+        return found
+
+
+@pytest.fixture
+def era(house, monkeypatch):
+    fake = EraMusic()
+    monkeypatch.setattr(music, '_send', fake)
+    house['media_player.living_room']['members'] = house['media_player.kitchen']['members'] = []
+    return house, fake
+
+
+def played(house):
+    return [(d['media_id'], d['media_type'], d['enqueue']) for p, d in house['sent'] if p == 'music_assistant/play_media']
+
+
+def test_provider_instance_addresses_are_playable_and_descriptions_never_are():
+    from hub.tools.house import broker
+    for uri, (_, kind, _) in ERA.items():
+        assert broker.playable(uri, kind), uri
+    for words, kind in (('high school throwback songs', 'playlist'), ('Rock Hits: 2011', 'playlist'), ('library://album/3', 'playlist'),
+                        ('library://playlist/7 and something calm', 'playlist'), ('', 'track'), ('library://podcast/1', 'podcast')):
+        assert not broker.playable(words, kind), words
+
+
+def test_a_playlist_the_lookup_found_plays_by_its_name(era):
+    """Turn 2b7007eca5a4: music_library found "Rock Hits: 2011", then play_music with that name was refused."""
+    house, _ = era
+    looked = catalog.library_lookup(search='2011')
+    assert any(p.startswith('Rock Hits: 2011 #') for p in looked['playlists'])
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='Rock Hits: 2011', kind='playlist')
+    assert found['done'] and 'Rock Hits: 2011' in found['picked'] and 'Apple Music' in found['picked']
+    assert played(house) == [('apple_music--Xy12Ab34://playlist/pl.5ee8333dbe944d9f', 'playlist', 'replace')]
+
+
+def test_a_playlist_the_lookup_found_plays_exactly_even_if_a_new_search_would_differ(era):
+    """Turn dd7606bfe0b7: "Hip-Hop/R&B Throwback", found by the lookup, played without a second search."""
+    house, fake = era
+    looked = catalog.library_lookup(search='Hip-Hop/R&B Throwback')
+    [line] = looked['playlists']
+    fake.era.clear()                        # a second search would now find nothing
+    asked = len(fake.asked)
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='Hip-Hop/R&B Throwback', kind='playlist')
+    assert found['done'] and played(house) == [('apple_music--Xy12Ab34://playlist/pl.u-AbC123xyz', 'playlist', 'replace')]
+    assert not [c for c, _ in fake.asked[asked:] if c == 'music/search']
+    house['sent'].clear()
+    handle = line.rsplit(' ', 1)[1]
+    assert catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what=handle)['done']
+    assert played(house) == [('apple_music--Xy12Ab34://playlist/pl.u-AbC123xyz', 'playlist', 'replace')]
+
+
+def test_a_description_is_searched_and_a_real_pick_plays_never_the_words(era):
+    """Turn d16ded378cb0: a description becomes a concrete pick; the words themselves never reach the speaker."""
+    house, _ = era
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='high school throwback songs', kind='playlist')
+    assert found['done'] and played(house) == [('apple_music--Xy12Ab34://playlist/pl.9f00aa11', 'playlist', 'replace')]
+    house['sent'].clear()
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='songs about a year we all miss')
+    assert 'Nothing matched' in found['nothing_matched'] and house['sent'] == []
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='#abcdef')
+    assert 'doesn’t remember' in found['nothing_matched'] and house['sent'] == []
+
+
+def test_an_era_without_a_playlist_plays_an_artist_and_queues_a_song(era):
+    house, _ = era
+    looked = catalog.library_lookup(search='Alex Rivers')
+    artist = next(a for a in looked['artists'] if a.startswith('Alex Rivers #')).rsplit(' ', 1)[1]
+    song = next(t for t in looked['tracks'] if t.startswith('Summer Lights')).rsplit(' ', 1)[1]
+    refused = catalog.play_music('me@example.com', 'kitchen speaker', 'queue', what=song)
+    assert 'Nothing is playing' in refused['refused'] and house['sent'] == []      # queue follows a play, never starts one
+    assert catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what=artist)['done']
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'queue', what=song)
+    assert found['done'] == ['Kitchen speaker: “Summer Lights – Alex Rivers” added to the queue']
+    assert played(house) == [('apple_music--Xy12Ab34://artist/1234567', 'artist', 'replace'),
+                             ('apple_music--Xy12Ab34://track/7654321', 'track', 'add')]
+
+
+def test_a_find_without_a_playable_address_says_so_and_blames_no_speaker(era):
+    house, fake = era
+    fake.era = {'not an address': ('Rock Hits: 2011', 'playlist', '')}
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='Rock Hits: 2011', kind='playlist')
+    assert 'gave no address Hub can play' in found['nothing_matched'] and 'speaker is fine' in found['nothing_matched']
+    assert house['sent'] == []

@@ -71,6 +71,18 @@ def test_hub_itself_turns_a_second_play_for_as_well_into_a_join(world):
     assert failures == []
 
 
+def test_found_music_refused_by_an_old_address_check_is_caught(world, monkeypatch):
+    """The live turns of the "2011 throwback" thread: with the old check, Music Assistant's provider-instance
+    addresses were refused, the lookup's own finds never played, and no turn ended in music."""
+    import re
+    from hub.tools.house import broker
+    monkeypatch.setattr(broker, 'MEDIA_URI', re.compile(
+        r'^[a-z][a-z0-9_]{0,40}://(?P<kind>track|album|artist|playlist|radio)/[A-Za-z0-9._:~%-]{1,160}$'))
+    found = _failed(scenarios.find('music-era-found-plays'))
+    assert [f'ends in music: something real is sent to the speaker (turn {n})' in found for n in (1, 2, 3)] == [True] * 3, found
+    assert 'gave no address Hub can play' in found and 'not available' not in found
+
+
 def test_remember_becoming_a_playlist_is_caught(world):
     found = _failed(_bad('remember-is-a-note-not-a-playlist', ((
         Use('edit_playlist', action='create', playlist='the kitchen and living room are one room'),

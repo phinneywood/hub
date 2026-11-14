@@ -53,7 +53,7 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   devices in the allowlisted domains and their states; `music_now`: what plays where) and actions per
   class. Each action has a preview, an undo where one exists, and a trust level on the Engine page.
 - **Ask can act.** Ask's first doing tools are `home_control` (lights, plugs, fans, scenes) and
-  `play_music` (play, pause, skip, volume, group). The model names a device, room or speaker from
+  `play_music` (play, queue, pause, skip, volume, group). The model names a device, room or speaker from
   `home_status` and `music_now`; Hub resolves it to an entity it keeps and checks the action twice
   (`control.py`, then `broker.WRITES`). Who asked comes from the signed-in request, never from the model.
   A name that is both a room and a device means the room (owner, 2026-11-13): "turn off the living room"
@@ -119,7 +119,15 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
 - **Limits.** At most 30 device changes a minute; a change whose answer never came back is reported as
   not confirmed, never as done. Playback that starts from silence starts at 15%.
 - **Playing is checked.** Hub sends Music Assistant only a concrete address (`library://playlist/7`,
-  `apple_music://album/…`) of the kind asked, never a description; the broker client refuses anything else.
+  `apple_music--Ab3dE6fG://playlist/…`) of the kind asked, never a description; the broker client refuses
+  anything else (`broker.playable`). Music Assistant names a provider instance `<domain>--<random>`, so its
+  catalog addresses carry that name; until 2026-11-14 the check refused them, and Ask could find a playlist
+  but never play it.
+- **Ask plays what it found.** Each item a `music_library` search returns gets a handle (`#1a2b3c`) and is
+  remembered for two hours, in memory only. `play_music` given that handle, or the item's name as the lookup
+  listed it, plays exactly that address, with no second search. Anything else is searched for and a real item
+  picked, as before. `queue` adds a found item after what a speaker is playing (it refuses a silent speaker,
+  and has no Undo), so with no fitting playlist Ask can play an artist and line up songs after it.
   After a play or resume Hub reads the speaker back for a few seconds, and one that isn't playing is
   recorded as not confirmed, with what was sent (2026-11-13: a play Home Assistant accepted stayed silent,
   and Ask had said it was playing). Grouping a silent speaker with one that is playing makes the playing

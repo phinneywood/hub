@@ -44,7 +44,7 @@ it should refuse or leave alone.
   them to the house's own names under `"golden": {"names": {"living_room": "…"}}`. No real name is ever
   in the repository.
 - **Checks** (`hub/golden/checks.py`) read the trace: `Called`, `NotCalled`, `NoChanges`, `ReadOnly`,
-  `ChangesOnly`, `Changed`, `Proposed`, `ConcretePick`, `ShortSearch`, `QuietFirst`, `SaysPick`, `Joined`, `HandedOff`,
+  `ChangesOnly`, `Changed`, `Proposed`, `ConcretePick`, `Plays`, `ShortSearch`, `QuietFirst`, `SaysPick`, `Joined`, `HandedOff`,
   `ReplySays`, `ReplyNot`, `PlainReply`. Each returns one plain sentence when it fails.
 - **The dry-run layer** (`hub/golden/dryrun.py`) stands in the three doors through which Ask can change
   anything. Reads go through. A change that passes Hub's checks is recorded and answered as if it worked;
