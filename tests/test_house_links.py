@@ -7,13 +7,14 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
+import hub
 from hub import config, home
 from hub.main import app
 from hub.tools.house import broker, read
 
 HA = 'https://ha.example.test:9443'
 MA = 'https://music.example.test:8095'
-TEMPLATES = pathlib.Path(__file__).resolve().parent.parent / 'hub' / 'templates'
+TEMPLATES = pathlib.Path(hub.__file__).parent / 'templates'     # the installed package's, as deployed
 
 
 def settings(**home_section):

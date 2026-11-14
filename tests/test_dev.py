@@ -65,6 +65,10 @@ def _git(path, *args):
 
 @pytest.fixture
 def world(tmp_path, monkeypatch):
+    try:    # these tests make real throwaway repositories; the installed-package check forbids running programs
+        subprocess.run(['git', '--version'], check=True, capture_output=True)
+    except (AssertionError, OSError, subprocess.SubprocessError):
+        pytest.skip('needs to run git, which this run does not allow')
     home = tmp_path / 'home'
     monkeypatch.setenv('HOME', str(home))   # Git's own config and every ~ path stay in tmp_path
     repo = home / 'code' / 'home-repo'
