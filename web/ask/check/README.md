@@ -1,7 +1,8 @@
 # Browser check for the Ask page
 
 Drives the real page in headless Chromium at phone width (390 px, light and dark), on made-up data with
-a scripted model. It checks streaming, lookup chips, citations, the read-only refusal, a reload, a note card saved by tap, Improve this, and the
+a scripted model. It checks streaming, lookup chips, citations, the read-only refusal, a reload, a note card saved by tap, Improve this, the Now playing card (music started by talking, changed by talk
+and by taps, then replaced by newer music, in light and dark), and the
 saved-chat list, that sending does not dim the page, that nothing scrolls sideways and that the page
 talks to no other host. It saves screenshots of each state.
 

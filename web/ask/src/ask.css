@@ -151,6 +151,34 @@ main.ask { flex:1; min-height:0; width:100%; max-width:none; margin:0; padding:0
 .ask-improve-go:hover { color:var(--fg); border-color:var(--mut); }
 .ask-improve-go:disabled { opacity:.6; }
 
+/* Now playing: live speakers, play/pause/next, a slider per room and one for the group, a chip per speaker */
+.ask .np { display:flex; flex-direction:column; gap:.6rem; }
+.np-head { display:flex; gap:.8rem; align-items:center; min-width:0; }
+.np-art { flex:none; width:3.2rem; height:3.2rem; border-radius:var(--radius-sm); display:grid; place-items:center; font-size:1.4rem;
+  background:color-mix(in srgb, var(--acc) 16%, var(--card)); color:var(--acc); }
+.np-what { display:flex; flex-direction:column; min-width:0; }
+.np-what small { color:var(--mut); font-size:.76rem; }
+.np-what b, .np-what span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.np-what span { color:var(--mut); font-size:.86rem; }
+.np-keys { display:flex; gap:.6rem; }
+.np-key { display:grid; place-items:center; width:44px; height:44px; border-radius:50%; border:0; background:var(--card); color:var(--fg); cursor:pointer; }
+.np-key:first-child { background:var(--acc); color:var(--acc-fg); }
+.np-key:disabled { opacity:.5; }
+.np-level { display:grid; grid-template-columns:minmax(0, 7rem) 1fr 2.6rem; gap:.6rem; align-items:center; font-size:.84rem; }
+.np-level span { color:var(--mut); line-height:1.25; overflow-wrap:anywhere; }   /* a long room name wraps, never cut */
+.np-level input { width:100%; min-height:32px; accent-color:var(--acc); }
+.np-level output { text-align:right; font-variant-numeric:tabular-nums; }
+.np-rooms { display:flex; flex-wrap:wrap; gap:.4rem; }
+.np-room { font:inherit; font-size:.82rem; min-height:36px; padding:.3rem .8rem; border-radius:999px; border:1px solid var(--line);
+  background:transparent; color:var(--fg); cursor:pointer; }
+.np-room.in { background:color-mix(in srgb, var(--acc) 14%, var(--card)); border-color:color-mix(in srgb, var(--acc) 45%, var(--line)); }
+.np-room:disabled { opacity:.55; }
+.np-said { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
+.np-undo { font:inherit; font-size:.8rem; padding:.2rem .7rem; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--fg); cursor:pointer; }
+.ask .np.np-old { flex-direction:row; align-items:center; gap:.6rem; padding:.55rem .9rem; color:var(--mut); font-size:.86rem; box-shadow:none; }
+.np-note { color:var(--mut); }
+.np .k-small { align-self:flex-start; }
+
 @media (prefers-reduced-motion: reduce) {
   .ask-msg, .ask-sheet, .ask-sheet-wrap { animation:none; }
   .ask-typing span { animation:none; opacity:.6; }

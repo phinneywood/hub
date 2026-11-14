@@ -118,6 +118,11 @@ def _house(trace):
         return
     trace.devices = {e: d['name'] for e, d in control.devices(found).items()}
     trace.rooms = {r['name']: [d['id'] for d in r['devices'] if d['kind'] == 'light'] for r in found['rooms']}
+    from ..tools.house import nowplaying
+    for call in trace.calls:            # what each Now playing card would show now, read as the page reads it
+        card = call.result.get('card') if isinstance(call.result, dict) else None
+        if card and card.get('kind') == 'music':
+            trace.cards[card['id']] = nowplaying.state(card['id'], found)
 
 
 class Spend:

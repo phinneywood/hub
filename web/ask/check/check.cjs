@@ -77,6 +77,52 @@ if (!out) { console.error("usage: node check.cjs <output-folder> [base-url]"); p
     expect(engine.includes("kitchen and living room play music together"), "the saved note is on the Notes page");
     await ctx.close();
   }
+  for (const scheme of ["light", "dark"]) {
+    // Signed in: music started by talking gets a live Now playing card; talk and taps both show on it.
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
+      colorScheme: scheme, extraHTTPHeaders: { "tailscale-user-login": "me@example.com" } });
+    const page = await ctx.newPage();
+    page.on("console", (m) => m.type() === "error" && !/\/favicon\.ico$/.test(m.location()?.url || "") && failures.push("console: " + m.text() + " " + (m.location()?.url || "")));
+    page.on("pageerror", (e) => failures.push("page error: " + e));
+    page.on("request", (r) => hosts.add(new URL(r.url()).host));
+    page.on("response", (r) => r.status() >= 400 && failures.push(`${r.status()} ${new URL(r.url()).pathname}`));
+    const shot = (name) => page.screenshot({ path: `${out}/music-${scheme}-${name}.png` });
+    const idle = async () => { await page.waitForSelector(".ask-send:not(.stop)"); await page.waitForTimeout(500); };
+    const say = async (text) => { await page.fill(".ask-input", text); await page.click(".ask-send"); await idle(); };
+    const card = ".np:not(.np-old)";
+    const inRoom = (name) => page.waitForSelector(`${card} .np-room.in:has-text("${name}")`, { timeout: 8000 });
+    const level = (label) => page.locator(`${card} .np-level:has(span:text-is("${label}")) output`).innerText();
+    await page.goto(base + "/ask"); await page.waitForSelector(".ask-empty");
+    await say("play calm piano in the living room");
+    await page.waitForSelector(`${card} .np-what small:text-is("Now playing")`); await inRoom("Living Room Speaker");
+    await page.locator(card).scrollIntoViewIfNeeded(); await shot("1-playing");
+    expect((await page.locator(`${card} .np-what b`).innerText()).length > 0, "the card shows what is playing");
+    expect((await page.locator(`${card} .np-room`).count()) === 3, "every speaker is a chip");
+    expect(await level("Living Room Speaker") === "15%", "music from silence starts at 15%");
+    await say("add the kitchen"); await page.locator(card).scrollIntoViewIfNeeded(); await inRoom("Kitchen Speaker");
+    expect(await level("All rooms") === "15%", "the kitchen joins at the playing volume");
+    await say("a bit louder"); await page.locator(card).scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => document.querySelector(".np:not(.np-old) .np-level output")?.textContent === "25%", null, { timeout: 8000 });
+    await page.locator(card).scrollIntoViewIfNeeded(); await shot("2-talked-louder");
+    await page.click(`${card} .np-room:has-text("Bedroom Speaker")`); await inRoom("Bedroom Speaker");
+    expect(await level("Bedroom Speaker") === "25%", "a tapped room joins at the group's volume");
+    await page.locator(`${card} .np-level:has(span:text-is("All rooms")) input`).fill("40");
+    await page.waitForSelector(`${card} .np-said:has-text("Bedroom Speaker volume")`, { timeout: 8000 });
+    expect(await level("Bedroom Speaker") === "40%", "the group slider moves every room");
+    await page.locator(card).scrollIntoViewIfNeeded(); await shot("3-tapped");
+    await page.click(`${card} .np-undo`); await page.waitForSelector(`${card} .np-said:has-text("Put back")`);
+    await page.waitForFunction(() => document.querySelector(".np:not(.np-old) .np-level output")?.textContent === "25%", null, { timeout: 8000 });
+    await page.click(`${card} .np-key[aria-label="Pause"]`); await page.waitForSelector(`${card} .np-key[aria-label="Play"]`);
+    await page.click(`${card} .np-room.in:has-text("Kitchen Speaker")`);
+    await page.waitForSelector(`${card} .np-room:not(.in):has-text("Kitchen Speaker")`, { timeout: 8000 });
+    await page.locator(card).scrollIntoViewIfNeeded(); await shot("4-paused-kitchen-out");
+    await say("play morning light in the bedroom");
+    await page.waitForSelector(".np.np-old"); await inRoom("Bedroom Speaker");
+    expect((await page.locator(".np").count()) === 2 && (await page.locator(".np-old").innerText()).includes("Replaced"), "an older card folds to Replaced");
+    await shot("5-replaced");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the music card scrolls sideways");
+    await ctx.close();
+  }
   expect([...hosts].every((h) => h === new URL(base).host), "the page contacted another host: " + [...hosts].join(", "));
   await browser.close();
   console.log(JSON.stringify({ ok: !failures.length, failures, hosts: [...hosts] }, null, 2));

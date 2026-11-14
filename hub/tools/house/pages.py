@@ -6,7 +6,7 @@ tap from a signed-in device (a program on this Mac has no Tailscale login and ca
 from datetime import datetime
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from ... import home, taps
 from ...templating import render
@@ -62,13 +62,51 @@ def do(request: Request, target: str = Form(...), action: str = Form(...), back:
 
 @router.post("/undo/{batch}")
 def undo(batch: str, request: Request, back: str = Form('/today')):
+    """Today's banner and the chat's Now playing card both post here."""
     if _login(request) is None:
-        return HTMLResponse("Undo from your phone or laptop.", status_code=403)
+        return _signed_out(request, "Undo from your phone or laptop.")
     try:
         result = control.undo(batch, login=_login(request), via='tap')
     except control.Refused as error:
-        return _changes(request, problem=str(error))
+        return taps.refused(request, error, lambda: _changes(request, problem=str(error)))
+    if taps.wants_json(request):
+        return _said(result)
     return _back(back, result['batch'])
+
+
+# ---- The chat's Now playing card (nowplaying.py): the speakers' live state, and its taps ----
+
+def _said(result):
+    """A card's answer after a change: what was done, plainly, and the batch for its Undo."""
+    words = result['done'] + [f'{w} (not confirmed)' for w in result['unknown']]
+    said = '; '.join(words) or 'Nothing changed.'
+    if result['silent']:
+        said = 'Sent, but the speaker isn’t playing. Check Music Assistant.'
+    return JSONResponse({'ok': bool(result['done']), 'said': said[:300],
+                         'batch': result['batch'] if result['undo'] else None})
+
+
+@router.get("/now/{speaker}")
+def now_playing(speaker: str):
+    from . import nowplaying
+    try:
+        return nowplaying.state(speaker[:140])
+    except read.broker.HomeDown as error:
+        return JSONResponse({'error': str(error)}, status_code=503)
+
+
+@router.post("/now/{speaker}")
+def now_playing_tap(speaker: str, request: Request, action: str = Form(...), target: str = Form(''),
+                    value: int | None = Form(None)):
+    """One tap on the card: play, pause, next, a speaker's or the group's volume, or a room in or out."""
+    from . import nowplaying
+    if _login(request) is None:
+        return JSONResponse({'error': 'Change the music from your phone or laptop.'}, status_code=403)
+    try:
+        result = nowplaying.tap(speaker[:140], action, login=_login(request), target=target[:140] or None, value=value)
+    except (control.Refused, read.broker.HomeDown) as error:
+        return JSONResponse({'error': str(error)[:300]}, status_code=409)
+    return _said(result)
 
 
 # ---- Playlists, through Music Assistant (music.py) ----

@@ -160,7 +160,12 @@ def _device(entity_id, item, registry, players_only):
             'volume': attrs.get('volume_level') if isinstance(attrs.get('volume_level'), (int, float)) else None,
             'members': [m for m in attrs.get('group_members') or () if isinstance(m, str) and m != entity_id],
             'colours': _colours(attrs) if domain == 'light' else None,
-            'colour': _colour_now(attrs) if domain == 'light' and state == 'on' else None}
+            'colour': _colour_now(attrs) if domain == 'light' and state == 'on' else None,
+            # Home Assistant lists a group's leader first; joining goes through the leader.
+            'leads': domain == 'media_player' and len(attrs.get('group_members') or ()) > 1
+            and (attrs.get('group_members') or [None])[0] == entity_id,
+            **({'title': _clip(attrs.get('media_title')), 'artist': _clip(attrs.get('media_artist')),
+                'album': _clip(attrs.get('media_album_name'))} if domain == 'media_player' else {})}
 
 
 COLOUR_MODES = {'hs', 'xy', 'rgb', 'rgbw', 'rgbww'}

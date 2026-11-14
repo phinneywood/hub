@@ -473,6 +473,8 @@ def play_music(login, speaker: str, action: Literal['play_media', 'play', 'pause
     out['picked'] = f'{name}, {"a playlist of yours" if picked["mine"] and picked["kind"] == "playlist" else "from your library" if picked["mine"] else "from Apple Music"} ({picked["kind"]}). Tell the owner what you picked.'
     if alone and here['members']:
         out['grouping'] = f'{safe(here["name"])} was taken out of its group so it plays only there; Undo puts it back.'
+    if result['done'] or result['unknown']:     # the chat draws a live Now playing card for this speaker
+        out['card'] = {'kind': 'music', 'id': target, 'text': name, 'lines': []}
     if mates:
         out['zone'] = (f'{safe(", ".join(players[m]["name"] for m in mates))} play along, in sync: the owner made them one '
                        'zone. Undo puts all of it back. Say so.')

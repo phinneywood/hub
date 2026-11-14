@@ -61,8 +61,9 @@ class Ledger:
                 state['state'] = 'paused'
             elif service == 'volume_set':
                 state['attributes']['volume_level'] = data['volume_level']
-            elif service == 'join':
-                group = [entity, *data['group_members']]
+            elif service == 'join':     # joins add to the leader's group; they don't replace it
+                group = list(state['attributes'].get('group_members') or [entity])
+                group += [m for m in data['group_members'] if m not in group]
                 for member in group:
                     self._overlay.setdefault(member, {'attributes': {}})['attributes']['group_members'] = list(group)
             elif service == 'unjoin':

@@ -1,5 +1,5 @@
 import "./policy.js";
-import { StrictMode, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { StrictMode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AssistantRuntimeProvider, ComposerPrimitive, MessagePrimitive, ThreadPrimitive, useAuiState,
@@ -121,11 +121,142 @@ function TapCard({ card }) {
   );
 }
 
-// A tool's chip, and its card when it left something waiting for a tap.
+/* ---- Now playing: the speakers' live state, read through Hub while the card is on screen. Every tap posts to
+   the signed-in /house/now route, which makes the change through the same allowlist, limit, record and Undo as
+   Ask. Only the newest music card in a chat stays live; older ones fold to “Replaced”. ---- */
+
+const POLL = 3000, SETTLE = 450;
+const post = (path, form = {}) => fetch(path, { method: "POST", body: new URLSearchParams(form),
+  headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" } }).then(async (r) => {
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || DOWN);
+  return body;
+});
+
+// The newest music card in the whole thread, by its tool call.
+const useLatestMusic = () => useAuiState((s) => {
+  let last = null;
+  s.thread.messages.forEach((m) => (m.parts || m.content || []).forEach((p) => {
+    if (p.type === "tool-call" && p.result?.card?.kind === "music") last = p.toolCallId;
+  }));
+  return last;
+});
+
+// A slider that shows the live level, follows the finger, and sends once the finger rests (or lifts).
+function Level({ label, value, onSet, disabled }) {
+  const [held, setHeld] = useState(null);
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const send = (v) => { clearTimeout(timer.current); timer.current = null; onSet(v).finally(() => setHeld(null)); };
+  const move = (v) => { setHeld(v); clearTimeout(timer.current); timer.current = setTimeout(() => send(v), SETTLE); };
+  const shown = held ?? value ?? 0;
+  return (
+    <label className="np-level">
+      <span>{label}</span>
+      <input type="range" min="0" max="100" step="1" value={shown} disabled={disabled || value === null}
+        aria-label={"Volume: " + label} onChange={(e) => move(Number(e.target.value))}
+        onPointerUp={() => held !== null && timer.current && send(held)} />
+      <output>{value === null ? "–" : shown + "%"}</output>
+    </label>
+  );
+}
+
+function NowPlaying({ card, toolCallId }) {
+  const latest = useLatestMusic();
+  const live = latest === toolCallId;
+  const box = useRef(null);
+  const [now, setNow] = useState(null);
+  const [down, setDown] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState(null);       // {text, batch}: the last tap, with its Undo
+  const [error, setError] = useState("");
+  const path = "/house/now/" + encodeURIComponent(card.id);
+  const read = useCallback(() => fetch(path, { headers: { Accept: "application/json" } })
+    .then(async (r) => { const b = await r.json().catch(() => ({})); if (!r.ok) throw new Error(b.error || DOWN); return b; })
+    .then((d) => { setNow(d); setDown(""); }, (e) => setDown(e.message)), [path]);
+
+  useEffect(() => {
+    if (!live) return undefined;
+    let seen = true, timer;
+    // Back on screen: read at once rather than show a stale card until the next round.
+    const watch = new IntersectionObserver(([e]) => { if (e.isIntersecting && !seen) read(); seen = e.isIntersecting; });
+    if (box.current) watch.observe(box.current);
+    const loop = () => {
+      const go = seen && !document.hidden ? read() : Promise.resolve();
+      go.finally(() => { timer = setTimeout(loop, POLL); });
+    };
+    loop();
+    return () => { clearTimeout(timer); watch.disconnect(); };
+  }, [live, read]);
+
+  const act = (form) => {
+    setBusy(true); setError("");
+    return post(path, form).then((d) => setSaid({ text: d.said, batch: d.batch }), (e) => setError(e.message))
+      .finally(() => { setBusy(false); read(); });
+  };
+  const undo = () => {
+    setBusy(true); setError("");
+    post("/house/undo/" + encodeURIComponent(said.batch)).then((d) => setSaid({ text: "Put back. " + d.said }),
+      (e) => setError(e.message)).finally(() => { setBusy(false); read(); });
+  };
+
+  if (!live) {
+    return <div className="k-card np np-old"><span className="np-note" aria-hidden="true">♪</span><span><b>{card.text}</b> · Replaced</span></div>;
+  }
+  if (now?.gone) return <div className="k-card np"><p className="ask-fine bad">That speaker isn’t in Home Assistant any more.</p></div>;
+  const group = (now?.speakers || []).filter((s) => s.in);
+  const title = now?.title || card.text;
+  return (
+    <section ref={box} className="k-card np" aria-label="Now playing">
+      <div className="np-head">
+        <span className="np-art" aria-hidden="true">♪</span>
+        <span className="np-what">
+          <small>{now ? (now.playing ? "Now playing" : now.label) : "Reading the speakers…"}</small>
+          <b>{title}</b>
+          {(now?.artist || now?.album) && <span>{[now.artist, now.album].filter(Boolean).join(" · ")}</span>}
+        </span>
+      </div>
+      <div className="np-keys">
+        <button type="button" className="np-key" disabled={busy || !now} onClick={() => act({ action: now.playing ? "pause" : "play" })}
+          aria-label={now?.playing ? "Pause" : "Play"}>
+          {now?.playing
+            ? <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+            : <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 5l11 7-11 7z" fill="currentColor"/></svg>}
+        </button>
+        <button type="button" className="np-key" disabled={busy || !now?.playing} onClick={() => act({ action: "next" })} aria-label="Next">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 5l9 7-9 7zM16 5h3v14h-3z" fill="currentColor"/></svg>
+        </button>
+      </div>
+      {group.length > 1 && <Level label="All rooms" value={now.volume} disabled={busy}
+        onSet={(v) => act({ action: "group_volume", value: v })} />}
+      {group.map((s) => <Level key={s.id} label={s.name} value={s.volume} disabled={busy || s.offline}
+        onSet={(v) => act({ action: "volume", target: s.id, value: v })} />)}
+      <div className="np-rooms" role="group" aria-label="Rooms">
+        {(now?.speakers || []).map((s) => (
+          <button type="button" key={s.id} className={"np-room" + (s.in ? " in" : "")} aria-pressed={s.in}
+            disabled={busy || s.offline} title={s.zone.length ? "Plays together with its zone" : undefined}
+            onClick={() => act({ action: s.in ? "remove" : "add", target: s.id })}>
+            {s.in ? "✓ " : "+ "}{s.name}
+          </button>
+        ))}
+      </div>
+      {said && (
+        <p className="ask-fine np-said">{said.text}
+          {said.batch && <button type="button" className="np-undo" disabled={busy} onClick={undo}>Undo</button>}</p>
+      )}
+      {(error || down) && <p className="ask-fine bad">{error || down}</p>}
+      <a className="k-small" href="/house/changes">Home changes ›</a>
+    </section>
+  );
+}
+
+// A tool's chip, and its card when it left something waiting for a tap, or music to follow.
 const Tool = (props) => (
   <>
     <Lookup {...props} />
-    {props.result?.card && props.status?.type !== "running" && <TapCard card={props.result.card} />}
+    {props.result?.card && props.status?.type !== "running" && (props.result.card.kind === "music"
+      ? <NowPlaying card={props.result.card} toolCallId={props.toolCallId} />
+      : <TapCard card={props.result.card} />)}
   </>
 );
 

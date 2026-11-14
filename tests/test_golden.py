@@ -1,6 +1,7 @@
 """Golden tests, offline: every scenario through the real Ask pipeline with a scripted model, a made-up
 household, and the dry-run layer. Also: the checks catch the real failures they were written for, the
 dry-run layer never lets a write out, and live runs keep to their cost cap and privacy rules."""
+import dataclasses
 import json
 
 import pytest
@@ -274,3 +275,12 @@ def test_insights_shows_the_latest_run(world, monkeypatch):
     runner.live(only=('what-needs-me-today',), model_for=_scripted_for)
     page = TestClient(app).get('/insights', headers=signed_in).text
     assert '1 of 1' in page and '/golden' in page
+
+
+def test_a_card_that_misses_a_room_or_stays_quiet_is_caught(world):
+    scenario = next(s for s in scenarios.SCENARIOS if s.id == 'music-card-follows-talk')
+    quiet = dataclasses.replace(scenario, turns=scenario.turns[:2], script=scenario.script[:2], checks=scenario.checks[-2:-1])
+    assert 'not above 15%' in runner.offline(quiet)[1][0]['why']           # the kitchen joined at 15%; nothing louder
+    alone = dataclasses.replace(scenario, turns=scenario.turns[:1], script=scenario.script[:1],
+                                checks=(checks.CardShows('living_room_speaker', 'kitchen_speaker'),))
+    assert 'not kitchen speaker, living room speaker' in runner.offline(alone)[1][0]['why']

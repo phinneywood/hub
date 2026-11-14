@@ -663,3 +663,10 @@ def test_making_a_playlist_waits_for_a_signed_in_tap(ma):
     catalog.edit_playlist('me@example.com', 'create', 'Later', said='make a playlist called Later')
     client.post(f'/house/playlists/skip/{music.proposals()[0]["id"]}', headers=SIGNED_IN)
     assert music.proposals() == []
+
+
+def test_new_music_brings_a_now_playing_card_for_that_speaker(house):
+    found = catalog.play_music('me@example.com', 'kitchen speaker', 'play_media', what='calm piano', group_too=False)
+    assert found['card'] == {'kind': 'music', 'id': 'media_player.kitchen', 'text': 'Calm Piano Evening', 'lines': []}
+    paused = catalog.play_music('me@example.com', 'kitchen speaker', 'pause')
+    assert 'card' not in paused                     # only new music starts a card; the live one shows the pause

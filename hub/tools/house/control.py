@@ -272,11 +272,12 @@ def _joins(leader, others, found, level=None):
 
 
 def change(targets, action, *, login, via, value=None, query=None, kind=None, members=(), label=None, alone=False, soft=False,
-           together=()):
+           together=(), each=None):
     """Make one kind of change to one or more devices (entity ids). Returns what happened, per device.
 
     `group` joins `members` to the one target's group. `together` (play_media, one target): speakers of the same zone
-    that join it once it plays, at the same volume, in the same batch, so one Undo puts all of it back."""
+    that join it once it plays, at the same volume, in the same batch, so one Undo puts all of it back.
+    `each` (volume): {entity id: percent} for speakers that each get their own level, as a group slider sets them."""
     if not targets:
         raise Refused('Nothing to change.')
     try:
@@ -301,7 +302,8 @@ def change(targets, action, *, login, via, value=None, query=None, kind=None, me
             raise Refused('Say which other speakers to group with it.' if not others
                           else f'Those speakers already play together with {leader["name"]}.')
     else:
-        plans = [(d, action, *_steps(d, action, value, query, kind, members, label, alone, soft)) for d in chosen]
+        plans = [(d, action, *_steps(d, action, (each or {}).get(d['id'], value), query, kind, members, label, alone, soft))
+                 for d in chosen]
     if together and action == 'play_media' and len(chosen) == 1:
         leader = dict(chosen[0], members=[] if alone else chosen[0]['members'])
         level = next((data['volume_level'] for _, service, data in plans[0][2] if service == 'volume_set'), None)

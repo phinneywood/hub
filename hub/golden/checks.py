@@ -30,6 +30,7 @@ class Trace:
     devices: dict = field(default_factory=dict)     # entity id -> name
     rooms: dict = field(default_factory=dict)       # room name -> entity ids of its lights
     undone: list = field(default_factory=list)      # live writes put back afterwards: [{'batch', 'why'?}]
+    cards: dict = field(default_factory=dict)       # Now playing card id -> what it shows at the end (nowplaying.state)
 
     def turn(self, n):
         """Turn `n` counted like a list index (-1 is the last), as a plain number."""
@@ -259,6 +260,32 @@ class Joined(Check):
             if c['what'] == 'media_player/join' and wanted <= {trace.device(e).lower() for e in _entities(c)}:
                 return None
         return f'No join of {", ".join(sorted(wanted))} was recorded.'
+
+
+class CardShows(Check):
+    """The newest Now playing card, read live at the end, shows music playing in exactly these speakers (aliases),
+    at a group volume above `above` percent when given."""
+
+    def __init__(self, *speakers, above=None):
+        self.speakers, self.above = speakers, above
+        self.says = 'the Now playing card shows ' + ' and '.join(speakers) + (f' above {above}%' if above is not None else '')
+
+    def __call__(self, trace):
+        ids = [c.result['card']['id'] for c in trace.calls
+               if isinstance(c.result, dict) and (c.result.get('card') or {}).get('kind') == 'music']
+        if not ids:
+            return 'No Now playing card was offered.'
+        now = trace.cards.get(ids[-1])
+        if not now or now.get('gone'):
+            return 'The Now playing card couldn’t read its speaker.'
+        shown = {s['name'].lower() for s in now['speakers'] if s['in']}
+        wanted = {trace.name(a).lower() for a in self.speakers}
+        if not now['playing']:
+            return f'The card shows {now["label"]}, not playing.'
+        if shown != wanted:
+            return f'The card shows {", ".join(sorted(shown))}, not {", ".join(sorted(wanted))}.'
+        if self.above is not None and not (now['volume'] or 0) > self.above:
+            return f'The card shows the group at {now["volume"]}%, not above {self.above}%.'
 
 
 class HandedOff(Check):

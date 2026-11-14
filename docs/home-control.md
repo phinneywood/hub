@@ -86,6 +86,16 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   outside the zone: a speaker grouped with others outside it still plays alone or asks first, as before.
   `music_now` tells the model each speaker's zone mates. Removing the note removes its zone. For security devices Ask will show an approval card instead
   (step 5). Device names and states reach Ask's model only over its zero-retention route.
+- **Now playing card in Ask** (2026-11-13, stage 1 of live music controls). When Ask starts new music, a card
+  under its answer shows what the speaker group is playing, play/pause and next, a chip per speaker (tap to add a
+  room, which joins the group in sync and brings its zone; tap again to take it out), a volume slider per room and
+  one for the group (every room moves by the same step). It reads the speakers' live state through the broker
+  (`GET /house/now/<speaker>`, every 3 seconds while the card is on screen), so a change made by talking shows up
+  on it. Taps post to `POST /house/now/<speaker>` (signed in, same origin) and go through `control.change`: the
+  same allowlist, 30-a-minute limit, record and Undo, with `via` = `card`. Sliders send once the finger rests.
+  The group's leader can't be taken out while other rooms play with it. Only the newest card in a chat stays
+  live; older ones fold to "Replaced". No artwork yet: Home Assistant's picture needs its token, and the page
+  loads nothing from other hosts. Code: `hub/tools/house/nowplaying.py`.
 - **No Home page of its own.** Home Assistant already has dashboards, so `/house` opens Home Assistant
   (its address is in the private settings file, `household.json` → `home.ha_url`; the older `home.assistant_url` still counts, with
   `home.music_url` for Music Assistant's player). Hub keeps only `/house/changes`: what it changed,
