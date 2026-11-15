@@ -1,14 +1,22 @@
 [
  {
   "sha": null,
-  "from": "23dc862d11c6c1c2a06c5b10052ff272e2a64346",
+  "from": "b9269fb44755262e8b856fc5d11761dd83899e1c",
   "live": null,
+  "title": "Music in another room",
+  "changes": [
+   "Music in another room is one tap: the music sheet lists every room, and a quiet one has Play here, for music of its own that starts softly while the rest plays on, and Join.",
+   "A room's own panel offers the same, the bar at the bottom names rooms playing something else, and a room playing its own music has its own pause."
+  ]
+ },
+ {
+  "sha": "b9269fb44755262e8b856fc5d11761dd83899e1c",
+  "from": "23dc862d11c6c1c2a06c5b10052ff272e2a64346",
+  "live": "2026-11-15T21:24:37Z",
   "title": "Buttons on the wall show in their room",
   "changes": [
    "A wall or remote button shows in its room, with its last press, its battery and what each press does.",
-   "The developer page reads the projects folder, and shows its tmux and brief sections only when they are set.",
-   "Music in another room is one tap: the music sheet lists every room, and a quiet one has Play here, for music of its own that starts softly while the rest plays on, and Join.",
-   "A room's own panel offers the same, the bar at the bottom names rooms playing something else, and a room playing its own music has its own pause."
+   "The developer page reads the projects folder, and shows its tmux and brief sections only when they are set."
   ]
  },
  {
