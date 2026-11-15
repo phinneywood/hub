@@ -1,4 +1,4 @@
-"""The Dev page reads the home repo, tmux and Git at request time, and shows "not configured" without them.
+"""The Dev page reads the projects folder, tmux and Git at request time, and shows "not configured" without them.
 
 Every repository here is a throwaway Git repo under tmp_path; nothing reads the real ~/Developer.
 """
@@ -71,7 +71,7 @@ def world(tmp_path, monkeypatch):
         pytest.skip('needs to run git, which this run does not allow')
     home = tmp_path / 'home'
     monkeypatch.setenv('HOME', str(home))   # Git's own config and every ~ path stay in tmp_path
-    repo = home / 'code' / 'home-repo'
+    repo = home / 'code'
     repo.mkdir(parents=True)
     (repo / 'README.md').write_text(README)
     (repo / 'AGENTS.md').write_text(AGENTS)
@@ -88,7 +88,7 @@ def world(tmp_path, monkeypatch):
     brief = tmp_path / 'brief.md'
     brief.write_text(BRIEF)
     (config.DATA_DIR / 'household.json').write_text(json.dumps(
-        {'dev': {'home_repo': str(repo), 'manager_brief': str(brief), 'tmux_session': 'demo'}}))
+        {'dev': {'projects': str(repo), 'manager_brief': str(brief), 'tmux_session': 'demo'}}))
     monkeypatch.setattr(read, 'windows', lambda session='manager', now=None: [
         {'index': '1', 'name': 'manager', 'claude': True, 'active': 'just now'},
         {'index': '2', 'name': 'demo task', 'claude': False, 'active': '3 hr ago'}])
@@ -108,7 +108,7 @@ def test_sections_and_lists_are_read_from_markdown():
 
 
 def test_projects_show_each_repositorys_git_state(world):
-    rows = {row['name']: row for row in read.projects(world / 'code' / 'home-repo')}
+    rows = {row['name']: row for row in read.projects(world / 'code')}
     assert rows['alpha']['branch'] == 'main' and rows['alpha']['others'] == ['feature-x']
     assert rows['alpha']['subject'] == 'First commit in alpha' and rows['alpha']['when'] == 'just now'
     assert rows['alpha']['changes'] is False and rows['alpha']['worktrees'] == 1
@@ -120,7 +120,7 @@ def test_git_is_only_asked_never_told(world, monkeypatch):
     seen = []
     real = read._run
     monkeypatch.setattr(read, '_run', lambda args, cwd=None: seen.append(args) or real(args, cwd))
-    read.projects(world / 'code' / 'home-repo')
+    read.projects(world / 'code')
     verbs = {args[3] for args in seen if args[0] == 'git'}
     assert verbs <= {'rev-parse', 'log', 'for-each-ref', 'status', 'worktree'}
     assert all(args[4:6] == ['list', '--porcelain'] for args in seen if args[3] == 'worktree')
@@ -138,10 +138,20 @@ def test_the_page_shows_all_four_sections(world):
 
 
 def test_without_settings_the_page_says_not_configured(monkeypatch):
-    monkeypatch.setattr(read, 'windows', lambda session='manager', now=None: None)
+    def unexpected(session='manager', now=None):
+        raise AssertionError('tmux is only asked when a session is set')
+    monkeypatch.setattr(read, 'windows', unexpected)
     page = TestClient(app).get('/dev')
     assert page.status_code == 200
-    assert page.text.count('Not configured') == 3 and 'Not available' in page.text
+    assert page.text.count('Not configured') == 2
+    assert 'In progress' not in page.text and 'Waiting on you' not in page.text
+
+
+def test_the_older_home_repo_setting_still_counts(world):
+    (config.DATA_DIR / 'household.json').write_text(json.dumps({'dev': {'home_repo': str(world / 'code')}}))
+    assert read.settings() == {'folder': world / 'code', 'manager_brief': None, 'session': None}
+    page = TestClient(app).get('/dev').text
+    assert 'First commit in alpha' in page and 'In progress' not in page and 'Waiting on you' not in page
 
 
 def test_tmux_out_of_reach_is_not_available(monkeypatch):

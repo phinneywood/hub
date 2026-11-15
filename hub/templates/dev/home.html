@@ -4,10 +4,10 @@
 {% block body %}
 <p class="eyebrow">Dev</p>
 <h1 class="status-head">How you develop on the Mac mini</h1>
-<p class="note">Read fresh each time this page opens, from the home repo, tmux and Git. Nothing here changes anything.</p>
+<p class="note">Read fresh each time this page opens, from the projects folder and Git. Nothing here changes anything.</p>
 
 <h2 id="how">How you work</h2>
-{% if how is none %}<p class="note">{% if configured %}The home repo’s README couldn’t be read.{% else %}Not configured: set <code>dev.home_repo</code> in the private settings.{% endif %}</p>
+{% if how is none %}<p class="note">{% if configured %}The projects folder’s README couldn’t be read.{% else %}Not configured: set <code>dev.projects</code> in the private settings.{% endif %}</p>
 {% else %}{% if how.steps %}<ol class="dev-steps">{% for step in how.steps %}<li>{{ step }}</li>{% endfor %}</ol>{% endif %}
 {% if how['keys'] %}<table class="dev-keys">
   <tr><th>Key</th><th>What</th></tr>
@@ -15,16 +15,16 @@
   {% endfor %}
 </table>{% endif %}{% endif %}
 
-<h2 id="windows">In progress</h2>
+{% if session %}<h2 id="windows">In progress</h2>
 {% if windows is none %}<p class="note">Not available: tmux session <code>{{ session }}</code> can’t be reached from Hub.</p>
 {% elif not windows %}<p class="note">No windows open.</p>
 {% else %}<ul class="checks dev-windows">
   {% for w in windows %}<li><span class="dev-index">{{ w.index }}</span><div><strong>{{ w.name }}</strong><small>{% if w.claude %}Claude running{% else %}No Claude{% endif %}{% if w.active %} · active {{ w.active }}{% endif %}</small></div></li>
   {% endfor %}
-</ul>{% endif %}
+</ul>{% endif %}{% endif %}
 
 <h2 id="projects">Projects</h2>
-{% if projects is none %}<p class="note">{% if configured %}The home repo’s AGENTS.md couldn’t be read.{% else %}Not configured: set <code>dev.home_repo</code> in the private settings.{% endif %}</p>
+{% if projects is none %}<p class="note">{% if configured %}The projects folder’s AGENTS.md couldn’t be read.{% else %}Not configured: set <code>dev.projects</code> in the private settings.{% endif %}</p>
 {% else %}<div class="dev-projects">
   {% for p in projects %}<section class="dev-project">
     <h3>{{ p.name }}{% if not p.missing %} <span class="tag">{{ p.branch }}</span>{% if p.changes %} <span class="tag wait">uncommitted changes</span>{% endif %}{% endif %}</h3>
@@ -42,8 +42,8 @@
   {% endfor %}
 </div>{% endif %}
 
-<h2 id="waiting">Waiting on you</h2>
-{% if waiting is none %}<p class="note">{% if brief_configured %}The Manager’s brief couldn’t be read.{% else %}Not configured: set <code>dev.manager_brief</code> in the private settings.{% endif %}</p>
+{% if brief_configured %}<h2 id="waiting">Waiting on you</h2>
+{% if waiting is none %}<p class="note">The brief couldn’t be read.</p>
 {% elif not waiting %}<p class="note">Nothing is waiting on you.</p>
-{% else %}<ol class="dev-steps">{% for item in waiting %}<li>{{ item }}</li>{% endfor %}</ol>{% endif %}
+{% else %}<ol class="dev-steps">{% for item in waiting %}<li>{{ item }}</li>{% endfor %}</ol>{% endif %}{% endif %}
 {% endblock %}

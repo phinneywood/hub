@@ -27,14 +27,15 @@ ITEM = re.compile(r'^(\d+)\.\s+(.*)')
 
 
 def settings():
-    """{'home_repo', 'manager_brief'}: a Path each, or None when not set. 'session': the tmux session."""
+    """{'folder', 'manager_brief'}: a Path each, or None when not set. 'folder' is the projects folder
+    (`dev.projects`; the older `dev.home_repo` still counts). 'session': the tmux session, None when not set."""
     dev = household.section('dev')
     def place(key):
         value = dev.get(key)
         return Path(value).expanduser() if isinstance(value, str) and value.strip() else None
     session = dev.get('tmux_session')
-    return {'home_repo': place('home_repo'), 'manager_brief': place('manager_brief'),
-            'session': session if isinstance(session, str) and session.strip() else SESSION}
+    return {'folder': place('projects') or place('home_repo'), 'manager_brief': place('manager_brief'),
+            'session': session.strip() if isinstance(session, str) and session.strip() else None}
 
 
 def _text(path):
@@ -95,7 +96,7 @@ def inline(text):
 
 
 def pointers(text):
-    """[(name, about, path)] for the bullets under "Other Repos" in the home repo's AGENTS.md."""
+    """[(name, about, path)] for the bullets under "Other Repos" in the projects folder's AGENTS.md."""
     found = []
     for line in section(text, 'Other Repos'):
         match = POINTER.match(line)
@@ -142,9 +143,9 @@ def repository(name, about, shown):
     return row
 
 
-def projects(home_repo):
-    """None when the home repo isn't configured or readable; else one row per "Other Repos" pointer."""
-    text = _text(home_repo / 'AGENTS.md') if home_repo else None
+def projects(folder):
+    """None when the projects folder isn't configured or readable; else one row per "Other Repos" pointer."""
+    text = _text(folder / 'AGENTS.md') if folder else None
     if text is None:
         return None
     found = pointers(text)
@@ -152,10 +153,10 @@ def projects(home_repo):
         return list(pool.map(lambda p: repository(*p), found))
 
 
-def how(home_repo):
-    """From the home repo's README, as HTML: the steps of "How the owner works" and the rows of "Keys"
+def how(folder):
+    """From the projects folder's README, as HTML: the steps of "How the owner works" and the rows of "Keys"
     ([key, what]). None when the README can't be read."""
-    text = _text(home_repo / 'README.md') if home_repo else None
+    text = _text(folder / 'README.md') if folder else None
     if text is None:
         return None
     return {'steps': [inline(item) for item in numbered(section(text, 'How the owner works'))],
@@ -222,8 +223,8 @@ def page():
     """Everything the Dev page shows. Never raises for a missing file, repo or tmux."""
     where = settings()
     with ThreadPoolExecutor(max_workers=2) as pool:
-        live = pool.submit(windows, where['session'])
-        rows = projects(where['home_repo'])
-        return {'configured': where['home_repo'] is not None, 'brief_configured': where['manager_brief'] is not None,
-                'how': how(where['home_repo']), 'windows': live.result(), 'projects': rows,
+        live = pool.submit(windows, where['session']) if where['session'] else None
+        rows = projects(where['folder'])
+        return {'configured': where['folder'] is not None, 'brief_configured': where['manager_brief'] is not None,
+                'how': how(where['folder']), 'windows': live.result() if live else None, 'projects': rows,
                 'waiting': waiting(where['manager_brief']), 'session': where['session']}
