@@ -12,8 +12,12 @@ export function list(items: string[]): string {
   return items.slice(0, -1).join(", ") + " and " + items[items.length - 1];
 }
 
+// A few rooms are named in shorthand on the plan and said in full.
+const FULL: Record<string, string> = { dining: "dining room", bath: "bathroom", guest: "guest room", living: "living room" };
+
 export function spoken(name: string): string {
-  return PLAIN.has(name.toLowerCase()) ? "the " + name.toLowerCase() : name;
+  const plain = name.toLowerCase();
+  return PLAIN.has(plain) ? "the " + (FULL[plain] ?? plain) : name;
 }
 
 export function houseSays(house: House): string {

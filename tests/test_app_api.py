@@ -35,7 +35,7 @@ def test_the_house_is_laid_out_floor_by_floor(house):
     found = picture()
     assert found['ok'] and found['signed_in'] is False
     assert [f['name'] for f in found['floors']] == ['Downstairs', 'Upstairs', 'Outside']
-    assert found['floors'][0]['rooms'] == ['dining', 'entry', 'kitchen', 'living-room', 'office']
+    assert found['floors'][0]['rooms'] == ['kitchen', 'living-room', 'dining', 'office', 'entry']     # most lamps first
     assert sorted(r for r in found['rooms'] if found['rooms'][r]['on']) == ['dining', 'kitchen', 'living-room', 'porch', 'robin-s-room']
 
 
@@ -261,9 +261,12 @@ def test_a_poke_reads_again_at_once():
     assert len(reads) >= 2 and reads[1] - reads[0] < 2
 
 
-def test_the_live_address_streams_the_picture(house):
+def test_the_live_address_streams_the_picture_then_beats_while_nothing_changes(house, monkeypatch):
+    from hub.app import routes
+    monkeypatch.setattr(routes, 'BEAT', 0.05)
     with client.stream('GET', '/app/api/live') as stream:
         lines = stream.iter_lines()
         assert next(lines) == 'event: house'
         assert json.loads(next(lines).removeprefix('data: '))['rooms']['kitchen']['on'] is True
         assert stream.headers['content-type'].startswith('text/event-stream')
+        assert 'event: beat' in [next(lines) for _ in range(12)]

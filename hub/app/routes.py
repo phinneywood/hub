@@ -17,7 +17,7 @@ from .feed import feed
 
 router = APIRouter()
 BUILT = Path(__file__).resolve().parent.parent / 'static' / 'app'
-QUIET = 15              # seconds of silence on the live feed before a keep-alive line
+BEAT = 5                # seconds of nothing new on the live feed before a beat, so the app can tell the line is alive
 PICKS_SECONDS = 300
 _picks = {'at': float('-inf'), 'found': []}
 
@@ -27,6 +27,8 @@ PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#141C33" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#E4EAF1" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Hub</title>
@@ -116,7 +118,8 @@ def home(request: Request):
 
 @router.get('/api/live')
 async def live(request: Request):
-    """The house as it changes: one `house` event per new picture, for as long as the app stays open."""
+    """The house as it changes: one `house` event per new picture, for as long as the app stays open, and a
+    `beat` whenever nothing has changed for a few seconds. An app that hears neither knows it has lost Hub."""
     loop = asyncio.get_running_loop()
     queue = feed.listen(loop)
 
@@ -126,9 +129,9 @@ async def live(request: Request):
             yield f'event: house\ndata: {first}\n\n'
             while True:
                 try:
-                    text = await asyncio.wait_for(queue.get(), QUIET)
+                    text = await asyncio.wait_for(queue.get(), BEAT)
                 except asyncio.TimeoutError:
-                    yield ': still here\n\n'
+                    yield 'event: beat\ndata: 1\n\n'
                     continue
                 yield f'event: house\ndata: {text}\n\n'
         finally:

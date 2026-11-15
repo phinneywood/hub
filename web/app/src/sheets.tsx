@@ -54,7 +54,7 @@ export function RoomSheet({ room, music }: { room: Room; music: Music | null }) 
 
 export function PlayingSheet({ music }: { music: Music }) {
   useEffect(() => void loadPicks(), []);
-  const reachable = music.speakers.filter((s) => !s.offline);
+  const reachable = music.speakers.filter((s) => !s.offline).sort((a, b) => Number(b.leads) - Number(a.leads) || Number(b.in) - Number(a.in));
   const silent = music.speakers.length - reachable.length;
   const found = picks.value ?? [];
   return (
@@ -72,7 +72,7 @@ export function PlayingSheet({ music }: { music: Music }) {
       {found.length > 0 && <h2>Play something else</h2>}
       {found.length > 0 && (
         <div class="picks">
-          {found.slice(0, 8).map((p) => (
+          {found.slice(0, found.length >= 8 ? 8 : found.length >= 4 ? 4 : found.length).map((p) => (
             <button type="button" class="pick" key={p.uri} onClick={() => void playPick(p)}>
               <Sleeve name={p.name} size="mid" /><b>{p.name}</b>
             </button>

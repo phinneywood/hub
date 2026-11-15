@@ -58,7 +58,9 @@ Two things differ from Ask's path:
 `hub/app/feed.py`. While at least one app is open, one thread reads the house every 3 seconds and sends the
 picture to every open app when it differs from the last one. After a change Hub made, it reads again at once and
 twice more as speakers settle. Nobody open, nothing read. The feed is a plain event stream
-(`text/event-stream`); the app reconnects by itself.
+(`text/event-stream`) with a `beat` every 5 seconds when nothing has changed. A phone that leaves the home
+network is told nothing, the line just goes quiet, so an app that hears no beat for 12 seconds says it can't
+reach Hub and keeps trying to reconnect by itself.
 
 This asks Home Assistant on a timer because the broker (home-ops) answers one question at a time today. When the
 broker can pass on Home Assistant's own change events, `Feed._read` is the one place that changes, and the 3

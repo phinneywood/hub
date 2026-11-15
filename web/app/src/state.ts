@@ -10,6 +10,7 @@ const HOLD = 5000;                // how long a tap is believed before the house
 const SOUND_HOLD = 8000;          // speakers take longer to start, stop and join
 const DRAG_HOLD = 60000;
 const ALL_OFF = "all-off";
+const SILENCE = 12000;            // Hub sends a beat every 5 s; this long without one and the line is taken for dead
 
 export type Look = "auto" | "dusk" | "day";
 export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "ask" } | null;
@@ -307,7 +308,8 @@ export async function undo(batch: string) {
 // ---- staying live ----
 
 let source: EventSource | null = null;
-let heard = Date.now();
+let heard = Date.now();     // when Hub was last heard from
+let tried = 0;              // when the line was last opened
 
 function accept(found: House | Down) {
   heard = Date.now();
@@ -329,8 +331,13 @@ function accept(found: House | Down) {
 }
 
 function connect() {
+  tried = Date.now();
   source?.close();
   source = new EventSource("/app/api/live");
+  source.addEventListener("beat", () => {
+    heard = Date.now();
+    if (trouble.value === "hub") trouble.value = "";
+  });
   source.addEventListener("house", (event) => {
     try {
       accept(JSON.parse((event as MessageEvent<string>).data) as House | Down);
@@ -350,7 +357,7 @@ async function look_now() {
     me.value = { signed_in: first.signed_in, initial: first.initial, versions: first.versions, links: first.links };
     accept(first);
   } catch {
-    /* the watch below says so if Hub stays out of reach */
+    trouble.value = "hub";
   }
 }
 
@@ -358,12 +365,24 @@ export function start() {
   connect();
   void look_now();
   window.setInterval(() => {
-    const open = source !== null && source.readyState === EventSource.OPEN;
-    if (!open && Date.now() - heard > 6000) trouble.value = "hub";
-    if (source === null || source.readyState === EventSource.CLOSED) connect();
-  }, 2000);
-  document.addEventListener("visibilitychange", () => {
+    // A phone that leaves the home network is told nothing: the line just goes silent. So listen for silence.
     if (document.visibilityState !== "visible") return;
+    if (Date.now() - heard > SILENCE || !navigator.onLine) {
+      trouble.value = "hub";
+      if (Date.now() - tried > 5000) connect();
+    }
+  }, 2000);
+  window.addEventListener("offline", () => (trouble.value = "hub"));
+  // Hub reads the house only while an app is listening. An app nobody is looking at stops listening after a
+  // short while, and picks up again the moment it is looked at.
+  let away = 0;
+  document.addEventListener("visibilitychange", () => {
+    clearTimeout(away);
+    if (document.visibilityState !== "visible") {
+      away = window.setTimeout(() => { source?.close(); source = null; }, 20000);
+      return;
+    }
+    heard = Date.now();
     connect();              // a phone that slept may hold a dead line without knowing
     void look_now();
   });

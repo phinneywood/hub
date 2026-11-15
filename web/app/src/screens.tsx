@@ -10,13 +10,14 @@ import { clock, houseSays, list, musicSays, playingIn, when } from "./words";
 const HOLD_MS = 430;        // how long a finger rests on a room before it opens
 const TIP = "hub.tip";
 
-/** How wide each room is drawn, in sixths of the plan, so every row is full. */
+/** How wide each room is drawn, in sixths of the plan, so every row is full. Rooms come biggest first, and
+ * the first ones take the wide places. */
 export function spans(count: number): number[] {
   if (count === 1) return [6];
   const out = Array<number>(count).fill(2);
   const over = count % 3;
-  if (over === 2) out.splice(count - 2, 2, 3, 3);
-  if (over === 1) out.splice(count - 4, 4, 3, 3, 3, 3);
+  if (over === 2) out.splice(0, 2, 3, 3);
+  if (over === 1) out.splice(0, 4, 3, 3, 3, 3);
   return out;
 }
 
@@ -202,7 +203,7 @@ export function Rail() {
 const OLDER = [["Ask, the chat", "/ask"], ["Today", "/today"], ["Kitchen", "/kitchen"], ["Mail", "/gmail"], ["Calendar", "/calendar"],
   ["Preschool", "/preschool/"], ["Trip", "/trip"], ["Bike + bus", "/mobility"], ["Network", "/network"], ["Insights", "/insights"],
   ["Settings and checks", "/settings"]] as const;
-const LOOKS: [Look, string][] = [["auto", "Follow this device"], ["dusk", "Evening"], ["day", "Day"]];
+const LOOKS: [Look, string][] = [["auto", "Automatic"], ["dusk", "Evening"], ["day", "Day"]];
 
 export function System() {
   const now = house.value;
@@ -215,20 +216,20 @@ export function System() {
       <h1 class="say">{says}</h1>
       <p class="sub">{now ? `Last read at ${clock(now.at)}. ${now.lights_on === 1 ? "One light is" : now.lights_on + " lights are"} on.` : "Nothing read yet."}</p>
       <section class="block">
+        <h2>Under the hood</h2>
+        <div class="rows">
+          <a class="row free" href="/house/changes"><div class="row-main"><b>Everything Hub changed</b><span>With Undo, for a day</span></div></a>
+          {links.ha && <a class="row free" href={links.ha}><div class="row-main"><b>Home Assistant</b><span>Devices, rooms and automations</span></div></a>}
+          {links.music && <a class="row free" href={links.music}><div class="row-main"><b>Music Assistant</b><span>The library, the queue and playlists</span></div></a>}
+        </div>
+      </section>
+      <section class="block">
         <h2>The look</h2>
         <div class="choices" role="radiogroup" aria-label="The look">
           {LOOKS.map(([value, name]) => (
             <button type="button" role="radio" aria-checked={look.value === value} class={"choice" + (look.value === value ? " on" : "")}
               key={value} onClick={() => (look.value = value)}>{name}</button>
           ))}
-        </div>
-      </section>
-      <section class="block">
-        <h2>Under the hood</h2>
-        <div class="rows">
-          <a class="row free" href="/house/changes"><div class="row-main"><b>Everything Hub changed</b><span>With Undo, for a day</span></div></a>
-          {links.ha && <a class="row free" href={links.ha}><div class="row-main"><b>Home Assistant</b><span>Devices, rooms and automations</span></div></a>}
-          {links.music && <a class="row free" href={links.music}><div class="row-main"><b>Music Assistant</b><span>The library, the queue and playlists</span></div></a>}
         </div>
       </section>
       <section class="block">

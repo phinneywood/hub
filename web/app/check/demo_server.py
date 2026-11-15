@@ -31,7 +31,7 @@ import uvicorn  # noqa: E402
 
 from hub.app import routes  # noqa: E402
 from hub.main import app  # noqa: E402
-from hub.tools.house import control, music  # noqa: E402
+from hub.tools.house import control, music, read  # noqa: E402
 from tests import app_world  # noqa: E402
 
 (Path(scratch) / 'household.json').write_text(json.dumps({'app': {'front': True}}))
@@ -45,6 +45,22 @@ patch.setattr(music, 'ready', lambda: True)
 patch.setattr(music, 'playlists', lambda search=None: [
     {'id': uri.rsplit('/', 1)[1], 'name': name, 'where': 'music', 'editable': True, 'uri': uri} for uri, name in world.names.items()])
 routes._picks.update(at=float('-inf'), found=[])
+
+
+# For the browser check only: put the made-up house back as it started, or make it stop answering.
+@app.post('/demo/{what}')
+def stage(what: str):
+    if what == 'reset':
+        world.states, world.down = app_world._states(), False
+        world.sent.clear()
+        control._taps.clear()
+    elif what in ('down', 'up'):
+        world.down = what == 'down'
+    else:
+        return {'ok': False}
+    read.clear_cache()
+    routes.feed.poke()
+    return {'ok': True}
 
 
 class SignedIn:

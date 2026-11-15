@@ -89,6 +89,7 @@ def home(found, floors=None):
     sounding = {s['id'] for s in music['speakers'] if s['in']} if music and music['playing'] else set()
     rooms = [_room(r, found['speakers'], sounding) for r in found['rooms']
              if r['name'] != read.OTHER_ROOM and any(d['kind'] == 'light' for d in r['devices'])]
+    rooms.sort(key=lambda r: (-len(r['lights']), r['name'].lower()))      # the rooms with most lamps lead each floor
     return {'ok': True, 'at': found['read_at'].isoformat(timespec='seconds'),
             'floors': _floors(rooms, found.get('room_floor') or {}, floors or {}),
             'rooms': {r['id']: r for r in rooms},

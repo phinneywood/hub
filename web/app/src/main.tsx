@@ -51,9 +51,25 @@ function App() {
   );
 }
 
+/** Keep the app's own files on this device (sw.js serves them), so it opens at once and can say when it
+ * can't reach home. Only the page, the two built files and the typeface; never anything about the house. */
+async function keepOnDevice() {
+  if (!("serviceWorker" in navigator) || !("caches" in window)) return;
+  await navigator.serviceWorker.register("/app/sw.js", { scope: "/app/" });
+  const built = [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')].map((el) => el.href)
+    .concat([...document.querySelectorAll<HTMLScriptElement>("script[src]")].map((el) => el.src));
+  const wanted = [new URL("/app/", location.href).href, new URL("/static/app/fonts/Jost.ttf", location.href).href, ...built];
+  const cache = await caches.open("hub-app-1");
+  for (const kept of await cache.keys()) {
+    const same = wanted.find((url) => new URL(url).pathname === new URL(kept.url).pathname);
+    if (same !== undefined && same !== kept.url) await cache.delete(kept);       // an older version of the same file
+  }
+  for (const url of wanted) if (!(await cache.match(url))) await cache.add(url);
+}
+
 const root = document.getElementById("app");
 if (root) {
   render(<App />, root);
   start();
-  if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/app/sw.js", { scope: "/app/" }).catch(() => undefined);
+  void keepOnDevice().catch(() => undefined);     // without it the app still works; it just needs Hub to open
 }
