@@ -435,6 +435,16 @@ def undo(batch: str, request: Request):
     return _change(request, lambda login: control.undo(batch, login=login, via='app', at_once=True))
 
 
+# ---- Activity (hub/app/activity.py): what happened in the house, from Home Assistant, Apple Home and Hub ----
+
+@router.get('/api/activity')
+def activity_picture(kinds: str = '', sources: str = '', before: float | None = None):
+    """What happened in the house, newest first: `kinds` and `sources` are comma lists, `before` a time for more."""
+    from . import activity
+    return activity.picture(kinds=[k for k in kinds.split(',') if k] or activity.SHOWN,
+                            sources=[s for s in sources.split(',') if s] or tuple(activity.SOURCES), before=before)
+
+
 # ---- Changes (hub/app/changes.py): what Hub changed in the house and the music library ----
 
 @router.get('/api/changes')

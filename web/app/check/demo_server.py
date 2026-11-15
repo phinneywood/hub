@@ -57,6 +57,35 @@ _ready = Path(scratch) / 'releases'
 (Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'}}))
 world = app_world.install(patch)
 
+# The Activity screen: a made-up evening in Home Assistant's logbook, and Apple Home through a stand-in HomeClaw.
+from hub.app import activity  # noqa: E402
+_now = time.time()
+world.states['person.alex'] = {'entity_id': 'person.alex', 'state': 'home', 'attributes': {'friendly_name': 'Alex', 'user_id': 'u-alex'}}
+world.logbook = [
+    {'when': _now - 7200, 'entity_id': 'light.porch_light', 'state': 'on', 'context_event_type': 'automation_triggered',
+     'context_domain': 'automation', 'context_name': 'Porch at sunset'},
+    {'when': _now - 3600, 'entity_id': 'binary_sensor.front_door', 'state': 'on'},
+    {'when': _now - 3590, 'entity_id': 'binary_sensor.front_door', 'state': 'off'},
+    {'when': _now - 1800, 'entity_id': 'event.living_button', 'state': '2026-11-15T17:58:00.000-08:00', 'attributes': {'event_type': 'multi_press_1'}},
+    {'when': _now - 1799, 'entity_id': 'scene.dinner', 'state': '2026-11-15T17:58:01.000-08:00', 'context_event_type': 'automation_triggered',
+     'context_domain': 'automation', 'context_name': 'Living room button'},
+    {'when': _now - 900, 'entity_id': 'media_player.living', 'state': 'playing', 'context_user_id': 'u-alex'},
+    {'when': _now - 86400 - 600, 'entity_id': 'light.kitchen_ceiling', 'state': 'off', 'context_user_id': 'u-alex'},
+]
+
+
+def _claw_events(since):
+    def at(ago):
+        return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(_now - ago))
+    return [{'type': 'characteristic_change', 'timestamp': at(2400), 'characteristic': 'lock_current_state', 'value': '1',
+             'service_type': 'lock', 'home': {'id': 'demo'}, 'accessory': {'id': 'a1', 'name': 'Side door', 'room': 'Entry'}},
+            {'type': 'characteristic_change', 'timestamp': at(600), 'characteristic': 'brightness', 'value': '40',
+             'service_type': 'lightbulb', 'home': {'id': 'demo'}, 'accessory': {'id': 'a2', 'name': 'Garage lights', 'room': 'Garage'}}]
+
+
+patch.setattr(activity.apple, 'setup', lambda: {'logging': True, 'home': 'demo'})
+patch.setattr(activity.apple, 'events', _claw_events)
+
 # The Engine screen: a made-up instruction, something to build and a note waiting for a tap.
 from hub.engine import notes as engine_notes, state as engine_state  # noqa: E402
 engine_state.add_instruction('Always tell me about school mail with a deadline.')

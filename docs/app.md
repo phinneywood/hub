@@ -42,6 +42,7 @@ sets this in the private settings file (`household.json`):
 | `GET /app/api/today` | Today as data: what needs a person, the rest of today, tomorrow, the week at school, the trip |
 | `GET /app/api/versions` | Each release of Hub, newest first, in plain words, and which one is running (see “Versions”) |
 | `POST /app/api/deploy` | Ask the deployer for the checked version waiting, from a signed-in device (see “Versions”) |
+| `GET /app/api/activity` | What happened in the house, newest first; `kinds`, `sources` (comma lists) and `before` (a time, for more) (see “Activity”) |
 | `GET /app/api/changes`, `POST /app/api/playlist/{do}` | Everything Hub changed, and playlist taps: `make`, `skip`, `undo` (see “Changes”) |
 | `GET /app/api/engine`, `POST /app/api/engine/{do}` | The Engine screen, and its taps: `tell`, `forget`, `request-done`, `improvement-done`, `note-save`, `note-skip`, `recipe-save`, `recipe-skip`, `recipe-remove`, `trust`, `run` (see “Engine”) |
 | `GET /app/api/mail-settings`, `POST /app/api/mail-settings/{do}` | Mail settings, and its taps: `level`, `charge`, `sender`, `apply`, `remove`, `undo`, `rule-stop`, `rule-resume`, `rules-check`, `backlog` (see “Mail settings”) |
@@ -273,9 +274,39 @@ follows what it is sent (`tests/app_world.py`). It reaches no other machine and 
 (`web/check_guard.py`). Ask works there on the stand-in model, with a made-up Kitchen and private desk, so the
 conversation can be tried and photographed without a key. See `web/app/check/README.md`.
 
+## Activity
+
+System's "Activity" opens what happened in the house (`hub/app/activity.py`, `web/app/src/activity.tsx`), newest
+first, by day, from three places:
+
+| | What it says | What it can't say |
+| --- | --- | --- |
+| Home Assistant's logbook | Every state change of its devices, button presses, scenes and automation runs, and often what caused it: a person (by their Home Assistant user), an automation or a script | A wall switch or a device changing by itself has no cause |
+| Apple Home, through HomeClaw | Each accessory's change in the selected home, with its old and new value | Who or what did it; anything while HomeClaw is closed or its event log is off |
+| Hub's own changes | What Hub changed, who asked (Ask, a tap, a routine) and Undo for a day | |
+
+**How it is read.** Every five minutes from Hub's start (`activity.start`), and when the screen opens if the last
+reading is a minute old. Home Assistant: the broker's fenced, read-only `logbook/get_events` (`broker.ASKS`, start
+and end only), at most six hours a request, a week back the first time. Apple Home: HomeClaw's command-line tool
+(`hub/tools/house/apple.py`), which Hub runs only as `events` and `config`, both reads; HomeClaw's own tool can
+change devices and scenes, so nothing else is ever passed to it. HomeClaw records only while its "Enable Event
+Logging" setting is on; when it is off, the screen says so. Rows go into Hub's database (`house_activity`) and are
+let go after 90 days; Home Assistant keeps about ten.
+
+**One line per happening.** A Home Assistant row for a device Hub changed within 20 seconds is left out: Hub's own
+row says who asked and has Undo. An Apple Home row for a device Home Assistant reported within 90 seconds, under the
+same name, is left out and the Home Assistant row says "and Apple Home".
+
+**What shows.** Lights and power, doors and locks, buttons, automations and music, until Motion or "Everything
+else" (sensors, a speaker going idle, a device dropping offline) is tapped; the choice is kept on the device. A
+source can be turned off the same way. "Hub's own changes and playlists waiting" opens Changes.
+
+Nothing here changes the house, and none of it goes to a model. Tests: `tests/test_app_activity.py`, on the
+made-up house with a stand-in HomeClaw.
+
 ## Changes
 
-System's "Everything Hub changed" opens Changes (`hub/app/changes.py`, `web/app/src/changes.tsx`): every house and
+Activity's "Hub's own changes and playlists waiting" opens Changes (`hub/app/changes.py`, `web/app/src/changes.tsx`): every house and
 playlist change Hub made, newest first, from the records the older pages read, with Undo while it can still be
 undone, and the playlists Ask proposed, waiting for "Make it" or "Not now". A house change is undone through
 `/app/api/undo`; a playlist change, made or skipped through `/app/api/playlist`. The library itself, and deleting a

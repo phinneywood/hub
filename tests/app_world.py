@@ -82,6 +82,7 @@ def _states():
 class World:
     def __init__(self):
         self.states, self.sent, self.down, self.names = _states(), [], False, {}
+        self.logbook = []        # what Home Assistant's logbook answers, for the Activity screen
 
     def _registry(self):
         rooms = {e: a for e, a, *_ in [*LIGHTS, *SWITCHES, *SPEAKERS, BUTTON]}
@@ -144,7 +145,8 @@ class World:
             self._service(domain, service, message['body'])
             return []
         answers = {**self._registry(), 'get_states': copy.deepcopy(list(self.states.values())),
-                   'automation/config': {'config': {'alias': 'Living room button', 'description': BUTTON_SAYS}}}
+                   'automation/config': {'config': {'alias': 'Living room button', 'description': BUTTON_SAYS}},
+                   'logbook/get_events': copy.deepcopy(self.logbook)}
         return [({'automation': ['automation.living_button']} if c['item_id'] == BUTTON[0] else {})
                 if c['type'] == 'search/related' else answers[c['type']] for c in message['commands']]
 

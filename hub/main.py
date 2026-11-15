@@ -56,6 +56,8 @@ def startup():
     threading.Thread(target=warm_cache, daemon=True).start()
     worker.resume_if_interrupted()
     delayed.start()
+    from .app import activity
+    activity.start()    # reads Home Assistant's logbook and Apple Home's events every five minutes
 
 
 @app.get("/readyz")

@@ -334,13 +334,28 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Versions: " + (await small()).join(", "));
     await tap(".uplink");
     expect(await saysSoon("The house is answering."), "Back from Versions: " + await says());
-    await tap('.row:has-text("Everything Hub changed")');
+    await tap('.row:has-text("Activity")');
+    expect(await saysSoon("What happened in the house"), "Activity: " + await says());
+    expect(await until(() => [...document.querySelectorAll(".ctl-name b")].some((b) => b.textContent.startsWith("Front door opened"))),
+      "Activity didn't list Home Assistant's rows");
+    expect(await until(() => [...document.querySelectorAll(".ctl-name b")].some((b) => b.textContent.startsWith("Side door (Entry) locked"))),
+      "Activity didn't list Apple Home's rows");
+    expect(await until(() => document.querySelectorAll(".ctl .forget").length > 0), "Activity showed no Undo for Hub's own changes");
+    await page.waitForTimeout(300); await shot("7c-activity");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on Activity: " + (await small()).join(", "));
+    await tap('.scene:text-is("Apple Home")');
+    expect(await until(() => ![...document.querySelectorAll(".ctl-name span")].some((s) => s.textContent.includes("Apple Home"))),
+      "turning off Apple Home still showed its rows");
+    await tap('.scene:text-is("Apple Home")');
+    await tap('.quiet-line a:has-text("Hub’s own changes")');
     expect(await saysSoon("Everything Hub changed"), "Changes: " + await says());
     expect(await until(() => document.querySelectorAll(".ctl").length > 0), "Changes listed nothing after the taps above");
     await page.waitForTimeout(300); await shot("7d-changes");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Changes: " + (await small()).join(", "));
     await tap(".uplink");
-    expect(await saysSoon("The house is answering."), "Back from Changes: " + await says());
+    expect(await saysSoon("What happened in the house"), "Back from Changes: " + await says());
+    await tap(".uplink");
+    expect(await saysSoon("The house is answering."), "Back from Activity: " + await says());
     await tap('.row:has-text("Engine")');
     expect(await saysSoon("Engine"), "Engine: " + await says());
     expect(await until(() => document.body.textContent.includes("Always tell me about school mail")), "Engine didn't list what Hub follows");

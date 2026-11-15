@@ -13,8 +13,9 @@ from ... import config
 READS = ('config/area_registry/list', 'config/device_registry/list', 'config/entity_registry/list',
          'config/label_registry/list', 'config/floor_registry/list', 'get_states')
 # Reads that take arguments, with the only keys each may carry: what an automation does, to say what a
-# button's presses do. Still read-only.
-ASKS = {'search/related': {'item_type', 'item_id'}, 'automation/config': {'entity_id'}}
+# button's presses do, and Home Assistant's logbook for a stretch of time, for the Activity screen. Still read-only.
+ASKS = {'search/related': {'item_type', 'item_id'}, 'automation/config': {'entity_id'},
+        'logbook/get_events': {'start_time', 'end_time'}}
 # (domain, service) -> the data keys it may carry besides entity_id. Lights, power and speakers only;
 # locks, the garage, the alarm, the thermostat and automations are not here. A light takes at most one colour.
 COLOURS = {'rgb_color', 'hs_color', 'xy_color', 'color_temp_kelvin'}

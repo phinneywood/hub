@@ -27,7 +27,7 @@ export function Changes() {
   return (
     <div class="wrap">
       <Top />
-      <button type="button" class="uplink" onClick={() => go("system")}>System</button>
+      <button type="button" class="uplink" onClick={() => go("activity")}>Activity</button>
       <h1 class="say">Everything Hub changed</h1>
       <p class="sub">{failed ? "Can’t reach Hub to read it." : !found ? "Reading…"
         : "Lights, plugs, fans, scenes, speakers and playlists, newest first. Each can be undone for a day."}</p>

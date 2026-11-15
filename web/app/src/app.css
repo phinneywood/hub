@@ -194,6 +194,10 @@ h2 { font-size: var(--t-l); line-height: 1.2; font-weight: 500; letter-spacing: 
 .ring.on { background: var(--ink-2); box-shadow: none; color: var(--sheet); }
 button.row { text-align: left; }
 .quiet { margin-top: 22px; color: var(--ink-3); font-size: var(--t-s); }
+.act-day { margin: 26px 0 2px; font-size: var(--t-s); font-weight: 500; color: var(--ink-3); }
+.act-more { margin-top: 18px; }
+.filters + .filters { margin-top: 0; }
+.filters .scene { min-width: 44px; }
 .field { width: 100%; height: 54px; border-radius: 14px; border: 0; background: var(--ground); padding: 0 16px; font-size: 18px; outline-offset: 0; }
 .field::placeholder { color: var(--ink-3); }
 .field:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--line-2); border-radius: 14px; }

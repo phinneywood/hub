@@ -66,6 +66,15 @@ export interface MailSettings {
 // The Changes screen, as Hub sends it (hub/app/changes.py).
 export interface Change { batch: string; what: string; at: number; via: string; unsure: string[]; not_done: string[]; undo: boolean; undone: boolean; where: "house" | "music" }
 export interface Changes { changes: Change[]; waiting: { id: string; name: string; songs: string[] }[] }
+// The Activity screen, as Hub sends it (hub/app/activity.py).
+export type ActivityKind = "lights" | "security" | "buttons" | "routines" | "music" | "motion" | "other";
+export type ActivitySource = "ha" | "apple" | "hub";
+export interface Happening {
+  at: number; source: ActivitySource; name: string; room: string; kind: ActivityKind; what: string; cause: string; also: string;
+  batch: string | null; undo: boolean; undone: boolean;
+}
+export interface SourceRead { read: number | null; trouble: string; off: boolean }
+export interface Activity { events: Happening[]; more: boolean; kinds: ActivityKind[]; sources: ActivitySource[]; status: { ha: SourceRead; apple: SourceRead } }
 export interface Pick { name: string; kind: string; uri: string }
 
 // Today, as Hub sends it (hub/app/today.py).

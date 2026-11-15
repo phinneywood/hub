@@ -3,7 +3,7 @@
 Call `apply(patch)` before the app is imported or anything is served. After it, Hub's model-key lookup
 (1Password, then the Keychain) finds nothing without looking, the mail bridge reports itself absent, and
 any connection to another machine or to a service's socket on this one (the Home Assistant broker, Kitchen)
-is refused, so a demo never shows or changes the real house. A guard against accidents, not a sandbox.
+is refused, and HomeClaw (Apple Home) is never run, so a demo never shows or changes the real house. A guard against accidents, not a sandbox.
 """
 import socket
 
@@ -29,3 +29,5 @@ def apply(patch):
         return connect(sock, address)
 
     patch.setattr(socket.socket, 'connect', local_only)
+    from hub.tools.house import apple
+    patch.setattr(apple, 'CLI', apple.Path('/nonexistent/homeclaw-cli'))     # never the real Apple Home
