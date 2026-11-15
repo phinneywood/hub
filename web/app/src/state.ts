@@ -200,9 +200,9 @@ export function say(text: string, batch: string | null = null) {
 }
 
 function answered(answer: Said, keys: string[], words: string): boolean {
-  if (answer.error) {
+  if (answer.error || answer.ok === false) {      // refused, or sent and not confirmed: show the house as it is
     drop(...keys);
-    say(answer.error);
+    say(answer.error ?? answer.said ?? "That didn’t take.");
     return false;
   }
   if (words) say(words, answer.batch ?? null);
@@ -248,7 +248,7 @@ export async function runScene(scene: Scene) {
   const keys: string[] = [];
   if (scene.id === ALL_OFF) {
     for (const room of Object.values(seen.value?.rooms ?? {})) {
-      if (room.on) {
+      if (room.on && !room.outside) {
         hold("room:" + room.id, { on: false });
         keys.push("room:" + room.id);
       }

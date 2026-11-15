@@ -6,9 +6,13 @@ Assistant for it. The app writes its own sentences from this. Names here are dat
 import re
 
 from ..tools.house import nowplaying, read
+from . import levels
 from . import scenes as mine
 
-ALL_OFF = 'all-off'      # the one scene Hub brings itself: every light that is on, off
+ALL_OFF = 'all-off'      # the one scene Hub brings itself: every light indoors that is on, off
+# A floor with one of these names in Home Assistant is outdoors. Its lights are not the house's: "All off" and
+# a scene's "every other light off" leave them to whatever switches them at dusk and dawn.
+OUTDOORS = ('outside', 'outdoors', 'outdoor', 'exterior', 'garden', 'yard')
 OTHER_FLOOR = 'Other rooms'
 
 
@@ -21,6 +25,25 @@ def _light(d):
             'dims': bool(d.get('dims')), 'offline': d['offline']}
 
 
+def outdoors(found, floors):
+    """The names of the rooms that are outdoors: those on a floor Home Assistant calls Outside (or the like), and
+    any the owner lists in household.json, "app": {"outside": ["Porch"]}."""
+    from .. import household
+    names = {room for room, floor in (found.get('room_floor') or {}).items()
+             if (floors or {}).get(floor, {}).get('name', '').strip().lower() in OUTDOORS}
+    try:
+        listed = household.section('app').get('outside')
+    except ValueError:
+        listed = None
+    return names | {str(n) for n in listed if isinstance(n, str)} if isinstance(listed, list) else names
+
+
+def indoor_lights_on(found, floors):
+    """Entity ids of the lamps that are lit indoors: what "All off" switches off."""
+    out = outdoors(found, floors)
+    return [d['id'] for r in found['rooms'] if r['name'] not in out for d in r['devices'] if d['kind'] == 'light' and d['on']]
+
+
 def _home_of(speaker, names):
     """The room a speaker is in: the one Home Assistant gives it, else the room it is named after
     ("Kitchen", "Kitchen speakers"), the longest such name winning. None for a speaker that belongs to no room."""
@@ -30,12 +53,12 @@ def _home_of(speaker, names):
     return max((n for n in names if said == n.lower() or said.startswith(n.lower() + ' ')), key=len, default=None)
 
 
-def _room(r, speakers, homes, sounding):
+def _room(r, speakers, homes, sounding, outside):
     lights = [d for d in r['devices'] if d['kind'] == 'light']
     lit = [d for d in lights if d['on']]
     levels = [d['level'] for d in lit if d['level'] is not None]
     speaker = next((s['id'] for s in speakers if homes.get(s['id']) == r['name'] and not s['offline']), None)
-    return {'id': slug(r['name']), 'name': r['name'], 'on': bool(lit), 'lit': len(lit),
+    return {'id': slug(r['name']), 'name': r['name'], 'on': bool(lit), 'lit': len(lit), 'outside': r['name'] in outside,
             'level': round(sum(levels) / len(levels)) if levels else (100 if lit else 0),
             'dims': any(d.get('dims') for d in lights),
             'lights': [_light(d) for d in lights],
@@ -95,11 +118,12 @@ def _facts(found):
     return facts[:6]
 
 
-def _scenes(found):
+def _scenes(found, floors):
     """The scenes Hub keeps (each knows whether the house is in it now), then Home Assistant's, then All off."""
-    kept = [{'id': s['id'], 'name': s['name'], 'on': mine.on(s, found), 'mine': True} for s in mine.kept()]
+    out = outdoors(found, floors)
+    kept = [{'id': s['id'], 'name': s['name'], 'on': mine.on(s, found, out), 'mine': True} for s in mine.kept()]
     theirs = [{'id': s['id'], 'name': s['name'], 'on': False, 'mine': False} for s in found['scenes']]
-    return kept + theirs + [{'id': ALL_OFF, 'name': 'All off', 'on': found['lights_on'] == 0, 'mine': False}]
+    return kept + theirs + [{'id': ALL_OFF, 'name': 'All off', 'on': not indoor_lights_on(found, floors), 'mine': False}]
 
 
 def home(found, floors=None):
@@ -109,13 +133,14 @@ def home(found, floors=None):
     homes = {s['id']: _home_of(s, names) for s in found['speakers']}
     music = _music(found, homes)
     sounding = {s['id'] for s in music['speakers'] if s['in']} if music and music['playing'] else set()
-    rooms = [_room(r, found['speakers'], homes, sounding) for r in found['rooms']
+    outside = outdoors(found, floors)
+    rooms = [_room(r, found['speakers'], homes, sounding, outside) for r in found['rooms']
              if r['name'] != read.OTHER_ROOM and any(d['kind'] == 'light' for d in r['devices'])]
     rooms.sort(key=lambda r: (-len(r['lights']), r['name'].lower()))      # the rooms with most lamps lead each floor
     return {'ok': True, 'at': found['read_at'].isoformat(timespec='seconds'),
             'floors': _floors(rooms, found.get('room_floor') or {}, floors or {}),
             'rooms': {r['id']: r for r in rooms},
-            'scenes': _scenes(found),
+            'scenes': _scenes(found, floors),
             'music': music, 'facts': _facts(found), 'lights_on': found['lights_on']}
 
 
@@ -127,6 +152,8 @@ def down(error):
 def now(fresh=False):
     """The picture right now, or down(). Never raises for a house that can't be read."""
     try:
-        return home(read.snapshot(fresh=fresh), read.floors())
+        found = read.snapshot(fresh=fresh)
+        levels.note(found)
+        return home(found, read.floors())
     except read.broker.HomeDown as error:
         return down(error)

@@ -54,13 +54,19 @@ def _is(d, level):
     return d['on'] and (d['level'] is None or not d.get('dims') or abs(d['level'] - level) <= NEAR)
 
 
-def on(scene, found):
+def _rest(scene, found, outside):
+    """The lamps a scene's "every other light off" means: lit, indoors, and not part of the scene."""
+    return [d['id'] for r in found['rooms'] if r['name'] not in outside for d in r['devices']
+            if d['kind'] == 'light' and d['on'] and not d['offline'] and d['id'] not in scene['lights']]
+
+
+def on(scene, found, outside=()):
     """Whether the house is in this scene right now: every kept light as kept, and the rest off when it says so."""
     lights = _lights(found)
     here = [(lights[e], level) for e, level in scene['lights'].items() if e in lights and not lights[e]['offline']]
     if not here or not all(_is(d, level) for d, level in here):
         return False
-    return not scene['rest_off'] or not any(d['on'] for e, d in lights.items() if e not in scene['lights'])
+    return not scene['rest_off'] or not _rest(scene, found, outside)
 
 
 def keep(name, rooms, rest_off, *, login):
@@ -98,7 +104,9 @@ def run(scene_id, *, login):
     scene = next((s for s in kept() if s['id'] == f'{PREFIX}{_number(scene_id)}'), None)
     if scene is None:
         raise control.Refused('That scene isn’t kept any more.')
-    lights = _lights(read.snapshot(fresh=True))
+    from . import model
+    found = read.snapshot(fresh=True)
+    lights = _lights(found)
     off, on_plain, levels = [], [], {}
     for entity, level in scene['lights'].items():
         d = lights.get(entity)
@@ -111,7 +119,7 @@ def run(scene_id, *, login):
         else:
             on_plain.append(entity)
     if scene['rest_off']:
-        off += [e for e, d in lights.items() if e not in scene['lights'] and d['on'] and not d['offline']]
+        off += _rest(scene, found, model.outdoors(found, read.floors()))
     changes = [(off, 'off', None), (on_plain, 'on', None), *((ids, 'brightness', level) for level, ids in sorted(levels.items()))]
     changes = [c for c in changes if c[0]]
     if not changes:

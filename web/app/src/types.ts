@@ -3,7 +3,7 @@
 export interface Light { id: string; name: string; on: boolean; level: number; dims: boolean; offline: boolean }
 export interface Other { id: string; name: string; kind: string; on: boolean; offline: boolean }
 export interface Room {
-  id: string; name: string; on: boolean; lit: number; level: number; dims: boolean;
+  id: string; name: string; on: boolean; lit: number; level: number; dims: boolean; outside: boolean;
   lights: Light[]; others: Other[]; speaker: string | null; sounding: boolean;
 }
 export interface Speaker { id: string; name: string; in: boolean; leads: boolean; volume: number | null; offline: boolean }

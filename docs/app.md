@@ -46,13 +46,20 @@ Every tap goes through `hub/tools/house/control.py`, like a request typed to Ask
 change with what was there before, and Undo for a day. A change needs a signed-in device: a program on this Mac
 has no Tailscale login and gets a 403.
 
-Two things differ from Ask's path:
+Four things differ from Ask's path:
 
 - **A room changes in one request.** Lights, plugs and fans that get the same change go to Home Assistant
   together (`control.change(..., at_once=True)`; the broker client accepts up to 40 of one kind at once, and still
   one at a time for everything else). Ask's path is unchanged.
 - **Taps have their own limit.** 120 a minute, one per tap, kept apart from Ask's 30 changes a minute, so an
   evening of switching rooms by hand never locks Ask out.
+- **A room comes back as it was.** Hub notes each lit lamp's brightness whenever it reads the house
+  (`hub/app/levels.py`, kept in its database). A room's tap asks for that again; a lamp Hub has never seen lit is
+  simply switched on, at whatever Home Assistant chooses.
+- **Outdoors is not the house.** "All off", and a kept scene's "turn every other light off", leave outdoor lights
+  alone: they belong to whatever switches them at dusk and dawn. A room is outdoors when its floor in Home
+  Assistant is called Outside (or Outdoors, Exterior, Garden, Yard), or when the owner lists it in the private
+  settings file: `"app": {"outside": ["Porch"]}`. The sentence at the top counts indoor rooms only.
 
 ## Scenes
 
@@ -63,7 +70,7 @@ The row of words above the plan. Three kinds, run the same way:
   one asks only the lights that differ, as one batch with one Undo, and the row shows which scene the house is in
   right now. Kept in Hub's own database (`app_scenes`), at most 12.
 - **Home Assistant's scenes**, when it has any. Hub can run them but not undo them or tell whether one is on.
-- **All off**: every light that is on, with Undo.
+- **All off**: every light indoors that is on, with Undo.
 
 ## The live feed
 

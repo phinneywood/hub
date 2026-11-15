@@ -12,7 +12,7 @@ from fastapi import APIRouter, Body, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from ..tools.house import control, nowplaying, read
-from . import model
+from . import levels, model
 from . import scenes as kept_scenes
 from .feed import feed
 
@@ -164,7 +164,15 @@ def room(room_id: str, request: Request, body: dict = Body(...)):
                 if not targets:         # nothing here dims: a level means on
                     targets, action, value = [d['id'] for d in lights if not d['on']], 'on', None
         elif body.get('on') is True:
-            targets, action, value = [d['id'] for d in lights if not d['on']], 'on', None
+            # Each dark lamp comes back as bright as it last was; one Hub has never seen lit is simply switched on.
+            again = {}
+            for d in lights:
+                if not d['on']:
+                    again.setdefault(levels.last(d['id']) if d.get('dims') else None, []).append(d['id'])
+            if not again:
+                raise control.Refused('Those lights are already like that.')
+            return control.several([(ids, 'brightness' if level else 'on', level) for level, ids in again.items()],
+                                   login=login, via='app')
         elif body.get('on') is False:
             targets, action, value = [d['id'] for d in lights if d['on']], 'off', None
         else:
@@ -190,15 +198,14 @@ def device(entity: str, request: Request, body: dict = Body(...)):
 
 @router.post('/api/scene/{scene}')
 def scene(scene: str, request: Request):
-    """A scene Hub keeps, a Home Assistant scene, or "All off": every light that is on."""
+    """A scene Hub keeps, a Home Assistant scene, or "All off": every light indoors that is on."""
     def work(login):
         if scene.startswith(kept_scenes.PREFIX):
             return kept_scenes.run(scene, login=login)
         if scene == model.ALL_OFF:
-            found = read.snapshot(fresh=True)
-            targets = [d['id'] for r in found['rooms'] for d in r['devices'] if d['kind'] == 'light' and d['on']]
+            targets = model.indoor_lights_on(read.snapshot(fresh=True), read.floors())
             if not targets:
-                raise control.Refused('Every light is already off.')
+                raise control.Refused('Every light indoors is already off.')
             return control.change(targets, 'off', login=login, via='app', at_once=True)
         return control.change([scene[:140]], 'activate', login=login, via='app')
     return _change(request, work)

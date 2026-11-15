@@ -87,7 +87,7 @@ export function PlayingSheet({ music }: { music: Music }) {
 export function KeepSheet({ now }: { now: House }) {
   const rooms = now.floors.flatMap((f) => f.rooms).map((id) => now.rooms[id]).filter((r): r is Room => r !== undefined);
   const [name, setName] = useState("");
-  const [picked, setPicked] = useState(() => new Set(rooms.filter((r) => r.on).map((r) => r.id)));
+  const [picked, setPicked] = useState(() => new Set(rooms.filter((r) => r.on && !r.outside).map((r) => r.id)));
   const [restOff, setRestOff] = useState(false);
   const [busy, setBusy] = useState(false);
   const flip = (id: string) => {
@@ -119,7 +119,7 @@ export function KeepSheet({ now }: { now: House }) {
           ))}
         </div>
         <div class="ctl two">
-          <div class="ctl-name"><b>Turn every other light off</b><span>When the scene runs</span></div>
+          <div class="ctl-name"><b>Turn every other light off</b><span>Indoors, when the scene runs</span></div>
           <Switch on={restOff} label="Turn every other light off" onChange={setRestOff} />
         </div>
         <div class="btns"><button type="submit" class="btn go" disabled={busy || !name.trim() || picked.size === 0}>Keep it</button></div>

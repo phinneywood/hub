@@ -40,7 +40,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await stage("reset");
     await page.reload(); await page.waitForSelector(".plan"); await page.waitForTimeout(2000);      // the opening moment is over
     await shot("1-home");
-    expect(await says() === "Five rooms are lit.", "the house sentence: " + await says());
+    expect(await says() === "Four rooms are lit.", "the house sentence: " + await says());
     expect(await sub() === "“Paper Lanterns” is playing in the kitchen and the living room.", "the music sentence: " + await sub());
     expect(await page.locator(".main .room").count() === 12, "twelve rooms on the plan");
     expect((await page.locator(".floor").allInnerTexts()).join("|") === "Downstairs|Upstairs|Outside", "three floors, ground floor first");
@@ -57,23 +57,23 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.route("**/app/api/room/**", async (route) => { if (slow) await new Promise((r) => setTimeout(r, 900)); await route.continue(); });
     const before = Date.now();
     await tap(room("office"));
-    expect(await saysSoon("Six rooms are lit.", 400), "a tap did not show within 0.4 s while Hub was still answering");
+    expect(await saysSoon("Five rooms are lit.", 400), "a tap did not show within 0.4 s while Hub was still answering");
     timings[name] = Date.now() - before;
     slow = false;
     await page.waitForSelector(".toast"); await shot("2-tapped");
     expect((await page.textContent(".toast span")).trim() === "Office on", "the toast: " + await page.textContent(".toast"));
     await page.waitForTimeout(1500);
-    expect(await says() === "Six rooms are lit.", "the tap did not hold once the house answered");
+    expect(await says() === "Five rooms are lit.", "the tap did not hold once the house answered");
     await tap(".toast button");
-    expect(await saysSoon("Five rooms are lit."), "Undo did not put the room back");
+    expect(await saysSoon("Four rooms are lit."), "Undo did not put the room back");
 
     // ---- a tap that didn't take is put right, and says why ----
     await page.unroute("**/app/api/room/**");
     await page.route("**/app/api/room/**", (route) => route.fulfill({ status: 409, contentType: "application/json", body: '{"error":"Home Assistant couldn’t be reached just now."}' }));
     quiet = true;
     await tap(room("office"));
-    expect(await saysSoon("Six rooms are lit.", 400), "the tap did not show");
-    expect(await saysSoon("Five rooms are lit.", 3000), "a refused tap was left showing as done");
+    expect(await saysSoon("Five rooms are lit.", 400), "the tap did not show");
+    expect(await saysSoon("Four rooms are lit.", 3000), "a refused tap was left showing as done");
     expect((await page.textContent(".toast span")).includes("couldn’t be reached"), "a refused tap did not say why");
     await page.unroute("**/app/api/room/**"); quiet = false;
     await page.waitForTimeout(400);
@@ -82,10 +82,10 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     const other = await ctx.newPage();
     await other.goto(base + "/app/"); await other.waitForSelector(".plan");
     await tap(room("entry"));
-    expect(await other.waitForFunction(() => document.querySelector(".say")?.textContent.trim() === "Six rooms are lit.", null, { timeout: 6000 }).then(() => true, () => false),
+    expect(await other.waitForFunction(() => document.querySelector(".say")?.textContent.trim() === "Five rooms are lit.", null, { timeout: 6000 }).then(() => true, () => false),
       "a second open app did not hear about the change within 6 s");
     await other.close();
-    await tap(room("entry")); expect(await saysSoon("Five rooms are lit."), "the entry did not switch off again");
+    await tap(room("entry")); expect(await saysSoon("Four rooms are lit."), "the entry did not switch off again");
     await page.waitForTimeout(600);
 
     // ---- hold a room: everything in it ----
@@ -101,7 +101,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     }
     await page.waitForSelector(".sheet.in"); await page.waitForTimeout(450); await shot("3-room");
     expect((await page.textContent(".sheet h1")).trim() === "Kitchen", "holding a room did not open it");
-    expect(await says() === "Five rooms are lit.", "holding a room also switched it");
+    expect(await says() === "Four rooms are lit.", "holding a room also switched it");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px in a room: " + (await small()).join(", "));
     await page.locator('.sheet .dimmer input').fill("30");
     await page.locator('.sheet .dimmer input').dispatchEvent("change");
@@ -113,14 +113,14 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
 
     // ---- a scene, and all off ----
     await tap('.scene:text-is("Movie night")');
-    expect(await saysSoon("Three rooms are lit."), "the scene did not run: " + await says());
+    expect(await saysSoon("Two rooms are lit."), "the scene did not run: " + await says());
     await page.waitForTimeout(500);
     await tap('.scene:text-is("All off")');
     expect(await saysSoon("The house is dark.", 400), "All off did not show at once");
     await page.waitForTimeout(1200); await shot("4-dark");
     expect(await says() === "The house is dark.", "All off did not hold");
     await tap(".toast button");
-    expect(await saysSoon("Three rooms are lit."), "Undo did not bring the lights back");
+    expect(await saysSoon("Two rooms are lit."), "Undo did not bring the lights back");
 
     // ---- keep the house as it stands as a scene ----
     await tap(".scene.add"); await page.waitForSelector(".sheet.in");
@@ -135,7 +135,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => [...document.querySelectorAll(".scene")].some((el) => el.textContent === "All off" && el.classList.contains("on"))), "All off did not show as on in a dark house");
     expect(!(await sceneOn("Reading")), "the kept scene still showed as on in a dark house");
     await tap('.scene:text-is("Reading")');
-    expect(await saysSoon("Three rooms are lit."), "the kept scene did not bring the rooms back: " + await says());
+    expect(await saysSoon("Two rooms are lit."), "the kept scene did not bring the rooms back: " + await says());
     expect(await until(() => document.querySelector(".scene")?.classList.contains("on")), "the kept scene did not show as on after it ran");
     await tap(".scene.add"); await page.waitForSelector(".sheet.in");
     await page.locator(".sheet .forget").click();

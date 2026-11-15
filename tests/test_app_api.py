@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from hub import config
 from hub.app import feed as feeds
-from hub.app import model
+from hub.app import levels, model
 from hub.main import app
 from hub.tools.house import broker, control, read
 from tests import app_world
@@ -24,6 +24,7 @@ SIGNED_IN = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.
 def house(monkeypatch):
     control._taps.clear()
     control._recent.clear()
+    levels.forget()
     return app_world.install(monkeypatch)
 
 
@@ -159,11 +160,38 @@ def test_one_lamp_and_one_plug(house):
     assert tap('device/light.kitchen_ceiling', {'level': 'bright'}).status_code == 400
 
 
-def test_all_off_is_every_lit_lamp_in_as_few_requests_as_it_takes(house):
+def test_all_off_is_every_lamp_lit_indoors_in_one_request(house):
+    assert [s for s in picture()['scenes'] if s['id'] == 'all-off'][0]['on'] is False
     assert tap('scene/all-off').json()['ok']
-    assert len(house.sent) == 1 and house.sent[0][0] == 'light/turn_off' and len(house.sent[0][1]['entity_id']) == 9
-    assert picture()['lights_on'] == 0
-    assert tap('scene/all-off').json() == {'error': 'Every light is already off.'}
+    assert len(house.sent) == 1 and house.sent[0][0] == 'light/turn_off' and len(house.sent[0][1]['entity_id']) == 8
+    found = picture()
+    # The porch is on a floor Home Assistant calls Outside: its light is left to whatever switches it at dusk.
+    assert [r for r in found['rooms'] if found['rooms'][r]['on']] == ['porch'] and found['rooms']['porch']['outside'] is True
+    assert [s for s in found['scenes'] if s['id'] == 'all-off'][0]['on'] is True
+    assert tap('scene/all-off').json() == {'error': 'Every light indoors is already off.'}
+
+
+def test_the_owner_can_name_rooms_that_are_outdoors(house, monkeypatch):
+    monkeypatch.setattr(app_world, 'FLOORS', [])
+    assert not any(r['outside'] for r in picture()['rooms'].values())
+    (config.DATA_DIR / 'household.json').write_text(json.dumps({'app': {'outside': ['Porch', 'Yard']}}))
+    assert sorted(r for r, room in picture()['rooms'].items() if room['outside']) == ['porch', 'yard']
+    assert tap('scene/all-off').json()['ok'] and len(house.sent[0][1]['entity_id']) == 8
+
+
+def test_a_room_switched_back_on_comes_back_as_bright_as_it_was(house):
+    picture()                                       # Hub has seen the kitchen lit: 80, 70 and 90
+    assert tap('room/kitchen', {'on': False}).json()['ok']
+    house.sent.clear()
+    answer = tap('room/kitchen', {'on': True}).json()
+    assert answer['ok'] and answer['batch']
+    assert sorted(house.sent, key=str) == sorted([
+        ('light/turn_on', {'entity_id': 'light.kitchen_ceiling', 'brightness_pct': 80}),
+        ('light/turn_on', {'entity_id': 'light.kitchen_pendants', 'brightness_pct': 70}),
+        ('light/turn_on', {'entity_id': 'light.kitchen_cabinets', 'brightness_pct': 90})], key=str)
+    assert [light['level'] for light in picture()['rooms']['kitchen']['lights']] == [80, 70, 90]
+    levels.forget()                                 # and it is still known after Hub restarts
+    assert levels.last('light.kitchen_pendants') == 70 and levels.last('light.office_desk') is None
 
 
 def test_a_home_assistant_scene_runs(house):
@@ -239,9 +267,10 @@ def test_a_scene_can_turn_everything_else_off(house):
     assert picture()['scenes'][0]['on'] is False                    # other rooms are still lit
     house.sent.clear()
     assert tap('scene/hub:1').json()['ok']
-    assert len(house.sent) == 1 and house.sent[0][0] == 'light/turn_off' and len(house.sent[0][1]['entity_id']) == 8
+    assert len(house.sent) == 1 and house.sent[0][0] == 'light/turn_off' and len(house.sent[0][1]['entity_id']) == 7
     found = picture()
-    assert [r for r in found['rooms'] if found['rooms'][r]['on']] == ['robin-s-room'] and found['scenes'][0]['on'] is True
+    assert sorted(r for r in found['rooms'] if found['rooms'][r]['on']) == ['porch', 'robin-s-room']     # outdoors is left alone
+    assert found['scenes'][0]['on'] is True
 
 
 def test_scenes_are_replaced_by_name_forgotten_and_few(house, monkeypatch):

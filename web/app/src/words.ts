@@ -22,8 +22,9 @@ export function spoken(name: string): string {
   return plain.split(/\s+/).every((word) => EVERYDAY.has(word)) ? "the " + (FULL[plain] ?? plain) : name;
 }
 
+/** How lit the house is. Lights outdoors are not the house: a lit porch on a dark house is still a dark house. */
 export function houseSays(house: House): string {
-  const lit = Object.values(house.rooms).filter((r) => r.on).length;
+  const lit = Object.values(house.rooms).filter((r) => r.on && !r.outside).length;
   if (lit === 0) return "The house is dark.";
   if (lit === 1) return "One room is lit.";
   return `${NUMBERS[lit] ?? lit} rooms are lit.`;
