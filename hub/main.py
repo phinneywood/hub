@@ -172,8 +172,9 @@ def luna_test(request: Request):
 
 @app.get("/manifest.webmanifest")
 def manifest():
-    return JSONResponse({"name": "Hub", "short_name": "Hub", "start_url": "/", "display": "standalone",
-                         "background_color": "#3050c4", "theme_color": "#3050c4",
+    colour, start = ("#141C33", "/app/") if _app_in_front() else ("#3050c4", "/")     # the app's evening ground
+    return JSONResponse({"name": "Hub", "short_name": "Hub", "start_url": start, "display": "standalone",
+                         "background_color": colour, "theme_color": colour,
                          "icons": [{"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
                                    {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
                                    {"src": "/static/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
@@ -199,13 +200,18 @@ for _address, _name in (("/favicon.ico", "favicon.ico"), ("/apple-touch-icon.png
 def landing(request: Request):
     """Hub opens on Ask, or on the app once the owner sets "app": {"front": true} in household.json.
     The chat also answers at /ask, the app at /app, the day's cards at /today."""
+    if _app_in_front():
+        return RedirectResponse("/app/", status_code=302)
+    return render(request, "ask/chat.html", active="ask")
+
+
+def _app_in_front():
+    """Whether the owner made the app Hub's front door: "app": {"front": true} in household.json."""
     from . import household
     try:
-        if household.section("app").get("front") is True:
-            return RedirectResponse("/app/", status_code=302)
+        return household.section("app").get("front") is True
     except ValueError:
-        pass
-    return render(request, "ask/chat.html", active="ask")
+        return False
 
 
 @app.get("/today", response_class=HTMLResponse)

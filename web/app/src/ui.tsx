@@ -13,6 +13,8 @@ const PATHS = {
   close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
   wave: <path d="M4.5 10.5v3M8.25 7.5v9M12 4.5v15M15.75 8v8M19.5 10.5v3" />,
   bolt: <path d="M13 3 5.5 13.5H11L10 21l8-10.5h-5.5z" />,
+  plus: <path d="M12 5.5v13M5.5 12h13" />,
+  check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
 };
 const SOLID = new Set(["more", "play", "pause", "next", "previous"]);
 

@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 
 from ..tools.house import control, nowplaying, read
 from . import model
+from . import scenes as kept_scenes
 from .feed import feed
 
 router = APIRouter()
@@ -189,8 +190,10 @@ def device(entity: str, request: Request, body: dict = Body(...)):
 
 @router.post('/api/scene/{scene}')
 def scene(scene: str, request: Request):
-    """A Home Assistant scene, or Hub's own "All off": every light that is on."""
+    """A scene Hub keeps, a Home Assistant scene, or "All off": every light that is on."""
     def work(login):
+        if scene.startswith(kept_scenes.PREFIX):
+            return kept_scenes.run(scene, login=login)
         if scene == model.ALL_OFF:
             found = read.snapshot(fresh=True)
             targets = [d['id'] for r in found['rooms'] for d in r['devices'] if d['kind'] == 'light' and d['on']]
@@ -199,6 +202,34 @@ def scene(scene: str, request: Request):
             return control.change(targets, 'off', login=login, via='app', at_once=True)
         return control.change([scene[:140]], 'activate', login=login, via='app')
     return _change(request, work)
+
+
+@router.post('/api/scenes')
+def keep_scene(request: Request, body: dict = Body(...)):
+    """Keep the lights of some rooms as they are now, under a name: {"name", "rooms": [room ids], "rest_off": bool}."""
+    if _login(request) is None:
+        return _signed_out()
+    try:
+        found = read.snapshot(fresh=True)
+        wanted = {str(r) for r in body.get('rooms') or ()}
+        names = [r['name'] for r in found['rooms'] if model.slug(r['name']) in wanted]
+        name = kept_scenes.keep(body.get('name'), names, bool(body.get('rest_off')), login=_login(request))
+    except (control.Refused, read.broker.HomeDown) as error:
+        return _refuse(error)
+    feed.poke()
+    return {'ok': True, 'said': f'{name} is kept'}
+
+
+@router.post('/api/scenes/{scene}/forget')
+def forget_scene(scene: str, request: Request):
+    if _login(request) is None:
+        return _signed_out()
+    try:
+        kept_scenes.forget(scene[:40])
+    except control.Refused as error:
+        return _refuse(error)
+    feed.poke()
+    return {'ok': True, 'said': 'Forgotten'}
 
 
 @router.post('/api/music/{speaker}')

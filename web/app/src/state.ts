@@ -13,7 +13,7 @@ const ALL_OFF = "all-off";
 const SILENCE = 12000;            // Hub sends a beat every 5 s; this long without one and the line is taken for dead
 
 export type Look = "auto" | "dusk" | "day";
-export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "ask" } | null;
+export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "ask" } | { kind: "keep" } | null;
 export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number }
 
@@ -45,6 +45,7 @@ export const view = signal<"home" | "system">(location.hash === "#system" ? "sys
 export const toast = signal<Toast | null>(null);
 export const look = signal<Look>(keptLook());
 export const picks = signal<Pick[] | null>(null);
+export const running = signal("");        // the scene being run, until the house answers
 
 // ---- the look: evening or day, following the phone unless told otherwise ----
 
@@ -58,6 +59,14 @@ effect(() => {
   } catch {
     /* a private window keeps nothing; the look just isn't remembered */
   }
+});
+
+// What a toast says is about the last thing done; a sheet that opens starts a new thing.
+let sheetOpen = false;
+effect(() => {
+  const open = sheet.value !== null;
+  if (open && !sheetOpen) toast.value = null;
+  sheetOpen = open;
 });
 
 export function go(where: "home" | "system") {
@@ -245,8 +254,26 @@ export async function runScene(scene: Scene) {
       }
     }
   }
+  running.value = scene.id;
   const answer = await api.post(`scene/${encodeURIComponent(scene.id)}`);
+  running.value = "";
   answered(answer, keys, scene.id === ALL_OFF ? "All lights off" : `${scene.name} is on`);
+}
+
+/** Remember the lights of these rooms as they are now, under a name. */
+export async function keepScene(name: string, rooms: string[], restOff: boolean): Promise<boolean> {
+  const answer = await api.post("scenes", { name, rooms, rest_off: restOff });
+  if (answer.error) {
+    say(answer.error);
+    return false;
+  }
+  say(answer.said ?? "Kept");
+  return true;
+}
+
+export async function forgetScene(scene: Scene) {
+  const answer = await api.post(`scenes/${encodeURIComponent(scene.id)}/forget`);
+  say(answer.error ?? `${scene.name} is forgotten`);
 }
 
 // ---- music ----

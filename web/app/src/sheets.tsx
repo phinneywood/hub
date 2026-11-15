@@ -1,8 +1,8 @@
 // What rises over the house: a room, the music, and Ask.
 import { signal } from "@preact/signals";
-import { useEffect } from "preact/hooks";
-import { dimDevice, dimRoom, dragDevice, dragRoom, dragVolume, loadPicks, picks, play, playPick, runScene, seen, setVolume, sheet,
-  skip, speakerIn, switchDevice, switchRoom } from "./state";
+import { useEffect, useState } from "preact/hooks";
+import { dimDevice, dimRoom, dragDevice, dragRoom, dragVolume, forgetScene, keepScene, loadPicks, picks, play, playPick, runScene, seen,
+  setVolume, sheet, skip, speakerIn, switchDevice, switchRoom } from "./state";
 import type { House, Music, Room, Speaker } from "./types";
 import { Sleeve } from "./screens";
 import { Icon, SheetFrame, Slider, Switch } from "./ui";
@@ -79,6 +79,58 @@ export function PlayingSheet({ music }: { music: Music }) {
           ))}
         </div>
       )}
+    </SheetFrame>
+  );
+}
+
+/** Keep the house as it stands as a scene: pick the rooms, name it. */
+export function KeepSheet({ now }: { now: House }) {
+  const rooms = now.floors.flatMap((f) => f.rooms).map((id) => now.rooms[id]).filter((r): r is Room => r !== undefined);
+  const [name, setName] = useState("");
+  const [picked, setPicked] = useState(() => new Set(rooms.filter((r) => r.on).map((r) => r.id)));
+  const [restOff, setRestOff] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const flip = (id: string) => {
+    const next = new Set(picked);
+    if (!next.delete(id)) next.add(id);
+    setPicked(next);
+  };
+  const keep = async (e: Event) => {
+    e.preventDefault();
+    setBusy(true);
+    if (await keepScene(name, [...picked], restOff)) sheet.value = null;
+    else setBusy(false);
+  };
+  const mine = now.scenes.filter((s) => s.mine);
+  return (
+    <SheetFrame title="Keep this as a scene" sub="Hub remembers these rooms’ lights as they are now. One tap brings them back.">
+      <form onSubmit={keep}>
+        <input class="field named" placeholder="Its name, such as Bedtime" aria-label="The scene’s name" maxLength={30} value={name}
+          onInput={(e) => setName(e.currentTarget.value)} />
+        <h2>Rooms</h2>
+        <div class="rows">
+          {rooms.map((r) => (
+            <button type="button" role="checkbox" aria-checked={picked.has(r.id)} class={"row tick" + (picked.has(r.id) ? " on" : "")} key={r.id}
+              onClick={() => flip(r.id)}>
+              <span class="ring"><Icon name="check" /></span>
+              <span class="row-main"><b>{r.name}</b></span>
+              <span class="row-q">{r.on ? (r.dims ? r.level + "%" : "On") : "Off"}</span>
+            </button>
+          ))}
+        </div>
+        <div class="ctl two">
+          <div class="ctl-name"><b>Turn every other light off</b><span>When the scene runs</span></div>
+          <Switch on={restOff} label="Turn every other light off" onChange={setRestOff} />
+        </div>
+        <div class="btns"><button type="submit" class="btn go" disabled={busy || !name.trim() || picked.size === 0}>Keep it</button></div>
+      </form>
+      {mine.length > 0 && <h2>Kept scenes</h2>}
+      {mine.map((s) => (
+        <div class="ctl two" key={s.id}>
+          <div class="ctl-name"><b>{s.name}</b></div>
+          <button type="button" class="forget" onClick={() => void forgetScene(s)}>Forget</button>
+        </div>
+      ))}
     </SheetFrame>
   );
 }

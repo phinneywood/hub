@@ -1,7 +1,7 @@
 // The screens: the house as a plan, the bar at the bottom, and System.
 import type { JSX } from "preact";
 import { useRef, useState } from "preact/hooks";
-import { go, house, look, me, play, runScene, seen, sheet, switchRoom, trouble, view, why } from "./state";
+import { go, house, look, me, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
 import type { Look } from "./state";
 import type { Floor, House, Room } from "./types";
 import { Bars, Icon } from "./ui";
@@ -121,7 +121,13 @@ export function Home() {
       <h1 class="say">{houseSays(now)}</h1>
       <p class="sub">{musicSays(now.music)}</p>
       <div class="scenes">
-        {now.scenes.map((s) => <button type="button" class="scene" key={s.id} onClick={() => void runScene(s)}>{s.name}</button>)}
+        {now.scenes.map((s) => (
+          <button type="button" class={"scene" + (s.on ? " on" : "") + (running.value === s.id ? " busy" : "")} key={s.id}
+            aria-pressed={s.on} onClick={() => void runScene(s)}>{s.name}</button>
+        ))}
+        <button type="button" class="scene add" aria-label="Keep the house as it is now as a scene" onClick={() => (sheet.value = { kind: "keep" })}>
+          <Icon name="plus" />
+        </button>
       </div>
       <Plan now={now} />
       {now.facts.length > 0 && (

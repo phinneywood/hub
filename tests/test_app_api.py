@@ -203,6 +203,62 @@ def test_the_broker_fence_takes_a_room_of_lights_but_nothing_else_by_the_list(ho
             broker._checked(domain, service, data)
 
 
+# ---- Scenes Hub keeps ----
+
+def test_the_house_as_it_stands_is_kept_as_a_scene_and_run_with_one_undo(house):
+    kept = tap('scenes', {'name': 'Dinner time', 'rooms': ['kitchen', 'dining'], 'rest_off': False})
+    assert kept.json() == {'ok': True, 'said': 'Dinner time is kept'} and house.sent == []      # keeping changes nothing
+    scenes = picture()['scenes']
+    assert scenes[0] == {'id': 'hub:1', 'name': 'Dinner time', 'on': True, 'mine': True}
+    assert [s['name'] for s in scenes][-1] == 'All off'
+    tap('room/kitchen', {'on': False}), tap('device/light.dining_pendant', {'level': 20}), tap('room/office', {'on': True})
+    assert picture()['scenes'][0]['on'] is False
+    house.sent.clear()
+    ran = tap('scene/hub:1').json()
+    assert ran['ok'] and ran['batch']
+    # Only what differs is asked: three kitchen lamps back to their own levels and one pendant. The sideboard lamp,
+    # already right, and the office, not part of the scene, are left alone.
+    assert sorted(house.sent, key=str) == sorted([
+        ('light/turn_on', {'entity_id': 'light.kitchen_pendants', 'brightness_pct': 70}),
+        ('light/turn_on', {'entity_id': 'light.kitchen_ceiling', 'brightness_pct': 80}),
+        ('light/turn_on', {'entity_id': 'light.kitchen_cabinets', 'brightness_pct': 90}),
+        ('light/turn_on', {'entity_id': 'light.dining_pendant', 'brightness_pct': 60})], key=str)
+    found = picture()
+    assert found['scenes'][0]['on'] is True and found['rooms']['office']['on'] is True
+    assert tap('scene/hub:1').json() == {'error': 'The house is already like that.'}
+    assert tap('undo/' + ran['batch']).json()['ok']
+    assert picture()['rooms']['kitchen']['on'] is False and picture()['scenes'][0]['on'] is False
+
+
+def test_a_scene_can_turn_everything_else_off(house):
+    tap('room/robin-s-room', {'level': 10})
+    assert tap('scenes', {'name': 'Bedtime story', 'rooms': ['robin-s-room', 'hallway'], 'rest_off': True}).json()['ok']
+    assert picture()['scenes'][0]['on'] is False                    # other rooms are still lit
+    house.sent.clear()
+    assert tap('scene/hub:1').json()['ok']
+    assert len(house.sent) == 1 and house.sent[0][0] == 'light/turn_off' and len(house.sent[0][1]['entity_id']) == 8
+    found = picture()
+    assert [r for r in found['rooms'] if found['rooms'][r]['on']] == ['robin-s-room'] and found['scenes'][0]['on'] is True
+
+
+def test_scenes_are_replaced_by_name_forgotten_and_few(house, monkeypatch):
+    assert tap('scenes', {'name': 'Evening', 'rooms': ['kitchen']}).json()['ok']
+    tap('room/kitchen', {'level': 30})
+    assert tap('scenes', {'name': 'Evening', 'rooms': ['kitchen']}).json()['ok']
+    scenes = [s for s in picture()['scenes'] if s['mine']]
+    assert len(scenes) == 1 and scenes[0]['on'] is True
+    assert tap('scenes', {'name': '  ', 'rooms': ['kitchen']}).json() == {'error': 'Give the scene a name.'}
+    assert tap('scenes', {'name': 'Nowhere', 'rooms': ['attic']}).json() == {'error': 'Pick at least one room.'}
+    assert tap('scenes', {'name': 'Mine', 'rooms': ['kitchen']}, headers={'origin': 'http://testserver'}).status_code == 403
+    from hub.app import scenes
+    monkeypatch.setattr(scenes, 'MOST', 1)
+    assert 'Forget one first' in tap('scenes', {'name': 'Another', 'rooms': ['kitchen']}).json()['error']
+    assert tap('scenes/hub:1/forget').json()['ok']
+    assert [s for s in picture()['scenes'] if s['mine']] == []
+    assert tap('scene/hub:1').json() == {'error': 'That scene isn’t kept any more.'}
+    assert tap('scene/hub:x').status_code == 409
+
+
 def test_taps_have_their_own_limit_and_a_room_counts_once(house, monkeypatch):
     monkeypatch.setattr(control, 'TAPS_PER_MINUTE', 3)
     assert tap('scene/all-off').json()['ok']                         # nine lamps, one tap
@@ -228,10 +284,11 @@ def test_the_page_names_its_built_files_by_version_and_they_may_be_kept(house):
 
 
 def test_hub_opens_on_the_app_only_once_the_owner_says_so(house):
-    assert 'id="app"' not in client.get('/').text
+    assert 'id="app"' not in client.get('/').text and client.get('/manifest.webmanifest').json()['start_url'] == '/'
     assert client.get('/app/api/home', headers=SIGNED_IN).json()['initial'] == 'M'
     (config.DATA_DIR / 'household.json').write_text(json.dumps({'app': {'front': True}}))
     assert client.get('/', follow_redirects=False).headers['location'] == '/app/'
+    assert client.get('/manifest.webmanifest').json()['start_url'] == '/app/'
     assert '<div id="app">' in client.get('/').text
 
 

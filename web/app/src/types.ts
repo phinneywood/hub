@@ -13,7 +13,7 @@ export interface Music {
 }
 export interface Fact { label: string; value: string; tone: string }
 export interface Floor { name: string; rooms: string[] }
-export interface Scene { id: string; name: string }
+export interface Scene { id: string; name: string; on: boolean; mine: boolean }
 export interface House {
   ok: true; at: string; floors: Floor[]; rooms: Record<string, Room>; scenes: Scene[];
   music: Music | null; facts: Fact[]; lights_on: number;

@@ -28,7 +28,8 @@ With it, `/` sends the browser to `/app/`. Without it, `/` is the Ask chat as be
 | `GET /app/api/live` | The same picture again each time it changes, for as long as the app is open |
 | `POST /app/api/room/{room}` | A room's lights together: `{"on": true}`, `{"on": false}` or `{"level": 40}` |
 | `POST /app/api/device/{entity}` | One light, plug or fan |
-| `POST /app/api/scene/{scene}` | A Home Assistant scene, or Hub's own `all-off` |
+| `POST /app/api/scene/{scene}` | A scene Hub keeps (`hub:3`), a Home Assistant scene, or `all-off` |
+| `POST /app/api/scenes`, `POST /app/api/scenes/{scene}/forget` | Keep the house as it stands as a scene; forget one |
 | `POST /app/api/music/{speaker}` | Play, pause, next, previous, a volume, a room in or out |
 | `GET /app/api/picks`, `POST /app/api/play/{speaker}` | The library's playlists, and playing one where music is on |
 | `POST /app/api/undo/{batch}` | Put a change back |
@@ -52,6 +53,17 @@ Two things differ from Ask's path:
   one at a time for everything else). Ask's path is unchanged.
 - **Taps have their own limit.** 120 a minute, one per tap, kept apart from Ask's 30 changes a minute, so an
   evening of switching rooms by hand never locks Ask out.
+
+## Scenes
+
+The row of words above the plan. Three kinds, run the same way:
+
+- **Scenes Hub keeps** (`hub/app/scenes.py`). The owner sets the house, taps the plus, picks the rooms and names
+  it: Hub remembers each of those rooms' lights as they are, and optionally "turn every other light off". Running
+  one asks only the lights that differ, as one batch with one Undo, and the row shows which scene the house is in
+  right now. Kept in Hub's own database (`app_scenes`), at most 12.
+- **Home Assistant's scenes**, when it has any. Hub can run them but not undo them or tell whether one is on.
+- **All off**: every light that is on, with Undo.
 
 ## The live feed
 

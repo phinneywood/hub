@@ -7,8 +7,9 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
 - a tap shows within 0.4 s while Hub is still answering, holds once the house agrees, and Undo puts it back;
 - a tap that didn't take is put right and says why;
 - a second open app hears about a change without asking;
-- holding a room opens it without switching it; the dimmer, a plug, scenes, All off, play and pause, a room
-  joining the music, a playlist, the list in Ask and the look all work;
+- holding a room opens it without switching it; the dimmer, a plug, scenes, All off, keeping the house as a
+  scene and running it, play and pause, a room joining the music, a playlist, the list in Ask and the look
+  all work;
 - everything meant to be tapped is at least 44 px on its short side;
 - the app says so when the house stops answering and when Hub can't be reached, still opens without Hub,
   and reconnects by itself;

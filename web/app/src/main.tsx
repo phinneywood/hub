@@ -4,7 +4,7 @@ import { useEffect } from "preact/hooks";
 import { signal } from "@preact/signals";
 import "./app.css";
 import { Dock, Home, Rail, System } from "./screens";
-import { Ask, AskSheet, PlayingSheet, RoomSheet } from "./sheets";
+import { Ask, AskSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
 
@@ -28,6 +28,7 @@ function Sheets() {
     return room ? <RoomSheet room={room} music={now.music} /> : null;
   }
   if (open.kind === "playing") return now.music ? <PlayingSheet music={now.music} /> : null;
+  if (open.kind === "keep") return <KeepSheet now={now} />;
   return wide.value ? null : <AskSheet />;
 }
 

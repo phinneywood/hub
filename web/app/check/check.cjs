@@ -122,6 +122,28 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap(".toast button");
     expect(await saysSoon("Three rooms are lit."), "Undo did not bring the lights back");
 
+    // ---- keep the house as it stands as a scene ----
+    await tap(".scene.add"); await page.waitForSelector(".sheet.in");
+    await page.fill(".sheet .field", "Reading"); await page.waitForTimeout(450); await shot("4b-keep");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px when keeping a scene: " + (await small()).join(", "));
+    await page.locator(".sheet .btn.go").click();
+    const sceneOn = (name) => page.evaluate((n) => [...document.querySelectorAll(".scene")].some((el) => el.textContent === n && el.classList.contains("on")), name);
+    expect(await until(() => document.querySelector(".scene")?.textContent === "Reading" && document.querySelector(".scene").classList.contains("on")),
+      "the kept scene did not lead the row and show as on");
+    await tap('.scene:text-is("All off")');
+    expect(await saysSoon("The house is dark.", 400), "All off did not show at once the second time");
+    expect(await until(() => [...document.querySelectorAll(".scene")].some((el) => el.textContent === "All off" && el.classList.contains("on"))), "All off did not show as on in a dark house");
+    expect(!(await sceneOn("Reading")), "the kept scene still showed as on in a dark house");
+    await tap('.scene:text-is("Reading")');
+    expect(await saysSoon("Three rooms are lit."), "the kept scene did not bring the rooms back: " + await says());
+    expect(await until(() => document.querySelector(".scene")?.classList.contains("on")), "the kept scene did not show as on after it ran");
+    await tap(".scene.add"); await page.waitForSelector(".sheet.in");
+    await page.locator(".sheet .forget").click();
+    expect(await until(() => ![...document.querySelectorAll(".scene")].some((el) => el.textContent === "Reading")), "the scene was not forgotten");
+    await page.keyboard.press("Escape");
+    expect(await until(() => !document.querySelector(".sheet")), "the sheet did not close");
+    await page.waitForTimeout(300);
+
     // ---- music ----
     await tap(".np-play");
     expect(await until(() => document.querySelector(".sub")?.textContent.trim() === "The house is quiet.", null, 400), "Pause did not show at once");

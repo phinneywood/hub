@@ -29,7 +29,7 @@ check_guard.apply(patch)   # before the app exists: no key store, no other machi
 
 import uvicorn  # noqa: E402
 
-from hub.app import routes  # noqa: E402
+from hub.app import routes, scenes  # noqa: E402
 from hub.main import app  # noqa: E402
 from hub.tools.house import control, music, read  # noqa: E402
 from tests import app_world  # noqa: E402
@@ -54,6 +54,8 @@ def stage(what: str):
         world.states, world.down = app_world._states(), False
         world.sent.clear()
         control._taps.clear()
+        for scene in scenes.kept():
+            scenes.forget(scene['id'])
     elif what in ('down', 'up'):
         world.down = what == 'down'
     else:

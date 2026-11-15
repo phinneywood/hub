@@ -6,6 +6,7 @@ Assistant for it. The app writes its own sentences from this. Names here are dat
 import re
 
 from ..tools.house import nowplaying, read
+from . import scenes as mine
 
 ALL_OFF = 'all-off'      # the one scene Hub brings itself: every light that is on, off
 OTHER_FLOOR = 'Other rooms'
@@ -94,6 +95,13 @@ def _facts(found):
     return facts[:6]
 
 
+def _scenes(found):
+    """The scenes Hub keeps (each knows whether the house is in it now), then Home Assistant's, then All off."""
+    kept = [{'id': s['id'], 'name': s['name'], 'on': mine.on(s, found), 'mine': True} for s in mine.kept()]
+    theirs = [{'id': s['id'], 'name': s['name'], 'on': False, 'mine': False} for s in found['scenes']]
+    return kept + theirs + [{'id': ALL_OFF, 'name': 'All off', 'on': found['lights_on'] == 0, 'mine': False}]
+
+
 def home(found, floors=None):
     """The whole Home screen from one reading of the house (read.snapshot())."""
     names = [r['name'] for r in found['rooms'] if r['name'] != read.OTHER_ROOM]
@@ -107,7 +115,7 @@ def home(found, floors=None):
     return {'ok': True, 'at': found['read_at'].isoformat(timespec='seconds'),
             'floors': _floors(rooms, found.get('room_floor') or {}, floors or {}),
             'rooms': {r['id']: r for r in rooms},
-            'scenes': [{'id': s['id'], 'name': s['name']} for s in found['scenes']] + [{'id': ALL_OFF, 'name': 'All off'}],
+            'scenes': _scenes(found),
             'music': music, 'facts': _facts(found), 'lights_on': found['lights_on']}
 
 
