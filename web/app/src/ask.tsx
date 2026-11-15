@@ -111,7 +111,7 @@ function KitchenReply({ after }: { after: number }) {
       {state === "long" && <p class="took">Kitchen is still working. Its answer will be in Kitchen.</p>}
       {state === "down" && <p class="took">Kitchen isn’t answering right now.</p>}
       {(more || state === "long" || replies.some((m) => m.recipes?.length)) && (
-        <a class="row-act" href="/kitchen">{more ? "Open Kitchen to see the cart" : "Open Kitchen"}</a>
+        <a class="row-act" href="#kitchen">{more ? "Open Kitchen to see the cart" : "Open Kitchen"}</a>
       )}
     </div>
   );

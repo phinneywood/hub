@@ -202,7 +202,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => { const box = document.querySelector(".ask-scroll"); return box.scrollHeight - box.scrollTop - box.clientHeight < 4; }), "Kitchen’s answer arrived out of view");
     await page.waitForTimeout(300); await shot("6c-ask-kitchen");
     await askFor("what needs me today?");
-    expect(await answered("Two things need you today."), "a private question was not answered: " + await lastAnswer());
+    expect(await answered("From what Hub can see, two emails need you."), "a question about the day was not answered from what Hub read: " + await lastAnswer());
     await askFor("remember to start music softly");
     expect(await answered("Hub will remember that."), "Ask did not remember: " + await lastAnswer());
     await askFor("unlock the front door");
@@ -254,6 +254,40 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.reload(); await page.waitForSelector(".say");
     expect(await saysSoon("Nothing needs you.", 4000), "a quiet day: " + await says());
     await page.waitForTimeout(1900); await shot("11-today-quiet");
+    await stage("reset");
+
+    // ---- Mail: what needs you, who never answered, what Hub sorted ----
+    await tap(phone ? '.tabs .tab:text-is("Mail")' : '.rail .tab:text-is("Mail")');
+    expect(await saysSoon("Two emails need you."), "Mail’s sentence: " + await says());
+    expect((await page.locator(".wrap.mail .row.need .row-main b").allInnerTexts()).join("|") === "Sam Rivera|Maple Street Dental|Saturday plans?",
+      "Mail: the emails that need you, the longest wait first, then the unanswered question");
+    expect((await page.locator(".wrap.mail .block h2").allInnerTexts()).join("|") === "Needs you|You asked, no answer yet|Sorted", "Mail’s sections, in order");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Mail scrolls sideways");
+    await page.waitForTimeout(300); await shot("12-mail");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on Mail: " + (await small()).join(", "));
+    await page.locator(".wrap.mail .tickbtn").first().click();
+    expect(await saysSoon("One email needs you.", 3000), "a tick did not take the email off Mail: " + await says());
+    await page.locator(".toast button").click();
+    expect(await saysSoon("Two emails need you.", 3000), "Undo did not put the email back on Mail: " + await says());
+    await tap('.row-act:text-is("File 3")');
+    expect(await until(() => !document.querySelector('.row-act') || ![...document.querySelectorAll(".row-act")].some((b) => b.textContent === "File 3"), null, 4000),
+      "filing did not empty the reading shelf");
+
+    // ---- Kitchen: the conversation, the list, and a cart that waits for a tap ----
+    await stage("reset");
+    await tap(phone ? '.tabs .tab:text-is("Kitchen")' : '.rail .tab:text-is("Kitchen")');
+    expect(await saysSoon("A cart waits for your tap."), "Kitchen’s sentence: " + await says());
+    expect(await page.locator(".kthread .kmsg").count() === 5, "Kitchen’s conversation so far");
+    expect(await page.locator(".kcard").count() === 4, "Kitchen’s recipes, plan and order");
+    await page.locator(".klist summary").click();
+    expect((await page.locator(".klist li").allInnerTexts()).join("|") === "Bananas|Eggs|Coffee beans|Dish soap", "the shopping list");
+    await page.waitForTimeout(300); await shot("13-kitchen");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on Kitchen: " + (await small()).join(", "));
+    await tap('.kcard .btn.go:text-is("Add to cart")');
+    expect(await until(() => [...document.querySelectorAll(".kstate")].some((p) => p.textContent.startsWith("Added to the cart")), null, 6000), "approving did not show");
+    await page.fill(".kcompose textarea", "what should we cook this week?");
+    await page.keyboard.press("Enter");
+    expect(await until(() => document.querySelectorAll(".kthread .kmsg.them .kcard").length >= 6, null, 12000), "Kitchen’s answer to a new message did not arrive");
     await stage("reset");
     await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
     await page.waitForSelector(".plan");

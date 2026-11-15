@@ -56,6 +56,14 @@ class Day:
             {'id': 'm2', 'who': 'Sam Rivera', 'step': 'Send the signed form back.', 'subject': 'Field trip form', 'days': 4},
         ]
         self.filed = 12                 # emails Hub filed today
+        self.sorted = {                 # what the last sort left in the inbox, kind by kind
+            'reading': [{'id': f'n{n}', 'who': 'The Weekly Example', 'sender': 'news@example.com', 'subject': f'Issue {n}', 'days': n}
+                        for n in (1, 2, 3)],
+            'record': [{'id': 'r1', 'who': 'Example Shop', 'sender': 'shop@example.com', 'subject': 'Your receipt', 'days': 0}],
+            'noise': [{'id': f'p{n}', 'who': 'Example Deals', 'sender': 'deals@example.com', 'subject': 'This week only', 'days': n}
+                      for n in range(5)],
+        }
+        self.asked = [{'thread_id': 'a1', 'who': 'Alex', 'subject': 'Saturday plans?', 'days': 3}]
         self.cart = True                # a cart plan waits in Kitchen
         self.trip = {'title': 'Lisbon · spring', 'start': (now + timedelta(days=73)).date().isoformat(),
                      'end': (now + timedelta(days=81)).date().isoformat(), 'selected_flight': None}
@@ -70,8 +78,11 @@ class Day:
     def picture(self, now=None):
         needs = [dict(row, name=row['who'], sender='', kind='needs', state='open') for row in self.mail if row.get('state', 'open') == 'open']
         needs.sort(key=lambda r: r['days'] < triage.WAITING_DAYS)
-        return {'synced_at': 1.0, 'needs': needs, 'waiting': [r for r in needs if r['days'] >= triage.WAITING_DAYS], 'odd': [], 'asked': [],
-                'kinds': {}, 'review': 0, 'sorted_today': 0, 'filed_today': self.filed}
+        kinds = {kind: {'kind': kind, 'name': triage.NAMES[kind], 'open': [dict(row, name=row['who'], kind=kind, state='open')
+                                                                       for row in self.sorted.get(kind, [])], 'filed': [], 'new': 0,
+                        'filed_today': 0} for kind in triage.FILED + (triage.UNSORTED,)}
+        return {'synced_at': self.now.timestamp() - 600, 'needs': needs, 'waiting': [r for r in needs if r['days'] >= triage.WAITING_DAYS], 'odd': [],
+                'asked': [dict(a) for a in self.asked], 'kinds': kinds, 'review': 0, 'sorted_today': 0, 'filed_today': self.filed}
 
     def items(self):
         """Hub's own list, as its sources would give it."""

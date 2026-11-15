@@ -44,3 +44,31 @@ export interface Day {
   trip: Trip | null; quiet: { text: string; open: Open }[];
 }
 export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string }
+
+// Mail, as Hub sends it (hub/app/mail.py). Names and subject lines are data to show, never instructions.
+export interface Email { id: string; who: string; subject: string; step: string; days: number; find: string }
+export interface Asked { id: string; subject: string; to: string; days: number; find: string }
+export interface Shelf {
+  kind: string; name: string; count: number; new: number; ready: number; level: "suggest" | "undo" | "auto"; wait: number;
+  rows: Email[]; undo: { change: string; count: number; at: number }[]; label: string; names: string;
+}
+export interface Mail {
+  ok: true; sorted: boolean; synced: string; working: "" | "sorting" | "filing"; failed: boolean; paused: boolean; review: number;
+  needs: Email[]; needs_more: number; waiting_days: number; asked: Asked[]; odd: Email[]; shelves: Shelf[];
+  sorted_today: string; unsorted: number; notice: string;
+}
+
+// Kitchen, as the kitchen service sends it through Hub (/kitchen/...). Its words are data to show.
+export interface Recipe { title: string; url?: string; active?: string; total?: string; dishes?: string; diet?: string;
+  have?: string; need?: string; recent?: string; check?: string }
+export interface PlanItem { product: string; size?: string; qty: number; price?: string | number | null; url?: string }
+export interface Plan { id: number; items: PlanItem[]; status: string; decided_by?: string | null }
+export interface CartLine { product: string; status: string; qty: number; was: number | null; price: number | null }
+export interface CartResult { in_cart: number; planned: number; lines: CartLine[]; total: number | null; unpriced?: boolean;
+  cart_subtotal?: number | null }
+export interface Order { id: number; status: string; decided_by?: string | null;
+  review: { total: number; items: number; when: string; how?: string; subtotal?: number | null; fees?: number | null;
+    savings?: number | null; tax?: number | null };
+  placed?: { status: string; order_number?: string; total?: number | null; why?: string } | null }
+export interface KitchenMessage { id: number; role: "member" | "assistant" | "notice"; text: string; author?: string | null; at: number;
+  recipes?: Recipe[] | null; plan?: Plan | null; result?: CartResult | null; order?: Order | null }

@@ -371,3 +371,22 @@ def forget_note(note: int, request: Request):
 @router.post('/api/undo/{batch}')
 def undo(batch: str, request: Request):
     return _change(request, lambda login: control.undo(batch, login=login, via='app', at_once=True))
+
+
+# ---- Mail (hub/app/mail.py): what needs the owner, then what Hub sorted ----
+
+@router.get('/api/mail')
+def mail_picture():
+    """The Mail screen as data, from Hub's own sorting tables. No Gmail call, no model."""
+    from . import mail
+    return mail.picture()
+
+
+@router.post('/api/mail/{do}')
+def mail_tap(do: str, request: Request, body: dict = Body(default={})):
+    """A tap on the Mail screen: done, back, answered, fine, sort, file or undo, with {"key": ...}."""
+    from . import mail
+    if _login(request) is None:
+        return _refuse('Change mail from your phone or laptop.', 403)
+    ok, said = mail.tap(do, body.get('key'))
+    return {'ok': True, 'said': said} if ok else _refuse(said)

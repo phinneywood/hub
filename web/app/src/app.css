@@ -425,3 +425,64 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
 .release-list { margin: 8px 0 0; padding-left: 1.1em; color: var(--ink-2); max-width: 60ch; }
 .release-list li { margin-top: 4px; }
 .release-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* ---------- mail ---------- */
+.row-sm { display: block; font-size: var(--t-xs); color: var(--ink-3); margin-top: 2px; }
+.row.need.warn:not(.on) .row-main span { color: var(--alarm); }
+.shelf .row { border-bottom: 0; }
+.shelf { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.shelf .quiet-line { margin-top: 0; padding-bottom: 6px; }
+.linkish { color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; min-height: 44px; padding: 0 4px; }
+.btn.ghost { box-shadow: inset 0 0 0 1.5px var(--line-2); }
+
+/* ---------- kitchen: a conversation, with cards that wait for a tap ---------- */
+.klist { margin-top: 26px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.klist summary { list-style: none; display: flex; justify-content: space-between; align-items: center; min-height: 56px; cursor: pointer; }
+.klist summary::-webkit-details-marker { display: none; }
+.klist summary span { font-size: var(--t-s); color: var(--ink-3); }
+.klist ul { list-style: none; padding: 0 0 12px; columns: 2; column-gap: 24px; }
+.klist li { padding: 5px 0; break-inside: avoid; font-size: var(--t-s); }
+.klist li.none { color: var(--ink-3); column-span: all; }
+.kthread { list-style: none; padding: 0; margin-top: 22px; display: flex; flex-direction: column; gap: 14px; }
+.kmsg { max-width: 92%; }
+.kmsg.me { align-self: flex-end; background: var(--raised); border-radius: 18px 18px 6px 18px; padding: 10px 14px; }
+.kmsg.them { align-self: flex-start; }
+.kmsg.notice { align-self: center; font-size: var(--t-xs); color: var(--ink-3); text-align: center; }
+.kwords p { white-space: pre-line; text-wrap: pretty; line-height: 1.42; }
+.kwords p + p { margin-top: 8px; }
+.kwords a { text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+.kmeta { display: block; font-size: var(--t-xs); color: var(--ink-3); margin-top: 6px; }
+.kmsg.me .kmeta { text-align: right; }
+.kcard { margin-top: 10px; background: var(--raised); border-radius: 16px; padding: 14px 16px; }
+.kcard-t { display: block; font-weight: 500; font-size: var(--t-m); }
+a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+.kfacts { font-size: var(--t-s); color: var(--ink-2); margin-top: 4px; }
+.kdiet { font-size: var(--t-s); margin-top: 8px; color: var(--ink-2); }
+.kdiet.warn { color: var(--alarm); }
+.kline { font-size: var(--t-s); margin-top: 6px; color: var(--ink-2); }
+.kline b { font-weight: 500; color: var(--ink); }
+.kcard .row-act { margin-top: 12px; }
+.kitems { list-style: none; padding: 0; margin-top: 10px; border-top: 1px solid var(--line); }
+.kitems li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: var(--t-s); }
+.kitems li small { display: block; font-size: var(--t-xs); color: var(--ink-3); }
+.kitems li.gone { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
+.kprice { flex: none; }
+.ktotal { display: flex; justify-content: space-between; margin-top: 8px; font-weight: 500; }
+.ktotal.quiet { font-weight: 400; color: var(--ink-2); font-size: var(--t-s); margin-top: 4px; }
+.kacts { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.kacts .btn { height: 46px; }
+.kacts .btn:not(.go) { box-shadow: inset 0 0 0 1.5px var(--line-2); }
+.kstate { margin-top: 12px; font-size: var(--t-s); color: var(--ink-2); }
+.kstate.ok { color: var(--sound); }
+.kfine { margin-top: 8px; font-size: var(--t-xs); color: var(--ink-3); }
+.kcompose { margin-top: 18px; }
+.kcompose .field { height: auto; min-height: 54px; padding: 15px 58px 15px 16px; resize: none; display: block; line-height: 1.35; font-family: inherit; color: inherit; }
+[data-theme="day"] .kcompose .field { background: var(--room); }
+
+/* four places and Ask fit a phone's width: the dot that marks where you are sits under the word */
+@media (max-width: 1039px) {
+  .tabs { gap: 0; padding: 0 10px 0 4px; }
+  .tab { position: relative; padding: 0 9px; font-size: 17px; }
+  .tab::before { position: absolute; left: 50%; bottom: 3px; margin-left: -3px; }
+  .askbtn { padding: 0 15px 0 12px; gap: 6px; }
+}

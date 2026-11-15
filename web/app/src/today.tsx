@@ -4,6 +4,10 @@ import { Top } from "./screens";
 import { seen } from "./state";
 import type { Day, Need, Slot } from "./types";
 import { Icon } from "./ui";
+
+// Mail and Kitchen are screens of the app now: their older addresses open here instead.
+const HERE: Record<string, string> = { "/gmail": "#mail", "/kitchen": "#kitchen" };
+const inApp = (href: string) => HERE[href] ?? href;
 import { daySays, daySub, partOfDay } from "./words";
 
 function NeedRow({ need }: { need: Need }) {
@@ -14,7 +18,7 @@ function NeedRow({ need }: { need: Need }) {
         <span class="ring"><Icon name="check" /></span>
       </button>
       <div class="row-main"><b>{need.title}</b>{need.why && <span>{need.why}</span>}</div>
-      {!done && <a class="row-act" href={need.open.href}>{need.open.label}</a>}
+      {!done && <a class="row-act" href={inApp(need.open.href)}>{need.open.label}</a>}
     </div>
   );
 }
@@ -105,7 +109,7 @@ export function Today() {
       <p class="sub">{daySub(now, outside)}</p>
       {!bare && <Sections now={now} />}
       {now.quiet.map((line) => (
-        <p class="quiet-line" key={line.text}>{line.text} <a href={line.open.href}>{line.open.label}</a></p>
+        <p class="quiet-line" key={line.text}>{line.text} <a href={inApp(line.open.href)}>{line.open.label}</a></p>
       ))}
     </div>
   );

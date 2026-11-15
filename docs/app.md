@@ -5,8 +5,9 @@ are lit when their lights are, and changes under a tap. Source: `web/app/` (Prea
 committed: `hub/static/app/`. The data and taps it uses: `hub/app/`.
 
 It is being built in phases (the plan is in the owner's private review notes). Phase 1 is Home and music;
-phase 2 is Ask, inside the app; phase 3 is Today. Until a later phase replaces it, Kitchen in the app's bar
-opens the older page, and a Today item's button opens the older page it belongs to (Mail, Kitchen, the trip).
+phase 2 is Ask, inside the app; phase 3 is Today; phase 4 brings Mail and Kitchen in as screens of their own. The
+bar has Home, Today, Mail and Kitchen. A Today item that belongs to Mail or Kitchen opens that screen; others (the
+trip, the class guide) still open their older pages.
 
 ## The front door
 
@@ -39,6 +40,9 @@ sets this in the private settings file (`household.json`):
 | `GET /app/api/today` | Today as data: what needs a person, the rest of today, tomorrow, the week at school, the trip |
 | `GET /app/api/versions` | Each release of Hub, newest first, in plain words, and which one is running (see “Versions”) |
 | `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
+| `GET /app/api/mail` | Mail as data: what needs the owner, questions nobody answered, records worth a look, each kind Hub sorted |
+| `POST /app/api/mail/{do}` | A tap on Mail, `{"key": ...}`: `done`, `back`, `answered`, `fine`, `sort`, `file` (a kind) or `undo` (a filing) |
+| `/kitchen/...` | Kitchen's screen uses the same relay to the kitchen service as the older page (`hub/tools/kitchen/pages.py`) |
 
 The picture is built in `hub/app/model.py` from the same reading of Home Assistant as the rest of Hub
 (`hub/tools/house/read.py`), so nothing new leaves Home Assistant for it. Two facts were added to that reading for
@@ -187,6 +191,34 @@ and once a minute while it is, and keeps none of it on the device.
 
 Tests: `tests/test_app_today.py`, on a made-up day (`tests/day_world.py`) that replaces Hub's readers, so no
 real calendar, mailbox or service is read. The demo server shows the same made-up day.
+
+## Mail
+
+What needs the owner, then what Hub sorted. Data and taps: `hub/app/mail.py`. In the app: `web/app/src/mail.tsx`.
+It is drawn from Hub's own sorting tables (`hub/tools/gmail/triage.py`), never a Gmail call, so it opens at once.
+
+- **The sentence** counts the emails that need the owner, and under it when Hub last sorted and what it sorted today.
+- **Needs you**: each email, the longest wait first, with the next step and a Find link (the older page's read-only
+  search). The circle marks it handled in Hub's own sorting, with Undo; nothing changes in Gmail.
+- **You asked, no answer yet**: the owner's own questions that nobody answered; the circle stops watching one.
+- **Worth a look**: records Hub kept in the inbox (a large amount, something unusual); the circle says it is fine.
+- **Sorted**: one line per kind Hub may file, with how many are in the inbox and the owner's level for it. At
+  "File when I tap" a File button files what is ready, and each filing from the last two weeks can be put back.
+  Filing and putting back move mail in Gmail through the bridge, exactly as the older page's buttons do.
+- **Sort now** asks for a sort; **Rules and settings** opens the older page, which keeps levels, sender rules, the
+  charge limit, the backlog and the plan.
+
+Every tap needs a signed-in device. Tests: `tests/test_app_mail.py`, on made-up rows in Hub's own tables.
+
+## Kitchen
+
+The household's conversation with the kitchen service. In the app: `web/app/src/kitchen.tsx`. It uses the same
+`/kitchen/...` relay as the older page, so nothing new reaches the kitchen service and nothing about it is kept
+on the device: the conversation, recipe cards with "Add what's missing to the cart", cart plans with Add to cart,
+the cart report after an add, orders as checkout showed them with Place order, the shopping list, and "Update from
+orders". Approving a plan and placing an order still take a tap on a signed-in device (`pages.py`). Kitchen's
+words are drawn as text, never as HTML. Turning on notifications stays on the older page, whose worker covers
+`/kitchen/`. Ask's Kitchen reply opens this screen.
 
 ## The live feed
 

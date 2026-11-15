@@ -3,10 +3,13 @@
   "sha": null,
   "from": "beea3028ec0d3ebe24cf29cab2cb52ed7debffba",
   "live": null,
-  "title": "The app becomes Hub's front door",
+  "title": "The app becomes Hub's front door, with Mail and Kitchen",
   "changes": [
    "Hub's usual address opens the new app. The older pages stay under System, and the old chat is at /ask.",
-   "A Versions page under System lists each release with what changed and links to the code."
+   "A Versions page under System lists each release with what changed and links to the code.",
+   "Mail is a screen in the app: what needs you and who hasn't answered, then what Hub sorted, with filing and Undo.",
+   "Kitchen is a screen in the app: the conversation, recipes, cart plans, orders and the shopping list.",
+   "Ask can now read your mail, calendar and school details on Claude Sonnet to answer questions about your day."
   ]
  },
  {

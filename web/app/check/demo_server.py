@@ -7,6 +7,9 @@ model, looks in no key store and reaches no other machine and no service on this
 Every room, name and song here is invented.
 
 Today shows a made-up day (tests/day_world.py): a calendar, a class guide, two emails, a waiting cart and a trip.
+Mail shows the same two emails, a question nobody answered and what the last sort left in the inbox; Kitchen shows
+a short conversation with a cart plan and an order waiting for a tap. Filing, approving and ordering only change
+the made-up day.
 
 Ask works here too, on a stand-in for its model (tests/ask_script.py) that picks a tool from a few plain words:
 "dim the kitchen", "everything off", "some jazz in the bedroom, softly", "play it in the dining room too",
@@ -42,6 +45,7 @@ from hub.app import levels, routes, scenes  # noqa: E402
 from hub.app.ask import private, route, turns  # noqa: E402
 from hub.main import app  # noqa: E402
 from hub.tools.house import control, read  # noqa: E402
+from hub.tools.gmail import filing, inbox, missions, triage  # noqa: E402
 from hub.tools.kitchen import client as kitchen  # noqa: E402
 from tests import app_world, ask_script, day_world  # noqa: E402
 
@@ -73,27 +77,81 @@ KITCHEN_SAYS = {'role': 'assistant', 'text': 'Three dinners you don’t usually 
                 'recipes': [{'title': 'Miso-glazed eggplant with sesame rice', 'total': '40 minutes'},
                             {'title': 'Chicken with preserved lemon and olives', 'total': '55 minutes'},
                             {'title': 'Black bean and squash tacos', 'total': '30 minutes'}]}
-asked_kitchen = []      # when each message was passed on; message n is its 1-based place, doubled
+FIRST = 100             # the made-up conversation so far has ids below this; what is asked here comes after
+SO_FAR = [
+    {'id': 1, 'role': 'member', 'author': 'Alex', 'text': 'Something easy for dinner tonight?'},
+    {'id': 2, 'role': 'assistant', 'text': 'Two that use what you bought this week.',
+     'recipes': [{'title': 'Sheet-pan gnocchi with peppers', 'active': '10 min', 'total': '30 min', 'have': 'gnocchi, peppers, onion',
+                  'need': 'feta'},
+                 {'title': 'Black bean and squash tacos', 'active': '15 min', 'total': '30 min', 'diet': 'Vegetarian',
+                  'have': 'black beans, tortillas', 'need': 'squash, lime'}]},
+    {'id': 3, 'role': 'member', 'author': 'Alex', 'text': 'Add what we need for the tacos'},
+    {'id': 4, 'role': 'assistant', 'text': 'Here is the plan. Nothing goes in the cart until you tap.',
+     'plan': {'id': 7, 'status': 'pending', 'items': [{'product': 'Butternut squash', 'size': '1 each', 'qty': 1, 'price': '2.49'},
+                                                      {'product': 'Limes', 'size': '1 each', 'qty': 3, 'price': '0.50'}]}},
+    {'id': 5, 'role': 'assistant', 'text': 'Here is the order, as checkout shows it. Nothing is ordered until you tap Place order.',
+     'order': {'id': 3, 'status': 'pending', 'review': {'items': 14, 'subtotal': 52.10, 'fees': 4.95, 'savings': 3.20, 'tax': 0.0,
+                                                        'total': 53.85, 'when': 'Tomorrow, 9–10 am', 'how': 'Pickup'}}},
+]
+SHOPPING = '# Shopping list\n- [ ] Bananas\n- [ ] Eggs\n- [ ] Coffee beans\n- [ ] Dish soap\n'
+asked_kitchen = []      # when each message was passed on; message n is FIRST + its 1-based place, doubled
+kitchen_now = {'plans': {}, 'orders': {}, 'notices': []}
+
+
+def kitchen_reset():
+    asked_kitchen.clear()
+    kitchen_now.update(plans={'7': {'status': 'pending' if day.cart else 'done'}}, orders={'3': {'status': 'pending'}}, notices=[])
 
 
 def made_up_kitchen(method, path, body=None, timeout=10):
-    """Stands where the kitchen service would: takes a message, and a few seconds later has an answer to it."""
+    """Stands where the kitchen service would: a conversation so far, a list, and a few seconds later an answer to
+    each new message. Approving, dismissing and placing only change what it says next."""
     if (method, path) == ('POST', '/messages'):
         asked_kitchen.append(time.monotonic())
-        return 200, {'id': len(asked_kitchen) * 2 - 1}
+        return 200, {'id': FIRST + len(asked_kitchen) * 2 - 1}
+    if (method, path) == ('GET', '/list'):
+        return 200, {'text': SHOPPING}
+    if method == 'POST' and path.startswith(('/plans/', '/orders/')):
+        _, what, number, choice = path.split('/')
+        kitchen_now[what][number] = {'status': {'approve': 'done', 'place': 'placed'}.get(choice, 'dismissed'), 'decided_by': 'me'}
+        if what == 'plans':
+            day.cart = False
+        kitchen_now['notices'].append(f'me {"approved" if choice == "approve" else "placed" if choice == "place" else "dismissed"} the '
+                                      f'{"cart plan" if what == "plans" else "order"}.')
+        return 200, {'ok': True}
     if method == 'GET' and path.startswith('/messages?after='):
-        after, now, messages = int(path.rsplit('=', 1)[1]), time.monotonic(), []
+        after, now = int(path.rsplit('=', 1)[1]), time.monotonic()
+        messages = [dict(m, at=time.time() - 3600 + m['id'] * 60) for m in SO_FAR if m['id'] > after]
         for n, at in enumerate(asked_kitchen, 1):
-            if n * 2 - 1 > after:
-                messages.append({'id': n * 2 - 1, 'role': 'member', 'text': '', 'author': 'me'})
-            if n * 2 > after and now - at >= KITCHEN_TAKES:
-                messages.append(dict(KITCHEN_SAYS, id=n * 2))
+            if FIRST + n * 2 - 1 > after:
+                messages.append({'id': FIRST + n * 2 - 1, 'role': 'member', 'text': '', 'author': 'me', 'at': time.time()})
+            if FIRST + n * 2 > after and now - at >= KITCHEN_TAKES:
+                messages.append(dict(KITCHEN_SAYS, id=FIRST + n * 2, at=time.time()))
+        for n, words in enumerate(kitchen_now['notices']):
+            if 50 + n > after:
+                messages.append({'id': 50 + n, 'role': 'notice', 'text': words, 'at': time.time()})
+        messages.sort(key=lambda m: m['id'])
         return 200, {'messages': messages, 'busy': any(now - at < KITCHEN_TAKES for at in asked_kitchen),
-                     'plans': {'7': {'status': 'pending'}} if day.cart else {}, 'orders': {}}
+                     'plans': dict(kitchen_now['plans']), 'orders': dict(kitchen_now['orders'])}
     raise kitchen.KitchenDown('made up')
 
 
 patch.setattr(kitchen, 'call', made_up_kitchen)
+kitchen_reset()
+
+# Mail, on the made-up day's inbox: reading can be filed with a tap, and filing only empties it here.
+patch.setattr(missions, 'is_paused', lambda: False)
+patch.setattr(filing, 'trusted', lambda kind: 'undo' if kind == 'reading' else 'suggest')
+patch.setattr(filing, 'ready', lambda kind, now=None: list(day.sorted.get(kind, [])) if kind == 'reading' else [])
+patch.setattr(triage, 'dismiss_asked', lambda thread: bool([day.asked.remove(a) for a in list(day.asked) if a['thread_id'] == thread]))
+
+
+def made_up_filing(kind):
+    filed = day.sorted.pop(kind, [])
+    inbox._filing['result'] = {'status': 'filed' if filed else 'nothing', 'count': len(filed)}
+
+
+patch.setattr(inbox, '_file_soon', made_up_filing)
 
 
 def a_habit():
@@ -116,13 +174,14 @@ def stage(what: str):
         control._taps.clear()
         control._recent.clear()
         levels.forget()
-        asked_kitchen.clear()
         for scene in scenes.kept():
             scenes.forget(scene['id'])
         for note in turns.remembered():
             turns.forget(note['id'])
         fresh = day_world.Day(EVENING)
         day.events, day.school, day.mail, day.filed, day.cart, day.faults = fresh.events, fresh.school, fresh.mail, fresh.filed, True, []
+        day.sorted, day.asked = fresh.sorted, fresh.asked
+        kitchen_reset()
         with store.db() as conn:
             conn.execute('delete from today_snoozed')
             conn.commit()
@@ -133,6 +192,7 @@ def stage(what: str):
         world.down = what == 'down'
     elif what == 'quiet-day':
         day.events, day.school, day.mail, day.filed, day.cart = [], [], [], 0, False
+        kitchen_now.update(plans={}, orders={})
     elif what in ('ask-away', 'ask-back'):
         patch.setattr(route, 'ready', (lambda: 'Ask isn’t set up yet: its key isn’t in 1Password.') if what == 'ask-away' else (lambda: None))
     else:

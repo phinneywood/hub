@@ -170,15 +170,14 @@ function Playing() {
   );
 }
 
-// Kitchen is still one of Hub's older pages; it moves into the app in a later phase.
-const ELSEWHERE = [["Kitchen", "/kitchen"]] as const;
+const TABS = [["home", "Home"], ["today", "Today"], ["mail", "Mail"], ["kitchen", "Kitchen"]] as const;
 
 function Tabs() {
   return (
     <>
-      <button type="button" class={"tab" + (view.value === "home" ? " on" : "")} onClick={() => go("home")}>Home</button>
-      <button type="button" class={"tab" + (view.value === "today" ? " on" : "")} onClick={() => go("today")}>Today</button>
-      {ELSEWHERE.map(([name, href]) => <a class="tab" href={href} key={href}>{name}</a>)}
+      {TABS.map(([where, name]) => (
+        <button type="button" key={where} class={"tab" + (view.value === where ? " on" : "")} onClick={() => go(where)}>{name}</button>
+      ))}
     </>
   );
 }
@@ -209,7 +208,7 @@ export function Rail() {
   );
 }
 
-const OLDER = [["Ask, the chat", "/ask"], ["Today, the cards", "/today"], ["Kitchen", "/kitchen"], ["Mail", "/gmail"], ["Calendar", "/calendar"],
+const OLDER = [["Ask, the chat", "/ask"], ["Today, the cards", "/today"], ["Kitchen, the older page", "/kitchen"], ["Mail rules and settings", "/gmail"], ["Calendar", "/calendar"],
   ["Preschool", "/preschool/"], ["Trip", "/trip"], ["Bike + bus", "/mobility"], ["Network", "/network"], ["Insights", "/insights"],
   ["Settings and checks", "/settings"]] as const;
 const LOOKS: [Look, string][] = [["auto", "Automatic"], ["dusk", "Evening"], ["day", "Day"]];

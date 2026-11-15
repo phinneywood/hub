@@ -9,6 +9,8 @@ import { loadAble } from "./asking";
 import { loadDay, watchDay } from "./day";
 import { Today } from "./today";
 import { Versions } from "./versions";
+import { Kitchen, watchKitchen } from "./kitchen";
+import { Mail, watchMail } from "./mail";
 import { KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
@@ -37,6 +39,11 @@ function Sheets() {
   return wide.value ? null : <AskSheet />;
 }
 
+function Screen() {
+  const where = view.value;
+  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "today" ? <Today /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
+}
+
 function App() {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -48,7 +55,7 @@ function App() {
   return (
     <div class="app">
       <Rail />
-      <main class={"main" + (waking.value ? " wake" : "")}>{view.value === "system" ? <System /> : view.value === "versions" ? <Versions /> : view.value === "today" ? <Today /> : <Home />}</main>
+      <main class={"main" + (waking.value ? " wake" : "")}><Screen /></main>
       {wide.value && <aside class="askrail" aria-label="Ask"><h2>Ask</h2><Ask /></aside>}
       <Dock ask={ask} />
       <Sheets />
@@ -79,6 +86,8 @@ if (root) {
   start();
   void loadAble();
   watchDay();
+  watchMail();
+  watchKitchen();
   if (view.value === "today") void loadDay();
   void keepOnDevice().catch(() => undefined);     // without it the app still works; it just needs Hub to open
 }
