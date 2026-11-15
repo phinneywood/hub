@@ -3,10 +3,15 @@
   "sha": null,
   "from": "b9269fb44755262e8b856fc5d11761dd83899e1c",
   "live": null,
-  "title": "Music in another room",
+  "title": "Music in another room, and every screen in the app",
   "changes": [
    "Music in another room is one tap: the music sheet lists every room, and a quiet one has Play here, for music of its own that starts softly while the rest plays on, and Join.",
-   "A room's own panel offers the same, the bar at the bottom names rooms playing something else, and a room playing its own music has its own pause."
+   "A room's own panel offers the same, the bar at the bottom names rooms playing something else, and a room playing its own music has its own pause.",
+   "Deploy is in the app: Versions shows a new version with a Deploy button, says when Hub is updating, and reloads by itself when the new version runs.",
+   "Engine is a screen in the app: what you asked Hub for, notes and routines waiting for a tap, how far Hub may go, and what the models cost.",
+   "Mail's Rules and settings open in the app: the plan with Apply and Undo, how far Hub files each kind, the charge alert and the 30-day rules.",
+   "Everything Hub changed, in the house and in playlists, is a screen in the app, each change with Undo for a day.",
+   "The older pages wear the app's look and carry its tabs, so none of them looks or feels like the old Hub."
   ]
  },
  {

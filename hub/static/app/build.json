@@ -6,7 +6,7 @@
     "tsconfig.json": "c94ed47be158f0c5f5afb715417b2d6e7f6a32d1403573e948b74a4cb7c5de76",
     "record-build.mjs": "0d1ca0afe2544a3dd8c957be6a95cb5eafeed4daad8a9f68d4f315126e9537d8",
     "src/api.ts": "02497ae601ecfedfa4c1095e803a786552e74878ecb4385dc6905ae44fa9a74b",
-    "src/app.css": "06c54d7a2c80bb76b3313a975c475fe0f51d3684ed8cc2985b6980b4bca198ca",
+    "src/app.css": "e31bf444ce29fcd095609311e0767a5ab18d7df4753a448d4d14bbee620e0ef0",
     "src/ask.tsx": "695a88b9ae90aa908d57d6998465aa3dde9d06042197322856795c3406caaa3f",
     "src/asking.ts": "d2b08dc0b9073a35b61103361690ba96a73df2b5bcc2465d5d293c2bb90e2bd6",
     "src/changes.tsx": "35c41194ba910d6b30531f3c945c2e7d9b785402dddc59dcf870f0add6de1752",
@@ -15,10 +15,10 @@
     "src/kitchen.tsx": "c6b80782825913f08bd0d3ac9f06b2e037f9d776031e8000790c1682278a0e4a",
     "src/mail.tsx": "fa9e5d328cc151dcec5a095d7737c36466c83942be110c4e424ce072cb69a208",
     "src/mailrules.tsx": "05d6c96620db2074636d23836776ef01c893ee1138087f62be923ce635fb51b8",
-    "src/main.tsx": "0fe897d70d3cdd304b4c6ba29446cba1816a9a70720456e2046d04fd1ed8906d",
-    "src/screens.tsx": "addf34843ac8dfac90ff354f0cd4bdc8297d2711843cdedea4125944f20795d3",
-    "src/sheets.tsx": "778fc2f0ed5cc50ad8855a73e35dc80890fcb312e6afba364964ea915ac4a5d5",
-    "src/state.ts": "3e72eb746ef3fbc0a6b546f016388b5162e660612aeaab3632f955c56bafac8f",
+    "src/main.tsx": "3022fb13184f123937f378cb4f5bd59a1fe24f898b6a42eebdee0af540fd0cc1",
+    "src/screens.tsx": "aa1ac98fd1c66b94d8c637b004be54a6e6af24db0adf2c35459b7fbfee8038f7",
+    "src/sheets.tsx": "3bdcf8198d629bddcdf9610e2235eff6aba1fc33a83d5762493db52a6289619a",
+    "src/state.ts": "feae6eee9d4be21c6a88a73857e2dd9ca0bd2de4faef77553e1f7eb4d7e0e7d0",
     "src/today.tsx": "2a0cb3a818d86ba2976736d1589e28b9abddda1e64e2b8ae8cce87696e6e0206",
     "src/types.ts": "0c9dd090274f9fc2ffe97931ad5d1c3a4e8f156f78c224648a6afaf9624ed602",
     "src/ui.tsx": "d9962d39d74fab88292dd119a24762e832e7528f1bb54f99a3948196827ce698",
@@ -27,7 +27,7 @@
     "src/words.ts": "6be6eeca16108f8271d6550dcb1e0bce6a54dfb0c4b4d1e5e4f31f38c2605163"
   },
   "built": {
-    "app.css": "8b25fee1a06f2f7495be482ebd95171106de5484b2fe9211fe2e90be06b3cbc7",
-    "app.js": "74357619524497f1e094f33c7de09893d16183f873a2289a9a400b17c355003c"
+    "app.css": "7496b9109b1df17d02095bd34eb926f7c0e9f8fc7cc9e0da2158e3bed779cf41",
+    "app.js": "96729c14b73f84efb5c8e115570412327f67944b70b2adb7e5aaf7893b3f43be"
   }
 }
