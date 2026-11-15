@@ -56,6 +56,12 @@ _ready = Path(scratch) / 'releases'
 (_ready / 'pending.json').write_text(json.dumps({'sha': 'd' * 40, 'subjects': ['Home: a made-up change, ready to deploy']}))
 (Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'}}))
 world = app_world.install(patch)
+
+# The Engine screen: a made-up instruction, something to build and a note waiting for a tap.
+from hub.engine import notes as engine_notes, state as engine_state  # noqa: E402
+engine_state.add_instruction('Always tell me about school mail with a deadline.')
+engine_state.add_request('A button that warms the house before we wake')
+engine_notes.propose('The porch light goes off at midnight', 'remember that the porch light goes off at midnight', login='me@example.com')
 patch.setattr(control, 'CHECK_WAIT', 0.2)
 
 # A made-up library, so "Play something else" and Ask have something to offer.

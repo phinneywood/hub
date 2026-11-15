@@ -314,6 +314,17 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Versions: " + (await small()).join(", "));
     await tap(".uplink");
     expect(await saysSoon("The house is answering."), "Back from Versions: " + await says());
+    await tap('.row:has-text("Engine")');
+    expect(await saysSoon("Engine"), "Engine: " + await says());
+    expect(await until(() => document.body.textContent.includes("Always tell me about school mail")), "Engine didn't list what Hub follows");
+    await page.waitForTimeout(300); await shot("7c-engine");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on Engine: " + (await small()).join(", "));
+    if (await page.locator('.ctl.one:has-text("porch light") .btn.go').count()) {
+      await tap('.ctl.one:has-text("porch light") .btn.go');
+      expect(await until(() => [...document.querySelectorAll(".ctl.two b")].some((b) => b.textContent.includes("porch light"))), "saving a note didn't list it");
+    }
+    await tap(".uplink");
+    expect(await saysSoon("The house is answering."), "Back from Engine: " + await says());
     await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
     await page.waitForSelector(".plan");
 

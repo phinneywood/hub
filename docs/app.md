@@ -40,6 +40,7 @@ sets this in the private settings file (`household.json`):
 | `GET /app/api/today` | Today as data: what needs a person, the rest of today, tomorrow, the week at school, the trip |
 | `GET /app/api/versions` | Each release of Hub, newest first, in plain words, and which one is running (see “Versions”) |
 | `POST /app/api/deploy` | Ask the deployer for the checked version waiting, from a signed-in device (see “Versions”) |
+| `GET /app/api/engine`, `POST /app/api/engine/{do}` | The Engine screen, and its taps: `tell`, `forget`, `request-done`, `improvement-done`, `note-save`, `note-skip`, `recipe-save`, `recipe-skip`, `recipe-remove`, `trust`, `run` (see “Engine”) |
 | `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
 | `GET /app/api/mail` | Mail as data: what needs the owner, questions nobody answered, records worth a look, each kind Hub sorted |
 | `POST /app/api/mail/{do}` | A tap on Mail, `{"key": ...}`: `done`, `back`, `answered`, `fine`, `sort`, `file` (a kind) or `undo` (a filing) |
@@ -262,6 +263,15 @@ good, as may the typeface (`fonts/Jost.ttf`, SIL Open Font License). Everything 
 follows what it is sent (`tests/app_world.py`). It reaches no other machine and no service on this one
 (`web/check_guard.py`). Ask works there on the stand-in model, with a made-up Kitchen and private desk, so the
 conversation can be tried and photographed without a key. See `web/app/check/README.md`.
+
+## Engine
+
+System opens Engine (`hub/app/engine.py`, `web/app/src/engine.tsx`): notes and routines Ask proposed, waiting for a
+tap; a box to tell Hub something; what Hub follows, with Remove; routines; what was asked for and not built; how far
+Hub may go with each action; and what the models cost, with the overnight review's Run. It reads and changes
+exactly what the older Engine page did, through the same functions in `hub/engine/`; every tap needs a signed-in
+device. Today's links to the older Engine, Notes and Recipes pages open it, and so does a fix card's Build.
+The older pages still answer; Ask activity stays there, for checking turns by hand.
 
 ## Versions
 

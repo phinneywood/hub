@@ -442,7 +442,7 @@ def engine_friction_decide(card_id: str, choice: str, request: Request):
         friction.decide(card_id, choice, login=login)
     except friction.Refused as error:
         return RedirectResponse("/today?problem=" + quote(str(error)), status_code=303)
-    return RedirectResponse("/engine#improvements" if choice == "build" else "/today", status_code=303)
+    return RedirectResponse("/app/#engine" if choice == "build" else "/today", status_code=303)
 
 
 @app.post("/engine/improvements/remove")

@@ -303,6 +303,39 @@ def deploy(request: Request):
     return {'ok': True, 'said': 'Updating. This takes about a minute.'}
 
 
+# ---- Engine (hub/app/engine.py): what the owner asked for, what Hub may do, what it spent ----
+
+@router.get('/api/engine')
+def engine_picture():
+    """The Engine screen as data. Reads what Hub keeps; calls no model."""
+    from . import engine
+    return engine.picture()
+
+
+@router.post('/api/engine/tell')
+def engine_tell(request: Request, body: dict = Body(...)):
+    """One line the owner typed: {"text": ...}. Sorting it may make one zero-retention model call, as on the older page."""
+    from . import engine
+    if _login(request) is None:
+        return _refuse('Tell Hub from your phone or laptop.', 403)
+    said, ok = engine.tell(str(body.get('text') or ''))
+    return {'ok': ok, 'said': said} if ok else _refuse(said)
+
+
+@router.post('/api/engine/{what}')
+def engine_tap(what: str, request: Request, body: dict = Body(...)):
+    """A tap on the Engine screen: {"key": ..., "value": ...}."""
+    from . import engine
+    if _login(request) is None:
+        return _refuse('Change this from your phone or laptop.', 403)
+    try:
+        return {'ok': True, 'said': engine.do(what, body.get('key'), body.get('value'))}
+    except engine.Refused as error:
+        return _refuse(error)
+    except (ValueError, TypeError):
+        return _refuse('Hub couldn’t read that request.', 400)
+
+
 # ---- Today (hub/app/today.py): what needs a person, then the day ----
 
 @router.get('/api/today')
