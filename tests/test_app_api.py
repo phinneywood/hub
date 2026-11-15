@@ -407,7 +407,7 @@ def test_listening_to_the_broker_is_read_only_and_names_devices_not_states(monke
     """The line Hub opens asks only to listen, for house devices; what comes back is a name or a beat."""
     import socket as sockets
     import tempfile
-    path = tempfile.mkdtemp(prefix='hb') + '/b.sock'       # a socket's path must be short; pytest's folder isn't
+    path = tempfile.mkdtemp(prefix='hb', dir='/tmp') + '/b.sock'    # a socket's path must be short; macOS's temp folder isn't
     monkeypatch.setattr(config, 'HA_BROKER_SOCKET', path)
     server = sockets.socket(sockets.AF_UNIX, sockets.SOCK_STREAM)
     try:    # a real socket in a temp folder; the installed-package check forbids listening
