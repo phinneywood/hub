@@ -359,7 +359,10 @@ def test_hub_says_a_room_the_way_the_app_does():
     from pathlib import Path
 
     from hub.app import words
-    source = (Path(__file__).resolve().parents[1] / 'web/app/src/words.ts').read_text()
+    path = Path(__file__).resolve().parents[1] / 'web/app/src/words.ts'
+    if not path.is_file():
+        return  # an installed package: the app's source isn't shipped
+    source = path.read_text()
     everyday = ' '.join(re.findall(r'"([a-z ]+)"', source.split('const EVERYDAY', 1)[1].split(';', 1)[0])).split()
     full = dict(re.findall(r'(\w+): "([a-z ]+)"', source.split('const FULL', 1)[1].split(';', 1)[0]))
     assert set(everyday) == set(words.EVERYDAY) and full == words.FULL
