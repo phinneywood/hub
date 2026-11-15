@@ -130,6 +130,11 @@ and tell me” the morning job does it.
 - Subject lines and message bodies may always be sent over such a route.
 - Approved models: Luna (`hub/luna.py`) for proposals and Jev (`preschool/jev.py`) for yes/no
   judgements. Another model needs the owner's yes.
+- Exception (2026-11-14): Ask in the app (`hub/app/ask/`, docs/app.md) uses Claude Sonnet on the owner's own
+  Anthropic API key for requests about the house: what the owner typed, the rooms, lights and speakers, what
+  is playing, and what Hub remembers. That route is not zero-retention, so mail, the calendar, school and
+  today's list never go there: Ask answers those on Luna's zero-retention route, and the house model is
+  given neither the question nor the answer. Every other tool keeps the zero-retention routes.
 - Senders with AI switched off are never read for a model.
 - Agents build and test with made-up data. Real mail stays out of coding sessions.
 - Deploying, restarting, new schedules, pushing and merging to main need the owner's yes each time.

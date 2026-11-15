@@ -274,6 +274,67 @@ def play(speaker: str, request: Request, body: dict = Body(...)):
     return _change(request, work)
 
 
+# ---- Ask (hub/app/ask): say it, and Hub does it or answers ----
+
+_asking, _asking_lock = set(), __import__('threading').Lock()
+
+
+@router.get('/api/ask')
+def ask_status(request: Request):
+    """Whether Ask can run, this person's last few turns, what they tend to ask around now, and what Hub remembers."""
+    from .ask import brain, turns
+    why, login = brain.warm() or brain.limits(), _login(request)
+    return {'ready': why is None, 'why': why, 'recent': turns.recent(login), 'usual': turns.usual(login) if why is None else [],
+            'remembers': turns.remembered()}
+
+
+@router.post('/api/ask')
+async def ask(request: Request, body: dict = Body(...)):
+    """One request, answered as it happens: a stream of small events (words, a card to draw, how it ended).
+    A caller that doesn't ask for a stream (a Shortcut on the owner's phone, for Siri) gets the whole answer at the
+    end instead, as {"said": ...}."""
+    from .ask import brain
+    login = _login(request)
+    if login is None:
+        return _refuse('Ask from your phone or laptop.', 403)
+    text = str(body.get('text') or '')[:brain.MESSAGE_LENGTH]
+    with _asking_lock:
+        if login in _asking:
+            return _refuse('Hub is still on your last request.')
+        _asking.add(login)
+
+    async def events():
+        try:
+            async for event in brain.run(text, login):
+                yield 'data: ' + json.dumps(event, separators=(',', ':')) + '\n\n'
+        finally:
+            with _asking_lock:
+                _asking.discard(login)
+
+    if 'text/event-stream' in request.headers.get('accept', ''):
+        return StreamingResponse(events(), media_type='text/event-stream', headers={'X-Accel-Buffering': 'no'})
+    said, end = [], {}
+    try:
+        async for event in brain.run(text, login):
+            if event['t'] == 'say':
+                said.append(event['text'])
+            elif event['t'] == 'done':
+                end = event
+    finally:
+        with _asking_lock:
+            _asking.discard(login)
+    return {'ok': end.get('status') == 'ok', 'said': ' '.join(''.join(said).split())}
+
+
+@router.post('/api/memory/{note}/forget')
+def forget_note(note: int, request: Request):
+    from .ask import turns
+    if _login(request) is None:
+        return _signed_out()
+    turns.forget(note)
+    return {'ok': True, 'said': 'Forgotten'}
+
+
 @router.post('/api/undo/{batch}')
 def undo(batch: str, request: Request):
     return _change(request, lambda login: control.undo(batch, login=login, via='app', at_once=True))

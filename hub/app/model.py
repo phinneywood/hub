@@ -84,19 +84,39 @@ def _floors(rooms, room_floor, floors):
     return [{'name': floors[f]['name'] if f else (OTHER_FLOOR if len(by) > 1 else ''), 'rooms': by[f]} for f in order]
 
 
+_main = {'leader': None}        # the speaker that led the house's main music at the last reading
+
+
+def streams(found):
+    """Every group of speakers, the house's main music first: one that is playing before one that is paused.
+    Of two that play, the one that was the main music a moment ago stays it, so starting something in another
+    room doesn't move the playing strip; failing that, the one in more rooms (the music downstairs before a
+    lullaby in one bedroom)."""
+    groups = sorted(nowplaying.groups(found), key=lambda g: (not g['playing'], g['state'] != 'paused', g['leader'] != _main['leader'],
+                                                             -sum(s['in'] for s in g['speakers'])))
+    if groups:
+        _main['leader'] = groups[0]['leader']
+    return groups
+
+
 def _music(found, homes):
     """What the house is playing: the group that plays, else the one paused, else any. None without speakers.
     A speaker is called by its room. One that can't be reached and belongs to no room (a laptop that is asleep,
-    say) is left out: it is not part of the house."""
-    groups = nowplaying.groups(found)
+    say) is left out: it is not part of the house. When other rooms are playing something of their own (a
+    lullaby upstairs, say), `also` names each of those and its speakers are marked `other`."""
+    groups = streams(found)
     if not groups:
         return None
-    now = groups[0]
+    now, others = groups[0], [g for g in groups[1:] if g['playing']]
+    elsewhere = {s['id'] for g in others for s in g['speakers'] if s['in']}
     return {'speaker': now['leader'], 'playing': now['playing'], 'state': now['state'], 'title': now['title'],
             'artist': now['artist'], 'album': now['album'], 'volume': now['volume'],
             'speakers': [{'id': s['id'], 'name': homes.get(s['id']) or s['name'], 'in': s['in'], 'leads': s['leads'],
-                          'volume': s['volume'], 'offline': s['offline']}
-                         for s in now['speakers'] if homes.get(s['id']) or not s['offline'] or s['in']]}
+                          'volume': s['volume'], 'offline': s['offline'], 'other': s['id'] in elsewhere}
+                         for s in now['speakers'] if homes.get(s['id']) or not s['offline'] or s['in']],
+            'also': [{'speaker': g['leader'], 'title': g['title'], 'artist': g['artist'],
+                      'speakers': [s['id'] for s in g['speakers'] if s['in']],
+                      'rooms': [homes.get(s['id']) or s['name'] for s in g['speakers'] if s['in']]} for g in others]}
 
 
 def _facts(found):
@@ -132,7 +152,7 @@ def home(found, floors=None):
     names += [s['room'] for s in found['speakers'] if s['room'] != read.OTHER_ROOM and s['room'] not in names]
     homes = {s['id']: _home_of(s, names) for s in found['speakers']}
     music = _music(found, homes)
-    sounding = {s['id'] for s in music['speakers'] if s['in']} if music and music['playing'] else set()
+    sounding = {s['id'] for s in music['speakers'] if (s['in'] and music['playing']) or s['other']} if music else set()
     outside = outdoors(found, floors)
     rooms = [_room(r, found['speakers'], homes, sounding, outside) for r in found['rooms']
              if r['name'] != read.OTHER_ROOM and any(d['kind'] == 'light' for d in r['devices'])]

@@ -59,7 +59,15 @@ VIA = ('card', 'bar', 'music', 'app')    # the Ask card, the mini-player across 
 
 def tap(anchor, action, *, login, target=None, value=None, via='card'):
     """One tap on the card. Returns control.change's result. Raises control.Refused (nothing was sent)."""
-    if action not in ACTIONS or via not in VIA:
+    if via not in VIA:
+        raise control.Refused('The card can’t do that.')
+    return change(anchor, action, login=login, target=target, value=value, via=via)
+
+
+def change(anchor, action, *, login, via, target=None, value=None):
+    """The same change, for callers inside Hub that name themselves (`via`), such as Ask. A browser's tap always
+    comes through tap(), which only accepts the names of Hub's own screens."""
+    if action not in ACTIONS:
         raise control.Refused('The card can’t do that.')
     found = read.snapshot(fresh=True)
     players = {d['id']: d for d in found['speakers']}

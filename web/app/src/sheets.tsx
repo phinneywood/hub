@@ -1,14 +1,13 @@
 // What rises over the house: a room, the music, and Ask.
-import { signal } from "@preact/signals";
 import { useEffect, useState } from "preact/hooks";
-import { dimDevice, dimRoom, dragDevice, dragRoom, dragVolume, forgetScene, keepScene, loadPicks, picks, play, playPick, runScene, seen,
+import { dimDevice, dimRoom, dragDevice, dragRoom, dragVolume, forgetScene, keepScene, loadPicks, pauseStream, picks, play, playPick,
   setVolume, sheet, skip, speakerIn, switchDevice, switchRoom } from "./state";
 import type { House, Music, Room, Speaker } from "./types";
 import { Sleeve } from "./screens";
 import { Icon, SheetFrame, Slider, Switch } from "./ui";
-import { howMany } from "./words";
+import { howMany, list } from "./words";
 
-function SpeakerRow({ speaker, title, sub }: { speaker: Speaker; title: string; sub?: string }) {
+export function SpeakerRow({ speaker, title, sub }: { speaker: Speaker; title: string; sub?: string }) {
   return (
     <div class="ctl">
       <div class="ctl-name"><b>{title}</b>{sub && <span>{sub}</span>}</div>
@@ -21,6 +20,7 @@ function SpeakerRow({ speaker, title, sub }: { speaker: Speaker; title: string; 
 
 export function RoomSheet({ room, music }: { room: Room; music: Music | null }) {
   const speaker = music?.speakers.find((s) => s.id === room.speaker);
+  const own = (music?.also ?? []).find((stream) => speaker && stream.speakers.includes(speaker.id));   // this room's own music
   const says = room.lit ? `${howMany(room.lit, "light")} on.` : room.lights.length === 1 ? "The light is off." : "All lights are off.";
   return (
     <SheetFrame title={room.name} sub={says}>
@@ -38,8 +38,9 @@ export function RoomSheet({ room, music }: { room: Room; music: Music | null }) 
       ))}
       {speaker && !speaker.offline && <h2>Speaker</h2>}
       {speaker && !speaker.offline && (
-        <SpeakerRow speaker={speaker} title={speaker.in && music?.playing ? music.title || "Playing" : "Not playing"}
-          sub={speaker.in ? `Volume ${speaker.volume ?? 0}%` : music?.playing ? "Switch on to play what’s on" : undefined} />
+        <SpeakerRow speaker={speaker}
+          title={speaker.other ? own?.title || "Playing" : speaker.in && music?.playing ? music.title || "Playing" : "Not playing"}
+          sub={speaker.in || speaker.other ? `Volume ${speaker.volume ?? 0}%` : music?.playing ? "Switch on to play what’s on" : undefined} />
       )}
       {room.others.length > 0 && <h2>Also here</h2>}
       {room.others.map((o) => (
@@ -67,7 +68,16 @@ export function PlayingSheet({ music }: { music: Music }) {
         <button type="button" aria-label="Next" onClick={() => void skip("next")}><Icon name="next" /></button>
       </div>
       <h2>Where it plays</h2>
-      {reachable.map((s) => <SpeakerRow speaker={s} title={s.name} key={s.id} />)}
+      {reachable.map((s) => <SpeakerRow speaker={s} title={s.name} sub={s.other ? "Playing something else" : undefined} key={s.id} />)}
+      {(music.also ?? []).length > 0 && <h2>Also playing</h2>}
+      {(music.also ?? []).map((stream) => (
+        <div class="ctl two" key={stream.speaker}>
+          <div class="ctl-name"><b>{stream.title || "Music"}</b><span>{list(stream.rooms)}</span></div>
+          <button type="button" class="mini" aria-label={`Pause the music in ${list(stream.rooms)}`} onClick={() => void pauseStream(stream.speaker)}>
+            <Icon name="pause" />
+          </button>
+        </div>
+      ))}
       {silent > 0 && <p class="quiet">{howMany(silent, "speaker")} can’t be reached right now.</p>}
       {found.length > 0 && <h2>Play something else</h2>}
       {found.length > 0 && (
@@ -133,75 +143,4 @@ export function KeepSheet({ now }: { now: House }) {
       ))}
     </SheetFrame>
   );
-}
-
-// ---- Ask: for now, a list you type into. Names switch things at once; anything else goes to the chat. ----
-
-const asked = signal("");
-const SAY = "hub.say";      // the chat page reads this once and sends it (web/ask): only Hub's own pages can set it
-
-/** Hand what was typed to Hub's chat, which still answers everything this list can't. */
-function toChat(text: string) {
-  try {
-    if (text) sessionStorage.setItem(SAY, text.slice(0, 2000));
-  } catch {
-    /* the chat just opens empty */
-  }
-  location.href = "/ask";
-}
-
-function marked(name: string, text: string) {
-  const at = name.toLowerCase().indexOf(text.toLowerCase());
-  if (at < 0 || !text) return <>{name}</>;
-  return <>{name.slice(0, at)}<mark>{name.slice(at, at + text.length)}</mark>{name.slice(at + text.length)}</>;
-}
-
-function Found({ now, text }: { now: House; text: string }) {
-  const has = (name: string) => name.toLowerCase().includes(text.toLowerCase());
-  const rooms = text ? Object.values(now.rooms).filter((r) => has(r.name)) : [];
-  const scenes = now.scenes.filter((s) => !text || has(s.name));
-  const lists = text ? (picks.value ?? []).filter((p) => has(p.name)).slice(0, 4) : [];
-  return (
-    <>
-      {!text && <p class="ask-hint">Scenes run at once. A few letters find a room or a playlist. Anything else goes to the chat.</p>}
-      {rooms.map((r) => (
-        <div class="sug" key={r.id}>
-          <span>{marked(r.name, text)}<small>{r.on ? (r.dims ? `Lights on at ${r.level}%` : "Lights on") : "Lights off"}</small></span>
-          <Switch on={r.on} label={`${r.name} lights`} onChange={() => void switchRoom(r.id)} />
-        </div>
-      ))}
-      {scenes.map((s) => (
-        <button type="button" class="sug" key={s.id} onClick={() => { void runScene(s); if (sheet.value?.kind === "ask") sheet.value = null; }}>
-          <span>{marked(s.name, text)}<small>Scene</small></span><span class="go"><Icon name="bolt" /></span>
-        </button>
-      ))}
-      {lists.map((p) => (
-        <button type="button" class="sug" key={p.uri} onClick={() => { void playPick(p); if (sheet.value?.kind === "ask") sheet.value = null; }}>
-          <span>{marked(p.name, text)}<small>Playlist. Plays where music is on now.</small></span><span class="go"><Icon name="play" /></span>
-        </button>
-      ))}
-      {text
-        ? <button type="button" class="sug" onClick={() => toChat(text)}><span>Ask Hub “{text}”<small>Opens the chat and asks</small></span><span class="go"><Icon name="up" /></span></button>
-        : <a class="sug" href="/ask"><span>Ask in the chat<small>For anything this list can’t do yet</small></span><span class="how">Open</span></a>}
-    </>
-  );
-}
-
-export function Ask({ focus }: { focus?: boolean }) {
-  useEffect(() => void loadPicks(), []);
-  const now = seen.value;
-  return (
-    <div class="ask">
-      <div class="ask-scroll"><div>{now && <Found now={now} text={asked.value.trim()} />}</div></div>
-      <form class="composer" onSubmit={(e) => { e.preventDefault(); if (asked.value.trim()) toChat(asked.value.trim()); }}>
-        <input class="field" id="askq" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" placeholder="Say it, or type a room"
-          aria-label="Ask Hub, or type a room, a scene or a playlist" value={asked.value} autofocus={focus}
-          onInput={(e) => (asked.value = e.currentTarget.value)} />
-      </form>
-    </div>
-  );
-}
-
-export function AskSheet() {
-  return <SheetFrame tall><Ask focus /></SheetFrame>;
 }

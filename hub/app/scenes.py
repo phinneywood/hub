@@ -99,7 +99,7 @@ def _number(scene_id):
         raise control.Refused('That scene isn’t kept any more.') from None
 
 
-def run(scene_id, *, login):
+def run(scene_id, *, login, via='app'):
     """Put the house into a kept scene: only the lights that differ are asked, as one batch with one Undo."""
     scene = next((s for s in kept() if s['id'] == f'{PREFIX}{_number(scene_id)}'), None)
     if scene is None:
@@ -124,4 +124,4 @@ def run(scene_id, *, login):
     changes = [c for c in changes if c[0]]
     if not changes:
         raise control.Refused('The house is already like that.')
-    return control.several(changes, login=login, via='app')
+    return control.several(changes, login=login, via=via, taps=via == 'app')

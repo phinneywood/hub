@@ -345,9 +345,10 @@ def change(targets, action, *, login, via, value=None, query=None, kind=None, me
     return _carry_out(plans, login=login, via=via, alone=alone, at_once=at_once)
 
 
-def several(changes, *, login, via):
+def several(changes, *, login, via, taps=True):
     """Different changes as one batch with one Undo, for a scene: [(entity ids, action, value)], lights, plugs and
-    fans only. Each is checked exactly as change() checks it; lamps that get the same change share a request."""
+    fans only. Each is checked exactly as change() checks it; lamps that get the same change share a request.
+    `taps`: counted against the app's own limit (a finger); False counts it against Ask's (a model)."""
     try:
         found = devices(read.snapshot(fresh=True))
     except broker.HomeDown as error:
@@ -361,12 +362,13 @@ def several(changes, *, login, via):
             plans.append((d, action, *_steps(d, action, value)))
     if not plans:
         raise Refused('Nothing to change.')
-    return _carry_out(plans, login=login, via=via, alone=False, at_once=True)
+    return _carry_out(plans, login=login, via=via, alone=False, at_once=True, taps=taps)
 
 
-def _carry_out(plans, *, login, via, alone, at_once):
+def _carry_out(plans, *, login, via, alone, at_once, taps=None):
     """Send the planned changes, record each with what was there before, and report."""
-    _spend(1 if at_once else len(plans), taps=at_once or via == 'app')      # a room switched together is one tap
+    taps = (at_once or via == 'app') if taps is None else taps
+    _spend(1 if at_once else len(plans), taps=taps)      # a room switched together is one tap
     batch, now, rows = uuid.uuid4().hex[:12], time.time(), []
     shared = _at_once([(d['id'], steps) for d, _, steps, _ in plans]) if at_once else [None] * len(plans)
     for (d, act, steps, words), sent in zip(plans, shared):

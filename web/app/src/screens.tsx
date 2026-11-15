@@ -3,6 +3,7 @@ import type { JSX } from "preact";
 import { useRef, useState } from "preact/hooks";
 import { go, house, look, me, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
 import type { Look } from "./state";
+import { able, forgetNote } from "./asking";
 import type { Floor, House, Room } from "./types";
 import { Bars, Icon } from "./ui";
 import { clock, houseSays, list, musicSays, playingIn, when } from "./words";
@@ -21,7 +22,7 @@ export function spans(count: number): number[] {
   return out;
 }
 
-function RoomCell({ room, span, order }: { room: Room; span: number; order: number }) {
+export function RoomCell({ room, span, order }: { room: Room; span: number; order: number }) {
   const timer = useRef(0);
   const opened = useRef(false);
   const [pressed, setPressed] = useState(false);
@@ -231,6 +232,19 @@ export function System() {
           {links.music && <a class="row free" href={links.music}><div class="row-main"><b>Music Assistant</b><span>The library, the queue and playlists</span></div></a>}
         </div>
       </section>
+      {(able.value?.remembers.length ?? 0) > 0 && (
+        <section class="block">
+          <h2>Hub remembers</h2>
+          <div class="rows">
+            {able.value!.remembers.map((note) => (
+              <div class="ctl two" key={note.id}>
+                <div class="ctl-name"><b>{note.note}</b></div>
+                <button type="button" class="forget" onClick={() => void forgetNote(note.id)}>Forget</button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <section class="block">
         <h2>The look</h2>
         <div class="choices" role="radiogroup" aria-label="The look">

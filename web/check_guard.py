@@ -15,7 +15,7 @@ def apply(patch):
     from preschool.support import luna as preschool_luna
     patch.setattr(model_key, '_keychain', lambda service: None)
     patch.setattr(model_key, '_exists', lambda service: False)
-    patch.setattr(model_key, '_onepassword', lambda: None)
+    patch.setattr(model_key, '_onepassword', lambda reference=None: None)
     model_key._cache.update(value=None, source=None, at=float('-inf'))
     patch.setattr(preschool_luna, 'key', lambda: None)
     patch.setattr(bridge, 'health', lambda: False)

@@ -285,6 +285,11 @@ export async function play(on: boolean) {
   answered(await api.post(`music/${encodeURIComponent(music.speaker)}`, { action: on ? "play" : "pause" }), ["play"], "");
 }
 
+/** Pause music that is playing somewhere else in the house, apart from the main one. */
+export async function pauseStream(speaker: string) {
+  answered(await api.post(`music/${encodeURIComponent(speaker)}`, { action: "pause" }), [], "Paused");
+}
+
 export async function skip(to: "next" | "previous") {
   const music = seen.value?.music;
   if (music) answered(await api.post(`music/${encodeURIComponent(music.speaker)}`, { action: to }), [], "");
@@ -325,11 +330,16 @@ export async function loadPicks() {
   }
 }
 
+export const undone = signal<string[]>([]);      // the changes put back this sitting, so their Undo isn't offered twice
+
 export async function undo(batch: string) {
   toast.value = null;
   const answer = await api.post(`undo/${encodeURIComponent(batch)}`);
   if (answer.error) say(answer.error);
-  else say("Put back");
+  else {
+    undone.value = [...undone.value, batch];
+    say("Put back");
+  }
 }
 
 // ---- staying live ----

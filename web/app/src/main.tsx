@@ -4,7 +4,9 @@ import { useEffect } from "preact/hooks";
 import { signal } from "@preact/signals";
 import "./app.css";
 import { Dock, Home, Rail, System } from "./screens";
-import { Ask, AskSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
+import { Ask, AskSheet } from "./ask";
+import { loadAble } from "./asking";
+import { KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
 
@@ -72,5 +74,6 @@ const root = document.getElementById("app");
 if (root) {
   render(<App />, root);
   start();
+  void loadAble();
   void keepOnDevice().catch(() => undefined);     // without it the app still works; it just needs Hub to open
 }

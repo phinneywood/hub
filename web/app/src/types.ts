@@ -6,10 +6,12 @@ export interface Room {
   id: string; name: string; on: boolean; lit: number; level: number; dims: boolean; outside: boolean;
   lights: Light[]; others: Other[]; speaker: string | null; sounding: boolean;
 }
-export interface Speaker { id: string; name: string; in: boolean; leads: boolean; volume: number | null; offline: boolean }
+export interface Speaker { id: string; name: string; in: boolean; leads: boolean; volume: number | null; offline: boolean; other: boolean }
+/** Music playing somewhere else in the house, apart from the main one. */
+export interface Stream { speaker: string; title: string; artist: string; speakers: string[]; rooms: string[] }
 export interface Music {
   speaker: string; playing: boolean; state: string; title: string; artist: string; album: string;
-  volume: number | null; speakers: Speaker[];
+  volume: number | null; speakers: Speaker[]; also: Stream[];
 }
 export interface Fact { label: string; value: string; tone: string }
 export interface Floor { name: string; rooms: string[] }

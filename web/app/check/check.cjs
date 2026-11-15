@@ -162,16 +162,75 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Playing Sunday Morning"), "a pick did not play");
     await page.keyboard.press("Escape"); await page.waitForTimeout(400);
 
-    // ---- Ask: a few letters reach a room ----
+    // ---- Ask: what is usually asked around now is one tap ----
+    const answered = (text, ms) => until((t) => [...document.querySelectorAll(".turn")].pop()?.querySelector(".answer")?.textContent.startsWith(t)
+      && ![...document.querySelectorAll(".turn")].pop().querySelector(".dots"), text, ms);
+    const lastAnswer = () => page.locator(".turn .answer").last().innerText().catch(() => "(nothing)");
     if (phone) { await tap(".askbtn"); await page.waitForSelector(".sheet.in"); }
+    expect(await until(() => document.querySelector(".sug")?.textContent === "Dim the living room to 30You often ask this around now"), "what is often asked around now was not offered");
+    await page.waitForTimeout(300); await shot("6a-ask-open");
+    await page.locator(".sug").first().click();
+    expect(await answered("The living room is at 30%."), "one tap on a habit did not do it: " + await lastAnswer());
+
+    // ---- Ask: a few letters reach a room ----
     await page.fill("#askq", "liv"); await page.waitForTimeout(250); await shot("6-ask");
     expect((await page.locator(".sug").first().innerText()).startsWith("Living room"), "typing did not find the room");
     await page.locator('.sug [role="switch"]').first().click();
     expect(await until((sel) => document.querySelector(sel)?.getAttribute("aria-checked") === "false", room("living-room")), "the switch in the list did not switch the room");
-    await page.fill("#askq", "play something calm");
-    expect((await page.locator(".sug").last().innerText()).startsWith("Ask Hub “play something calm”"), "free text was not offered to the chat");
+
+    // ---- Ask: say it, and Hub does it and says so ----
+    const askFor = async (words) => { await page.fill("#askq", words); await page.keyboard.press("Enter"); };
+    const level = (id) => page.evaluate((i) => fetch("/app/api/home").then((r) => r.json()).then((h) => h.rooms[i].level), id);
+    const asking = Date.now();
+    await askFor("Dim the kitchen and living room for dinner");
+    expect(await answered("The kitchen and the living room are at 40%."), "Ask did not dim the rooms: " + await lastAnswer());
+    timings[name + "-ask"] = Date.now() - asking;
+    expect(await page.locator(".turn").last().locator(".plan .room").count() === 2, "the rooms that changed were not drawn under the answer");
+    expect(await level("kitchen") === 40 && await level("living-room") === 40, "the rooms are not at 40%");
+    expect(await page.inputValue("#askq") === "", "the field kept the words after they were sent");
+    await page.waitForTimeout(350); await shot("6b-ask-did");
+    await page.locator(".turn .took button").last().click();
+    expect(await until(() => document.querySelector(".turn.back .took")?.textContent === "Put back as it was"), "the answer did not say it was put back");
+    expect(await until(() => fetch("/app/api/home").then((r) => r.json()).then((h) => h.rooms.kitchen.level === 80)), "Undo under the answer did not put the kitchen back");
+    await askFor("some jazz in the bedroom, softly");
+    expect(await answered("Playing Evening Jazz in the bedroom at 15%."), "Ask did not play the music: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelector(".rows .ctl-name")?.textContent === "Bedroom"), "the speaker was not drawn under the answer");
+    expect(await until(() => document.querySelector(".sub")?.textContent.endsWith("Something else is playing in the bedroom.")), "Home did not say that two rooms play different things: " + await sub());
+    await askFor("what should we cook this week?");
+    expect(await answered("Kitchen is on it."), "Ask did not pass the question to Kitchen: " + await lastAnswer());
+    expect(await until(() => document.querySelectorAll(".kitchen-says .recipes li").length === 3, null, 12000), "Kitchen’s answer did not arrive under the request");
+    expect(await until(() => { const box = document.querySelector(".ask-scroll"); return box.scrollHeight - box.scrollTop - box.clientHeight < 4; }), "Kitchen’s answer arrived out of view");
+    await page.waitForTimeout(300); await shot("6c-ask-kitchen");
+    await askFor("what needs me today?");
+    expect(await answered("Two things need you today."), "a private question was not answered: " + await lastAnswer());
+    await askFor("remember to start music softly");
+    expect(await answered("Hub will remember that."), "Ask did not remember: " + await lastAnswer());
+    await askFor("unlock the front door");
+    expect(await answered("Locks, the alarm"), "Ask did not say what it can’t do: " + await lastAnswer());
+    await page.waitForTimeout(300); await shot("6d-ask-talk");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px in Ask: " + (await small()).join(", "));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Ask made the page scroll sideways");
     await page.fill("#askq", "");
     if (phone) { await page.keyboard.press("Escape"); await page.waitForTimeout(400); }
+    await tap(phone ? ".who" : ".rail .foot .tab");
+    expect(await until(() => [...document.querySelectorAll(".block h2")].some((h) => h.textContent === "Hub remembers")), "System did not list what Hub remembers");
+    await page.locator(".block .forget").first().click();
+    expect(await until(() => ![...document.querySelectorAll(".block h2")].some((h) => h.textContent === "Hub remembers")), "Forget did not forget");
+    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
+    await page.waitForSelector(".plan");
+
+    // ---- where Ask isn't set up yet, what is typed still goes somewhere: Hub's older chat ----
+    await stage("reset"); await stage("ask-away");
+    await page.reload(); await page.waitForSelector(".plan");
+    if (phone) { await tap(".askbtn"); await page.waitForSelector(".sheet.in"); }
+    expect(await until(() => document.querySelector(".ask-hint")?.textContent.endsWith("Anything else goes to the chat.")), "Ask did not say that it hands over to the chat");
+    await page.route(base + "/ask", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>The chat</title>" }));
+    await askFor("play something calm");
+    expect(await page.waitForURL(base + "/ask", { timeout: 5000 }).then(() => true, () => false), "what was typed did not open the chat");
+    expect(await page.evaluate(() => sessionStorage.getItem("hub.say")) === "play something calm", "what was typed did not go to the chat with it");
+    await page.unroute(base + "/ask");
+    await stage("ask-back");
+    await page.goto(base + "/app/"); await page.waitForSelector(".plan"); await page.waitForTimeout(1900);
 
     // ---- System, and the look ----
     await tap(phone ? ".who" : ".rail .foot .tab");

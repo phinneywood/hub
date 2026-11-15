@@ -10,6 +10,10 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
 - holding a room opens it without switching it; the dimmer, a plug, scenes, All off, keeping the house as a
   scene and running it, play and pause, a room joining the music, a playlist, the list in Ask and the look
   all work;
+- Ask offers what is often asked around now, does what is typed and says so in a sentence, draws the rooms
+  or speakers it changed, puts a change back from under the answer, shows Kitchen's reply when it arrives,
+  answers a private question, remembers and forgets, and says what it can't do;
+- on a Hub where Ask isn't set up, what is typed still reaches the older chat;
 - everything meant to be tapped is at least 44 px on its short side;
 - the app says so when the house stops answering and when Hub can't be reached, still opens without Hub,
   and reconnects by itself;
@@ -25,6 +29,11 @@ Run it after changing the app or updating its packages.
        .venv/bin/python web/app/check/demo_server.py
 
    It listens on `http://127.0.0.1:8912/`. Open that in a browser to try the app by hand.
+   Ask there runs on a stand-in for its model (`tests/ask_script.py`): a script that knows the made-up rooms
+   and a few verbs, such as “dim the kitchen”, “everything off”, “some jazz in the bedroom, softly”,
+   “play it in the dining room too”, “pause”, “movie night”, “remember to start music softly”,
+   “what should we cook this week?” and “what needs me today?”. It shows how Ask looks and feels, not how
+   well the real model understands.
 
 2. In another shell, with Playwright available to Node:
 

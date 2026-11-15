@@ -55,3 +55,8 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   Owner-approved (2026-11-11): Ask Hub hands cooking and grocery messages to Kitchen too, word for word
   with the sender's login (`catalog.HANDOFFS`). Kitchen's replies go to the page, and a short text of them
   reaches Ask's model on later turns, as data, on its zero-retention route.
+  Owner-approved (2026-11-14): Ask in the app (`hub/app/ask/`) uses Claude Sonnet on the owner's own Anthropic
+  key, through `hub/app/ask/route.py` only, for requests about the house (the owner's words, rooms, lights,
+  speakers, what is playing, what Hub remembers). Mail, the calendar, school and today's list never go
+  there: `hub/app/ask/private.py` answers them on Luna's zero-retention route. Don't give Ask's house model a
+  tool or context that carries any of those, or Kitchen's replies; read "Ask" in `docs/app.md` first.

@@ -5,11 +5,17 @@ The real app and the real change code run against a fictional house that follows
 (tests/app_world.py): tap a room and the next reading shows it. It uses a throwaway data folder, calls no
 model, looks in no key store and reaches no other machine and no service on this one (web/check_guard.py).
 Every room, name and song here is invented.
+
+Ask works here too, on a stand-in for its model (tests/ask_script.py) that picks a tool from a few plain words:
+"dim the kitchen", "everything off", "some jazz in the bedroom, softly", "play it in the dining room too",
+"pause", "movie night", "remember to start music softly", "what should we cook this week?", "what needs me today?".
+The stand-in is only a script; how well Ask understands is the real model's job and can't be judged here.
 """
 import json
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 scratch = tempfile.mkdtemp(prefix='hub-app-check-')
@@ -29,35 +35,86 @@ check_guard.apply(patch)   # before the app exists: no key store, no other machi
 
 import uvicorn  # noqa: E402
 
-from hub.app import routes, scenes  # noqa: E402
+from hub.app import levels, routes, scenes  # noqa: E402
+from hub.app.ask import private, route, turns  # noqa: E402
 from hub.main import app  # noqa: E402
-from hub.tools.house import control, music, read  # noqa: E402
-from tests import app_world  # noqa: E402
+from hub.tools.house import control, read  # noqa: E402
+from hub.tools.kitchen import client as kitchen  # noqa: E402
+from tests import app_world, ask_script  # noqa: E402
 
 (Path(scratch) / 'household.json').write_text(json.dumps({'app': {'front': True}}))
 world = app_world.install(patch)
 patch.setattr(control, 'CHECK_WAIT', 0.2)
 
-# A made-up library, so "Play something else" has something to offer.
-LIBRARY = ['Evening Jazz', 'Kitchen Dance Party', 'Sunday Morning', 'Quiet Piano', 'Rainy Day', 'Songs for the Car']
-world.names = {f'library://playlist/{n}': name for n, name in enumerate(LIBRARY, 1)}
-patch.setattr(music, 'ready', lambda: True)
-patch.setattr(music, 'playlists', lambda search=None: [
-    {'id': uri.rsplit('/', 1)[1], 'name': name, 'where': 'music', 'editable': True, 'uri': uri} for uri, name in world.names.items()])
+# A made-up library, so "Play something else" and Ask have something to offer.
+ask_script.library(patch, world)
 routes._picks.update(at=float('-inf'), found=[])
 
+# Ask, without a model: the stand-in picks the tool; the private desk and Kitchen answer with made-up words.
+patch.setattr(route, 'build', lambda http_client=None: ask_script.MODEL)
+patch.setattr(route, 'ready', lambda: None)
+patch.setattr(private, 'answer', lambda text, topics=None: (
+    'Two things need you today. The plumber comes at ten, and Robin’s class trip form is due on Friday.',
+    {'tokens_in': 0, 'tokens_out': 0, 'cost': 0.0}))
+KITCHEN_TAKES = 4.0     # seconds the made-up Kitchen takes to answer
+KITCHEN_SAYS = {'role': 'assistant', 'text': 'Three dinners you don’t usually make. Tell me which and I’ll add what you’re missing to the cart.',
+                'recipes': [{'title': 'Miso-glazed eggplant with sesame rice', 'total': '40 minutes'},
+                            {'title': 'Chicken with preserved lemon and olives', 'total': '55 minutes'},
+                            {'title': 'Black bean and squash tacos', 'total': '30 minutes'}]}
+asked_kitchen = []      # when each message was passed on; message n is its 1-based place, doubled
 
-# For the browser check only: put the made-up house back as it started, or make it stop answering.
+
+def made_up_kitchen(method, path, body=None, timeout=10):
+    """Stands where the kitchen service would: takes a message, and a few seconds later has an answer to it."""
+    if (method, path) == ('POST', '/messages'):
+        asked_kitchen.append(time.monotonic())
+        return 200, {'id': len(asked_kitchen) * 2 - 1}
+    if method == 'GET' and path.startswith('/messages?after='):
+        after, now, messages = int(path.rsplit('=', 1)[1]), time.monotonic(), []
+        for n, at in enumerate(asked_kitchen, 1):
+            if n * 2 - 1 > after:
+                messages.append({'id': n * 2 - 1, 'role': 'member', 'text': '', 'author': 'me'})
+            if n * 2 > after and now - at >= KITCHEN_TAKES:
+                messages.append(dict(KITCHEN_SAYS, id=n * 2))
+        return 200, {'messages': messages, 'busy': any(now - at < KITCHEN_TAKES for at in asked_kitchen), 'plans': {}, 'orders': {}}
+    raise kitchen.KitchenDown('made up')
+
+
+patch.setattr(kitchen, 'call', made_up_kitchen)
+
+
+def a_habit():
+    """Two earlier evenings on which the same thing was asked at about this time, so Ask offers it again."""
+    for days in (1, 2):
+        turns.save('me@example.com', 'Dim the living room to 30', 'The living room is at 30%.', [{'kind': 'rooms', 'rooms': ['living-room']}],
+                   at=time.time() - days * 86400)
+
+
+a_habit()
+
+
+# For the browser check only: put the made-up house back as it started, make it stop answering, or take Ask
+# away as on a Hub where it isn't set up yet.
 @app.post('/demo/{what}')
 def stage(what: str):
     if what == 'reset':
         world.states, world.down = app_world._states(), False
         world.sent.clear()
         control._taps.clear()
+        control._recent.clear()
+        levels.forget()
+        asked_kitchen.clear()
         for scene in scenes.kept():
             scenes.forget(scene['id'])
+        for note in turns.remembered():
+            turns.forget(note['id'])
+        with turns._db() as conn:
+            conn.execute('delete from app_ask')
+        a_habit()
     elif what in ('down', 'up'):
         world.down = what == 'down'
+    elif what in ('ask-away', 'ask-back'):
+        patch.setattr(route, 'ready', (lambda: 'Ask isn’t set up yet: its key isn’t in 1Password.') if what == 'ask-away' else (lambda: None))
     else:
         return {'ok': False}
     read.clear_cache()

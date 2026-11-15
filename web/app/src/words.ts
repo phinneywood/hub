@@ -38,7 +38,9 @@ export function musicSays(music: Music | null): string {
   if (!music || !music.playing) return "The house is quiet.";
   const where = playingIn(music).map(spoken);
   const what = music.title ? `“${music.title}”` : "Music";
-  return where.length ? `${what} is playing in ${list(where)}.` : `${what} is playing.`;
+  const elsewhere = (music.also ?? []).flatMap((stream) => stream.rooms).map(spoken);
+  return (where.length ? `${what} is playing in ${list(where)}.` : `${what} is playing.`)
+    + (elsewhere.length ? ` Something else is playing in ${list(elsewhere)}.` : "");
 }
 
 export function when(now = new Date()): string {

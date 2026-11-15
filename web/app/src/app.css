@@ -249,6 +249,9 @@ button.row { text-align: left; }
 
 .ctl { display: grid; grid-template-columns: 1fr 112px 50px; gap: 12px; align-items: center; min-height: 56px; border-bottom: 1px solid var(--line); }
 .ctl.two { grid-template-columns: 1fr 50px; }
+.ctl.vol { grid-template-columns: 1fr 150px; }
+.mini { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; justify-self: end; background: var(--line); }
+.mini .ic { width: 18px; height: 18px; }
 .ctl.first { margin-top: 18px; border-top: 1px solid var(--line); }
 .ctl-name b { display: block; font-weight: 500; }
 .ctl-name span { display: block; font-size: var(--t-xs); color: var(--ink-3); }
@@ -280,7 +283,10 @@ button.row { text-align: left; }
 
 /* ---------- ask ---------- */
 .ask { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-.ask-scroll { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 14px; }
+.ask-scroll { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; padding-bottom: 14px; overscroll-behavior: contain; }
+.ask-said { margin-top: auto; padding-top: 14px; }       /* sits on the field, and can still be scrolled back when it outgrows the sheet */
+.ask-scroll { -webkit-mask-image: linear-gradient(#0000, #000 14px); mask-image: linear-gradient(#0000, #000 14px); }   /* older words leave softly */
+.found.brief { border-top: 1px solid var(--line); padding-top: 4px; }
 .ask-hint { font-size: var(--t-xs); color: var(--ink-3); margin-bottom: 4px; }
 .sug { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; min-height: 54px; border-bottom: 1px solid var(--line); width: 100%; font-size: 18px; }
 .sug:last-child { border-bottom: 0; }
@@ -290,13 +296,48 @@ button.row { text-align: left; }
 .sug .go { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--line); }
 .sug .go .ic { width: 16px; height: 16px; }
 .sug mark { background: none; color: inherit; box-shadow: inset 0 -2px 0 var(--lamp); }
-.composer { flex: none; }
+.composer { flex: none; position: relative; }
+.composer .field { padding-right: 58px; }
+.send { position: absolute; right: 5px; top: 5px; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-3); transition: background .15s ease, color .15s ease; }
+.send.on { background: var(--lamp); color: var(--on-lamp); }
+.send .ic { width: 20px; height: 20px; }
+
+/* a request and its answer */
+.turn { padding: 6px 0 18px; }
+.turn + .turn { border-top: 1px solid var(--line); padding-top: 16px; }
+.asked { font-size: var(--t-s); color: var(--ink-3); }
+.answer { font-size: 21px; line-height: 1.28; margin-top: 8px; letter-spacing: -.005em; text-wrap: pretty; white-space: pre-line; }
+.answer.long, .says { font-size: var(--t-m); line-height: 1.42; letter-spacing: 0; }
+.says { margin-top: 12px; white-space: pre-line; text-wrap: pretty; }
+.recipes { list-style: none; margin-top: 10px; padding: 0; border-top: 1px solid var(--line); }
+.recipes li { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.recipes b { font-weight: 500; }
+.recipes small { flex: none; font-size: var(--t-xs); color: var(--ink-3); }
+.took { font-size: var(--t-xs); color: var(--ink-3); margin-top: 10px; display: flex; gap: 14px; align-items: center; }
+.took button { font-weight: 500; color: var(--ink); height: 44px; min-width: 44px; padding: 0 2px; text-align: left; }
+.took .work { flex: none; width: 34px; height: 3px; border-radius: 2px; background: var(--line); position: relative; overflow: hidden; }
+.took .work::after { content: ""; position: absolute; inset: 0 55% 0 0; background: var(--lamp); border-radius: 2px; animation: work 1.4s ease-in-out infinite alternate; }
+@keyframes work { to { inset: 0 0 0 55%; } }
+.ask .plan { margin-top: 14px; border-radius: 14px; }
+.ask .room:not(.lit) { background: var(--ground); }      /* a dark room still reads as a room on the sheet, in either look */
+.turn.back .answer { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
+.ask .rows { margin-top: 12px; }
+.ask .ctl.two { margin-top: 10px; border-top: 1px solid var(--line); }
+.turn .ctl:last-child { border-bottom: 0; }       /* the line between turns is enough */
+.kitchen-says .row-act { display: inline-grid; place-items: center; margin-top: 12px; height: 44px; padding: 0 14px; border-radius: 11px; font-size: var(--t-s); font-weight: 500; box-shadow: inset 0 0 0 1.5px var(--line-2); }
+.dots { display: inline-flex; gap: 5px; margin-top: 14px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); animation: dots 1s ease-in-out infinite; }
+.dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes dots { 0%, 100% { opacity: .25; } 40% { opacity: 1; } }
 
 .banner { margin-top: 18px; padding: 14px 16px; border-radius: 14px; background: color-mix(in oklab, var(--alarm) 16%, var(--ground)); box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--alarm) 55%, transparent); }
 .banner b { display: block; font-weight: 500; }
 .banner span { display: block; font-size: var(--t-s); color: var(--ink-2); margin-top: 2px; }
 .toast { position: fixed; left: 50%; bottom: 150px; transform: translate(-50%, 20px); z-index: 20; background: var(--ink); color: var(--ground); border-radius: 14px; padding: 0 8px 0 16px; height: 50px; display: flex; align-items: center; gap: 14px; white-space: nowrap; opacity: 0; transition: opacity .2s ease, transform .3s var(--ease); font-weight: 500; }
 .toast.in { opacity: 1; transform: translate(-50%, 0); }
+/* over a sheet the line sits at the top, clear of what the sheet is showing */
+body:has(.sheet.in) .toast { bottom: auto; top: max(14px, env(safe-area-inset-top)); transform: translate(-50%, -20px); }
+body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
 .toast button { height: 44px; padding: 0 12px; font-weight: 500; position: relative; isolation: isolate; }
 .toast button::before { content: ""; position: absolute; inset: 4px 0; border-radius: 9px; background: color-mix(in oklab, var(--ground) 14%, transparent); z-index: -1; }
 
