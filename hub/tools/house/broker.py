@@ -86,13 +86,12 @@ def listen(domains=LISTEN):
     Raises NotSent when the broker isn't there, HomeDown when it says no (an older broker has no such
     operation) or the line goes quiet. Closing the generator hangs up."""
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.settimeout(LISTEN_QUIET)
     try:
-        sock.connect(str(config.HA_BROKER_SOCKET))
-    except OSError:
-        sock.close()
-        raise NotSent('The Home Assistant broker on this Mac isn’t answering.') from None
-    try:
+        sock.settimeout(LISTEN_QUIET)
+        try:
+            sock.connect(str(config.HA_BROKER_SOCKET))
+        except OSError:
+            raise NotSent('The Home Assistant broker on this Mac isn’t answering.') from None
         sock.sendall(json.dumps({'op': 'listen', 'domains': list(domains)}, separators=(',', ':')).encode() + b'\n')
         lines = sock.makefile('rb')
         first = True
