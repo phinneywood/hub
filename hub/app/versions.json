@@ -1,8 +1,19 @@
 [
  {
   "sha": null,
-  "from": "b9269fb44755262e8b856fc5d11761dd83899e1c",
+  "from": "3649afc7cbf4cb24b068a8df04c187934cc4b408",
   "live": null,
+  "title": "Each month's best photos",
+  "changes": [
+   "Photos, under System, shows each month's best photos, chosen on the Mac from the family library and the shared library, with no model and nothing leaving the house.",
+   "Mark each one Keep, Print or Skip. Kept photos go into that month's album in Photos, and Print also saves a full-size copy to a prints folder.",
+   "Earlier and Later move between months, and More shows the runners-up."
+  ]
+ },
+ {
+  "sha": "3649afc7cbf4cb24b068a8df04c187934cc4b408",
+  "from": "b9269fb44755262e8b856fc5d11761dd83899e1c",
+  "live": "2026-11-15T22:19:18Z",
   "title": "Music in another room, and every screen in the app",
   "changes": [
    "Music in another room is one tap: the music sheet lists every room, and a quiet one has Play here, for music of its own that starts softly while the rest plays on, and Join.",

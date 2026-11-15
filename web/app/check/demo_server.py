@@ -54,8 +54,38 @@ _ready = Path(scratch) / 'releases'
 (_ready / ('d' * 40) / 'venv').mkdir(parents=True)
 (_ready / 'queue').mkdir()
 (_ready / 'pending.json').write_text(json.dumps({'sha': 'd' * 40, 'subjects': ['Home: a made-up change, ready to deploy']}))
-(Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'}}))
+(Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'},
+                                                         'photos': {'dir': str(Path(scratch) / 'curator')}}))
 world = app_world.install(patch)
+
+
+def _swatch(hue):
+    """A plain colour wash standing in for a photo's preview, as a PNG."""
+    import colorsys
+    import struct
+    import zlib
+    w, h = 64, 48
+    rows = b''.join(b'\0' + bytes(int(255 * c) for x in range(w)
+                                  for c in colorsys.hsv_to_rgb(hue, .35 + .4 * x / w, .45 + .4 * y / h)) for y in range(h))
+    chunk = lambda kind, data: struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))  # noqa: E731
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0))
+            + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
+
+
+# The Photos screen: a made-up month the curator chose, with previews that are colour washes.
+_curator = Path(scratch) / 'curator'
+(_curator / 'months').mkdir(parents=True)
+(_curator / 'thumbs').mkdir()
+_shots = [{'id': f'{n:08X}-0000-4000-8000-000000000000', 'taken': f'2026-10-{2 + n:02d}T{9 + n % 8:02d}:15:00-07:00',
+           'people': [['Alex'], ['Sam'], ['Alex', 'Sam'], []][n % 4], 'favorite': n % 5 == 0, 'shared': n % 2 == 0}
+          for n in range(16)]
+for _n, _shot in enumerate(_shots):
+    (_curator / 'thumbs' / f"{_shot['id']}.jpg").write_bytes(_swatch(_n / 16))
+(_curator / 'months' / '2026-10.json').write_text(json.dumps({'month': '2026-10', 'album': 'October 2026', 'looked_at': 412,
+                                                              'picks': _shots[:12], 'more': _shots[12:]}))
+(_curator / 'marks.json').write_text(json.dumps({_shots[1]['id']: {'mark': 'keep', 'by': 'me@example.com', 'at': 0},
+                                                 _shots[4]['id']: {'mark': 'print', 'by': 'me@example.com', 'at': 0}}))
+(_curator / 'applied.json').write_text(json.dumps({'album': [_shots[1]['id']], 'print': []}))
 
 # The Engine screen: a made-up instruction, something to build and a note waiting for a tap.
 from hub.engine import notes as engine_notes, state as engine_state  # noqa: E402

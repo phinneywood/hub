@@ -1,5 +1,5 @@
 // Every request the app makes to Hub. Same origin only; Hub refuses a change from anywhere else.
-import type { Changes, Down, Engine, House, MailSettings, Me, Pick, Releases, Said } from "./types";
+import type { Changes, Down, Engine, House, MailSettings, Me, Photos, Pick, Releases, Said } from "./types";
 
 export async function get<T>(path: string): Promise<T> {
   const answer = await fetch("/app/api/" + path, { headers: { accept: "application/json" } });
@@ -26,3 +26,4 @@ export const versions = () => get<Releases>("versions");
 export const engine = () => get<Engine>("engine");
 export const changes = () => get<Changes>("changes");
 export const mailSettings = () => get<MailSettings>("mail-settings");
+export const photos = (month = "") => get<Photos>("photos" + (month ? "?month=" + encodeURIComponent(month) : ""));

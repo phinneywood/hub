@@ -230,6 +230,7 @@ export function System() {
         <h2>Under the hood</h2>
         <div class="rows">
           {me.value.update && <button type="button" class="row free lit" onClick={() => go("versions")}><div class="row-main"><b>A new version is ready</b><span>Open it to deploy</span></div></button>}
+          <button type="button" class="row free" onClick={() => go("photos")}><div class="row-main"><b>Photos</b><span>Each month’s best, chosen on this Mac</span></div></button>
           <button type="button" class="row free" onClick={() => go("changes")}><div class="row-main"><b>Everything Hub changed</b><span>With Undo, for a day</span></div></button>
           {links.ha && <a class="row free" href={links.ha}><div class="row-main"><b>Home Assistant</b><span>Devices, rooms and automations</span></div></a>}
           {links.music && <a class="row free" href={links.music}><div class="row-main"><b>Music Assistant</b><span>The library, the queue and playlists</span></div></a>}

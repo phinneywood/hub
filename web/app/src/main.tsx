@@ -12,6 +12,7 @@ import { Versions } from "./versions";
 import { Engine } from "./engine";
 import { MailSettings } from "./mailrules";
 import { Changes } from "./changes";
+import { Photos } from "./photos";
 import { Kitchen, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
 import { HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
@@ -48,7 +49,7 @@ function Sheets() {
 
 function Screen() {
   const where = view.value;
-  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "today" ? <Today /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
+  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "photos" ? <Photos /> : where === "today" ? <Today /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
 }
 
 function App() {
