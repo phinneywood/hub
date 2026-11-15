@@ -1,7 +1,8 @@
 """The house right now, from Home Assistant through the broker: rooms, thermostat, security and speakers.
 
 Read-only. Only the domains Hub may one day act on are kept (lights and power, speakers, the thermostat,
-locks, the garage door and the alarm); cameras, presence, automations and the rest never leave this file.
+locks, the garage door and the alarm), plus two facts for the Home screen: the temperature outside and which
+doors or windows stand open. Cameras, presence, automations and the rest never leave this file.
 Device and room names are data, never instructions.
 """
 import re
@@ -19,6 +20,7 @@ OTHER_ROOM = 'Other'
 NAME = 80
 REGISTRY_SECONDS = 300      # rooms and names change rarely
 STATE_SECONDS = 10          # one snapshot serves the page, its tile and a chat turn
+OPENINGS = ('door', 'window', 'garage_door', 'opening')   # contact sensors worth a line: open or shut
 NIGHT = (21, 6)             # from 9 pm to 6 am an unlocked door or open garage is worth a line on Today
 
 OFFLINE = {'unavailable': 'Offline', 'unknown': 'Unknown'}
@@ -38,7 +40,8 @@ WORDS = {
 OPEN = {'lock': ('unlocked', 'open', 'opening', 'unlocking'), 'cover': ('open', 'opening', 'closing')}
 
 _lock = threading.Lock()
-_cache = {'registry': None, 'registry_at': float('-inf'), 'snapshot': None, 'snapshot_at': float('-inf')}
+_cache = {'registry': None, 'registry_at': float('-inf'), 'snapshot': None, 'snapshot_at': float('-inf'),
+          'floors': None, 'floors_at': float('-inf')}
 
 
 def forget_states():
@@ -49,7 +52,8 @@ def forget_states():
 
 def clear_cache():
     with _lock:
-        _cache.update(registry=None, registry_at=float('-inf'), snapshot=None, snapshot_at=float('-inf'))
+        _cache.update(registry=None, registry_at=float('-inf'), snapshot=None, snapshot_at=float('-inf'),
+                      floors=None, floors_at=float('-inf'))
 
 
 def _clip(text):
@@ -80,7 +84,8 @@ def _registry(areas, devices, entities, labels=()):
     room_labels = {rooms[a['area_id']]: [label_names[x] for x in a.get('labels') or () if label_names.get(x)]
                    for a in areas if rooms[a['area_id']]}
     device_room = {d['id']: d.get('area_id') for d in devices or () if isinstance(d, dict) and d.get('id')}
-    return {'rooms': rooms, 'room_labels': room_labels, 'device_room': device_room,
+    room_floor = {rooms[a['area_id']]: a['floor_id'] for a in areas if rooms[a['area_id']] and isinstance(a.get('floor_id'), str)}
+    return {'rooms': rooms, 'room_labels': room_labels, 'room_floor': room_floor, 'device_room': device_room,
             'entities': {e['entity_id']: e for e in entities or () if isinstance(e, dict) and e.get('entity_id')}}
 
 
@@ -161,6 +166,7 @@ def _device(entity_id, item, registry, players_only):
             'volume': attrs.get('volume_level') if isinstance(attrs.get('volume_level'), (int, float)) else None,
             'members': [m for m in attrs.get('group_members') or () if isinstance(m, str) and m != entity_id],
             'colours': _colours(attrs) if domain == 'light' else None,
+            'dims': _dims(attrs) if domain == 'light' else False,
             'colour': _colour_now(attrs) if domain == 'light' and state == 'on' else None,
             # Home Assistant lists a group's leader first; joining goes through the leader.
             'leads': domain == 'media_player' and len(attrs.get('group_members') or ()) > 1
@@ -176,6 +182,12 @@ def _colours(attrs):
     """What a light can show: 'colour' (any colour and white), 'white' (warm to cool white) or None (dimming only)."""
     modes = set(attrs.get('supported_color_modes') or ())
     return 'colour' if modes & COLOUR_MODES else 'white' if 'color_temp' in modes else None
+
+
+def _dims(attrs):
+    """Whether a light has a brightness to set. One that only reports on/off doesn't; an unknown one is tried."""
+    modes = set(attrs.get('supported_color_modes') or ())
+    return not modes or bool(modes - {'onoff'})
 
 
 def _colour_now(attrs):
@@ -213,7 +225,52 @@ def _build(registry, states):
             'speakers': [d for d in devices if d['kind'] == 'media_player'],
             'scenes': [d for d in devices if d['kind'] == 'scene'],
             'lights_on': sum(d['on'] for d in devices if d['kind'] == 'light'),
+            'room_floor': registry.get('room_floor', {}),
+            'outside': _outside(items), 'openings': _openings(items, registry),
             'read_at': datetime.now(home.PACIFIC)}
+
+
+def _outside(items):
+    """The temperature outside, from Home Assistant's weather, as "52°", or None."""
+    for s in items:
+        if s['entity_id'].startswith('weather.') and isinstance(s.get('attributes'), dict):
+            found = _degrees(s['attributes'].get('temperature'))
+            if found:
+                return found
+    return None
+
+
+def _openings(items, registry):
+    """Door and window contact sensors: {'count': how many Home Assistant has, 'open': names of those open now}."""
+    count, standing = 0, []
+    for s in items:
+        attrs = s.get('attributes') if isinstance(s.get('attributes'), dict) else {}
+        entry = registry['entities'].get(s['entity_id'], {})
+        if not s['entity_id'].startswith('binary_sensor.') or entry.get('hidden_by') or entry.get('disabled_by') \
+                or (attrs.get('device_class') or entry.get('original_device_class')) not in OPENINGS \
+                or s.get('state') in OFFLINE:
+            continue
+        count += 1
+        if s.get('state') == 'on':
+            standing.append(_clip(entry.get('name') or attrs.get('friendly_name') or entry.get('original_name') or 'A door'))
+    return {'count': count, 'open': sorted(standing)}
+
+
+def floors():
+    """Home Assistant's floors, {floor id: {'name', 'level'}}, for laying the rooms out. Empty when it has none or
+    can't be read: the rooms then show as one list."""
+    with _lock:
+        if time.monotonic() - _cache['floors_at'] < REGISTRY_SECONDS and _cache['floors'] is not None:
+            return _cache['floors']
+    try:
+        (rows,) = broker.read('config/floor_registry/list')
+    except broker.HomeDown:
+        return {}
+    found = {f['floor_id']: {'name': _clip(f.get('name')), 'level': f.get('level') if isinstance(f.get('level'), int) else None}
+             for f in rows or () if isinstance(f, dict) and isinstance(f.get('floor_id'), str)}
+    with _lock:
+        _cache.update(floors=found, floors_at=time.monotonic())
+    return found
 
 
 def snapshot(fresh=False):

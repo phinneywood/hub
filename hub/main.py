@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 
 from . import actions, bridge, config, delayed, luna, worker
 from .auth import require_owner
@@ -32,7 +33,8 @@ def warm_cache():
 app = FastAPI(dependencies=[Depends(require_owner), Depends(refresh_cache)], docs_url=None, redoc_url=None, openapi_url=None)
 import preschool
 app.mount("/preschool/static", StaticFiles(directory=str(Path(preschool.__file__).parent / "static")), name="preschool-static")
-app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
+# Files only are compressed here: a streamed answer (Ask, the app's live feed) must leave as it is written.
+app.mount("/static", GZipMiddleware(StaticFiles(directory=str(HERE / "static")), minimum_size=1024), name="static")
 
 for tool in TOOLS:
     app.include_router(tool["router"], prefix="/" + tool["slug"])
@@ -41,6 +43,8 @@ from .golden.routes import router as golden_router  # noqa: E402
 app.include_router(golden_router, prefix="/golden")
 from .live.routes import router as live_router  # noqa: E402
 app.include_router(live_router, prefix="/checks")
+from .app import routes as front  # noqa: E402
+app.include_router(front.router, prefix="/app")
 
 
 @app.on_event("startup")
@@ -80,7 +84,11 @@ async def same_origin_only(request: Request, call_next):
 @app.middleware("http")
 async def no_store(request: Request, call_next):
     response = await call_next(request)
-    response.headers["Cache-Control"] = "no-store"
+    path = request.url.path
+    # The app's built files are fetched by version (?v=<hash>) and its font never changes, so a phone may keep them.
+    kept = path.startswith("/static/app/") and response.status_code == 200 and (
+        "v" in request.query_params or path.startswith("/static/app/fonts/"))
+    response.headers["Cache-Control"] = "public, max-age=31536000, immutable" if kept else "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     if "content-security-policy" not in response.headers:      # the Home and Music screens set their own, to hold one frame
         response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'"
@@ -189,7 +197,14 @@ for _address, _name in (("/favicon.ico", "favicon.ico"), ("/apple-touch-icon.png
 
 @app.get("/", response_class=HTMLResponse)
 def landing(request: Request):
-    """Hub opens on Ask. The same page answers at /ask; the day's cards are at /today."""
+    """Hub opens on Ask, or on the app once the owner sets "app": {"front": true} in household.json.
+    The chat also answers at /ask, the app at /app, the day's cards at /today."""
+    from . import household
+    try:
+        if household.section("app").get("front") is True:
+            return RedirectResponse("/app/", status_code=302)
+    except ValueError:
+        pass
     return render(request, "ask/chat.html", active="ask")
 
 

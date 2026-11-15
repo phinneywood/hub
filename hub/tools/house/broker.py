@@ -11,7 +11,7 @@ import socket
 from ... import config
 
 READS = ('config/area_registry/list', 'config/device_registry/list', 'config/entity_registry/list',
-         'config/label_registry/list', 'get_states')
+         'config/label_registry/list', 'config/floor_registry/list', 'get_states')
 # (domain, service) -> the data keys it may carry besides entity_id. Lights, power and speakers only;
 # locks, the garage, the alarm, the thermostat and automations are not here. A light takes at most one colour.
 COLOURS = {'rgb_color', 'hs_color', 'xy_color', 'color_temp_kelvin'}
@@ -29,6 +29,9 @@ WRITES = {
 }
 ENTITY = re.compile(r'^(light|switch|fan|scene|media_player)\.[a-z0-9_]{1,120}$')
 MEDIA_TYPES = {'track', 'album', 'artist', 'playlist', 'radio'}
+# A whole room in one request: lights, plugs and fans may be switched (and lights dimmed) several at a time.
+TOGETHER = ('light', 'switch', 'fan')
+MOST = 40
 # Something concrete Music Assistant can play: its own address for one item, never words. The provider part is
 # "library" or a provider instance, which Music Assistant names <domain>--<random>, such as apple_music--Ab3dE6fG;
 # the id is the provider's own and may hold dots, dashes or slashes. A description sent as media_id makes Music
@@ -109,9 +112,13 @@ def _checked(domain, service, data):
     allowed = WRITES.get((domain, service))
     if allowed is None or not isinstance(data, dict) or set(data) - allowed - {'entity_id'}:
         raise ValueError('Hub may not do that in Home Assistant.')
-    if not isinstance(data.get('entity_id'), str) or not ENTITY.fullmatch(data['entity_id']) \
-            or data['entity_id'].partition('.')[0] != ('media_player' if domain == 'music_assistant' else domain):
-        raise ValueError('Hub may not do that in Home Assistant.')
+    kind = 'media_player' if domain == 'music_assistant' else domain
+    named = data.get('entity_id')
+    several = isinstance(named, list) and domain in TOGETHER and 1 <= len(named) <= MOST \
+        and all(isinstance(e, str) for e in named) and len(set(named)) == len(named) and not COLOURS & set(data)
+    for entity in named if several else [named]:
+        if not isinstance(entity, str) or not ENTITY.fullmatch(entity) or entity.partition('.')[0] != kind:
+            raise ValueError('Hub may not do that in Home Assistant.')
     if 'brightness_pct' in data and not (isinstance(data['brightness_pct'], int) and 1 <= data['brightness_pct'] <= 100):
         raise ValueError('Brightness must be 1 to 100.')
     _colour(data)

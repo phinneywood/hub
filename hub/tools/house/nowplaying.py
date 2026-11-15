@@ -7,7 +7,7 @@ in Music Assistant show up on the next read. Every tap goes through control.chan
 """
 from . import control, read, zones
 
-ACTIONS = ('play', 'pause', 'next', 'volume', 'group_volume', 'add', 'remove')
+ACTIONS = ('play', 'pause', 'next', 'previous', 'volume', 'group_volume', 'add', 'remove')
 
 
 def _group(anchor, players):
@@ -54,7 +54,7 @@ def groups(found=None):
     return sorted(out, key=lambda g: (not g['playing'], g['state'] != 'paused'))
 
 
-VIA = ('card', 'bar', 'music')       # the Ask card, the mini-player across Hub's pages, the Music screen
+VIA = ('card', 'bar', 'music', 'app')    # the Ask card, the mini-player across Hub's pages, the Music screen, the app
 
 
 def tap(anchor, action, *, login, target=None, value=None, via='card'):
@@ -66,7 +66,7 @@ def tap(anchor, action, *, login, target=None, value=None, via='card'):
     if anchor not in players:
         raise control.Refused('That speaker isn’t in Home Assistant any more.')
     leader, group = _group(anchor, players)
-    if action in ('play', 'pause', 'next'):
+    if action in ('play', 'pause', 'next', 'previous'):
         return control.change([leader['id']], action, login=login, via=via)
     if value is None and action in ('volume', 'group_volume'):
         raise control.Refused('Say the volume, from 0 to 100.')
