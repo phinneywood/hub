@@ -223,7 +223,7 @@ def test_without_the_door_nothing_changes(monkeypatch):
     client = TestClient(app)
     assert read.framed() == {} and read.opens()['ha_url'] == HA
     page = client.get('/tools', headers=SIGNED_IN).text
-    assert 'Insights' in page and '/house/assistant' not in page and 'Opens in a new tab' in page
+    assert '/house/assistant' not in page and 'Opens in a new tab' in page
     assert client.get('/house/assistant', headers=SIGNED_IN, follow_redirects=False).headers['location'] == '/house/changes'
     assert client.get('/house', headers=SIGNED_IN, follow_redirects=False).headers['location'] == HA
 
@@ -239,7 +239,7 @@ def test_with_the_door_home_assistant_and_music_assistant_are_screens_of_hub():
     music_page = client.get('/house/player', headers=SIGNED_IN)
     assert f'src="{HA}/app/abc123_music_assistant"' in music_page.text
     nav = client.get('/today', headers=SIGNED_IN).text
-    assert '>Home</a>' in nav and '>Music</a>' in nav and '>Insights</a>' not in nav
+    assert 'href="/house/assistant">Home Assistant</a>' in nav and 'href="/house/player">Music Assistant</a>' in nav
     tools = client.get('/tools', headers=SIGNED_IN).text
     assert 'href="/insights"' in tools and 'href="/house/assistant"' in tools and 'Opens in a new tab' not in tools
     assert client.get('/house', headers=SIGNED_IN, follow_redirects=False).headers['location'] == '/house/assistant'

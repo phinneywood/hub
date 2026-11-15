@@ -379,7 +379,7 @@ def test_a_whole_turn_on_the_real_model_class_sends_exactly_lunas_route_and_reco
 
 def test_the_page_is_in_the_nav_and_loads_only_hubs_own_files(ready):
     page = ready.get('/ask')
-    assert page.status_code == 200 and '<a href="/ask" class="on" aria-current="page">Ask</a>' in page.text
+    assert page.status_code == 200 and 'href="/app/#system"' in page.text   # the older chat leads back to the app
     assert '/static/ask/ask.js' in page.text and '/static/ask/ask.css' in page.text and 'id="ask-root"' in page.text
     assert page.headers['content-security-policy'] == "default-src 'self'; frame-ancestors 'none'"
     assert ready.get('/static/ask/ask.js').status_code == 200
