@@ -48,6 +48,9 @@ SCENES = {
                                           'light.kitchen_pendants': 0, 'light.kitchen_cabinets': 0, 'light.dining_pendant': 0,
                                           'light.dining_sideboard': 0}),
 }
+# A button by the living room door; Home Assistant's automation for it says what its presses do.
+BUTTON = ('event.living_button', 'living', 'Living room button')
+BUTTON_SAYS = 'Single press: next of Dinner, Movie night, Off. Double press: Movie night. Long press: Off.'
 SENSORS = [('binary_sensor.front_door', 'Front door', 'door', 'off'), ('binary_sensor.back_door', 'Back door', 'door', 'off'),
            ('binary_sensor.kitchen_window', 'Kitchen window', 'window', 'off')]
 
@@ -69,6 +72,8 @@ def _states():
         out[entity] = {'entity_id': entity, 'state': state, 'attributes': {'friendly_name': name, 'device_class': kind}}
     out['media_player.study_laptop'] = {'entity_id': 'media_player.study_laptop', 'state': 'unavailable',        # asleep, and no room's speaker
                                         'attributes': {'friendly_name': 'A laptop'}}
+    out[BUTTON[0]] = {'entity_id': BUTTON[0], 'state': '2026-11-15T17:58:00.000-08:00',
+                      'attributes': {'friendly_name': BUTTON[2], 'device_class': 'button', 'event_type': 'multi_press_1'}}
     out['alarm_control_panel.house'] = {'entity_id': 'alarm_control_panel.house', 'state': 'disarmed', 'attributes': {'friendly_name': 'Alarm'}}
     out['weather.home'] = {'entity_id': 'weather.home', 'state': 'rainy', 'attributes': {'friendly_name': 'Home', 'temperature': 52}}
     return out
@@ -79,7 +84,7 @@ class World:
         self.states, self.sent, self.down, self.names = _states(), [], False, {}
 
     def _registry(self):
-        rooms = {e: a for e, a, *_ in [*LIGHTS, *SWITCHES, *SPEAKERS]}
+        rooms = {e: a for e, a, *_ in [*LIGHTS, *SWITCHES, *SPEAKERS, BUTTON]}
         entries = [{'entity_id': e, 'area_id': rooms.get(e), **({'platform': 'music_assistant'} if e.startswith('media_player.') else {})}
                    for e in self.states]
         return {'config/area_registry/list': [{'area_id': a, 'name': n, 'floor_id': f} for a, n, f in AREAS],
@@ -138,8 +143,10 @@ class World:
             self.sent.append((f'{domain}/{service}', copy.deepcopy(message['body'])))
             self._service(domain, service, message['body'])
             return []
-        answers = {**self._registry(), 'get_states': copy.deepcopy(list(self.states.values()))}
-        return [answers[c['type']] for c in message['commands']]
+        answers = {**self._registry(), 'get_states': copy.deepcopy(list(self.states.values())),
+                   'automation/config': {'config': {'alias': 'Living room button', 'description': BUTTON_SAYS}}}
+        return [({'automation': ['automation.living_button']} if c['item_id'] == BUTTON[0] else {})
+                if c['type'] == 'search/related' else answers[c['type']] for c in message['commands']]
 
 
 def install(patch):

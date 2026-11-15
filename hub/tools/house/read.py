@@ -38,10 +38,14 @@ WORDS = {
                 'dry': 'Dry', 'fan_only': 'Fan only'},
 }
 OPEN = {'lock': ('unlocked', 'open', 'opening', 'unlocking'), 'cover': ('open', 'opening', 'closing')}
+# A wall or remote button (an event entity of class button): what its presses are called.
+PRESSES = {'multi_press_1': 'Single press', 'multi_press_2': 'Double press', 'multi_press_3': 'Triple press',
+           'long_press': 'Long press', 'long_release': 'Long press', 'initial_press': 'Press', 'short_release': 'Press'}
+SAYS_PRESS = re.compile(r'\b(Single|Double|Triple|Long) press:\s*(.+?)(?=\s+(?:Single|Double|Triple|Long) press:|$)', re.S)
 
 _lock = threading.Lock()
 _cache = {'registry': None, 'registry_at': float('-inf'), 'snapshot': None, 'snapshot_at': float('-inf'),
-          'floors': None, 'floors_at': float('-inf')}
+          'floors': None, 'floors_at': float('-inf'), 'presses': {}, 'presses_at': float('-inf')}
 
 
 def forget_states():
@@ -53,7 +57,7 @@ def forget_states():
 def clear_cache():
     with _lock:
         _cache.update(registry=None, registry_at=float('-inf'), snapshot=None, snapshot_at=float('-inf'),
-                      floors=None, floors_at=float('-inf'))
+                      floors=None, floors_at=float('-inf'), presses={}, presses_at=float('-inf'))
 
 
 def _clip(text):
@@ -84,8 +88,11 @@ def _registry(areas, devices, entities, labels=()):
     room_labels = {rooms[a['area_id']]: [label_names[x] for x in a.get('labels') or () if label_names.get(x)]
                    for a in areas if rooms[a['area_id']]}
     device_room = {d['id']: d.get('area_id') for d in devices or () if isinstance(d, dict) and d.get('id')}
+    device_name = {d['id']: _clip(d.get('name_by_user') or d.get('name')) for d in devices or ()
+                   if isinstance(d, dict) and d.get('id') and (d.get('name_by_user') or d.get('name'))}
     room_floor = {rooms[a['area_id']]: a['floor_id'] for a in areas if rooms[a['area_id']] and isinstance(a.get('floor_id'), str)}
     return {'rooms': rooms, 'room_labels': room_labels, 'room_floor': room_floor, 'device_room': device_room,
+            'device_name': device_name,
             'entities': {e['entity_id']: e for e in entities or () if isinstance(e, dict) and e.get('entity_id')}}
 
 
@@ -226,7 +233,7 @@ def _build(registry, states):
             'scenes': [d for d in devices if d['kind'] == 'scene'],
             'lights_on': sum(d['on'] for d in devices if d['kind'] == 'light'),
             'room_floor': registry.get('room_floor', {}),
-            'outside': _outside(items), 'openings': _openings(items, registry),
+            'outside': _outside(items), 'openings': _openings(items, registry), 'buttons': _buttons(items, registry),
             'read_at': datetime.now(home.PACIFIC)}
 
 
@@ -256,6 +263,67 @@ def _openings(items, registry):
     return {'count': count, 'open': sorted(standing)}
 
 
+def _buttons(items, registry):
+    """Buttons on walls and remotes: their room, battery and last press. What each press does is added by
+    presses(), from the Home Assistant automations that listen to them. Hub only reads buttons, never presses them."""
+    battery = {}
+    for s in items:
+        entry = registry['entities'].get(s['entity_id'], {})
+        attrs = s.get('attributes') if isinstance(s.get('attributes'), dict) else {}
+        if s['entity_id'].startswith('sensor.') and entry.get('device_id') \
+                and (attrs.get('device_class') or entry.get('original_device_class')) == 'battery':
+            level = _percent(s.get('state'), 100)
+            if level is not None:
+                battery[entry['device_id']] = level
+    found = []
+    for s in items:
+        entry = registry['entities'].get(s['entity_id'], {})
+        attrs = s.get('attributes') if isinstance(s.get('attributes'), dict) else {}
+        if not s['entity_id'].startswith('event.') or entry.get('hidden_by') or entry.get('disabled_by') \
+                or (attrs.get('device_class') or entry.get('original_device_class')) != 'button':
+            continue
+        state = str(s.get('state') or 'unknown')
+        found.append({'id': s['entity_id'],
+                      'name': registry.get('device_name', {}).get(entry.get('device_id')) or _clip(
+                          entry.get('name') or attrs.get('friendly_name') or s['entity_id']),
+                      'room': registry['rooms'].get(_room_id(s['entity_id'], entry, registry)) or OTHER_ROOM,
+                      'battery': battery.get(entry.get('device_id')), 'offline': state == 'unavailable',
+                      'last': None if state in OFFLINE else PRESSES.get(attrs.get('event_type'), 'Press'),
+                      'at': None if state in OFFLINE else state[:40], 'does': []})
+    return sorted(found, key=lambda b: b['name'].lower())
+
+
+def _says(description):
+    """An automation's description as rows: "Single press: Chill. Long press: Off." gives one row a press;
+    any other description is one row of its own."""
+    text = ' '.join(description.split())[:400] if isinstance(description, str) else ''
+    rows = [{'press': f'{kind} press', 'does': does.strip().rstrip('.')} for kind, does in SAYS_PRESS.findall(text)]
+    return rows or ([{'press': '', 'does': text}] if text else [])
+
+
+def presses(buttons):
+    """Fill each button's 'does' from the descriptions of the automations that listen to it. Read rarely, and
+    fails soft: a button whose automations can't be read just says nothing about its presses."""
+    ids = tuple(sorted(b['id'] for b in buttons))
+    with _lock:
+        cached = _cache['presses'] if time.monotonic() - _cache['presses_at'] < REGISTRY_SECONDS else None
+    if cached is None or set(cached) != set(ids):
+        cached = {}
+        try:
+            related = broker.ask(*({'type': 'search/related', 'item_type': 'entity', 'item_id': i} for i in ids)) if ids else []
+            for button, found in zip(ids, related):
+                autos = [a for a in (found or {}).get('automation') or () if isinstance(a, str)][:4]
+                configs = broker.ask(*({'type': 'automation/config', 'entity_id': a} for a in autos)) if autos else []
+                cached[button] = [row for c in configs for row in _says((c or {}).get('config', {}).get('description'))]
+        except (broker.HomeDown, AttributeError, TypeError):
+            cached = {i: [] for i in ids}
+        with _lock:
+            _cache.update(presses=cached, presses_at=time.monotonic())
+    for b in buttons:
+        b['does'] = cached.get(b['id'], [])[:6]
+    return buttons
+
+
 def floors():
     """Home Assistant's floors, {floor id: {'name', 'level'}}, for laying the rooms out. Empty when it has none or
     can't be read: the rooms then show as one list."""
@@ -280,6 +348,7 @@ def snapshot(fresh=False):
         if not fresh and time.monotonic() - _cache['snapshot_at'] < STATE_SECONDS and _cache['snapshot']:
             return _cache['snapshot']
     found = _build(*_fetch())
+    presses(found['buttons'])
     with _lock:
         _cache.update(snapshot=found, snapshot_at=time.monotonic())
     return found

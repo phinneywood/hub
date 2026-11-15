@@ -55,6 +55,17 @@ export function clock(at: string): string {
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
+/** "just now", "5 minutes ago", "3 hours ago", else the day and time. */
+export function ago(at: string, now = new Date()): string {
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return "";
+  const minutes = Math.round((now.getTime() - date.getTime()) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  if (minutes < 12 * 60) { const hours = Math.round(minutes / 60); return `${hours} hour${hours === 1 ? "" : "s"} ago`; }
+  return date.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+}
+
 export function howMany(count: number, thing: string): string {
   return `${NUMBERS[count] ?? count} ${thing}${count === 1 ? "" : "s"}`;
 }

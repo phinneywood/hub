@@ -6,7 +6,7 @@
     "tsconfig.json": "c94ed47be158f0c5f5afb715417b2d6e7f6a32d1403573e948b74a4cb7c5de76",
     "record-build.mjs": "0d1ca0afe2544a3dd8c957be6a95cb5eafeed4daad8a9f68d4f315126e9537d8",
     "src/api.ts": "14d9b66fc5dc2aa3ffcb0aaf54a24016e6efb2babc1414d1f4b50d3c72d78c21",
-    "src/app.css": "476245e0383e7d823401db09d3aa5150d5465738a2f5ba7c6d2c3ee252de6cca",
+    "src/app.css": "5ebbe40ce79149f2dd69d364127db405a2c7dcb47dd52e92f5a2c3810da96ad5",
     "src/ask.tsx": "695a88b9ae90aa908d57d6998465aa3dde9d06042197322856795c3406caaa3f",
     "src/asking.ts": "d2b08dc0b9073a35b61103361690ba96a73df2b5bcc2465d5d293c2bb90e2bd6",
     "src/day.ts": "dc1a1bf92187bde50d54b2dffe6490421b8bc0e8ec0251599a90b30f00d78ce4",
@@ -14,17 +14,17 @@
     "src/mail.tsx": "3cc48c003bd88faf151088007167a1e36207abc175125c5558a1fdfdd3e0b2ce",
     "src/main.tsx": "294ecd923d3735fd90034c61c7e5af37fc61427c24e335018d31a29a9df372e1",
     "src/screens.tsx": "9d9ad70326854377fd3595e39a85de5849177baeff7c9bc62ddd71de551f3bfa",
-    "src/sheets.tsx": "a4239add4545530271e3421285c4b323024cf73e1cc83f497078b452b6ddb71d",
+    "src/sheets.tsx": "778fc2f0ed5cc50ad8855a73e35dc80890fcb312e6afba364964ea915ac4a5d5",
     "src/state.ts": "1b995221affda8ff92540b8673eac9077067b793887b45097ad7005267e80e1b",
     "src/today.tsx": "e0dec140e3f873391de3bfe189daa18b36c283462116cea78353fa4059b9b1c8",
-    "src/types.ts": "72922c4792083a2bab2b756118623fe95de42e71b8da3eefcad4660908748468",
+    "src/types.ts": "cca60cbf5b8fd32ca11352969bb0d14b8da0b681c9e34cd1872dec74a3512211",
     "src/ui.tsx": "d9962d39d74fab88292dd119a24762e832e7528f1bb54f99a3948196827ce698",
     "src/versions.tsx": "65cc20d8aae059f95ad478ce6721b9623229db8a80eea2d6f396192088f3ba56",
     "src/vite-env.d.ts": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
-    "src/words.ts": "671ad8dc7c5f7bb3b3fdfde048ad5821b293f88b945b6dcbfdc38c80383c429c"
+    "src/words.ts": "6be6eeca16108f8271d6550dcb1e0bce6a54dfb0c4b4d1e5e4f31f38c2605163"
   },
   "built": {
-    "app.css": "f3857404002de09ee796d9a8143c56a8ce233e05b42d90bd390de86bdfba97ff",
-    "app.js": "d271be4fe9a7e0202b84000755542d9f2b4ee76075a70eb259084ec8b14514a6"
+    "app.css": "f3c084868b7861c9ff805a6c81fcda8a97c2aeeb91a241125668444341c195da",
+    "app.js": "95ef218e2aa94ecd7456a662894958dd72a7fb6132091498230e9acd5d5d491d"
   }
 }

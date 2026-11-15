@@ -53,7 +53,12 @@ def _home_of(speaker, names):
     return max((n for n in names if said == n.lower() or said.startswith(n.lower() + ' ')), key=len, default=None)
 
 
-def _room(r, speakers, homes, sounding, outside):
+def _button(b):
+    return {'id': b['id'], 'name': b['name'], 'battery': b['battery'], 'offline': b['offline'], 'last': b['last'],
+            'at': b['at'], 'does': b['does']}
+
+
+def _room(r, speakers, homes, sounding, outside, buttons=()):
     lights = [d for d in r['devices'] if d['kind'] == 'light']
     lit = [d for d in lights if d['on']]
     levels = [d['level'] for d in lit if d['level'] is not None]
@@ -64,7 +69,8 @@ def _room(r, speakers, homes, sounding, outside):
             'lights': [_light(d) for d in lights],
             'others': [{'id': d['id'], 'name': d['name'], 'kind': d['kind'], 'on': d['on'], 'offline': d['offline']}
                        for d in r['devices'] if d['kind'] != 'light'],
-            'speaker': speaker, 'sounding': speaker in sounding}
+            'speaker': speaker, 'sounding': speaker in sounding,
+            'buttons': [_button(b) for b in buttons if b['room'] == r['name']]}
 
 
 def _rank(level):
@@ -154,7 +160,7 @@ def home(found, floors=None):
     music = _music(found, homes)
     sounding = {s['id'] for s in music['speakers'] if (s['in'] and music['playing']) or s['other']} if music else set()
     outside = outdoors(found, floors)
-    rooms = [_room(r, found['speakers'], homes, sounding, outside) for r in found['rooms']
+    rooms = [_room(r, found['speakers'], homes, sounding, outside, found.get('buttons') or ()) for r in found['rooms']
              if r['name'] != read.OTHER_ROOM and any(d['kind'] == 'light' for d in r['devices'])]
     rooms.sort(key=lambda r: (-len(r['lights']), r['name'].lower()))      # the rooms with most lamps lead each floor
     return {'ok': True, 'at': found['read_at'].isoformat(timespec='seconds'),

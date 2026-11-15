@@ -49,6 +49,13 @@ The picture is built in `hub/app/model.py` from the same reading of Home Assista
 the Home screen: the temperature outside, and which door and window sensors are open. They are not part of what
 Ask's `home_status` lookup shares with a model.
 
+**Buttons** (2026-11-15). A wall or remote button (a Home Assistant event entity of class button) shows in its room's
+sheet under "Buttons": its name, last press and when, and its battery. Hub never presses one. What each press does
+comes from the description of the Home Assistant automations that listen to it, read with two fenced, read-only
+commands (`broker.ASKS`: `search/related`, `automation/config`) at most every five minutes. A description written as
+"Single press: … Double press: … Long press: …" shows one row a press; any other description shows as one line.
+Buttons are not part of what Ask's model is given.
+
 ## Changing things
 
 Every tap goes through `hub/tools/house/control.py`, like a request typed to Ask: the broker's allowlist

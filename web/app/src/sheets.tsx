@@ -2,10 +2,10 @@
 import { useEffect, useState } from "preact/hooks";
 import { dimDevice, dimRoom, dragDevice, dragRoom, dragVolume, forgetScene, keepScene, loadPicks, pauseStream, picks, play, playPick,
   setVolume, sheet, skip, speakerIn, switchDevice, switchRoom } from "./state";
-import type { House, Music, Room, Speaker } from "./types";
+import type { Button, House, Music, Room, Speaker } from "./types";
 import { Sleeve } from "./screens";
 import { Icon, SheetFrame, Slider, Switch } from "./ui";
-import { howMany, list } from "./words";
+import { ago, howMany, list } from "./words";
 
 export function SpeakerRow({ speaker, title, sub }: { speaker: Speaker; title: string; sub?: string }) {
   return (
@@ -14,6 +14,20 @@ export function SpeakerRow({ speaker, title, sub }: { speaker: Speaker; title: s
       <Slider value={speaker.volume ?? 0} label={`${speaker.name} volume`} sound dim={!speaker.in}
         onDrag={(v) => dragVolume(speaker.id, v)} onSet={(v) => void setVolume(speaker.id, v)} />
       <Switch on={speaker.in} sound label={`${speaker.name} speaker`} onChange={(on) => void speakerIn(speaker.id, speaker.name, on)} />
+    </div>
+  );
+}
+
+function ButtonRow({ button }: { button: Button }) {
+  const note = button.offline ? "Not answering"
+    : [button.last && button.at ? `${button.last}, ${ago(button.at)}` : "Not pressed yet",
+       button.battery !== null ? `battery ${button.battery}%` : ""].filter(Boolean).join(" · ");
+  return (
+    <div class="ctl one" key={button.id}>
+      <div class="ctl-name"><b>{button.name}</b><span>{note}</span>
+        {button.does.length > 0 && <ul class="presses">{button.does.map((d) => (
+          <li key={d.press + d.does}>{d.press && <b>{d.press}</b>}{d.does}</li>))}</ul>}
+      </div>
     </div>
   );
 }
@@ -49,6 +63,8 @@ export function RoomSheet({ room, music }: { room: Room; music: Music | null }) 
           <Switch on={o.on} label={o.name} off={o.offline} onChange={(on) => void switchDevice(o.id, o.name, on)} />
         </div>
       ))}
+      {(room.buttons ?? []).length > 0 && <h2>Buttons</h2>}
+      {(room.buttons ?? []).map((b) => <ButtonRow button={b} key={b.id} />)}
     </SheetFrame>
   );
 }
