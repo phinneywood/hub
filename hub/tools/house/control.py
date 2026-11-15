@@ -16,6 +16,7 @@ from ... import store
 from . import broker, read
 
 PER_MINUTE = 30
+TAPS_PER_MINUTE = 120       # the app's own taps: a finger on a signed-in device, one per request sent
 UNDO_SECONDS = 24 * 3600
 QUIET = 0.15                 # playback that starts from silence starts here
 PLAYING = ('playing', 'buffering')
@@ -36,6 +37,7 @@ create index if not exists house_changes_batch on house_changes(batch);
 
 _lock = threading.Lock()
 _recent = deque()
+_taps = deque()
 
 
 class Refused(Exception):
@@ -48,14 +50,17 @@ def _db():
     return conn
 
 
-def _spend(count):
+def _spend(count, taps=False):
+    """Count changes against the minute's limit. `taps`: the app's own limit, kept apart from Ask's, so an
+    evening of switching rooms by hand never locks Ask out, nor the other way round."""
     now = time.monotonic()
+    recent, most = (_taps, TAPS_PER_MINUTE) if taps else (_recent, PER_MINUTE)
     with _lock:
-        while _recent and now - _recent[0] > 60:
-            _recent.popleft()
-        if len(_recent) + count > PER_MINUTE:
-            raise Refused(f'Hub has made {PER_MINUTE} changes in the last minute. Try again in a moment.')
-        _recent.extend([now] * count)
+        while recent and now - recent[0] > 60:
+            recent.popleft()
+        if len(recent) + count > most:
+            raise Refused(f'Hub has made {most} changes in the last minute. Try again in a moment.')
+        recent.extend([now] * count)
 
 
 def devices(found):
@@ -235,6 +240,25 @@ def _run(steps):
     return 'done'
 
 
+def _at_once(jobs):
+    """Outcomes for jobs that can share a request, by position; None for the rest. `jobs` is [(entity, steps)].
+    Lights, plugs and fans given the same single step go to Home Assistant together, so a room changes at once
+    and not lamp by lamp."""
+    out, same = [None] * len(jobs), {}
+    for n, (entity, steps) in enumerate(jobs):
+        if len(steps) == 1 and steps[0][0] in broker.TOGETHER and not broker.COLOURS & set(steps[0][2]):
+            domain, service, data = steps[0]
+            rest = json.dumps({k: v for k, v in data.items() if k != 'entity_id'}, sort_keys=True)
+            same.setdefault((domain, service, rest), []).append(n)
+    for (domain, service, rest), members in same.items():
+        for start in range(0, len(members) if len(members) > 1 else 0, broker.MOST):
+            part = members[start:start + broker.MOST]
+            outcome = _run([(domain, service, {**json.loads(rest), 'entity_id': [jobs[n][0] for n in part]})])
+            for n in part:
+                out[n] = outcome
+    return out
+
+
 def _playing(entity):
     """Whether the speaker is playing, read back a few times while Music Assistant starts. False when it can't be read."""
     for n in range(CHECKS):
@@ -277,8 +301,10 @@ def _joins(leader, others, found, level=None):
 
 
 def change(targets, action, *, login, via, value=None, query=None, kind=None, members=(), label=None, alone=False, soft=False,
-           together=(), each=None):
+           together=(), each=None, at_once=False):
     """Make one kind of change to one or more devices (entity ids). Returns what happened, per device.
+
+    `at_once`: lights, plugs and fans getting the same change share one request to Home Assistant (a room's tap).
 
     `group` joins `members` to the one target's group. `together` (play_media, one target): speakers of the same zone
     that join it once it plays, at the same volume, in the same batch, so one Undo puts all of it back.
@@ -316,12 +342,39 @@ def change(targets, action, *, login, via, value=None, query=None, kind=None, me
             if entity in together and level is not None:
                 plans.append((found[entity], 'volume', *_steps(found[entity], 'volume', round(level * 100))))
         plans += _joins(leader, together, found, level)
-    _spend(len(plans))
+    return _carry_out(plans, login=login, via=via, alone=alone, at_once=at_once)
+
+
+def several(changes, *, login, via, taps=True):
+    """Different changes as one batch with one Undo, for a scene: [(entity ids, action, value)], lights, plugs and
+    fans only. Each is checked exactly as change() checks it; lamps that get the same change share a request.
+    `taps`: counted against the app's own limit (a finger); False counts it against Ask's (a model)."""
+    try:
+        found = devices(read.snapshot(fresh=True))
+    except broker.HomeDown as error:
+        raise Refused(str(error)) from None
+    plans = []
+    for targets, action, value in changes:
+        for entity in dict.fromkeys(targets):
+            d = _known(found, entity)
+            if d['kind'] not in POWER:
+                raise Refused('A scene changes lights, plugs and fans only.')
+            plans.append((d, action, *_steps(d, action, value)))
+    if not plans:
+        raise Refused('Nothing to change.')
+    return _carry_out(plans, login=login, via=via, alone=False, at_once=True, taps=taps)
+
+
+def _carry_out(plans, *, login, via, alone, at_once, taps=None):
+    """Send the planned changes, record each with what was there before, and report."""
+    taps = (at_once or via == 'app') if taps is None else taps
+    _spend(1 if at_once else len(plans), taps=taps)      # a room switched together is one tap
     batch, now, rows = uuid.uuid4().hex[:12], time.time(), []
-    for d, act, steps, words in plans:
+    shared = _at_once([(d['id'], steps) for d, _, steps, _ in plans]) if at_once else [None] * len(plans)
+    for (d, act, steps, words), sent in zip(plans, shared):
         before = {'state': d['state'], 'level': d['level'], 'colour': d.get('colour'), 'volume': d['volume'], 'members': d['members'],
                   'alone': bool(alone and act == 'play_media' and d['members'])}
-        outcome, silent = _run(steps), False
+        outcome, silent = sent or _run(steps), False
         if act in ('play_media', 'play') and outcome != 'not_sent' and not _playing(d['id']):
             outcome, silent = 'unknown', True        # sent, maybe accepted, but nothing plays: never recorded as done
         rows.append({'entity': d['id'], 'name': d['name'], 'words': words, 'outcome': outcome, 'silent': silent,
@@ -352,7 +405,7 @@ def summary(batch):
     return found
 
 
-def undo(batch, *, login, via):
+def undo(batch, *, login, via, at_once=False):
     """Put a batch back. Returns what happened, as change() does."""
     rows = [r for r in _rows(str(batch or '')[:12]) if not r['undone'] and r['via'] != 'undo' and r['outcome'] != 'not_sent']
     if not rows:
@@ -363,10 +416,11 @@ def undo(batch, *, login, via):
     plans = [(r, steps) for r, steps in plans if steps]
     if not plans:
         raise Refused('That can’t be undone from Hub.')
-    _spend(len(plans))
+    _spend(1 if at_once else len(plans), taps=at_once or via == 'app')
     new, now, out = uuid.uuid4().hex[:12], time.time(), []
-    for r, steps in plans:
-        outcome = _run(steps)
+    shared = _at_once([(r['entity'], steps) for r, steps in plans]) if at_once else [None] * len(plans)
+    for (r, steps), sent in zip(plans, shared):
+        outcome = sent or _run(steps)
         words = f'{r["name"]} put back'
         out.append({'words': words, 'outcome': outcome, 'undoable': False})
         with _db() as conn:

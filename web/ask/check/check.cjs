@@ -139,6 +139,16 @@ if (!out) { console.error("usage: node check.cjs <output-folder> [base-url]"); p
     await page.waitForSelector('.mp-screen .mp-panel >> nth=0 >> .mp-room.in:has-text("Kitchen Speaker")', { timeout: 8000 });
     await page.waitForTimeout(400); await shot("8-music-screen");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the Music screen scrolls sideways");
+
+    // What the owner typed in the app's Ask field arrives here and is sent once (web/app hands it over in this
+    // tab's own storage).
+    await page.evaluate(() => sessionStorage.setItem("hub.say", "What needs me today?"));
+    await page.goto(base + "/ask");
+    await page.waitForSelector(".ask-md"); await idle(); await shot("9-handed-over");
+    expect((await page.locator(".ask-viewport").innerText()).includes("What needs me today?"), "the handed-over question was not asked");
+    expect(await page.evaluate(() => sessionStorage.getItem("hub.say")) === null, "the handed-over question was kept");
+    await page.reload(); await page.waitForSelector(".ask-md"); await page.waitForTimeout(500);
+    expect((await page.locator(".ask-viewport").innerText()).split("What needs me today?").length === 2, "a reload asked the question again");
     await ctx.close();
   }
   expect([...hosts].every((h) => h === new URL(base).host), "the page contacted another host: " + [...hosts].join(", "));

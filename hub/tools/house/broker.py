@@ -11,7 +11,7 @@ import socket
 from ... import config
 
 READS = ('config/area_registry/list', 'config/device_registry/list', 'config/entity_registry/list',
-         'config/label_registry/list', 'get_states')
+         'config/label_registry/list', 'config/floor_registry/list', 'get_states')
 # (domain, service) -> the data keys it may carry besides entity_id. Lights, power and speakers only;
 # locks, the garage, the alarm, the thermostat and automations are not here. A light takes at most one colour.
 COLOURS = {'rgb_color', 'hs_color', 'xy_color', 'color_temp_kelvin'}
@@ -29,6 +29,9 @@ WRITES = {
 }
 ENTITY = re.compile(r'^(light|switch|fan|scene|media_player)\.[a-z0-9_]{1,120}$')
 MEDIA_TYPES = {'track', 'album', 'artist', 'playlist', 'radio'}
+# A whole room in one request: lights, plugs and fans may be switched (and lights dimmed) several at a time.
+TOGETHER = ('light', 'switch', 'fan')
+MOST = 40
 # Something concrete Music Assistant can play: its own address for one item, never words. The provider part is
 # "library" or a provider instance, which Music Assistant names <domain>--<random>, such as apple_music--Ab3dE6fG;
 # the id is the provider's own and may hold dots, dashes or slashes. A description sent as media_id makes Music
@@ -36,6 +39,10 @@ MEDIA_TYPES = {'track', 'album', 'artist', 'playlist', 'radio'}
 MEDIA_URI = re.compile(r'^[a-z][a-z0-9_]{0,40}(?:--[A-Za-z0-9_]{1,40})?://(?P<kind>track|album|artist|playlist|radio)/'
                        r'[^\s"\'<>\\]{1,240}$')
 LIMIT = 16 * 1024 * 1024      # one reply line; the broker caps Home Assistant's own answers at 8 MB each
+# The kinds of device Hub listens to for changes: what the Home screen shows. The broker allows no others.
+LISTEN = ('light', 'switch', 'fan', 'scene', 'media_player', 'binary_sensor', 'alarm_control_panel', 'lock', 'cover',
+          'climate', 'weather')
+LISTEN_QUIET = 50             # the broker sends a beat at least every 20 seconds; this long without one and the line is dead
 TIMEOUT = 8
 
 
@@ -71,6 +78,38 @@ def _exchange(message, timeout):
     if not isinstance(reply, dict) or not reply.get('ok'):
         raise HomeDown('Home Assistant couldn’t be read just now.')
     return reply.get('result')
+
+
+def listen(domains=LISTEN):
+    """The house as it changes: yields the entity id of each device of these kinds when it changes (which one,
+    never what to), and None for each beat, for as long as the broker keeps the line open. Read-only.
+    Raises NotSent when the broker isn't there, HomeDown when it says no (an older broker has no such
+    operation) or the line goes quiet. Closing the generator hangs up."""
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.settimeout(LISTEN_QUIET)
+        try:
+            sock.connect(str(config.HA_BROKER_SOCKET))
+        except OSError:
+            raise NotSent('The Home Assistant broker on this Mac isn’t answering.') from None
+        sock.sendall(json.dumps({'op': 'listen', 'domains': list(domains)}, separators=(',', ':')).encode() + b'\n')
+        lines = sock.makefile('rb')
+        first = True
+        while True:
+            raw = lines.readline(64 * 1024)
+            try:
+                message = json.loads(raw) if raw else None
+            except ValueError:
+                message = None
+            if not isinstance(message, dict) or message.get('ok') is False or (first and not message.get('ok')):
+                raise HomeDown('The Home Assistant broker isn’t passing changes on.')
+            if not first:
+                yield str(message['changed'])[:200] if isinstance(message.get('changed'), str) else None
+            first = False
+    except OSError:
+        raise HomeDown('The Home Assistant broker isn’t passing changes on.') from None
+    finally:
+        sock.close()
 
 
 def read(*types, timeout=TIMEOUT):
@@ -109,9 +148,13 @@ def _checked(domain, service, data):
     allowed = WRITES.get((domain, service))
     if allowed is None or not isinstance(data, dict) or set(data) - allowed - {'entity_id'}:
         raise ValueError('Hub may not do that in Home Assistant.')
-    if not isinstance(data.get('entity_id'), str) or not ENTITY.fullmatch(data['entity_id']) \
-            or data['entity_id'].partition('.')[0] != ('media_player' if domain == 'music_assistant' else domain):
-        raise ValueError('Hub may not do that in Home Assistant.')
+    kind = 'media_player' if domain == 'music_assistant' else domain
+    named = data.get('entity_id')
+    several = isinstance(named, list) and domain in TOGETHER and 1 <= len(named) <= MOST \
+        and all(isinstance(e, str) for e in named) and len(set(named)) == len(named) and not COLOURS & set(data)
+    for entity in named if several else [named]:
+        if not isinstance(entity, str) or not ENTITY.fullmatch(entity) or entity.partition('.')[0] != kind:
+            raise ValueError('Hub may not do that in Home Assistant.')
     if 'brightness_pct' in data and not (isinstance(data['brightness_pct'], int) and 1 <= data['brightness_pct'] <= 100):
         raise ValueError('Brightness must be 1 to 100.')
     _colour(data)

@@ -5,11 +5,11 @@
     "vite.config.js": "1cf0b5fef37cf2bcf96bca6d44fd020926c48117abb597c7fa276c45bd1704b1",
     "record-build.mjs": "8753f52b81cb6e87c655f4f56bc5d3706ebfd38772400011284e977515a1affe",
     "src/ask.css": "13a9732e9f96399c841ba092bc54dd1b91d773409bcf7f9e06c957dca7953d68",
-    "src/main.jsx": "2fca0bf96df47359d07ebb10da5daadbe48c9de83467ed53068eb2508554601a",
+    "src/main.jsx": "00b95209e1140e7341e10c107fb0f2399386487276ea04bb861000da47214d55",
     "src/policy.js": "cf5f565b0659bd234401b8ab5edefe673dbd485c0cbfdaf97d2cc5bd09365d02"
   },
   "built": {
     "ask.css": "def799b2549dbd602a38644c793c8beba5a1c331095292b3ae26a4b844ca3327",
-    "ask.js": "52f1f615942bd4c356cd4ee9287b5736cd660e190392df3563a32c60b4c118bc"
+    "ask.js": "8a3cb8ff36b9d0db21b9f0875dff3568ab7081bac6ee050b4d6ef61605e24ad1"
   }
 }

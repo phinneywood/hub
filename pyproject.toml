@@ -13,5 +13,5 @@ dependencies = ["fastapi", "uvicorn[standard]", "httpx", "jinja2", "python-multi
 include = ["hub*", "preschool*"]
 
 [tool.setuptools.package-data]
-hub = ["templates/*.html", "templates/**/*.html", "static/*", "static/ask/*"]
+hub = ["templates/*.html", "templates/**/*.html", "static/*", "static/ask/*", "static/app/*", "static/app/fonts/*"]
 preschool = ["templates/*.html", "templates/**/*.html", "static/*"]

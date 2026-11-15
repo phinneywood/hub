@@ -1,7 +1,8 @@
 # The Ask page
 
 Source for Hub's `/ask` chat page: React, assistant-ui primitives and the AI SDK's chat transport.
-It is the only Hub page with a build step. The built files are committed in `hub/static/ask/`, so
+It is one of two parts of Hub with a build step (the other is the new app, `web/app`). The built files are
+committed in `hub/static/ask/`, so
 the Mac that runs Hub and the deployer need no Node.
 
 To change the page, on the Mac mini, from the repository root:
