@@ -38,6 +38,21 @@ export interface Release {
 export interface Ready { sha: string; short: string; subjects: string[] }
 export interface Deploy { ready: Ready | null; asked: boolean; put_back: string | null }
 export interface Releases { versions: Release[]; running: string | null; repo: string | null; deploy: Deploy | null }
+// The Engine screen, as Hub sends it (hub/app/engine.py).
+export interface EngineRun { at: number; ok: boolean; calls: number; checks: number; cost: number }
+export interface Engine {
+  sorting: boolean; full: boolean;
+  asked: { id: number; text: string; zone: string[] }[];
+  notes: { id: string; text: string; said: string; zone: string[] }[];
+  recipes: { id: string; name: string; steps: string[]; said: string | null }[];
+  kept: { id: number; name: string; steps: string[] }[];
+  requests: { id: string; text: string; at: number; kind: "request" | "improvement" }[];
+  actions: { slug: string; name: string; does: string; undo: string; level: string; levels: { value: string; name: string }[] }[];
+  spend: { review: { used: number; limit: number }; sorting: { used: number; limit: number; checks: number; check_limit: number };
+    month: number; month_limit: number; can_run: boolean };
+  runs: EngineRun[]; sorts: EngineRun[];
+  sources: { name: string; reads: string; sends: string }[];
+}
 export interface Pick { name: string; kind: string; uri: string }
 
 // Today, as Hub sends it (hub/app/today.py).

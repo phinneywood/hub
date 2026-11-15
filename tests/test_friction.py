@@ -117,7 +117,7 @@ def test_build_files_a_brief_for_the_manager_and_never_keeps_it_off_for_good():
     client = TestClient(app)
     assert client.post(f'/engine/friction/{first["id"]}/build', headers={'origin': 'http://testserver'}).status_code == 403
     reply = client.post(f'/engine/friction/{first["id"]}/build', headers=SIGNED_IN, follow_redirects=False)
-    assert reply.status_code == 303 and reply.headers['location'] == '/engine#improvements'
+    assert reply.status_code == 303 and reply.headers['location'] == '/app/#engine'
     [entry] = improve.requests()
     assert entry['source'] == 'friction' and 'Which one? Porch Lamp, Hall Light' in entry['brief'] and '3 times' in entry['brief']
     client.post(f'/engine/friction/{second["id"]}/never', headers=SIGNED_IN)

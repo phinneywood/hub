@@ -5,8 +5,11 @@ import { seen } from "./state";
 import type { Day, Need, Slot } from "./types";
 import { Icon } from "./ui";
 
-// Mail and Kitchen are screens of the app now: their older addresses open here instead.
-const HERE: Record<string, string> = { "/gmail": "#mail", "/kitchen": "#kitchen" };
+// Mail, Kitchen and Engine are screens of the app now: their older addresses open here instead.
+const HERE: Record<string, string> = {
+  "/gmail": "#mail", "/kitchen": "#kitchen", "/engine": "#engine", "/engine#improvements": "#engine",
+  "/engine/notes": "#engine", "/engine/recipes": "#engine", "/app/#versions": "#versions",
+};
 const inApp = (href: string) => HERE[href] ?? href;
 import { daySays, daySub, partOfDay } from "./words";
 

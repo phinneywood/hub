@@ -78,7 +78,7 @@ def today_items():
     """A quiet line on Today for each request filed in the last day."""
     from .. import today
     return [today.rec(f'improve-{r["id"]}', 'info', 'Improvement filed for the next building session', r['brief'][:200],
-                      href='/engine#improvements', cta='Open')
+                      href='/app/#engine', cta='Open')
             for r in requests() if r['status'] == 'new' and time.time() - r['at'] < SHOW_SECONDS]
 
 

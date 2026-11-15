@@ -203,7 +203,7 @@ export function Rail() {
       <div class="mark"><i />Hub</div>
       <Tabs />
       <div class="foot">
-        <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" ? " on" : "")} onClick={() => go("system")}>System</button>
+        <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" ? " on" : "")} onClick={() => go("system")}>System</button>
         <p class="ok">{fine ? "The house is answering." : trouble.value === "hub" ? "Can’t reach Hub." : "The house isn’t answering."}</p>
       </div>
     </nav>
@@ -234,6 +234,7 @@ export function System() {
           {links.ha && <a class="row free" href={links.ha}><div class="row-main"><b>Home Assistant</b><span>Devices, rooms and automations</span></div></a>}
           {links.music && <a class="row free" href={links.music}><div class="row-main"><b>Music Assistant</b><span>The library, the queue and playlists</span></div></a>}
           <button type="button" class="row free" onClick={() => go("versions")}><div class="row-main"><b>Versions</b><span>What each release of Hub changed</span></div></button>
+          <button type="button" class="row free" onClick={() => go("engine")}><div class="row-main"><b>Engine</b><span>What you asked for, what Hub may do, what it costs</span></div></button>
         </div>
       </section>
       {(able.value?.remembers.length ?? 0) > 0 && (

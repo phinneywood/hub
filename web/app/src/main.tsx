@@ -9,6 +9,7 @@ import { loadAble } from "./asking";
 import { loadDay, watchDay } from "./day";
 import { Today } from "./today";
 import { Versions } from "./versions";
+import { Engine } from "./engine";
 import { Kitchen, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
 import { HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
@@ -45,7 +46,7 @@ function Sheets() {
 
 function Screen() {
   const where = view.value;
-  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "today" ? <Today /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
+  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "today" ? <Today /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
 }
 
 function App() {
