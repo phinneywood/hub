@@ -2,7 +2,8 @@
 // just made laid over it until the house itself agrees: a tap shows at once and is put right if it didn't take.
 import { computed, effect, signal } from "@preact/signals";
 import * as api from "./api";
-import type { Down, House, Me, Pick, Room, Said, Scene } from "./types";
+import type { Down, House, Me, Pick, Room, Said, Scene, Speaker } from "./types";
+import { spoken } from "./words";
 
 const KEEP = "hub.house";         // the last picture, so the app opens on something at once
 const LOOK = "hub.look";
@@ -13,7 +14,8 @@ const ALL_OFF = "all-off";
 const SILENCE = 12000;            // Hub sends a beat every 5 s; this long without one and the line is taken for dead
 
 export type Look = "auto" | "dusk" | "day";
-export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "ask" } | { kind: "keep" } | null;
+export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "ask" } | { kind: "keep" }
+  | null;
 export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
 export type View = "home" | "today" | "mail" | "kitchen" | "system" | "versions";
@@ -129,6 +131,9 @@ function settle(now: House) {
       agrees = !device || (device.on === (h.on ?? device.on) && (!device.on || !("level" in device) || near(device.level, h.level, 3)));
     } else if (kind === "play") {
       agrees = !now.music || now.music.playing === h.on;
+    } else if (kind === "own") {
+      const speaker = now.music?.speakers.find((s) => s.id === id);
+      agrees = !speaker || speaker.other || (speaker.in && now.music!.playing);
     } else {
       const speaker = now.music?.speakers.find((s) => s.id === id);
       agrees = !speaker || (kind === "vol" ? near(speaker.volume, h.value, 1) : speaker.in === h.on);
@@ -174,11 +179,12 @@ function overlay(now: House, holds: Record<string, Held>): House {
   let music = now.music;
   if (music) {
     const speakers = music.speakers.map((s) => {
-      const volume = holds["vol:" + s.id], member = holds["in:" + s.id];
+      const volume = holds["vol:" + s.id], member = holds["in:" + s.id], own = holds["own:" + s.id];
+      if (own && !s.other && !(s.in && music!.playing)) return { ...s, in: false, other: true };     // its own music, starting
       return volume || member ? { ...s, volume: volume?.value ?? s.volume, in: member?.on ?? s.in } : s;
     });
     music = { ...music, playing: holds["play"]?.on ?? music.playing, speakers };
-    const sounding = new Set(music.playing ? speakers.filter((s) => s.in).map((s) => s.id) : []);
+    const sounding = new Set(speakers.filter((s) => (s.in && music!.playing) || s.other).map((s) => s.id));
     for (const [id, room] of Object.entries(rooms)) {
       const sounds = room.speaker !== null && sounding.has(room.speaker);
       if (sounds !== room.sounding) rooms[id] = { ...room, sounding: sounds };
@@ -324,6 +330,14 @@ export async function playPick(pick: Pick) {
   if (!music) return;
   hold("play", { on: true }, SOUND_HOLD);
   answered(await api.post(`play/${encodeURIComponent(music.speaker)}`, { uri: pick.uri, kind: pick.kind, name: pick.name }), ["play"], `Playing ${pick.name}`);
+}
+
+/** Play a pick in one room only, its own music: whatever plays anywhere else plays on. */
+export async function playHere(speaker: Speaker, pick: Pick) {
+  hold("own:" + speaker.id, { on: true }, SOUND_HOLD);
+  sheet.value = null;
+  const answer = await api.post(`play/${encodeURIComponent(speaker.id)}`, { uri: pick.uri, kind: pick.kind, name: pick.name, here: true });
+  answered(answer, ["own:" + speaker.id], `Playing ${pick.name} in ${spoken(speaker.name)}`);
 }
 
 export async function loadPicks() {

@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
-from ..tools.house import control, nowplaying, read
+from ..tools.house import control, nowplaying, read, zones
 from . import levels, model
 from . import scenes as kept_scenes
 from .feed import feed
@@ -267,10 +267,19 @@ def picks():
 
 @router.post('/api/play/{speaker}')
 def play(speaker: str, request: Request, body: dict = Body(...)):
-    """Play one of the picks where music is on now: {"uri", "kind", "name"}."""
+    """Play one of the picks where music is on now: {"uri", "kind", "name"}. With {"here": true}, in that speaker's room
+    only, as Ask plays in a named room: its zone comes along, it leaves a group it shares with other rooms, and music
+    playing anywhere else plays on."""
     def work(login):
-        return control.change([speaker[:140]], 'play_media', query=str(body.get('uri') or '')[:300], kind=body.get('kind'),
-                              label=str(body.get('name') or '')[:80], login=login, via='app')
+        anchor, mates, alone = speaker[:140], [], False
+        if body.get('here'):
+            players = {d['id']: d for d in read.snapshot(fresh=True)['speakers']}
+            if anchor not in players:
+                raise control.Refused('That speaker isn’t in Home Assistant any more.')
+            mates = zones.mates(anchor, players)
+            alone = any(m not in (anchor, *mates) for m in players[anchor]['members'])
+        return control.change([anchor], 'play_media', query=str(body.get('uri') or '')[:300], kind=body.get('kind'),
+                              label=str(body.get('name') or '')[:80], login=login, via='app', alone=alone, together=mates)
     return _change(request, work)
 
 

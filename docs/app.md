@@ -32,7 +32,7 @@ sets this in the private settings file (`household.json`):
 | `POST /app/api/scene/{scene}` | A scene Hub keeps (`hub:3`), a Home Assistant scene, or `all-off` |
 | `POST /app/api/scenes`, `POST /app/api/scenes/{scene}/forget` | Keep the house as it stands as a scene; forget one |
 | `POST /app/api/music/{speaker}` | Play, pause, next, previous, a volume, a room in or out |
-| `GET /app/api/picks`, `POST /app/api/play/{speaker}` | The library's playlists, and playing one where music is on |
+| `GET /app/api/picks`, `POST /app/api/play/{speaker}` | The library's playlists, and playing one where music is on, or with `"here": true` in that speaker's room only |
 | `POST /app/api/undo/{batch}` | Put a change back |
 | `GET /app/api/ask` | Whether Ask can run here, the last half hour of this person's requests, what they often ask around now, and what Hub remembers |
 | `POST /app/api/ask` | One request, `{"text": ...}`, answered as it happens (see “Ask”) |
@@ -80,8 +80,13 @@ Four things differ from Ask's path:
 
 When two rooms play different things (music downstairs, a lullaby in one bedroom), the picture still has one
 main music, the one the playing strip works: it stays the main one for as long as it plays, and otherwise the
-one in more rooms is. The others are named in `music.also`, their rooms show the playing bars, the sentence says
-so, and the music sheet lists them under “Also playing” with a pause each.
+one in more rooms is. The others are named in `music.also`, their rooms show the playing bars, the sentence and
+the playing strip say so, and the music sheet lists every room under “Other rooms”: one playing its own music with
+its volume and a pause, a quiet one with **Play here** and **Join**. Play here picks a playlist for that room alone
+(`play/{speaker}` with `"here": true`, as Ask plays in a named room: its zone comes along, it leaves a group it
+shared, it starts softly from silence) and never touches what plays elsewhere; Join adds it to the main music. A
+room's own sheet offers the same. Nothing in the app moves a room that plays its own music into the main music
+without the owner tapping Join on it.
 
 ## Scenes
 

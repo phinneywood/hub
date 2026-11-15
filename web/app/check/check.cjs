@@ -154,12 +154,24 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.locator(".np").click({ position: { x: 120, y: 20 } });
     await page.waitForSelector(".sheet.in"); await page.waitForSelector(".pick"); await page.waitForTimeout(450); await shot("5-music");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px in the music sheet: " + (await small()).join(", "));
-    await page.locator('.sheet [aria-label="Dining speaker"]').click();
+    await page.locator('.sheet [aria-label="Dining joins “Paper Lanterns”"]').click();
     expect(await until(() => document.querySelector(".sub")?.textContent.includes("the dining")), "a room did not join the music: " + await sub());
     await page.waitForTimeout(1200);
     expect((await sub()).includes("the dining"), "the joined room did not hold");
     await page.locator('.pick:has-text("Sunday Morning")').click();
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Playing Sunday Morning"), "a pick did not play");
+    // A quiet room plays music of its own, and the rest plays on.
+    await page.locator('.sheet [aria-label="Play something in Bedroom"]').click();
+    await page.waitForSelector(".sheet.in .pick"); await page.waitForTimeout(450); await shot("5b-play-here");
+    expect((await page.locator(".sheet-head p").first().innerText()).includes("plays on"), "playing in one room did not say the rest plays on");
+    await page.locator('.sheet .pick:has-text("Rainy Day")').click();
+    expect(await until(() => document.querySelector(".np-text span")?.textContent.includes("also Bedroom"), null, 400), "a room's own music did not show at once");
+    expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Playing Rainy Day in the bedroom"), "a room did not play its own music");
+    await page.waitForTimeout(1200);
+    expect((await sub()).includes("Something else is playing in the bedroom"), "the main music did not play on beside the bedroom: " + await sub());
+    await page.locator(".np").click({ position: { x: 120, y: 20 } });
+    await page.waitForSelector(".sheet.in"); await page.waitForTimeout(450); await shot("5c-two-rooms");
+    expect(await page.locator('.sheet [aria-label="Pause the music in Bedroom"]').count() === 1, "the bedroom's own music had no pause");
     await page.keyboard.press("Escape"); await page.waitForTimeout(400);
 
     // ---- Ask: what is usually asked around now is one tap ----

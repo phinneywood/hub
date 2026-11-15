@@ -11,7 +11,7 @@ import { Today } from "./today";
 import { Versions } from "./versions";
 import { Kitchen, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
-import { KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
+import { HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
 
@@ -35,6 +35,10 @@ function Sheets() {
     return room ? <RoomSheet room={room} music={now.music} /> : null;
   }
   if (open.kind === "playing") return now.music ? <PlayingSheet music={now.music} /> : null;
+  if (open.kind === "here") {
+    const speaker = now.music?.speakers.find((s) => s.id === open.speaker);
+    return now.music && speaker ? <HereSheet speaker={speaker} music={now.music} /> : null;
+  }
   if (open.kind === "keep") return <KeepSheet now={now} />;
   return wide.value ? null : <AskSheet />;
 }

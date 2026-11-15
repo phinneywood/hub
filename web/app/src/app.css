@@ -273,6 +273,12 @@ button.row { text-align: left; }
 .presses li { padding: 2px 0; }
 .presses b { display: inline; font-weight: 500; margin-right: 6px; }
 .ctl.vol { grid-template-columns: 1fr 150px; }
+.ctl.acts { grid-template-columns: 1fr auto; }
+.pills { display: flex; gap: 8px; justify-self: end; }
+.pill { height: 44px; padding: 0 16px; border-radius: 22px; display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-s); font-weight: 500; background: var(--line); }
+.pill.go { background: var(--lamp); color: var(--on-lamp); padding-left: 12px; }
+.pill .ic { width: 14px; height: 14px; }
+.pill:active { transform: scale(.97); }
 .mini { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; justify-self: end; background: var(--line); }
 .mini .ic { width: 18px; height: 18px; }
 .ctl.first { margin-top: 18px; border-top: 1px solid var(--line); }

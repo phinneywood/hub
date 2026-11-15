@@ -153,6 +153,7 @@ function Playing() {
   const music = seen.value?.music;
   if (!music) return null;
   const where = playingIn(music);
+  const elsewhere = (music.also ?? []).flatMap((stream) => stream.rooms);    // rooms playing music of their own
   const quiet = !music.playing;
   const title = music.title || (quiet ? "Nothing playing" : "Music");
   return (
@@ -162,7 +163,8 @@ function Playing() {
       <Sleeve name={music.album || music.title} />
       <div class="np-text">
         <b>{title}</b>
-        <span>{music.playing ? <><Bars />{list(where) || "Playing"}</> : music.title ? "Paused" : "Choose something to play"}</span>
+        <span>{music.playing ? <><Bars />{(list(where) || "Playing") + (elsewhere.length ? ` · also ${list(elsewhere)}` : "")}</>
+          : music.title ? "Paused" : "Choose something to play"}</span>
       </div>
       <button type="button" class="np-play" aria-label={music.playing ? "Pause" : "Play"}
         onClick={(e) => { e.stopPropagation(); void play(!music.playing); }}><Icon name={music.playing ? "pause" : "play"} /></button>

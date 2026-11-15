@@ -213,6 +213,27 @@ def test_music_taps_pause_set_a_volume_and_bring_a_room_in(house):
     assert tap('music/media_player.living', {'action': 'louder'}).status_code == 409
 
 
+def test_a_quiet_room_plays_its_own_music_and_the_rest_plays_on(house):
+    house.names = {'library://playlist/7': 'Rainy Day'}
+    pick = {'uri': 'library://playlist/7', 'kind': 'playlist', 'name': 'Rainy Day', 'here': True}
+    assert tap('play/media_player.bedroom', pick).json()['ok']
+    music = picture()['music']
+    assert (music['speaker'], music['title'], music['playing']) == ('media_player.living', 'Paper Lanterns', True)   # the strip stays
+    assert [(s['speaker'], s['rooms']) for s in music['also']] == [('media_player.bedroom', ['Bedroom'])]
+    assert [s['name'] for s in music['speakers'] if s['other']] == ['Bedroom']
+    assert house.states['media_player.bedroom']['attributes']['volume_level'] == control.QUIET        # from silence, softly
+
+
+def test_playing_here_takes_a_room_out_of_the_music_it_shared(house):
+    house.names = {'library://playlist/7': 'Rainy Day'}
+    pick = {'uri': 'library://playlist/7', 'kind': 'playlist', 'name': 'Rainy Day', 'here': True}
+    assert tap('play/media_player.kitchen', pick).json()['ok']
+    assert ('media_player/unjoin', {'entity_id': 'media_player.kitchen'}) in house.sent
+    music = picture()['music']
+    assert [s['name'] for s in music['speakers'] if s['in']] == ['Living room'] and music['title'] == 'Paper Lanterns'
+    assert [s['rooms'] for s in music['also']] == [['Kitchen']]
+
+
 def test_a_change_that_never_reached_the_house_is_not_called_done(house):
     house.down = True
     answer = tap('room/kitchen', {'on': False})

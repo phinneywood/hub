@@ -6,7 +6,9 @@
   "title": "Buttons on the wall show in their room",
   "changes": [
    "A wall or remote button shows in its room, with its last press, its battery and what each press does.",
-   "The developer page reads the projects folder, and shows its tmux and brief sections only when they are set."
+   "The developer page reads the projects folder, and shows its tmux and brief sections only when they are set.",
+   "Music in another room is one tap: the music sheet lists every room, and a quiet one has Play here, for music of its own that starts softly while the rest plays on, and Join.",
+   "A room's own panel offers the same, the bar at the bottom names rooms playing something else, and a room playing its own music has its own pause."
   ]
  },
  {

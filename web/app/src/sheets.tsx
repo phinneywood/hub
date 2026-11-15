@@ -1,11 +1,11 @@
 // What rises over the house: a room, the music, and Ask.
 import { useEffect, useState } from "preact/hooks";
-import { dimDevice, dimRoom, dragDevice, dragRoom, dragVolume, forgetScene, keepScene, loadPicks, pauseStream, picks, play, playPick,
-  setVolume, sheet, skip, speakerIn, switchDevice, switchRoom } from "./state";
-import type { Button, House, Music, Room, Speaker } from "./types";
+import { dimDevice, dimRoom, dragDevice, dragRoom, dragVolume, forgetScene, keepScene, loadPicks, pauseStream, picks, play, playHere,
+  playPick, setVolume, sheet, skip, speakerIn, switchDevice, switchRoom } from "./state";
+import type { Button, House, Music, Pick, Room, Speaker, Stream } from "./types";
 import { Sleeve } from "./screens";
 import { Icon, SheetFrame, Slider, Switch } from "./ui";
-import { ago, howMany, list } from "./words";
+import { ago, howMany, list, playingIn, spoken } from "./words";
 
 export function SpeakerRow({ speaker, title, sub }: { speaker: Speaker; title: string; sub?: string }) {
   return (
@@ -14,6 +14,42 @@ export function SpeakerRow({ speaker, title, sub }: { speaker: Speaker; title: s
       <Slider value={speaker.volume ?? 0} label={`${speaker.name} volume`} sound dim={!speaker.in}
         onDrag={(v) => dragVolume(speaker.id, v)} onSet={(v) => void setVolume(speaker.id, v)} />
       <Switch on={speaker.in} sound label={`${speaker.name} speaker`} onChange={(on) => void speakerIn(speaker.id, speaker.name, on)} />
+    </div>
+  );
+}
+
+/** The music a speaker plays on its own, apart from the house's main music. */
+function ownMusic(speaker: Speaker, music: Music): Stream | undefined {
+  return speaker.other ? (music.also ?? []).find((stream) => stream.speakers.includes(speaker.id)) : undefined;
+}
+
+/** A room playing music of its own: its volume, and a pause that stops only that music. */
+function OwnRow({ speaker, stream, title, sub }: { speaker: Speaker; stream: Stream | undefined; title: string; sub: string }) {
+  const where = list(stream?.rooms ?? [speaker.name]);
+  return (
+    <div class="ctl">
+      <div class="ctl-name"><b>{title}</b><span>{sub}</span></div>
+      <Slider value={speaker.volume ?? 0} label={`${speaker.name} volume`} sound onDrag={(v) => dragVolume(speaker.id, v)}
+        onSet={(v) => void setVolume(speaker.id, v)} />
+      <button type="button" class="mini" aria-label={`Pause the music in ${where}`} onClick={() => void pauseStream(stream?.speaker ?? speaker.id)}>
+        <Icon name="pause" />
+      </button>
+    </div>
+  );
+}
+
+/** A quiet room: start music of its own there, or bring it into what is playing. */
+function QuietRow({ speaker, music, title, sub }: { speaker: Speaker; music: Music; title: string; sub: string }) {
+  const joins = music.playing && playingIn(music).length > 0;
+  return (
+    <div class="ctl acts">
+      <div class="ctl-name"><b>{title}</b><span>{sub}</span></div>
+      <div class="pills">
+        <button type="button" class="pill go" aria-label={`Play something in ${speaker.name}`}
+          onClick={() => (sheet.value = { kind: "here", speaker: speaker.id })}><Icon name="play" />Play here</button>
+        {joins && <button type="button" class="pill" aria-label={`${speaker.name} joins “${music.title || "the music"}”`}
+          onClick={() => void speakerIn(speaker.id, speaker.name, true)}>Join</button>}
+      </div>
     </div>
   );
 }
@@ -34,7 +70,7 @@ function ButtonRow({ button }: { button: Button }) {
 
 export function RoomSheet({ room, music }: { room: Room; music: Music | null }) {
   const speaker = music?.speakers.find((s) => s.id === room.speaker);
-  const own = (music?.also ?? []).find((stream) => speaker && stream.speakers.includes(speaker.id));   // this room's own music
+  const own = speaker && music ? ownMusic(speaker, music) : undefined;      // this room's own music
   const says = room.lit ? `${howMany(room.lit, "light")} on.` : room.lights.length === 1 ? "The light is off." : "All lights are off.";
   return (
     <SheetFrame title={room.name} sub={says}>
@@ -50,11 +86,12 @@ export function RoomSheet({ room, music }: { room: Room; music: Music | null }) 
           <Switch on={l.on} label={l.name} off={l.offline} onChange={(on) => void switchDevice(l.id, l.name, on)} />
         </div>
       ))}
-      {speaker && !speaker.offline && <h2>Speaker</h2>}
-      {speaker && !speaker.offline && (
-        <SpeakerRow speaker={speaker}
-          title={speaker.other ? own?.title || "Playing" : speaker.in && music?.playing ? music.title || "Playing" : "Not playing"}
-          sub={speaker.in || speaker.other ? `Volume ${speaker.volume ?? 0}%` : music?.playing ? "Switch on to play what’s on" : undefined} />
+      {speaker && !speaker.offline && music && <h2>Music</h2>}
+      {speaker && !speaker.offline && music && (
+        speaker.other ? <OwnRow speaker={speaker} stream={own} title={own?.title || "Playing"} sub={`Volume ${speaker.volume ?? 0}%`} />
+        : speaker.in && music.playing ? <SpeakerRow speaker={speaker} title={music.title || "Playing"} sub={`Volume ${speaker.volume ?? 0}%`} />
+        : <QuietRow speaker={speaker} music={music} title="Nothing playing here"
+            sub={music.playing && playingIn(music).length ? `Or join “${music.title || "the music"}”` : "Starts softly"} />
       )}
       {room.others.length > 0 && <h2>Also here</h2>}
       {room.others.map((o) => (
@@ -72,8 +109,12 @@ export function RoomSheet({ room, music }: { room: Room; music: Music | null }) 
 export function PlayingSheet({ music }: { music: Music }) {
   useEffect(() => void loadPicks(), []);
   const reachable = music.speakers.filter((s) => !s.offline).sort((a, b) => Number(b.leads) - Number(a.leads) || Number(b.in) - Number(a.in));
+  const here = reachable.filter((s) => s.in && !s.other);
+  // Every other room: those playing their own music first, then the quiet ones, each with what it can do.
+  const rest = reachable.filter((s) => !(s.in && !s.other)).sort((a, b) => Number(b.other) - Number(a.other));
   const silent = music.speakers.length - reachable.length;
   const found = picks.value ?? [];
+  const where = playingIn(music).map(spoken);
   return (
     <SheetFrame title={music.title || (music.playing ? "Music" : "Nothing playing")} sub={[music.artist, music.album].filter(Boolean).join(", ") || undefined}>
       <div class="transport">
@@ -83,28 +124,46 @@ export function PlayingSheet({ music }: { music: Music }) {
         </button>
         <button type="button" aria-label="Next" onClick={() => void skip("next")}><Icon name="next" /></button>
       </div>
-      <h2>Where it plays</h2>
-      {reachable.map((s) => <SpeakerRow speaker={s} title={s.name} sub={s.other ? "Playing something else" : undefined} key={s.id} />)}
-      {(music.also ?? []).length > 0 && <h2>Also playing</h2>}
-      {(music.also ?? []).map((stream) => (
-        <div class="ctl two" key={stream.speaker}>
-          <div class="ctl-name"><b>{stream.title || "Music"}</b><span>{list(stream.rooms)}</span></div>
-          <button type="button" class="mini" aria-label={`Pause the music in ${list(stream.rooms)}`} onClick={() => void pauseStream(stream.speaker)}>
-            <Icon name="pause" />
-          </button>
-        </div>
-      ))}
+      {here.length > 0 && <h2>Where it plays</h2>}
+      {here.map((s) => <SpeakerRow speaker={s} title={s.name} key={s.id} />)}
+      {rest.length > 0 && <h2>{here.length ? "Other rooms" : "Rooms"}</h2>}
+      {rest.map((s) => s.other
+        ? <OwnRow speaker={s} stream={ownMusic(s, music)} title={s.name} key={s.id}
+            sub={ownMusic(s, music)?.title ? `Playing “${ownMusic(s, music)!.title}”` : "Playing something else"} />
+        : <QuietRow speaker={s} music={music} title={s.name} sub="Quiet" key={s.id} />)}
       {silent > 0 && <p class="quiet">{howMany(silent, "speaker")} can’t be reached right now.</p>}
-      {found.length > 0 && <h2>Play something else</h2>}
-      {found.length > 0 && (
-        <div class="picks">
-          {found.slice(0, found.length >= 8 ? 8 : found.length >= 4 ? 4 : found.length).map((p) => (
-            <button type="button" class="pick" key={p.uri} onClick={() => void playPick(p)}>
-              <Sleeve name={p.name} size="mid" /><b>{p.name}</b>
-            </button>
-          ))}
-        </div>
-      )}
+      {found.length > 0 && <h2>{music.playing && where.length ? `Play something else in ${list(where)}` : "Play something"}</h2>}
+      {found.length > 0 && <Picks found={found} onPick={(p) => void playPick(p)} />}
+    </SheetFrame>
+  );
+}
+
+/** Playlists as sleeves, in full rows: four or eight beside the music, all of them when choosing for a room. */
+function Picks({ found, onPick, all }: { found: Pick[]; onPick: (pick: Pick) => void; all?: boolean }) {
+  return (
+    <div class="picks">
+      {(all ? found : found.slice(0, found.length >= 8 ? 8 : found.length >= 4 ? 4 : found.length)).map((p) => (
+        <button type="button" class="pick" key={p.uri} onClick={() => onPick(p)}>
+          <Sleeve name={p.name} size="mid" /><b>{p.name}</b>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Pick something to play in one room only. What plays anywhere else plays on. */
+export function HereSheet({ speaker, music }: { speaker: Speaker; music: Music }) {
+  useEffect(() => void loadPicks(), []);
+  const found = picks.value;
+  const elsewhere = [...(music.playing ? playingIn(music) : []), ...(music.also ?? []).flatMap((s) => s.rooms)]
+    .filter((name) => name !== speaker.name).map(spoken);
+  const sub = `Only in ${spoken(speaker.name)}, starting softly.`
+    + (elsewhere.length ? ` Music in ${list(elsewhere)} plays on.` : "");
+  return (
+    <SheetFrame title={`Play in ${spoken(speaker.name)}`} sub={sub}>
+      {found === null && <p class="quiet">Finding playlists…</p>}
+      {found !== null && found.length === 0 && <p class="quiet">Hub can’t find any playlists right now.</p>}
+      {found !== null && found.length > 0 && <Picks found={found} all onPick={(p) => void playHere(speaker, p)} />}
     </SheetFrame>
   );
 }
