@@ -205,10 +205,13 @@ def windows(session=SESSION, now=None):
     binary = _tmux()
     if not binary:
         return None
-    out = _run([binary, 'list-windows', '-t', session, '-F', '#{window_index}\t#{window_name}\t#{window_activity}\t#{pane_pid}'])
+    # Spaces, not tabs: without a UTF-8 locale tmux prints a tab in a format as "_". The name goes last; it may hold spaces.
+    out = _run([binary, 'list-windows', '-t', session, '-F',
+                '#{window_index} #{window_activity} #{pane_pid} #{window_name}'])
     if out is None:
         return None
-    rows = [line.split('\t') for line in out.splitlines() if line.count('\t') == 3]
+    rows = [[index, name, stamp, pid] for index, stamp, pid, name in
+            (line.split(' ', 3) for line in out.splitlines() if line.count(' ') >= 3)]
     busy = _claude_under({pid for *_, pid in rows})
     now = now or time.time()
     return [{'index': index, 'name': name, 'claude': pid in busy,

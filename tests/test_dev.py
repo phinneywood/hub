@@ -91,7 +91,7 @@ def world(tmp_path, monkeypatch):
         {'dev': {'home_repo': str(repo), 'manager_brief': str(brief), 'tmux_session': 'demo'}}))
     monkeypatch.setattr(read, 'windows', lambda session='manager', now=None: [
         {'index': '1', 'name': 'manager', 'claude': True, 'active': 'just now'},
-        {'index': '2', 'name': 'demo-task', 'claude': False, 'active': '3 hr ago'}])
+        {'index': '2', 'name': 'demo task', 'claude': False, 'active': '3 hr ago'}])
     return home
 
 
@@ -131,7 +131,7 @@ def test_the_page_shows_all_four_sections(world):
     assert '<strong>Talk to the Manager.</strong>' in page and '&lt;script&gt;' in page and 'Not this list' not in page
     assert '<td><code>Ctrl-b w</code></td><td>See all work</td>' in page
     assert 'Go to the <strong>Manager</strong> &lt;b&gt;now&lt;/b&gt;' in page
-    assert 'demo-task' in page and 'Claude running' in page
+    assert 'demo task' in page and 'Claude running' in page
     assert 'First commit in alpha' in page and 'feature-x' in page and 'uncommitted changes' in page
     assert 'Folder missing or not a Git checkout' in page
     assert 'Pick a name for the <strong>demo</strong> app.' in page and 'Old item' not in page
@@ -153,12 +153,12 @@ def test_tmux_out_of_reach_is_not_available(monkeypatch):
 
 
 def test_tmux_windows_and_claude_beneath_them(monkeypatch):
-    out = {'list-windows': '1\tmanager\t1000\t10\n2\tdemo-task\t400\t20\n',
+    out = {'list-windows': '1 1000 10 manager\n2 400 20 demo task\n',
            'ps': '10 1 /bin/zsh\n11 10 claude\n20 1 /bin/zsh\n21 20 vim\n'}
     monkeypatch.setattr(read, '_tmux', lambda: 'tmux')
     monkeypatch.setattr(read, '_run', lambda args, cwd=None: out['ps' if args[0] == 'ps' else args[1]])
     assert read.windows('demo', now=1060) == [{'index': '1', 'name': 'manager', 'claude': True, 'active': 'just now'},
-                                              {'index': '2', 'name': 'demo-task', 'claude': False, 'active': '11 min ago'}]
+                                              {'index': '2', 'name': 'demo task', 'claude': False, 'active': '11 min ago'}]
 
 
 def test_dev_is_in_all_tools_but_not_a_card_on_today(world):
