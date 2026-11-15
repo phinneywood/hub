@@ -41,10 +41,11 @@ def test_every_page_the_deployer_checks_and_every_new_one_answers_200(client, pa
     assert client.get(path).status_code == 200
 
 
-def test_the_landing_page_is_ask_and_keeps_the_deployers_other_checks(client):
-    landing = client.get('/')
-    assert 'id="ask-root"' in landing.text and '<title>Ask · Hub</title>' in landing.text
-    assert landing.text == client.get('/ask').text                     # one page, two addresses
+def test_the_landing_page_is_the_app_and_keeps_the_deployers_other_checks(client):
+    landing = client.get('/')                                           # the deployer follows the redirect, as this does
+    assert landing.status_code == 200 and '<div id="app">' in landing.text
+    chat = client.get('/ask').text
+    assert 'id="ask-root"' in chat and '<title>Ask · Hub</title>' in chat
     assert home.UNAVAILABLE not in landing.text                         # the deployer fails a deploy that shows this on '/'
     assert client.get('/', headers={'Tailscale-User-Login': 'unauthorized@example.invalid'}).status_code == 403
     for path in NEW_PAGES[:4]:
@@ -59,9 +60,9 @@ def _main_nav(page):
 
 
 def test_main_navigation_is_three_views_with_tools_and_settings_behind_icons(client):
-    for path, current in (('/', 'Ask'), ('/today', 'Today'), ('/insights', 'Insights')):
+    for path, current in (('/ask', 'Ask'), ('/today', 'Today'), ('/insights', 'Insights')):
         page = client.get(path).text
-        assert _main_nav(page) == ['/', '/today', '/insights']
+        assert _main_nav(page) == ['/ask', '/today', '/insights']
         assert f'class="on" aria-current="page">{current}</a>' in page
         assert 'href="/tools"' in page and 'href="/settings" aria-label="Settings"' in page and 'href="#main"' in page
     assert 'class="shell-icon on" href="/tools"' in client.get('/trip').text          # a tool page is under All tools

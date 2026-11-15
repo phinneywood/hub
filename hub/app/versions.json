@@ -1,0 +1,197 @@
+[
+ {
+  "sha": null,
+  "from": "beea3028ec0d3ebe24cf29cab2cb52ed7debffba",
+  "live": null,
+  "title": "The app becomes Hub's front door",
+  "changes": [
+   "Hub's usual address opens the new app. The older pages stay under System, and the old chat is at /ask.",
+   "A Versions page under System lists each release with what changed and links to the code."
+  ]
+ },
+ {
+  "sha": "beea3028ec0d3ebe24cf29cab2cb52ed7debffba",
+  "from": "3115aa3dfc1c3b7960b6eeab1dd1c67fd3e869ac",
+  "live": "2026-11-15T15:34:06Z",
+  "title": "The new app: Home, Music, Ask and Today",
+  "changes": [
+   "The new app at /app: the house as a plan of rooms that light up, with music, scenes and Undo.",
+   "Ask inside the app, on Claude Sonnet, for requests about the house: say it and Hub does it.",
+   "Today inside the app: what needs you first, then the rest of the day."
+  ]
+ },
+ {
+  "sha": "3115aa3dfc1c3b7960b6eeab1dd1c67fd3e869ac",
+  "from": "386db306c1d2f81091af9421ac4dc854a2b51d89",
+  "live": "2026-11-15T00:47:13Z",
+  "title": "Dev page fix",
+  "changes": [
+   "The Dev page reads terminal window names that contain spaces."
+  ]
+ },
+ {
+  "sha": "386db306c1d2f81091af9421ac4dc854a2b51d89",
+  "from": "9678183b21aee53103f9c2fec6bf0da41ce9752f",
+  "live": "2026-11-15T00:02:37Z",
+  "title": "Home Assistant inside Hub, and live checks",
+  "changes": [
+   "Home Assistant and Music Assistant open inside Hub, behind Hub's sign-in.",
+   "Live checks: small tests of the real running system that a deploy must pass.",
+   "A Dev page with every project's live state.",
+   "Silent speakers fold under one line on the Music screen."
+  ]
+ },
+ {
+  "sha": "9678183b21aee53103f9c2fec6bf0da41ce9752f",
+  "from": "95bd22c337e975006d7d0afd469910e0fd8a46c1",
+  "live": "2026-11-14T21:44:27Z",
+  "title": "Ask plays the music it found",
+  "changes": [
+   "When Ask finds music, it plays it instead of only naming it."
+  ]
+ },
+ {
+  "sha": "95bd22c337e975006d7d0afd469910e0fd8a46c1",
+  "from": "4f9419bc75cba350b45125e4106661673b8eb865",
+  "live": "2026-11-14T16:37:04Z",
+  "title": "Ask lists the devices on the network",
+  "changes": [
+   "Ask can list the devices on the home network, grouped by mesh unit."
+  ]
+ },
+ {
+  "sha": "4f9419bc75cba350b45125e4106661673b8eb865",
+  "from": "2e5e7008e9e7bdbdf63a26afb27c2f8137ed3569",
+  "live": "2026-11-14T04:37:27Z",
+  "title": "Today's Home card leads to Music",
+  "changes": [
+   "The Home card on Today leads to Music and Music Assistant."
+  ]
+ },
+ {
+  "sha": "2e5e7008e9e7bdbdf63a26afb27c2f8137ed3569",
+  "from": "b4103db9157b279ee7687c8bcd1423dc40c9ae96",
+  "live": "2026-11-14T04:25:09Z",
+  "title": "A mini-player and a Music screen",
+  "changes": [
+   "A mini-player on Hub's pages while music plays, and a Music screen under Home."
+  ]
+ },
+ {
+  "sha": "b4103db9157b279ee7687c8bcd1423dc40c9ae96",
+  "from": "2ade21a0e1beff287d3889a84a5378e16db7a5c8",
+  "live": "2026-11-14T04:12:57Z",
+  "title": "Rooms from Home Assistant, and a Now playing card",
+  "changes": [
+   "Rooms come from Home Assistant's areas and labels, and light colours stay within bounds.",
+   "Ask shows a live Now playing card.",
+   "Home Assistant and Music Assistant are one tap away."
+  ]
+ },
+ {
+  "sha": "2ade21a0e1beff287d3889a84a5378e16db7a5c8",
+  "from": "f92f31be11b6d3582dd597ceac24fca7f4eb3295",
+  "live": "2026-11-14T03:11:28Z",
+  "title": "Hub gets a logo",
+  "changes": [
+   "A logo, with every icon drawn from it. The empty Ask chat shows it."
+  ]
+ },
+ {
+  "sha": "f92f31be11b6d3582dd597ceac24fca7f4eb3295",
+  "from": "e821de2acbc8f411a63a3ce34603226e0127e73d",
+  "live": "2026-11-14T00:12:15Z",
+  "title": "A record of every Ask turn",
+  "changes": [
+   "Each Ask turn is recorded, failed answers included, with an Ask activity page to look back at them.",
+   "Music plays only real items, checks that it started, and groups under the speaker already playing."
+  ]
+ },
+ {
+  "sha": "e821de2acbc8f411a63a3ce34603226e0127e73d",
+  "from": "62d9c8b28db7f05977d3b2ec09e6eb0d04db23d6",
+  "live": "2026-11-13T19:42:49Z",
+  "title": "A new look",
+  "changes": [
+   "A warm paper palette, raised cards, pill buttons and a segmented main menu.",
+   "A calmer Ask chat with a floating box to type in.",
+   "Icons on every tool, and charts on the new palette."
+  ]
+ },
+ {
+  "sha": "62d9c8b28db7f05977d3b2ec09e6eb0d04db23d6",
+  "from": "9ff4e2934a6455d11888f4910e001541a440ab26",
+  "live": "2026-11-13T18:31:45Z",
+  "title": "Cards in the chat, recipes and fix cards",
+  "changes": [
+   "Ask shows cards in the chat, with an Improve this button.",
+   "Saved routines (recipes) of allowed steps, kept only when you tap to save.",
+   "\"As well\" plays music in sync across speakers.",
+   "A friction log, and morning cards offering fixes: Build, Not now or Never.",
+   "When a name is both a room and a device, Hub takes it to mean the room."
+  ]
+ },
+ {
+  "sha": "9ff4e2934a6455d11888f4910e001541a440ab26",
+  "from": "dd61ffe8eec11bcd8d89ed14df709c9f8cb62510",
+  "live": "2026-11-13T15:19:49Z",
+  "title": "Ask plays music where asked",
+  "changes": [
+   "Ask plays a specific pick, only on the speakers asked for, and softly when asked."
+  ]
+ },
+ {
+  "sha": "dd61ffe8eec11bcd8d89ed14df709c9f8cb62510",
+  "from": "126b735262911439a51453ed8f614b5a2e91bd71",
+  "live": "2026-11-13T04:34:37Z",
+  "title": "Playlists through Music Assistant",
+  "changes": [
+   "Hub can make and change playlists in Music Assistant, with Undo and reminders.",
+   "Each background playlist edit is checked before the next one starts."
+  ]
+ },
+ {
+  "sha": "126b735262911439a51453ed8f614b5a2e91bd71",
+  "from": "f4c342b7921ac46423cf9f66a1a1379c4b1ea2c6",
+  "live": "2026-11-13T01:38:39Z",
+  "title": "Hub can run the house",
+  "changes": [
+   "Hub reads the house through Home Assistant and can change lights, plugs, scenes and speakers, with Undo.",
+   "Mail filing and pause say plainly what they did; Calendar shows several days; Bike + bus is sturdier.",
+   "Hub's database is created readable by the owner only."
+  ]
+ },
+ {
+  "sha": "f4c342b7921ac46423cf9f66a1a1379c4b1ea2c6",
+  "from": "463cabeaf5963d2076dec07ebaeee01eeb3fdae1",
+  "live": "2026-11-11T22:53:48Z",
+  "title": "Ask hands cooking and groceries to Kitchen",
+  "changes": [
+   "Ask passes cooking and grocery requests to Kitchen, and Kitchen's cards show in the chat.",
+   "A preview Hub for development, on a copy of real data."
+  ]
+ },
+ {
+  "sha": "463cabeaf5963d2076dec07ebaeee01eeb3fdae1",
+  "from": "34046551210f5c29b3de7ca176f759d9ce8ae4e1",
+  "live": "2026-11-11T13:20:06Z",
+  "title": "Three main views: Ask, Today and Insights",
+  "changes": [
+   "Hub's top bar settles on three views: Ask, Today and Insights.",
+   "Ask can look up the network, the inbox's size and what the AI has cost.",
+   "Insights gains a network summary; Today stops showing a second card for a tool that already asks for a decision.",
+   "Trip starts from a made-up sample trip and always keeps the saved one exactly as it was.",
+   "An attempt the night before rolled itself back; this release carries the same changes."
+  ]
+ },
+ {
+  "sha": "34046551210f5c29b3de7ca176f759d9ce8ae4e1",
+  "from": "0acfa7c36ba5c101c8f274839891a61e35e1ffc9",
+  "live": "2026-11-11T00:20:10Z",
+  "title": "Ask Hub, a chat that can look things up",
+  "changes": [
+   "Ask Hub: a chat that answers from Hub's own lookups. It can read, not change.",
+   "The first release from the cleaned-up history; the source is ready to be public."
+  ]
+ }
+]

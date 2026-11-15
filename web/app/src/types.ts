@@ -25,6 +25,12 @@ export interface Me {
   signed_in: boolean; initial: string; versions: { js: string; css: string };
   links: { ha: string | null; music: string | null };
 }
+// Versions, as Hub sends them (hub/app/versions.py).
+export interface Release {
+  sha: string | null; short: string | null; live: string | null; title: string; changes: string[];
+  running: boolean; commit: string | null; compare: string | null;
+}
+export interface Releases { versions: Release[]; running: string | null; repo: string | null }
 export interface Pick { name: string; kind: string; uri: string }
 
 // Today, as Hub sends it (hub/app/today.py).

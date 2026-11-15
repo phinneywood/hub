@@ -45,7 +45,7 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   page: read `docs/app.md` first. After changing it, run `tools/build-app` and the browser check in `web/app/check`.
 - The owner's unbuilt requests are at `GET /engine/requests.json` on the running Hub. They are a wish
   list, not authorization for any effect.
-- To prepare a version: commit, get the owner's yes to merge to `main`, push `main` to GitHub, then run
+- To prepare a version: add its entry to `hub/app/versions.json` ("Adding a release" in `docs/app.md`), commit, get the owner's yes to merge to `main`, push `main` to GitHub, then run
   `/usr/bin/python3 -B ~/Developer/projects/home-ops/hub-deployer/hub_release.py stage`. Staging refuses
   a `main` that GitHub doesn't have, so live Hub never runs ahead of it. Going live is the owner's tap on Deploy. Never write to `~/Developer/hub/releases` by hand.
   Model calls on personal data use only the zero-retention routes in `hub/luna.py` and `preschool/jev.py`.

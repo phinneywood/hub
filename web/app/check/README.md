@@ -17,6 +17,7 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
 - Today says the right sentence, lists what needs you with the longest wait first, shows the evening,
   tomorrow, the week at school and the trip, marks two things at once, takes a tick and puts it back, and
   says so when nothing needs you;
+- System opens Versions, which lists the releases and leads back;
 - everything meant to be tapped is at least 44 px on its short side;
 - the app says so when the house stops answering and when Hub can't be reached, still opens without Hub,
   and reconnects by itself;

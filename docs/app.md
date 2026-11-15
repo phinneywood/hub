@@ -8,16 +8,15 @@ It is being built in phases (the plan is in the owner's private review notes). P
 phase 2 is Ask, inside the app; phase 3 is Today. Until a later phase replaces it, Kitchen in the app's bar
 opens the older page, and a Today item's button opens the older page it belongs to (Mail, Kitchen, the trip).
 
-## Switching it on
+## The front door
 
-The app always answers at `/app` once a version with it is deployed, so it can be tried beside the old front.
-Hub opens on it only when the owner says so in the private settings file (`household.json`):
+The app is Hub's front door: `/` sends the browser to `/app/`, and the phone's home-screen icon opens it. The
+older pages all still answer, listed under System; the old chat is at `/ask`. To open on the chat again, the owner
+sets this in the private settings file (`household.json`):
 
 ```json
-"app": {"front": true}
+"app": {"front": false}
 ```
-
-With it, `/` sends the browser to `/app/`. Without it, `/` is the Ask chat as before. Nothing else changes either way: no address was removed.
 
 ## What it asks Hub for
 
@@ -38,6 +37,7 @@ With it, `/` sends the browser to `/app/`. Without it, `/` is the Ask chat as be
 | `POST /app/api/ask` | One request, `{"text": ...}`, answered as it happens (see “Ask”) |
 | `POST /app/api/memory/{note}/forget` | Forget one thing Hub remembers |
 | `GET /app/api/today` | Today as data: what needs a person, the rest of today, tomorrow, the week at school, the trip |
+| `GET /app/api/versions` | Each release of Hub, newest first, in plain words, and which one is running (see “Versions”) |
 | `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
 
 The picture is built in `hub/app/model.py` from the same reading of Home Assistant as the rest of Hub
@@ -221,3 +221,30 @@ good, as may the typeface (`fonts/Jost.ttf`, SIL Open Font License). Everything 
 follows what it is sent (`tests/app_world.py`). It reaches no other machine and no service on this one
 (`web/check_guard.py`). Ask works there on the stand-in model, with a made-up Kitchen and private desk, so the
 conversation can be tried and photographed without a key. See `web/app/check/README.md`.
+
+## Versions
+
+System opens Versions: each release of Hub, newest first, with when it went live, what changed in plain words,
+and links to the commit and to every change since the release before. The list is `hub/app/versions.json`,
+kept by hand; `hub/app/versions.py` reads it. The links go to the repository named in the private settings file,
+so no account name is in the source:
+
+```json
+"versions": {"repo": "https://github.com/<owner>/hub"}
+```
+
+Without it the screen shows short commit names, unlinked.
+
+### Adding a release
+
+Every release adds its entry, in the same branch as the work, before it is merged:
+
+1. Fill in the entry at the top that has `"sha": null`: its `sha` and `live` come from the deployer's
+   `last.json` for the release now running (`live` in UTC, `2026-11-15T15:34:06Z`). If that release was rolled
+   back instead, leave it and fold its lines into the new entry.
+2. Add a new entry above it with `"sha": null`, `"live": null`, `"from"` set to the sha just filled in, a short
+   `title`, and `changes`: a few sentences the owner would say, not commit subjects. No names or private
+   details; the file is public like the rest of the source.
+
+A release can't name its own commit, so the newest entry stays `null` until the next one; Hub shows the running
+version's commit for it. `tests/test_app_versions.py` checks the list holds together.

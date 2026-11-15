@@ -198,7 +198,7 @@ for _address, _name in (("/favicon.ico", "favicon.ico"), ("/apple-touch-icon.png
 
 @app.get("/", response_class=HTMLResponse)
 def landing(request: Request):
-    """Hub opens on Ask, or on the app once the owner sets "app": {"front": true} in household.json.
+    """Hub opens on the app, or on the Ask chat when the owner sets "app": {"front": false} in household.json.
     The chat also answers at /ask, the app at /app, the day's cards at /today."""
     if _app_in_front():
         return RedirectResponse("/app/", status_code=302)
@@ -206,12 +206,12 @@ def landing(request: Request):
 
 
 def _app_in_front():
-    """Whether the owner made the app Hub's front door: "app": {"front": true} in household.json."""
+    """Whether the app is Hub's front door: yes, unless the owner set "app": {"front": false} in household.json."""
     from . import household
     try:
-        return household.section("app").get("front") is True
+        return household.section("app").get("front") is not False
     except ValueError:
-        return False
+        return True
 
 
 @app.get("/today", response_class=HTMLResponse)

@@ -25,7 +25,7 @@
   <a class="brand" href="/"><img class="brand-mark" src="/static/favicon.svg" alt="" width="24" height="24">Hub</a>
   <nav class="shell-nav" aria-label="Main">
     {# With the door set up, Home Assistant and Music Assistant are main views and Insights moves to All tools. #}
-    {% set views = [('ask', 'Ask', '/'), ('today', 'Today', '/today')] + ([('home', 'Home', '/house/assistant')] + ([('music', 'Music', '/house/player')] if frames.music else []) if frames.ha else [('insights', 'Insights', '/insights')]) %}
+    {% set views = [('ask', 'Ask', '/ask'), ('today', 'Today', '/today')] + ([('home', 'Home', '/house/assistant')] + ([('music', 'Music', '/house/player')] if frames.music else []) if frames.ha else [('insights', 'Insights', '/insights')]) %}
     {% for slug, name, href in views %}<a href="{{ href }}"{% if active == slug %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}
   </nav>
   <div class="shell-util">

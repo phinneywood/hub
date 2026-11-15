@@ -416,3 +416,12 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Versions */
+.uplink { display: inline-flex; align-items: center; min-height: 44px; font-size: var(--t-s); color: var(--ink-2); }
+.uplink::before { content: "‹"; margin-right: 6px; }
+.release-when { margin-top: 2px; font-size: var(--t-s); color: var(--ink-3); }
+.release.now .release-when { color: var(--ink-2); }
+.release-list { margin: 8px 0 0; padding-left: 1.1em; color: var(--ink-2); max-width: 60ch; }
+.release-list li { margin-top: 4px; }
+.release-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }

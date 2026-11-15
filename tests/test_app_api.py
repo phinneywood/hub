@@ -315,13 +315,14 @@ def test_the_page_names_its_built_files_by_version_and_they_may_be_kept(house):
     assert client.get('/static/app/nothing.js', params={'v': '1'}).headers['cache-control'] == 'no-store'
 
 
-def test_hub_opens_on_the_app_only_once_the_owner_says_so(house):
-    assert 'id="app"' not in client.get('/').text and client.get('/manifest.webmanifest').json()['start_url'] == '/'
-    assert client.get('/app/api/home', headers=SIGNED_IN).json()['initial'] == 'M'
-    (config.DATA_DIR / 'household.json').write_text(json.dumps({'app': {'front': True}}))
+def test_hub_opens_on_the_app_unless_the_owner_turns_it_off(house):
     assert client.get('/', follow_redirects=False).headers['location'] == '/app/'
     assert client.get('/manifest.webmanifest').json()['start_url'] == '/app/'
     assert '<div id="app">' in client.get('/').text
+    (config.DATA_DIR / 'household.json').write_text(json.dumps({'app': {'front': False}}))
+    assert 'id="ask-root"' in client.get('/').text and client.get('/manifest.webmanifest').json()['start_url'] == '/'
+    (config.DATA_DIR / 'household.json').write_text(json.dumps({'app': {'front': True}}))
+    assert client.get('/', follow_redirects=False).headers['location'] == '/app/'
 
 
 # ---- The live feed ----

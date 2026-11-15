@@ -274,6 +274,15 @@ def play(speaker: str, request: Request, body: dict = Body(...)):
     return _change(request, work)
 
 
+# ---- Versions (hub/app/versions.py): what each release changed ----
+
+@router.get('/api/versions')
+def versions_list():
+    """Each release, newest first, in plain words, and which one is running."""
+    from . import versions as releases
+    return releases.picture()
+
+
 # ---- Today (hub/app/today.py): what needs a person, then the day ----
 
 @router.get('/api/today')

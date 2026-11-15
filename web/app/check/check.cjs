@@ -267,6 +267,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.evaluate(() => document.documentElement.dataset.theme) === "day", "choosing Day did not change the look");
     await tap('.choice:text-is("Automatic")');
     expect(await page.evaluate(() => document.documentElement.dataset.theme) === (options.colorScheme === "dark" ? "dusk" : "day"), "Automatic did not follow the device");
+    await tap('.row:has-text("Versions")');
+    expect(await saysSoon("Versions"), "Versions: " + await says());
+    expect(await until(() => document.querySelectorAll(".release").length > 1), "Versions listed no releases");
+    await page.waitForTimeout(300); await shot("7b-versions");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on Versions: " + (await small()).join(", "));
+    await tap(".uplink");
+    expect(await saysSoon("The house is answering."), "Back from Versions: " + await says());
     await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
     await page.waitForSelector(".plan");
 

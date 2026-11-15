@@ -45,7 +45,7 @@ from hub.tools.house import control, read  # noqa: E402
 from hub.tools.kitchen import client as kitchen  # noqa: E402
 from tests import app_world, ask_script, day_world  # noqa: E402
 
-(Path(scratch) / 'household.json').write_text(json.dumps({'app': {'front': True}}))
+(Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'}}))
 world = app_world.install(patch)
 patch.setattr(control, 'CHECK_WAIT', 0.2)
 
