@@ -135,9 +135,20 @@ export function KeepSheet({ now }: { now: House }) {
   );
 }
 
-// ---- Ask: for now, a list you type into. Names switch things at once; the chat is one tap further. ----
+// ---- Ask: for now, a list you type into. Names switch things at once; anything else goes to the chat. ----
 
 const asked = signal("");
+const SAY = "hub.say";      // the chat page reads this once and sends it (web/ask): only Hub's own pages can set it
+
+/** Hand what was typed to Hub's chat, which still answers everything this list can't. */
+function toChat(text: string) {
+  try {
+    if (text) sessionStorage.setItem(SAY, text.slice(0, 2000));
+  } catch {
+    /* the chat just opens empty */
+  }
+  location.href = "/ask";
+}
 
 function marked(name: string, text: string) {
   const at = name.toLowerCase().indexOf(text.toLowerCase());
@@ -152,7 +163,7 @@ function Found({ now, text }: { now: House; text: string }) {
   const lists = text ? (picks.value ?? []).filter((p) => has(p.name)).slice(0, 4) : [];
   return (
     <>
-      {!text && <p class="ask-hint">Scenes run at once. Type a few letters for a room or a playlist.</p>}
+      {!text && <p class="ask-hint">Scenes run at once. A few letters find a room or a playlist. Anything else goes to the chat.</p>}
       {rooms.map((r) => (
         <div class="sug" key={r.id}>
           <span>{marked(r.name, text)}<small>{r.on ? (r.dims ? `Lights on at ${r.level}%` : "Lights on") : "Lights off"}</small></span>
@@ -169,7 +180,9 @@ function Found({ now, text }: { now: House; text: string }) {
           <span>{marked(p.name, text)}<small>Playlist. Plays where music is on now.</small></span><span class="go"><Icon name="play" /></span>
         </button>
       ))}
-      <a class="sug" href="/ask"><span>Ask in the chat<small>For anything this list can’t do yet</small></span><span class="how">Open</span></a>
+      {text
+        ? <button type="button" class="sug" onClick={() => toChat(text)}><span>Ask Hub “{text}”<small>Opens the chat and asks</small></span><span class="go"><Icon name="up" /></span></button>
+        : <a class="sug" href="/ask"><span>Ask in the chat<small>For anything this list can’t do yet</small></span><span class="how">Open</span></a>}
     </>
   );
 }
@@ -180,9 +193,9 @@ export function Ask({ focus }: { focus?: boolean }) {
   return (
     <div class="ask">
       <div class="ask-scroll"><div>{now && <Found now={now} text={asked.value.trim()} />}</div></div>
-      <form class="composer" onSubmit={(e) => e.preventDefault()}>
-        <input class="field" id="askq" autocomplete="off" autocapitalize="off" spellcheck={false} placeholder="A room, a scene or a playlist"
-          aria-label="Find a room, a scene or a playlist" value={asked.value} autofocus={focus}
+      <form class="composer" onSubmit={(e) => { e.preventDefault(); if (asked.value.trim()) toChat(asked.value.trim()); }}>
+        <input class="field" id="askq" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" placeholder="Say it, or type a room"
+          aria-label="Ask Hub, or type a room, a scene or a playlist" value={asked.value} autofocus={focus}
           onInput={(e) => (asked.value = e.currentTarget.value)} />
       </form>
     </div>

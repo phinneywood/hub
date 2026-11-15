@@ -168,6 +168,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect((await page.locator(".sug").first().innerText()).startsWith("Living room"), "typing did not find the room");
     await page.locator('.sug [role="switch"]').first().click();
     expect(await until((sel) => document.querySelector(sel)?.getAttribute("aria-checked") === "false", room("living-room")), "the switch in the list did not switch the room");
+    await page.fill("#askq", "play something calm");
+    expect((await page.locator(".sug").last().innerText()).startsWith("Ask Hub “play something calm”"), "free text was not offered to the chat");
     await page.fill("#askq", "");
     if (phone) { await page.keyboard.press("Escape"); await page.waitForTimeout(400); }
 

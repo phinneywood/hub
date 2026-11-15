@@ -563,6 +563,15 @@ const SUGGESTIONS = ["What needs me today?", "What’s on this week?", "Which em
 // Hub turns it into the question, which waits in the box for the owner to send or change.
 const ABOUT = new URLSearchParams(location.search).get("about");
 
+// The app's Ask field (web/app) hands over what the owner typed there: it leaves the words in this tab's own
+// storage and opens this page, which sends them once. Only Hub's own pages can write that storage; a link from
+// outside can't, so nothing arrives here that the owner didn't type and send.
+let said_in_app = null;
+try {
+  said_in_app = (sessionStorage.getItem("hub.say") || "").trim().slice(0, 2000) || null;
+  sessionStorage.removeItem("hub.say");
+} catch { /* no storage: the page opens empty */ }
+
 function Chat({ threadId, initial, about, onDrop, onActivity, onRefused }) {
   const transport = useMemo(() => new DefaultChatTransport({ api: `/ask/threads/${threadId}/chat` }), [threadId]);
   const runtime = useChatRuntime({
@@ -573,6 +582,12 @@ function Chat({ threadId, initial, about, onDrop, onActivity, onRefused }) {
   useEffect(() => { if (about) runtime.thread.composer.setText(about.question); }, [about, runtime]);
   const drop = () => { runtime.thread.composer.setText(""); onDrop(); };
   const say = useCallback((text) => runtime.thread.append({ role: "user", content: [{ type: "text", text }] }), [runtime]);
+  useEffect(() => {
+    if (!said_in_app || initial.length) return;
+    const text = said_in_app;
+    said_in_app = null;
+    say(text);
+  }, [say, initial]);
   return (
     <ThreadId.Provider value={threadId}>
     <Say.Provider value={say}>
