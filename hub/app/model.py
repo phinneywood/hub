@@ -20,11 +20,20 @@ def _light(d):
             'dims': bool(d.get('dims')), 'offline': d['offline']}
 
 
-def _room(r, speakers, sounding):
+def _home_of(speaker, names):
+    """The room a speaker is in: the one Home Assistant gives it, else the room it is named after
+    ("Kitchen", "Kitchen speakers"), the longest such name winning. None for a speaker that belongs to no room."""
+    if speaker['room'] in names:
+        return speaker['room']
+    said = speaker['name'].lower()
+    return max((n for n in names if said == n.lower() or said.startswith(n.lower() + ' ')), key=len, default=None)
+
+
+def _room(r, speakers, homes, sounding):
     lights = [d for d in r['devices'] if d['kind'] == 'light']
     lit = [d for d in lights if d['on']]
     levels = [d['level'] for d in lit if d['level'] is not None]
-    speaker = next((s['id'] for s in speakers if s['room'] == r['name'] and not s['offline']), None)
+    speaker = next((s['id'] for s in speakers if homes.get(s['id']) == r['name'] and not s['offline']), None)
     return {'id': slug(r['name']), 'name': r['name'], 'on': bool(lit), 'lit': len(lit),
             'level': round(sum(levels) / len(levels)) if levels else (100 if lit else 0),
             'dims': any(d.get('dims') for d in lights),
@@ -51,17 +60,19 @@ def _floors(rooms, room_floor, floors):
     return [{'name': floors[f]['name'] if f else (OTHER_FLOOR if len(by) > 1 else ''), 'rooms': by[f]} for f in order]
 
 
-def _music(found):
-    """What the house is playing: the group that plays, else the one paused, else any. None without speakers."""
+def _music(found, homes):
+    """What the house is playing: the group that plays, else the one paused, else any. None without speakers.
+    A speaker is called by its room. One that can't be reached and belongs to no room (a laptop that is asleep,
+    say) is left out: it is not part of the house."""
     groups = nowplaying.groups(found)
     if not groups:
         return None
     now = groups[0]
     return {'speaker': now['leader'], 'playing': now['playing'], 'state': now['state'], 'title': now['title'],
             'artist': now['artist'], 'album': now['album'], 'volume': now['volume'],
-            'speakers': [{'id': s['id'], 'name': s['room'] if s['room'] and s['room'] != read.OTHER_ROOM else s['name'],
-                          'in': s['in'], 'leads': s['leads'], 'volume': s['volume'], 'offline': s['offline']}
-                         for s in now['speakers']]}
+            'speakers': [{'id': s['id'], 'name': homes.get(s['id']) or s['name'], 'in': s['in'], 'leads': s['leads'],
+                          'volume': s['volume'], 'offline': s['offline']}
+                         for s in now['speakers'] if homes.get(s['id']) or not s['offline'] or s['in']]}
 
 
 def _facts(found):
@@ -85,9 +96,12 @@ def _facts(found):
 
 def home(found, floors=None):
     """The whole Home screen from one reading of the house (read.snapshot())."""
-    music = _music(found)
+    names = [r['name'] for r in found['rooms'] if r['name'] != read.OTHER_ROOM]
+    names += [s['room'] for s in found['speakers'] if s['room'] != read.OTHER_ROOM and s['room'] not in names]
+    homes = {s['id']: _home_of(s, names) for s in found['speakers']}
+    music = _music(found, homes)
     sounding = {s['id'] for s in music['speakers'] if s['in']} if music and music['playing'] else set()
-    rooms = [_room(r, found['speakers'], sounding) for r in found['rooms']
+    rooms = [_room(r, found['speakers'], homes, sounding) for r in found['rooms']
              if r['name'] != read.OTHER_ROOM and any(d['kind'] == 'light' for d in r['devices'])]
     rooms.sort(key=lambda r: (-len(r['lights']), r['name'].lower()))      # the rooms with most lamps lead each floor
     return {'ok': True, 'at': found['read_at'].isoformat(timespec='seconds'),

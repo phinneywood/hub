@@ -57,6 +57,14 @@ def test_music_is_the_group_that_plays_named_by_room(house):
         ('Bedroom', False), ('Dining', False), ('Kitchen', True), ('Living room', True), ('Robin’s room', False)]
 
 
+def test_a_speaker_is_found_by_its_name_and_a_sleeping_laptop_is_not_the_houses(house):
+    found = picture()
+    assert found['rooms']['dining']['speaker'] == 'media_player.dining'      # Home Assistant gave it no room; its name did
+    assert 'A laptop' not in [s['name'] for s in found['music']['speakers']]
+    house.states['media_player.kitchen']['state'] = 'unavailable'            # a room's own speaker gone quiet is still said
+    assert ('Kitchen', True) in [(s['name'], s['offline']) for s in picture()['music']['speakers']]
+
+
 def test_facts_are_the_alarm_what_stands_open_and_the_weather(house):
     assert picture()['facts'] == [{'label': 'Alarm', 'value': 'Off', 'tone': ''},
                                   {'label': 'Doors and windows', 'value': 'All shut', 'tone': ''},

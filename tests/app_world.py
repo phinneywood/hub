@@ -32,7 +32,7 @@ LIGHTS = [
 SWITCHES = [('switch.coffee_maker', 'kitchen', 'Coffee maker', 'off'), ('fan.office_fan', 'office', 'Ceiling fan', 'off'),
             ('fan.bedroom_fan', 'bedroom', 'Ceiling fan', 'off'), ('switch.robin_sound', 'robin', 'Sound machine', 'on')]
 SPEAKERS = [('media_player.kitchen', 'kitchen', 'Kitchen speaker', 0.28), ('media_player.living', 'living', 'Living room speaker', 0.22),
-            ('media_player.dining', 'dining', 'Dining speaker', 0.2), ('media_player.bedroom', 'bedroom', 'Bedroom speaker', 0.15),
+            ('media_player.dining', None, 'Dining', 0.2), ('media_player.bedroom', 'bedroom', 'Bedroom speaker', 0.15),       # no room given: named after it
             ('media_player.robin', 'robin', 'Robin’s speaker', 0.1)]
 PLAYING = ('media_player.living', 'media_player.kitchen')       # the living room leads
 TRACK = {'media_title': 'Paper Lanterns', 'media_artist': 'The Harbor Trio', 'media_album_name': 'Evening Jazz'}
@@ -67,6 +67,8 @@ def _states():
         out[entity] = {'entity_id': entity, 'state': 'unknown', 'attributes': {'friendly_name': name}}
     for entity, name, kind, state in SENSORS:
         out[entity] = {'entity_id': entity, 'state': state, 'attributes': {'friendly_name': name, 'device_class': kind}}
+    out['media_player.study_laptop'] = {'entity_id': 'media_player.study_laptop', 'state': 'unavailable',        # asleep, and no room's speaker
+                                        'attributes': {'friendly_name': 'A laptop'}}
     out['alarm_control_panel.house'] = {'entity_id': 'alarm_control_panel.house', 'state': 'disarmed', 'attributes': {'friendly_name': 'Alarm'}}
     out['weather.home'] = {'entity_id': 'weather.home', 'state': 'rainy', 'attributes': {'friendly_name': 'Home', 'temperature': 52}}
     return out

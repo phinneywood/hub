@@ -2,10 +2,12 @@
 import type { House, Music } from "./types";
 
 const NUMBERS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
-// Rooms said the way people say them: "in the kitchen", but a named room keeps its name.
-const PLAIN = new Set(["kitchen", "living room", "dining", "dining room", "bedroom", "office", "hallway", "hall", "bath",
-  "bathroom", "porch", "yard", "basement", "garage", "entry", "study", "nursery", "den", "deck", "pantry", "laundry",
-  "foyer", "stairs", "guest room", "family room", "sun room", "attic", "patio", "garden"]);
+// Rooms said the way people say them: "in the kitchen", "in the front yard". A room made only of these everyday
+// words is said that way; one with a name in it ("Robin’s room") keeps its name.
+const EVERYDAY = new Set(("kitchen living dining room bedroom office hallway hall bath bathroom porch yard basement garage "
+  + "entry study nursery den deck pantry laundry foyer stairs guest family sun attic patio garden front back side "
+  + "upstairs downstairs primary main sitting area door play playroom mud mudroom closet loft landing lower upper "
+  + "tv media library workshop shed driveway balcony terrace hallway lounge kids").split(" "));
 
 export function list(items: string[]): string {
   if (items.length < 2) return items.join("");
@@ -16,8 +18,8 @@ export function list(items: string[]): string {
 const FULL: Record<string, string> = { dining: "dining room", bath: "bathroom", guest: "guest room", living: "living room" };
 
 export function spoken(name: string): string {
-  const plain = name.toLowerCase();
-  return PLAIN.has(plain) ? "the " + (FULL[plain] ?? plain) : name;
+  const plain = name.toLowerCase().trim();
+  return plain.split(/\s+/).every((word) => EVERYDAY.has(word)) ? "the " + (FULL[plain] ?? plain) : name;
 }
 
 export function houseSays(house: House): string {

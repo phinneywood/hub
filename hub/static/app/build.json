@@ -14,10 +14,10 @@
     "src/types.ts": "db646be2f3728c8151cc406ca1073581affe3daaf0c8227dc623d34b0388b3e1",
     "src/ui.tsx": "80f913c172a1dee4afe3a18b603056ae3123add019eb8de7893a98a5d4631b70",
     "src/vite-env.d.ts": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
-    "src/words.ts": "dca8c60905ada2b477826d967d548db287b2cd5fc2d1863be6499480804923c2"
+    "src/words.ts": "95a3358ee65e8d2567019d3531069942351b1572928bbd219652635446e518f3"
   },
   "built": {
     "app.css": "abcdf3de8c1658d3a386dc8778d8de68cca47985904b74236cf8bd6a72641c3c",
-    "app.js": "61b410d7bbb722da579e2063332fcc7386948b77c26d6bfc43ea864bbe2b8f04"
+    "app.js": "d4b2af113612f4200b22fb90e8f5ca3cba610f66d3aff5b8068eea4b0125f3eb"
   }
 }
