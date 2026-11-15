@@ -59,15 +59,12 @@ def _main_nav(page):
     return [part.split('"')[0] for part in nav.split('href="')[1:]]
 
 
-def test_main_navigation_is_three_views_with_tools_and_settings_behind_icons(client):
-    for path, current in (('/ask', 'Ask'), ('/today', 'Today'), ('/insights', 'Insights')):
+def test_every_older_page_carries_the_apps_tabs_and_leads_back_to_it(client):
+    for path in ('/ask', '/today', '/insights', '/trip', '/engine', '/status', '/settings'):
         page = client.get(path).text
-        assert _main_nav(page) == ['/ask', '/today', '/insights']
-        assert f'class="on" aria-current="page">{current}</a>' in page
-        assert 'href="/tools"' in page and 'href="/settings" aria-label="Settings"' in page and 'href="#main"' in page
-    assert 'class="shell-icon on" href="/tools"' in client.get('/trip').text          # a tool page is under All tools
-    for path in ('/engine', '/status'):
-        assert 'class="shell-icon on" href="/settings"' in client.get(path).text    # and these two under Settings
+        assert _main_nav(page) == ['/app/', '/app/#today', '/app/#mail', '/app/#kitchen']
+        assert 'class="brand" href="/app/"' in page and 'href="/app/#system">System</a>' in page
+        assert 'href="/tools"' in page and 'href="#main"' in page and '/static/look.js' in page
 
 
 def test_all_tools_lists_every_tool_and_settings_holds_engine_and_status(client):

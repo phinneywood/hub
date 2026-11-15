@@ -20,7 +20,7 @@ def test_home_renders_one_tile_per_tool_even_when_sources_fail(monkeypatch):
     assert page.status_code == 200
     assert page.text.count('class="tile ') == 8     # every tool but Ask, which is a main view
     assert home.UNAVAILABLE in page.text
-    assert '<a href="/today" class="on" aria-current="page">Today</a>' in page.text
+    assert '<a href="/app/#today">Today</a>' in page.text      # the app's tabs, on every older page
 
 
 def test_slow_source_does_not_block_the_page(monkeypatch):
