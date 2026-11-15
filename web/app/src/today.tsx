@@ -9,7 +9,7 @@ import { Icon } from "./ui";
 const HERE: Record<string, string> = {
   "/gmail": "#mail", "/kitchen": "#kitchen", "/engine": "#engine", "/engine#improvements": "#engine",
   "/engine/notes": "#engine", "/engine/recipes": "#engine", "/app/#versions": "#versions",
-  "/gmail/plan": "#mailsettings", "/gmail/delayed": "#mailsettings", "/gmail/backlog": "#mailsettings",
+  "/house/changes": "#changes", "/house/playlists": "#changes", "/gmail/plan": "#mailsettings", "/gmail/delayed": "#mailsettings", "/gmail/backlog": "#mailsettings",
 };
 const inApp = (href: string) => HERE[href] ?? href;
 import { daySays, daySub, partOfDay } from "./words";

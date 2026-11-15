@@ -426,6 +426,29 @@ def undo(batch: str, request: Request):
     return _change(request, lambda login: control.undo(batch, login=login, via='app', at_once=True))
 
 
+# ---- Changes (hub/app/changes.py): what Hub changed in the house and the music library ----
+
+@router.get('/api/changes')
+def changes_picture():
+    """Every change Hub made, newest first, with Undo for a day, and playlists waiting for a tap."""
+    from . import changes
+    return changes.picture()
+
+
+@router.post('/api/playlist/{do}')
+def playlist_tap(do: str, request: Request, body: dict = Body(default={})):
+    """A playlist tap: make, skip or undo, with {"key": ...}."""
+    from . import changes
+    if _login(request) is None:
+        return _refuse('Change playlists from your phone or laptop.', 403)
+    try:
+        said = changes.tap(do, body.get('key'), _login(request))
+    except changes.Refused as error:
+        return _refuse(error)
+    feed.poke()
+    return {'ok': True, 'said': said[:300]}
+
+
 # ---- Mail (hub/app/mail.py): what needs the owner, then what Hub sorted ----
 
 @router.get('/api/mail')

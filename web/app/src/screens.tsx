@@ -201,7 +201,7 @@ export function Rail() {
       <div class="mark"><i />Hub</div>
       <Tabs />
       <div class="foot">
-        <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" ? " on" : "")} onClick={() => go("system")}>System</button>
+        <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" || view.value === "changes" ? " on" : "")} onClick={() => go("system")}>System</button>
         <p class="ok">{fine ? "The house is answering." : trouble.value === "hub" ? "Can’t reach Hub." : "The house isn’t answering."}</p>
       </div>
     </nav>
@@ -228,7 +228,7 @@ export function System() {
         <h2>Under the hood</h2>
         <div class="rows">
           {me.value.update && <button type="button" class="row free lit" onClick={() => go("versions")}><div class="row-main"><b>A new version is ready</b><span>Open it to deploy</span></div></button>}
-          <a class="row free" href="/house/changes"><div class="row-main"><b>Everything Hub changed</b><span>With Undo, for a day</span></div></a>
+          <button type="button" class="row free" onClick={() => go("changes")}><div class="row-main"><b>Everything Hub changed</b><span>With Undo, for a day</span></div></button>
           {links.ha && <a class="row free" href={links.ha}><div class="row-main"><b>Home Assistant</b><span>Devices, rooms and automations</span></div></a>}
           {links.music && <a class="row free" href={links.music}><div class="row-main"><b>Music Assistant</b><span>The library, the queue and playlists</span></div></a>}
           <button type="button" class="row free" onClick={() => go("versions")}><div class="row-main"><b>Versions</b><span>What each release of Hub changed</span></div></button>
