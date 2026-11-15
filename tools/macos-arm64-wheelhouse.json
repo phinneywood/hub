@@ -1,5 +1,5 @@
 {
-  "requirements_sha256": "66c52a974b49df475261fe7ea62b5a760da38c6584b7d432c86cef984542008f",
+  "requirements_sha256": "cd30bcae5c4ad80c67e4d7fd952b4da8c563aa011b1999366f4786ea539dd9ac",
   "schema": 1,
   "target": {
     "abi": "cp312",
@@ -21,6 +21,12 @@
       "version": "0.8.0"
     },
     {
+      "filename": "anthropic-2.8.0-py3-none-any.whl",
+      "name": "anthropic",
+      "sha256": "76ad332e2d500fc54d0112cf100544ad1a7605e71e092b98d9eb664d2b66e283",
+      "version": "2.8.0"
+    },
+    {
       "filename": "anyio-4.16.0-py3-none-any.whl",
       "name": "anyio",
       "sha256": "c66ae634e0b8228396b801741beb3294326d4b6102f7bba4041c0dfb58c29026",
@@ -37,6 +43,12 @@
       "name": "click",
       "sha256": "255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360",
       "version": "8.5.0"
+    },
+    {
+      "filename": "docstring_parser-0.18.0-py3-none-any.whl",
+      "name": "docstring-parser",
+      "sha256": "b3fcbed555c47d8479be0796ef7e19c2670d428d72e96da63f3a40122860374b",
+      "version": "0.18.0"
     },
     {
       "filename": "fastapi-0.162.0-py3-none-any.whl",
