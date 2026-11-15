@@ -10,9 +10,10 @@
     ['#home', 'sheet=playing', 'Music', 'Where it plays and how loud, before anything else.'],
     ['#home', 'ask=type', 'Ask, typing', 'Type three letters and switch the room right in the list. No waiting.'],
     ['#home', 'ask=lights', 'Ask, in words', 'Say it. The house changes behind the answer, and Undo is one tap.'],
-    ['#home', 'ask=tacos', 'Ask about dinner', 'Kitchen answers inside Ask, with the list and one button.'],
+    ['#home', 'ask=fresh', 'Ask for something new', 'Kitchen finds dinners you would not think of, and knows what you already have.'],
     ['#today', '', 'Today', 'What needs you, then the day. Nothing you have to go and check.'],
-    ['#kitchen', '', 'Kitchen', 'The cart to approve, the week’s dinners and the shared list.'],
+    ['#kitchen', 'sheet=idea:curry', 'A new recipe', 'Why it was picked, what is missing, and one button that adds only that.'],
+    ['#kitchen', '', 'Kitchen', 'The cart to approve, three dinners new to you, the week and the shared list.'],
     ['#system', '', 'System', 'Hub tests itself against the real house and shows 30 days of it.'],
     ['#home', 'state=offline', 'When it can’t reach home', 'Says what is wrong and what to do, and shows the last known state.'],
   ];

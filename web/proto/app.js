@@ -110,6 +110,11 @@
       <p class="sub">${c.count} things, ${c.total}. ${c.slot}, at ${esc(c.store)}.</p>
       ${c.approved ? '' : `<div class="card"><b>One swap to check</b><span>The usual oat milk is out, so Hub picked the other brand you’ve bought before.</span>
       <div class="btns"><button class="btn go" data-act="approve">Approve the cart</button><button class="btn plain" data-act="noop">See all ${c.count}</button></div></div>`}
+      <section class="block"><h2>New to you this week</h2>
+      <p class="sub">Three dinners you have never made, picked from what you buy and what you skip. No nuts in any of them.</p>
+      <div class="rows" style="margin-top:12px">
+        ${k.ideas.map((i) => `<button class="row free" data-act="idea-open:${i.id}"><div class="row-main"><b>${esc(i.name)}</b><span>${i.mins} minutes. ${i.added ? 'Added to tomorrow’s pickup.' : `You have ${i.have.length} of ${i.have.length + i.need.length}.`}</span></div><span class="row-act">${i.added ? 'Added' : 'Look'}</span></button>`).join('')}
+      </div></section>
       <div class="cols"><div>
       <section class="block"><h2>This week’s dinners</h2><div class="rows">
         ${k.meals.map((m) => `<div class="row"><span class="row-t day">${m.day}</span><div class="row-main"><b>${esc(m.name)}</b><span>${m.mins} minutes</span></div></div>`).join('')}
@@ -155,6 +160,7 @@
     music: { asked: 'Play this in the dining room too', answer: 'Evening Jazz is in the dining room as well, starting softly at 15%.', took: 'Done in 0.9 seconds', kind: 'speakers',
       run() { const s = D.music.speakers.find((x) => x.id === 'dining'); s.on = true; s.vol = 15; } },
     tomorrow: { asked: 'What’s on tomorrow?', answer: 'Three things. The plumber’s call overlaps the dentist at four, so one of them has to move.', kind: 'agenda' },
+    fresh: { asked: 'Find us something new for dinner', answer: 'Three you have never made. Each fits a weeknight, none has nuts, and you already have most of what they need.', kind: 'ideas' },
     tacos: { asked: 'Can we do tacos tonight?', answer: 'Yes. You have the beans and the avocados. Four things are missing, and they fit in tomorrow’s pickup.', kind: 'shop' },
     shop: { asked: 'Add them to the cart', answer: 'Adding four things to the cart at Greenway Market. The shop’s site is slow, so this takes a minute or two. Close this if you like: your phone will buzz when it’s done.', kind: 'work' },
   };
@@ -163,7 +169,7 @@
     { text: 'Dim downstairs for dinner', act: 'ask:lights' },
     { text: 'Play this in the dining room too', act: 'ask:music' },
     { text: 'What’s on tomorrow?', act: 'ask:tomorrow' },
-    { text: 'Can we do tacos tonight?', act: 'ask:tacos' },
+    { text: 'Find us something new for dinner', act: 'ask:fresh' },
   ];
   function matches(q) {
     const hit = (s) => s.toLowerCase().includes(q.toLowerCase());
@@ -183,6 +189,7 @@
     if (t.kind === 'agenda') extra = `<div class="rows">${D.today.tomorrow.map((e) => `<div class="row${e.warn ? ' warn' : ''}"><span class="row-t">${e.time}</span><div class="row-main"><b>${esc(e.title)}</b><span>${esc(e.sub)}</span></div></div>`).join('')}</div><div class="btns"><button class="btn plain small" data-act="noop">Move the plumber</button><button class="btn plain small" data-act="noop">Move the dentist</button></div>`;
     if (t.kind === 'shop') extra = `<div class="rows">${[['Corn tortillas', '1 pack'], ['Limes', '4'], ['Cilantro', '1 bunch'], ['Sour cream', '1 small']].map(([a, b]) => `<div class="row free"><div class="row-main"><b style="font-weight:400">${a}</b></div><span class="row-q">${b}</span></div>`).join('')}</div>
       ${t.added ? '' : '<div class="btns"><button class="btn go small" data-act="ask:shop">Add 4 to the cart</button><button class="btn plain small" data-act="noop">Just the list</button></div>'}`;
+    if (t.kind === 'ideas') extra = `<div class="rows">${D.kitchen.ideas.map((i) => `<button class="row free" data-act="idea-open:${i.id}"><div class="row-main"><b>${esc(i.name)}</b><span>${i.mins} minutes. ${i.added ? 'Added to tomorrow’s pickup.' : `Missing ${i.need.length}.`}</span></div><span class="row-act">${i.added ? 'Added' : 'Look'}</span></button>`).join('')}</div>`;
     if (t.kind === 'work') extra = `<div class="work"></div><div class="steps"><span class="did">Opened tomorrow’s cart</span><span class="did">Found the tortillas and the limes</span><span>Looking for cilantro</span></div>`;
     if (t.kind === 'think') return `<div class="turn"><p class="asked">${esc(t.asked)}</p><span class="dots"><i></i><i></i><i></i></span></div>`;
     const took = t.took ? `<p class="took"><span>${t.took}</span>${t.kind === 'rooms' ? '<button data-act="undo">Undo</button>' : ''}</p>` : '';
@@ -198,7 +205,7 @@
       <button class="send" aria-label="Send">${ic('up')}</button></form></div>`;
   }
   function ask(key, text) {
-    const s = SCRIPT[key] || { asked: text || S.q, answer: 'This prototype knows five requests: dim downstairs, play this in the dining room too, what’s on tomorrow, tacos tonight, and adding to the cart. The real Hub answers anything, with the same cards.', kind: 'text' };
+    const s = SCRIPT[key] || { asked: text || S.q, answer: 'This prototype knows six requests: dim downstairs, play this in the dining room too, what’s on tomorrow, something new for dinner, tacos tonight, and adding to the cart. The real Hub answers anything, with the same cards.', kind: 'text' };
     if (key === 'shop') S.turns.forEach((t) => { if (t.kind === 'shop') t.added = true; });
     S.q = '';
     const fast = P.get('still') === '1';
@@ -242,6 +249,20 @@
     ${sp ? `<h2>Speaker</h2><div class="ctl"><div class="ctl-name"><b>${sp.on && D.music.playing ? esc(D.music.from) : 'Not playing'}</b><span>${sp.on ? 'Volume ' + sp.vol + '%' : 'Tap to join what’s playing'}</span></div>${slim(sp.vol, 'snd', `vol:${sp.id}`, !sp.on)}<button class="switch snd${sp.on ? ' on' : ''}" role="switch" aria-checked="${sp.on}" aria-label="Speaker" data-act="speaker:${sp.id}"></button></div>` : ''}
     ${r.plugs.length ? `<h2>Also here</h2>${r.plugs.map((p, i) => `<div class="ctl two"><div class="ctl-name"><b>${esc(p.name)}</b><span>${esc(p.note)}</span></div><button class="switch${p.on ? ' on' : ''}" role="switch" aria-checked="${p.on}" aria-label="${esc(p.name)}" data-act="plug:${id}:${i}"></button></div>`).join('')}` : ''}`;
   }
+  function ideaSheet(id) {
+    const i = D.kitchen.ideas.find((x) => x.id === id), out = i.out || [];
+    const n = i.need.length + out.length;
+    return `<div class="grab"></div>
+    <div class="sheet-head"><div><h1>${esc(i.name)}</h1><p>${esc(i.why)}</p></div><button class="x" data-act="close" aria-label="Close">${ic('x')}</button></div>
+    <p class="quiet" style="margin-top:12px">${i.mins} minutes. Found on ${esc(i.from)}.</p>
+    <h2>Missing</h2>
+    <div class="rows">${i.need.map(([a, b]) => `<div class="row free"><div class="row-main"><b style="font-weight:400">${esc(a)}</b></div><span class="row-q">${esc(b)}</span></div>`).join('')}
+      ${out.map((a) => `<div class="row free"><div class="row-main"><b style="font-weight:400">${esc(a)}</b></div><button class="row-q" data-act="idea-have:${id}:${a}">We have it</button></div>`).join('')}</div>
+    <div class="btns">${i.added ? `<span class="quiet" style="margin:0">Added to tomorrow’s pickup.</span>` : `<button class="btn go" data-act="idea-add:${id}">Add ${n} to the cart</button><button class="btn plain" data-act="idea-no:${id}">Not for us</button>`}</div>
+    <h2>Probably in the house</h2>
+    <p class="quiet" style="margin:0 0 8px">From what you have bought lately. Tap anything you’re out of.</p>
+    <div class="rows">${i.have.filter((a) => !out.includes(a)).map((a) => `<div class="row tick done-soft"><button class="ring on" aria-label="We are out of ${esc(a)}" data-act="idea-out:${id}:${a}">${ic('check')}</button><div class="row-main"><b style="font-weight:400">${esc(a)}</b></div></div>`).join('')}</div>`;
+  }
   function playingSheet() {
     const m = D.music;
     return `<div class="grab"></div>
@@ -261,6 +282,7 @@
     const [kind, arg] = S.sheet.split(':');
     if (kind === 'room' && room(arg)) html = roomSheet(arg);
     else if (kind === 'playing') html = playingSheet();
+    else if (kind === 'idea' && D.kitchen.ideas.some((x) => x.id === arg)) html = ideaSheet(arg);
     else if (kind === 'ask' && !wide()) html = `<div class="grab"></div>${askHTML()}`;
     if (!html) { el.classList.remove('in'); sc.classList.remove('in'); setTimeout(() => { if (!S.sheet) { el.hidden = true; sc.hidden = true; } }, 340); return; }
     el.innerHTML = html; el.classList.toggle('tall', kind === 'ask'); el.hidden = false; sc.hidden = false;
@@ -326,6 +348,11 @@
     pick(name) { D.music.from = name; D.music.title = name === 'Evening Jazz' ? 'Paper Lanterns' : 'First track'; D.music.playing = true; S.q = ''; paintWords(); if (S.sheet === 'playing') paintSheet(); else { S.sheet = ''; paintSheet(); } toast(`Playing ${name}`); },
     need(id) { const n = D.today.needs.find((x) => x.id === id); n.done = !n.done; paint(); },
     item(g, i) { const it = D.kitchen.list[g].items[i]; it.done = !it.done; paint(); },
+    'idea-open'(id) { S.sheet = 'idea:' + id; paintSheet(); },
+    'idea-out'(id, a) { const i = D.kitchen.ideas.find((x) => x.id === id); i.out = (i.out || []).concat([a]); paintSheet(); },
+    'idea-have'(id, a) { const i = D.kitchen.ideas.find((x) => x.id === id); i.out = (i.out || []).filter((x) => x !== a); paintSheet(); },
+    'idea-add'(id) { const i = D.kitchen.ideas.find((x) => x.id === id), n = i.need.length + (i.out || []).length; i.added = true; const c = D.kitchen.cart; c.count += n; c.extra = (c.extra || 0) + n * 4; c.total = 'about $' + Math.round(86.2 + c.extra); S.sheet = ''; paint(); toast(`${n} things added to tomorrow’s pickup`); },
+    'idea-no'(id) { D.kitchen.ideas = D.kitchen.ideas.filter((x) => x.id !== id); S.sheet = ''; paint(); toast('Noted. Fewer like that.'); },
     approve() { D.kitchen.cart.approved = true; D.today.needs[0].done = true; paint(); toast('Cart approved. Pickup tomorrow at 11.'); },
     update() { toast('Updating. Hub will be back in about 20 seconds.'); },
     ask(key) { if (!wide() && S.sheet !== 'ask') { S.sheet = 'ask'; paintSheet(); } ask(key); },
@@ -368,7 +395,7 @@
   document.addEventListener('submit', (e) => {
     if (e.target.dataset.form !== 'ask') return; e.preventDefault();
     const q = $('#askq').value.trim(); if (!q) return;
-    const key = /dim|downstairs|dinner light/i.test(q) ? 'lights' : /dining|too|as well/i.test(q) ? 'music' : /tomorrow|calendar|what.s on/i.test(q) ? 'tomorrow' : /taco|dinner|cook/i.test(q) ? 'tacos' : /cart|add them/i.test(q) ? 'shop' : 'free';
+    const key = /dim|downstairs|dinner light/i.test(q) ? 'lights' : /dining|too|as well/i.test(q) ? 'music' : /tomorrow|calendar|what.s on/i.test(q) ? 'tomorrow' : /new|never|idea|surprise|recipe/i.test(q) ? 'fresh' : /taco|dinner|cook/i.test(q) ? 'tacos' : /cart|add them/i.test(q) ? 'shop' : 'free';
     ask(key, q);
   });
   window.addEventListener('hashchange', () => { S.view = (location.hash || '#home').slice(1); paint(); });
