@@ -12,7 +12,9 @@ trip, the class guide) still open their older pages.
 ## The front door
 
 The app is Hub's front door: `/` sends the browser to `/app/`, and the phone's home-screen icon opens it. The
-older pages all still answer, listed under System; the old chat is at `/ask`. To open on the chat again, the owner
+older pages all still answer, listed under System; the old chat is at `/ask`. They wear the app's look (its palette and
+typeface in `hub/static/style.css`, and the Evening or Day look chosen in System through `hub/static/look.js`) and carry
+the app's tabs and a System link, so an older page is one step from the app rather than a place of its own. To open on the chat again, the owner
 sets this in the private settings file (`household.json`):
 
 ```json
