@@ -3,7 +3,7 @@
 // device. Rules, levels and the backlog stay on the older Mail page.
 import { signal } from "@preact/signals";
 import { Top } from "./screens";
-import { say, view } from "./state";
+import { go, say, view } from "./state";
 import type { Email, Mail as MailData, Shelf } from "./types";
 import { Icon } from "./ui";
 
@@ -194,7 +194,7 @@ export function Mail() {
       </section>
       <div class="btns">
         <button type="button" class="btn ghost" disabled={busy} onClick={() => void act("sort")}>{now.working === "sorting" ? "Sorting…" : "Sort now"}</button>
-        <a class="btn ghost" href="/gmail">Rules and settings</a>
+        <button type="button" class="btn ghost" onClick={() => go("mailsettings")}>Rules and settings</button>
       </div>
       <p class="quiet">Hub only reads your mail, and files it only at the level you chose. It never sends.</p>
     </div>

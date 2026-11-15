@@ -178,7 +178,7 @@ function Tabs() {
   return (
     <>
       {TABS.map(([where, name]) => (
-        <button type="button" key={where} class={"tab" + (view.value === where ? " on" : "")} onClick={() => go(where)}>{name}</button>
+        <button type="button" key={where} class={"tab" + (view.value === where || (where === "mail" && view.value === "mailsettings") ? " on" : "")} onClick={() => go(where)}>{name}</button>
       ))}
     </>
   );
@@ -210,7 +210,7 @@ export function Rail() {
   );
 }
 
-const OLDER = [["Ask, the chat", "/ask"], ["Today, the cards", "/today"], ["Kitchen, the older page", "/kitchen"], ["Mail rules and settings", "/gmail"], ["Calendar", "/calendar"],
+const OLDER = [["Ask, the chat", "/ask"], ["Today, the cards", "/today"], ["Kitchen, the older page", "/kitchen"], ["Mail, the older page", "/gmail"], ["Calendar", "/calendar"],
   ["Preschool", "/preschool/"], ["Trip", "/trip"], ["Bike + bus", "/mobility"], ["Network", "/network"], ["Insights", "/insights"],
   ["Settings and checks", "/settings"]] as const;
 const LOOKS: [Look, string][] = [["auto", "Automatic"], ["dusk", "Evening"], ["day", "Day"]];
