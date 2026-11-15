@@ -27,7 +27,7 @@ scratch = tempfile.mkdtemp(prefix='hub-app-check-')
 os.environ.update(HUB_DATA_DIR=scratch, HUB_BACKGROUND_JOBS='disabled', HUB_BRIDGE_URL='http://127.0.0.1:9',
                   HUB_BRIDGE_TOKEN_FILE=str(Path(scratch) / 'absent'), HUB_KITCHEN_SOCKET=str(Path(scratch) / 'absent.sock'),
                   HUB_HA_BROKER_SOCKET=str(Path(scratch) / 'absent-broker.sock'), HUB_ALLOWED_LOGINS='me@example.com',
-                  PYDANTIC_AI_NO_BANNER='1')
+                  PYDANTIC_AI_NO_BANNER='1', HUB_RELEASES_DIR=str(Path(scratch) / 'releases'))
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -49,6 +49,11 @@ from hub.tools.gmail import filing, inbox, missions, triage  # noqa: E402
 from hub.tools.kitchen import client as kitchen  # noqa: E402
 from tests import app_world, ask_script, day_world  # noqa: E402
 
+# A made-up checked version waiting for Deploy. No deployer listens here, so a tap leaves it "updating".
+_ready = Path(scratch) / 'releases'
+(_ready / ('d' * 40) / 'venv').mkdir(parents=True)
+(_ready / 'queue').mkdir()
+(_ready / 'pending.json').write_text(json.dumps({'sha': 'd' * 40, 'subjects': ['Home: a made-up change, ready to deploy']}))
 (Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'}}))
 world = app_world.install(patch)
 patch.setattr(control, 'CHECK_WAIT', 0.2)

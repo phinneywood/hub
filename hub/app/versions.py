@@ -46,4 +46,18 @@ def picture():
             'commit': f'{at}/commit/{sha}' if at and sha else None,
             'compare': f'{at}/compare/{entry["from"][:12]}...{(sha or "main")[:12]}' if at and entry.get('from') else None,
         })
-    return {'versions': out, 'running': running[:7] if running else None, 'repo': at}
+    return {'versions': out, 'running': running[:7] if running else None, 'repo': at, 'deploy': deploy()}
+
+
+def deploy():
+    """What the Deploy card needs: the checked version waiting, whether it was asked for, and how the last try went.
+    None when this Hub doesn't run from the releases folder (a development or preview Hub has nothing to deploy)."""
+    if release.folder() is None:
+        return None
+    ready = release.pending()
+    last = release.last()
+    return {
+        'ready': {**ready, 'short': ready['sha'][:7]} if ready else None,
+        'asked': release.requested(),
+        'put_back': last['sha'][:7] if last and last['status'] != 'accepted' else None,
+    }

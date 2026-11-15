@@ -313,9 +313,15 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.evaluate(() => document.documentElement.dataset.theme) === "day", "choosing Day did not change the look");
     await tap('.choice:text-is("Automatic")');
     expect(await page.evaluate(() => document.documentElement.dataset.theme) === (options.colorScheme === "dark" ? "dusk" : "day"), "Automatic did not follow the device");
-    await tap('.row:has-text("Versions")');
+    expect(await page.locator('.row:has-text("A new version is ready")').count() === 1, "System didn't say a version is waiting");
+    await tap('.row:has-text("A new version is ready")');
     expect(await saysSoon("Versions"), "Versions: " + await says());
-    expect(await until(() => document.querySelectorAll(".release").length > 1), "Versions listed no releases");
+    expect(await until(() => document.querySelectorAll(".release").length > 2), "Versions listed no releases");
+    if (await page.locator('.release.ready .btn.go').count()) {
+      await page.waitForTimeout(300); await shot("7b-deploy-ready");
+      await tap('.release.ready .btn.go');
+    }
+    expect(await until(() => document.querySelector(".release.ready h2")?.textContent === "Updating Hub"), "Deploy didn't say it is updating");
     await page.waitForTimeout(300); await shot("7b-versions");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Versions: " + (await small()).join(", "));
     await tap(".uplink");

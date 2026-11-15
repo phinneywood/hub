@@ -39,6 +39,7 @@ sets this in the private settings file (`household.json`):
 | `POST /app/api/memory/{note}/forget` | Forget one thing Hub remembers |
 | `GET /app/api/today` | Today as data: what needs a person, the rest of today, tomorrow, the week at school, the trip |
 | `GET /app/api/versions` | Each release of Hub, newest first, in plain words, and which one is running (see “Versions”) |
+| `POST /app/api/deploy` | Ask the deployer for the checked version waiting, from a signed-in device (see “Versions”) |
 | `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
 | `GET /app/api/mail` | Mail as data: what needs the owner, questions nobody answered, records worth a look, each kind Hub sorted |
 | `POST /app/api/mail/{do}` | A tap on Mail, `{"key": ...}`: `done`, `back`, `answered`, `fine`, `sort`, `file` (a kind) or `undo` (a filing) |
@@ -279,6 +280,13 @@ so no account name is in the source:
 ```
 
 Without it the screen shows short commit names, unlinked.
+
+**Deploy** (2026-11-15). When the deployer has a checked version waiting (`hub/engine/release.py`), Versions leads
+with it: its commit subjects and a Deploy button, which posts `/app/api/deploy` and leaves the same request note as
+the older Engine page. Only a signed-in device can ask. The card then says Hub is updating and looks again every
+few seconds; when a different version answers it reloads, so the new app is what opens. If the deployer put the
+earlier version back, it says so. System shows "A new version is ready" while one waits, and Today's "A new
+version of Hub is ready" opens Versions too. The older Engine page's Deploy now lands on Versions as well.
 
 ### Adding a release
 
