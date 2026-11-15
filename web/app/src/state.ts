@@ -15,7 +15,8 @@ const SILENCE = 12000;            // Hub sends a beat every 5 s; this long witho
 export type Look = "auto" | "dusk" | "day";
 export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "ask" } | { kind: "keep" } | null;
 export type Trouble = "" | "hub" | "house";
-export interface Toast { text: string; batch: string | null; n: number }
+export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
+export type View = "home" | "today" | "system";
 
 function kept(): House | null {
   try {
@@ -41,7 +42,8 @@ export const trouble = signal<Trouble>("");   // "hub": can't reach Hub; "house"
 export const why = signal("");
 export const me = signal<Me>({ signed_in: true, initial: "", versions: { js: "", css: "" }, links: { ha: null, music: null } });
 export const sheet = signal<Sheet>(null);
-export const view = signal<"home" | "system">(location.hash === "#system" ? "system" : "home");
+const here = (): View => (location.hash === "#system" ? "system" : location.hash === "#today" ? "today" : "home");
+export const view = signal<View>(here());
 export const toast = signal<Toast | null>(null);
 export const look = signal<Look>(keptLook());
 export const picks = signal<Pick[] | null>(null);
@@ -69,13 +71,13 @@ effect(() => {
   sheetOpen = open;
 });
 
-export function go(where: "home" | "system") {
+export function go(where: View) {
   view.value = where;
   sheet.value = null;
   history.replaceState(null, "", where === "home" ? location.pathname : "#" + where);
   window.scrollTo(0, 0);
 }
-window.addEventListener("hashchange", () => (view.value = location.hash === "#system" ? "system" : "home"));
+window.addEventListener("hashchange", () => (view.value = here()));
 
 // ---- what a person just changed, laid over the picture ----
 
@@ -195,8 +197,10 @@ export const seen = computed<House | null>(() => {
 
 let said = 0;
 
-export function say(text: string, batch: string | null = null) {
-  toast.value = { text, batch, n: ++said };
+/** The line that says what just happened. `batch`: a change to the house that Undo can put back; `back`: any
+ * other way to put it back. */
+export function say(text: string, batch: string | null = null, back?: () => void) {
+  toast.value = { text, batch, n: ++said, back };
 }
 
 function answered(answer: Said, keys: string[], words: string): boolean {

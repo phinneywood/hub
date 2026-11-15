@@ -6,6 +6,8 @@ import "./app.css";
 import { Dock, Home, Rail, System } from "./screens";
 import { Ask, AskSheet } from "./ask";
 import { loadAble } from "./asking";
+import { loadDay, watchDay } from "./day";
+import { Today } from "./today";
 import { KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
@@ -45,7 +47,7 @@ function App() {
   return (
     <div class="app">
       <Rail />
-      <main class={"main" + (waking.value ? " wake" : "")}>{view.value === "system" ? <System /> : <Home />}</main>
+      <main class={"main" + (waking.value ? " wake" : "")}>{view.value === "system" ? <System /> : view.value === "today" ? <Today /> : <Home />}</main>
       {wide.value && <aside class="askrail" aria-label="Ask"><h2>Ask</h2><Ask /></aside>}
       <Dock ask={ask} />
       <Sheets />
@@ -75,5 +77,7 @@ if (root) {
   render(<App />, root);
   start();
   void loadAble();
+  watchDay();
+  if (view.value === "today") void loadDay();
   void keepOnDevice().catch(() => undefined);     // without it the app still works; it just needs Hub to open
 }

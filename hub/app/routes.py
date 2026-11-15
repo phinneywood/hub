@@ -274,6 +274,30 @@ def play(speaker: str, request: Request, body: dict = Body(...)):
     return _change(request, work)
 
 
+# ---- Today (hub/app/today.py): what needs a person, then the day ----
+
+@router.get('/api/today')
+def day():
+    """The Today screen as data. Reads what Hub already keeps; calls no model."""
+    from . import today
+    return today.picture()
+
+
+@router.post('/api/today/tick')
+def tick(request: Request, body: dict = Body(...)):
+    """A need's circle: {"key": ...}. With {"back": true}, put it back."""
+    from . import today
+    if _login(request) is None:
+        return _signed_out()
+    key = str(body.get('key') or '')
+    if not key:
+        return _refuse('Nothing to tick.')
+    if body.get('back'):
+        return {'ok': bool(today.untick(key)), 'said': 'Put back'}
+    said = today.tick(key)
+    return {'ok': True, 'said': said, 'key': key} if said else _refuse('That one is already gone.')
+
+
 # ---- Ask (hub/app/ask): say it, and Hub does it or answers ----
 
 _asking, _asking_lock = set(), __import__('threading').Lock()

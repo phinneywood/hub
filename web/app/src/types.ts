@@ -26,4 +26,15 @@ export interface Me {
   links: { ha: string | null; music: string | null };
 }
 export interface Pick { name: string; kind: string; uri: string }
+
+// Today, as Hub sends it (hub/app/today.py).
+export interface Open { href: string; label: string }
+export interface Need { key: string; title: string; why: string; tone: string; open: Open; tick: string }
+export interface Slot { time: string; half: string; title: string; note: string; warn: boolean; next: boolean }
+export interface SchoolDay { day: string; title: string; note: string; struck: boolean }
+export interface Trip { title: string; when: string; note: string; open: Open }
+export interface Day {
+  ok: true; at: string; needs: Need[]; more: number; today: Slot[]; tomorrow: Slot[]; school: SchoolDay[];
+  trip: Trip | null; quiet: { text: string; open: Open }[];
+}
 export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string }

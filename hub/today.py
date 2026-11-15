@@ -250,8 +250,21 @@ def _settle(item):
     return item
 
 
+def show(key):
+    """Put back what hide() hid."""
+    from . import store
+    store.unsnooze(key)
+    if key.startswith(WEEK_KEYS):
+        store.unsnooze(GMAIL_NEXT)
+
+
 def collect(jobs, tiles=()):
     """Up to MAX_ITEMS recommendations, most urgent first, without anything snoozed. Never raises."""
+    return gather(jobs, tiles)[:MAX_ITEMS]
+
+
+def gather(jobs, tiles=()):
+    """Every recommendation, most urgent first, without anything snoozed. Never raises."""
     from . import store
     from .engine import state
     wait(jobs, timeout=DEADLINE_SECONDS)
@@ -272,7 +285,7 @@ def collect(jobs, tiles=()):
     except Exception:  # noqa: BLE001 - without the store, items stay as plain links
         pass
     found.sort(key=lambda r: RANK.get(r['tone'], 9))
-    return found[:MAX_ITEMS]
+    return found
 
 
 def needs_you(tiles=()):

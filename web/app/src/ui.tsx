@@ -87,14 +87,15 @@ export function ToastLine() {
   const now = toast.value;
   useEffect(() => {
     if (!now) return;
-    const timer = window.setTimeout(() => { if (toast.value?.n === now.n) toast.value = null; }, now.batch ? 6000 : 3500);
+    const timer = window.setTimeout(() => { if (toast.value?.n === now.n) toast.value = null; }, now.batch || now.back ? 6000 : 3500);
     return () => clearTimeout(timer);
   }, [now?.n]);
   if (!now) return null;
   return (
     <div class="toast in" role="status" key={now.n}>
       <span>{now.text}</span>
-      {now.batch && <button type="button" onClick={() => void undo(now.batch!)}>Undo</button>}
+      {now.batch ? <button type="button" onClick={() => void undo(now.batch!)}>Undo</button>
+        : now.back && <button type="button" onClick={() => { toast.value = null; now.back!(); }}>Undo</button>}
     </div>
   );
 }

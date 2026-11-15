@@ -14,6 +14,9 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   or speakers it changed, puts a change back from under the answer, shows Kitchen's reply when it arrives,
   answers a private question, remembers and forgets, and says what it can't do;
 - on a Hub where Ask isn't set up, what is typed still reaches the older chat;
+- Today says the right sentence, lists what needs you with the longest wait first, shows the evening,
+  tomorrow, the week at school and the trip, marks two things at once, takes a tick and puts it back, and
+  says so when nothing needs you;
 - everything meant to be tapped is at least 44 px on its short side;
 - the app says so when the house stops answering and when Hub can't be reached, still opens without Hub,
   and reconnects by itself;
@@ -29,6 +32,7 @@ Run it after changing the app or updating its packages.
        .venv/bin/python web/app/check/demo_server.py
 
    It listens on `http://127.0.0.1:8912/`. Open that in a browser to try the app by hand.
+   Today there shows a made-up day (`tests/day_world.py`) seen from ten past six this evening.
    Ask there runs on a stand-in for its model (`tests/ask_script.py`): a script that knows the made-up rooms
    and a few verbs, such as “dim the kitchen”, “everything off”, “some jazz in the bedroom, softly”,
    “play it in the dining room too”, “pause”, “movie night”, “remember to start music softly”,

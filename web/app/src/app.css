@@ -170,6 +170,25 @@ h2 { font-size: var(--t-l); line-height: 1.2; font-weight: 500; letter-spacing: 
 .ctl.two:has(.forget) { grid-template-columns: 1fr auto; }
 .row { display: grid; grid-template-columns: 58px 1fr auto; align-items: center; gap: 0 8px; min-height: 60px; padding: 10px 0; border-bottom: 1px solid var(--line); width: 100%; }
 .row.free { grid-template-columns: 1fr auto; }
+.row-t { font-size: var(--t-l); font-weight: 300; letter-spacing: -.01em; color: var(--ink-2); white-space: nowrap; }
+.row-t small { font-size: 11px; font-weight: 500; letter-spacing: .02em; margin-left: 2px; color: var(--ink-3); }
+.row-t.day { font-size: var(--t-s); font-weight: 500; letter-spacing: 0; }
+.row.now .row-t { color: var(--ink); font-weight: 500; }
+.row.warn .row-main span { color: var(--alarm); }
+.row.struck .row-main b { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--ink-3); font-weight: 400; }
+.row-act { display: inline-grid; place-items: center; height: 44px; padding: 0 14px; border-radius: 11px; font-size: var(--t-s); font-weight: 500; box-shadow: inset 0 0 0 1.5px var(--line-2); white-space: nowrap; }
+/* a need: a circle to tick, what it is, and where to deal with it */
+.row.need { grid-template-columns: 44px 1fr auto; gap: 0 6px; }
+.row.need:not(.on) .row-main b { color: var(--ink); font-weight: 500; }
+.row.need.on .row-main b { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; font-weight: 400; }
+.row.need.on .row-main span { color: var(--ink-3); }
+.tickbtn { width: 44px; height: 44px; display: grid; place-items: center; margin-left: -10px; }
+.quiet-line { margin-top: 22px; color: var(--ink-3); font-size: var(--t-s); text-wrap: pretty; }
+.quiet-line + .quiet-line { margin-top: 6px; }
+.block .quiet-line { margin-top: 12px; }
+.quiet-line a { color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; display: inline-block; min-width: 44px; padding: 12px 6px; margin: -12px 0; }
+.wrap.day .row:not(.need):not(.free) { grid-template-columns: 76px 1fr auto; }      /* room for "11:00 am" */
+.wrap.bare .say { margin-top: 26vh; }
 .row-main b { display: block; font-weight: 500; }
 .row-main span { display: block; font-size: var(--t-s); color: var(--ink-2); line-height: 1.3; margin-top: 1px; }
 .ring.on { background: var(--ink-2); box-shadow: none; color: var(--sheet); }
@@ -365,6 +384,7 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
   .rail .ok { font-size: var(--t-xs); color: var(--ink-3); margin-top: 10px; line-height: 1.35; }
   .main { grid-column: 2; grid-row: 1; overflow-y: auto; max-width: none; margin: 0; padding: 22px 56px 60px; }
   .wrap { max-width: 700px; margin: 0 auto; }
+  .wrap.bare .say { margin-top: 20vh; }
   .top { height: 40px; padding-top: 0; }
   .who { display: none; }
   .say { margin-top: 18px; }
@@ -388,6 +408,8 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
 }
 
 @media (min-width: 1500px) {
+  .wrap.day { max-width: 980px; }
+  .wrap.day .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 64px; align-items: start; }
   .wrap { max-width: 900px; }
 }
 

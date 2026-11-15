@@ -1,5 +1,5 @@
 // Hub speaks in sentences. These write them from the house as it is.
-import type { House, Music } from "./types";
+import type { Day, House, Music, Slot } from "./types";
 
 const NUMBERS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
 // Rooms said the way people say them: "in the kitchen", "in the front yard". A room made only of these everyday
@@ -57,4 +57,43 @@ export function clock(at: string): string {
 
 export function howMany(count: number, thing: string): string {
   return `${NUMBERS[count] ?? count} ${thing}${count === 1 ? "" : "s"}`;
+}
+
+// ---- Today ----
+
+const HOURS = ["twelve", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven"];
+
+/** A time the way it is said: "seven", "noon", "9:30". */
+function saidTime(slot: Slot): string {
+  const [hour, minute] = slot.time.split(":");
+  if (minute !== "00") return slot.time;
+  if (hour === "12") return slot.half === "pm" ? "noon" : "midnight";
+  return HOURS[Number(hour) % 12] ?? slot.time;
+}
+
+function timed(slot: Slot): boolean {
+  return slot.time.includes(":");
+}
+
+/** The headline: the next thing today, then how much needs you. */
+export function daySays(day: Day): string {
+  const count = day.needs.length + day.more;
+  const needs = count === 0 ? "Nothing needs you." : count === 1 ? "One thing needs you." : `${NUMBERS[count] ?? count} things need you.`;
+  const next = day.today.find((slot) => slot.next);
+  if (!next) return needs;
+  return (next.time === "Now" ? `${next.title} is on now. ` : timed(next) ? `${next.title} is at ${saidTime(next)}. ` : "") + needs;
+}
+
+/** Under the headline: the weather outside, and how tomorrow starts once today is done. */
+export function daySub(day: Day, outside: string): string {
+  const weather = outside ? `${outside} outside.` : "";
+  const first = day.tomorrow.find(timed);
+  const tomorrow = !day.today.some((slot) => slot.next) && first ? `Tomorrow starts with ${first.title} at ${saidTime(first)}.` : "";
+  return [weather, tomorrow].filter(Boolean).join(" ");
+}
+
+/** What the rest of today is called at this hour. */
+export function partOfDay(at: string): string {
+  const hour = new Date(at).getHours();
+  return hour < 12 ? "Today" : hour < 17 ? "This afternoon" : "This evening";
 }

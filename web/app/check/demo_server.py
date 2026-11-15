@@ -6,6 +6,8 @@ The real app and the real change code run against a fictional house that follows
 model, looks in no key store and reaches no other machine and no service on this one (web/check_guard.py).
 Every room, name and song here is invented.
 
+Today shows a made-up day (tests/day_world.py): a calendar, a class guide, two emails, a waiting cart and a trip.
+
 Ask works here too, on a stand-in for its model (tests/ask_script.py) that picks a tool from a few plain words:
 "dim the kitchen", "everything off", "some jazz in the bedroom, softly", "play it in the dining room too",
 "pause", "movie night", "remember to start music softly", "what should we cook this week?", "what needs me today?".
@@ -35,12 +37,13 @@ check_guard.apply(patch)   # before the app exists: no key store, no other machi
 
 import uvicorn  # noqa: E402
 
+from hub import store  # noqa: E402
 from hub.app import levels, routes, scenes  # noqa: E402
 from hub.app.ask import private, route, turns  # noqa: E402
 from hub.main import app  # noqa: E402
 from hub.tools.house import control, read  # noqa: E402
 from hub.tools.kitchen import client as kitchen  # noqa: E402
-from tests import app_world, ask_script  # noqa: E402
+from tests import app_world, ask_script, day_world  # noqa: E402
 
 (Path(scratch) / 'household.json').write_text(json.dumps({'app': {'front': True}}))
 world = app_world.install(patch)
@@ -49,6 +52,15 @@ patch.setattr(control, 'CHECK_WAIT', 0.2)
 # A made-up library, so "Play something else" and Ask have something to offer.
 ask_script.library(patch, world)
 routes._picks.update(at=float('-inf'), found=[])
+
+# A made-up day for Today, seen from ten past six this evening: a calendar, a class guide, two emails, a trip.
+# Kitchen's waiting cart comes from the made-up Kitchen below.
+from datetime import datetime  # noqa: E402
+
+from hub import home  # noqa: E402
+
+EVENING = datetime.now(home.PACIFIC).replace(hour=18, minute=10, second=0, microsecond=0)
+day = day_world.install(patch, kitchen_too=False, now=EVENING)
 
 # Ask, without a model: the stand-in picks the tool; the private desk and Kitchen answer with made-up words.
 patch.setattr(route, 'build', lambda http_client=None: ask_script.MODEL)
@@ -76,7 +88,8 @@ def made_up_kitchen(method, path, body=None, timeout=10):
                 messages.append({'id': n * 2 - 1, 'role': 'member', 'text': '', 'author': 'me'})
             if n * 2 > after and now - at >= KITCHEN_TAKES:
                 messages.append(dict(KITCHEN_SAYS, id=n * 2))
-        return 200, {'messages': messages, 'busy': any(now - at < KITCHEN_TAKES for at in asked_kitchen), 'plans': {}, 'orders': {}}
+        return 200, {'messages': messages, 'busy': any(now - at < KITCHEN_TAKES for at in asked_kitchen),
+                     'plans': {'7': {'status': 'pending'}} if day.cart else {}, 'orders': {}}
     raise kitchen.KitchenDown('made up')
 
 
@@ -108,11 +121,18 @@ def stage(what: str):
             scenes.forget(scene['id'])
         for note in turns.remembered():
             turns.forget(note['id'])
+        fresh = day_world.Day(EVENING)
+        day.events, day.school, day.mail, day.filed, day.cart, day.faults = fresh.events, fresh.school, fresh.mail, fresh.filed, True, []
+        with store.db() as conn:
+            conn.execute('delete from today_snoozed')
+            conn.commit()
         with turns._db() as conn:
             conn.execute('delete from app_ask')
         a_habit()
     elif what in ('down', 'up'):
         world.down = what == 'down'
+    elif what == 'quiet-day':
+        day.events, day.school, day.mail, day.filed, day.cart = [], [], [], 0, False
     elif what in ('ask-away', 'ask-back'):
         patch.setattr(route, 'ready', (lambda: 'Ask isn’t set up yet: its key isn’t in 1Password.') if what == 'ask-away' else (lambda: None))
     else:

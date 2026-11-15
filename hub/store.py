@@ -189,6 +189,11 @@ def snooze(key, day, until=None):
                      (key[:200], until or day))
 
 
+def unsnooze(key):
+    with closing(db()) as conn, conn:
+        conn.execute("delete from today_snoozed where key = ?", (key[:200],))
+
+
 def snoozed(day):
     with closing(db()) as conn:
         return {r["key"] for r in conn.execute("select key from today_snoozed where until >= ?", (day,))}

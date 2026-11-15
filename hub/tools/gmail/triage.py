@@ -678,6 +678,15 @@ def done(message_id):
     return True
 
 
+def reopen(message_id):
+    """Put back an email that done() marked as handled."""
+    row = get(message_id)
+    if not row or row['state'] != 'done':
+        return False
+    _set(message_id, state='open')
+    return True
+
+
 def looks_fine(message_id):
     row = get(message_id)
     if not row or not row['odd']:

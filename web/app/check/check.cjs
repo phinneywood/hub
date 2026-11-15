@@ -232,6 +232,32 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await stage("ask-back");
     await page.goto(base + "/app/"); await page.waitForSelector(".plan"); await page.waitForTimeout(1900);
 
+    // ---- Today: what needs you, then the day ----
+    await stage("reset");
+    await tap(phone ? '.tabs .tab:text-is("Today")' : '.rail .tab:text-is("Today")');
+    expect(await saysSoon("Dinner at home is at seven. Three things need you."), "Today’s sentence: " + await says());
+    expect((await page.locator(".row.need .row-main b").allInnerTexts()).join("|") === "Email from Sam Rivera|Approve the grocery cart|Email from Maple Street Dental",
+      "what needs you, the longest wait first");
+    expect((await page.locator(".block h2").allInnerTexts()).join("|") === "Needs you|This evening|Tomorrow|This week at school|Lisbon", "Today’s sections, in order");
+    expect(await page.locator(".row.warn .row-main span").innerText() === "Overlaps Dentist at 4:00 pm", "two things at once were not marked on the day");
+    expect(await page.locator(".row.struck").count() === 1, "a cancelled class date was not struck through");
+    expect((await page.locator(".quiet-line").last().innerText()).startsWith("Hub filed 12 emails."), "housekeeping was not told quietly");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Today scrolls sideways");
+    await page.waitForTimeout(300); await shot("10-today");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on Today: " + (await small()).join(", "));
+    await page.locator(".tickbtn").first().click();
+    expect(await saysSoon("Dinner at home is at seven. Two things need you.", 3000), "a tick did not take the email off the list: " + await says());
+    expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Marked as handled"), "a tick did not say what it did");
+    await page.locator(".toast button").click();
+    expect(await saysSoon("Dinner at home is at seven. Three things need you.", 3000), "Undo did not put the email back: " + await says());
+    await stage("quiet-day");
+    await page.reload(); await page.waitForSelector(".say");
+    expect(await saysSoon("Nothing needs you.", 4000), "a quiet day: " + await says());
+    await page.waitForTimeout(1900); await shot("11-today-quiet");
+    await stage("reset");
+    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
+    await page.waitForSelector(".plan");
+
     // ---- System, and the look ----
     await tap(phone ? ".who" : ".rail .foot .tab");
     expect(await saysSoon("The house is answering."), "System: " + await says());

@@ -5,8 +5,8 @@ are lit when their lights are, and changes under a tap. Source: `web/app/` (Prea
 committed: `hub/static/app/`. The data and taps it uses: `hub/app/`.
 
 It is being built in phases (the plan is in the owner's private review notes). Phase 1 is Home and music;
-phase 2 is Ask, inside the app. Until a later phase replaces them, Today and Kitchen in the app's bar open the
-older pages.
+phase 2 is Ask, inside the app; phase 3 is Today. Until a later phase replaces it, Kitchen in the app's bar
+opens the older page, and a Today item's button opens the older page it belongs to (Mail, Kitchen, the trip).
 
 ## Switching it on
 
@@ -37,6 +37,8 @@ With it, `/` sends the browser to `/app/`. Without it, `/` is the Ask chat as be
 | `GET /app/api/ask` | Whether Ask can run here, the last half hour of this person's requests, what they often ask around now, and what Hub remembers |
 | `POST /app/api/ask` | One request, `{"text": ...}`, answered as it happens (see “Ask”) |
 | `POST /app/api/memory/{note}/forget` | Forget one thing Hub remembers |
+| `GET /app/api/today` | Today as data: what needs a person, the rest of today, tomorrow, the week at school, the trip |
+| `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
 
 The picture is built in `hub/app/model.py` from the same reading of Home Assistant as the rest of Hub
 (`hub/tools/house/read.py`), so nothing new leaves Home Assistant for it. Two facts were added to that reading for
@@ -154,6 +156,36 @@ Tailscale login still decides who is asking, and the same-origin rule still refu
 one. Two tests run the real model adapter with only the network replaced, to pin the request that would leave
 and the cost that is recorded. How well the real model understands is not something these can show: that
 needs the live comparison on real requests.
+
+## Today
+
+What needs a person, then the day. Data: `hub/app/today.py`. In the app: `web/app/src/today.tsx` and `day.ts`.
+It reads what Hub already keeps and nothing else: the "Needs you" list of the older Today page
+(`hub/today.py`: the sources' own checks, faults, the overnight review's suggestions, what was hidden), the
+calendar week, the reviewed class guide, the trip, and whether Kitchen has a cart waiting. No model is called,
+nothing is changed by reading it, and every part fails soft. The app asks for it when the screen is looked at
+and once a minute while it is, and keeps none of it on the device.
+
+- **The sentence** is written in the app from the data: the next thing today, then how much needs you
+  ("Dinner at home is at seven. Three things need you."). Under it, the temperature outside, and how tomorrow
+  starts once today is done.
+- **Needs you**, at most five, the most pressing first. Three things differ from the older page, all from the
+  owner's "mail is only what needs me":
+  - each email that needs the owner is its own line (who it is from, the next step), three at most, the
+    longest wait first;
+  - Hub's own housekeeping offers (filing sorted mail, archive rules, planned changes) are not asked: they
+    are one quiet line under the day, still a tap from their page;
+  - what has its own place on the screen isn't listed twice: class dates, two events at once, the trip.
+- **The circle** beside a need marks an email as handled in Hub's own sorting (nothing changes in Gmail) and
+  hides anything else until tomorrow, or for a week where the older page did. It shows at once, and Undo
+  puts it back. It needs a signed-in device.
+- **The day**: what is left of today and all of tomorrow from the calendar, all-day events first; an event
+  under way says Now; two busy events at once are marked on the later one.
+- **This week at school**: the reviewed class guide's dates for seven days, a cancelled one struck through.
+- **The trip**, from four months before it until it ends.
+
+Tests: `tests/test_app_today.py`, on a made-up day (`tests/day_world.py`) that replaces Hub's readers, so no
+real calendar, mailbox or service is read. The demo server shows the same made-up day.
 
 ## The live feed
 
