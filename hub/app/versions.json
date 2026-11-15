@@ -1,8 +1,18 @@
 [
  {
   "sha": null,
-  "from": "beea3028ec0d3ebe24cf29cab2cb52ed7debffba",
+  "from": "23dc862d11c6c1c2a06c5b10052ff272e2a64346",
   "live": null,
+  "title": "Buttons on the wall show in their room",
+  "changes": [
+   "A wall or remote button shows in its room, with its last press, its battery and what each press does.",
+   "The developer page reads the projects folder, and shows its tmux and brief sections only when they are set."
+  ]
+ },
+ {
+  "sha": "23dc862d11c6c1c2a06c5b10052ff272e2a64346",
+  "from": "beea3028ec0d3ebe24cf29cab2cb52ed7debffba",
+  "live": "2026-11-15T19:48:12Z",
   "title": "The app becomes Hub's front door, with Mail and Kitchen",
   "changes": [
    "Hub's usual address opens the new app. The older pages stay under System, and the old chat is at /ask.",
