@@ -28,14 +28,16 @@ export interface House {
 export interface Down { ok: false; why: string }
 export interface Me {
   signed_in: boolean; initial: string; versions: { js: string; css: string };
-  links: { ha: string | null; music: string | null };
+  links: { ha: string | null; music: string | null }; update?: boolean;
 }
 // Versions, as Hub sends them (hub/app/versions.py).
 export interface Release {
   sha: string | null; short: string | null; live: string | null; title: string; changes: string[];
   running: boolean; commit: string | null; compare: string | null;
 }
-export interface Releases { versions: Release[]; running: string | null; repo: string | null }
+export interface Ready { sha: string; short: string; subjects: string[] }
+export interface Deploy { ready: Ready | null; asked: boolean; put_back: string | null }
+export interface Releases { versions: Release[]; running: string | null; repo: string | null; deploy: Deploy | null }
 export interface Pick { name: string; kind: string; uri: string }
 
 // Today, as Hub sends it (hub/app/today.py).

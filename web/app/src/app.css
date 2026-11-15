@@ -429,6 +429,8 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
 .release-list { margin: 8px 0 0; padding-left: 1.1em; color: var(--ink-2); max-width: 60ch; }
 .release-list li { margin-top: 4px; }
 .release-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.release.ready h2 { color: var(--lamp); }
+.row.lit .row-main b { color: var(--lamp); }
 
 /* ---------- mail ---------- */
 .row-sm { display: block; font-size: var(--t-xs); color: var(--ink-3); margin-top: 2px; }

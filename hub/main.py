@@ -338,7 +338,8 @@ def engine_deploy(request: Request):
     asked = release.request(login)
     if asked:
         store_log("engine_deploy", "asked")
-    return RedirectResponse("/engine?deploy=" + ("asked" if asked else "none"), status_code=303)
+    # The app's Versions screen follows the update from here, so the tap lands in the new look
+    return RedirectResponse("/app/#versions" if asked else "/engine?deploy=none", status_code=303)
 
 
 @app.post("/engine/prepare")

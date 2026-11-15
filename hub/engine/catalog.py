@@ -864,6 +864,9 @@ def old_key_reminder():
                    '/status', 'How')
 
 
+VERSIONS = '/app/#versions'  # the app's Versions screen deploys and follows the update
+
+
 def hub_release():
     """A checked version waiting for the owner, or an update that didn’t take."""
     from . import release
@@ -872,13 +875,13 @@ def hub_release():
         return []
     if last and last['sha'] == ready['sha'] and last['status'] != 'accepted' and not release.requested():
         return [today.rec('hub-release-failed', 'warn', 'The Hub update didn’t take',
-                          'The version from before is running again. Nothing was lost.', href='/engine', cta='Details')]
+                          'The version from before is running again. Nothing was lost.', href=VERSIONS, cta='Details')]
     if release.requested():
         return [today.rec('hub-release', 'info', 'Hub is updating', 'This takes about a minute. Reload to see it.',
-                          href='/engine', cta='Details')]
+                          href=VERSIONS, cta='Details')]
     count = len(ready['subjects'])
     why = ready['subjects'][0] + (f' and {count - 1} more' if count > 1 else '') if count else 'Built and checked.'
-    return [today.rec('hub-release', 'info', 'A new version of Hub is ready', why, href='/engine', cta='Deploy',
+    return [today.rec('hub-release', 'info', 'A new version of Hub is ready', why, href=VERSIONS, cta='Deploy',
                       action='hub.deploy')]
 
 

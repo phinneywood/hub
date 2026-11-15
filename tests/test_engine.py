@@ -227,7 +227,8 @@ def test_deploy_request_names_only_the_pending_version_and_failures_are_reported
         (releases / 'pending.json').write_text(bad)
         assert release.pending() is None and not release.request('me@example.com')
     (releases / 'pending.json').write_text(json.dumps({'sha': SHA_NEW, 'subjects': 'not a list'}))
-    assert 'Updating.' in client.post('/engine/deploy', headers=owner).text
+    asked = client.post('/engine/deploy', headers=owner, follow_redirects=False)
+    assert asked.status_code == 303 and asked.headers['location'] == '/app/#versions'
     assert json.loads((releases / 'queue' / 'request.json').read_text())['sha'] == SHA_NEW
     [item] = catalog.hub_release()
     assert item['title'] == 'Hub is updating' and item['action'] is None

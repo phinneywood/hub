@@ -114,7 +114,13 @@ def home(request: Request):
     login = _login(request)
     links = read.opens()
     return {**model.now(), 'signed_in': login is not None, 'initial': (login or 'H')[:1].upper(), 'versions': versions(),
-            'links': {'ha': links.get('ha_url'), 'music': links.get('music_url')}}
+            'links': {'ha': links.get('ha_url'), 'music': links.get('music_url')}, 'update': _update_ready()}
+
+
+def _update_ready():
+    """Whether a checked version is waiting for Deploy, so System can say so."""
+    from ..engine import release
+    return release.folder() is not None and release.pending() is not None
 
 
 @router.get('/api/live')
@@ -281,6 +287,20 @@ def versions_list():
     """Each release, newest first, in plain words, and which one is running."""
     from . import versions as releases
     return releases.picture()
+
+
+@router.post('/api/deploy')
+def deploy(request: Request):
+    """Ask the deployer for the checked version, like Deploy on the older Engine page. A signed-in device only."""
+    from .. import store
+    from ..engine import release
+    login = _login(request)
+    if login is None:
+        return _refuse('Deploy from your phone or laptop.', 403)
+    if not release.request(login):
+        return _refuse('There’s no checked version waiting.')
+    store.log('engine_deploy', 'asked')
+    return {'ok': True, 'said': 'Updating. This takes about a minute.'}
 
 
 # ---- Today (hub/app/today.py): what needs a person, then the day ----

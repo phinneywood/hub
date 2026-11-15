@@ -5,7 +5,7 @@ import re
 from fastapi.testclient import TestClient
 
 from hub import config
-from hub.app import versions
+from hub.app import routes, versions
 from hub.engine import release
 from hub.main import app
 
@@ -50,3 +50,27 @@ def test_links_go_to_the_repository_in_the_private_settings_only(monkeypatch):
     assert second['compare'] == 'https://github.com/example/hub/compare/cccccccccccc...bbbbbbbbbbbb'
     (config.DATA_DIR / 'household.json').write_text(json.dumps({'versions': {'repo': 'javascript:alert(1)'}}))
     assert client.get('/app/api/versions').json()['repo'] is None
+
+
+def test_deploy_from_the_app_needs_a_signed_in_owner_and_a_checked_version(tmp_path, monkeypatch):
+    root = tmp_path / 'releases'
+    (root / ('b' * 40) / 'venv').mkdir(parents=True)
+    (root / 'queue').mkdir()
+    monkeypatch.setattr(release, 'running', lambda: 'a' * 40)
+    monkeypatch.delenv('HUB_RELEASES_DIR', raising=False)
+    assert client.get('/app/api/versions').json()['deploy'] is None    # a development Hub has nothing to deploy
+    monkeypatch.setenv('HUB_RELEASES_DIR', str(root))
+    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {'me@example.com'})
+    owner = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
+    assert client.get('/app/api/versions').json()['deploy'] == {'ready': None, 'asked': False, 'put_back': None}
+    assert client.post('/app/api/deploy', headers=owner).status_code == 409
+    (root / 'pending.json').write_text(json.dumps({'sha': 'b' * 40, 'subjects': ['Synthetic change']}))
+    assert routes._update_ready() is True                              # System says a version is waiting
+    assert client.get('/app/api/versions').json()['deploy']['ready'] == {'sha': 'b' * 40, 'short': 'bbbbbbb', 'subjects': ['Synthetic change']}
+    assert client.post('/app/api/deploy', headers={'origin': 'http://testserver'}).status_code == 403   # a program on this Mac
+    assert not (root / 'queue' / 'request.json').exists()
+    assert client.post('/app/api/deploy', headers=owner).json()['ok'] is True
+    assert json.loads((root / 'queue' / 'request.json').read_text())['sha'] == 'b' * 40
+    assert client.get('/app/api/versions').json()['deploy']['asked'] is True
+    (root / 'last.json').write_text(json.dumps({'sha': 'b' * 40, 'status': 'rolled_back'}))
+    assert client.get('/app/api/versions').json()['deploy']['put_back'] == 'bbbbbbb'
