@@ -1,13 +1,12 @@
-"""Mail, the calendar, school and today's list: answered here, never by the house model.
+"""Mail, the calendar, school and today's list: what Ask may read about them, and when it reads it.
 
-Owner decision (2026-11-14): Ask's house model is reached with the owner's own key, which is not a
-zero-retention route. So a question about any of these is answered by Luna on the pinned zero-retention route
-(`hub/luna.py`), from the same bounded lookups the old chat used, and shown to the owner as Ask's answer. The house
-model is never given the question, the data or the answer.
+Owner decision (2026-11-15, reversing 2026-11-14): Ask's model (Claude Sonnet on the owner's own key, `route.py`)
+may be given these. A question plainly about one of them is recognised by its words (`about`) and its bounded
+lookups (`data`, the same ones the older chat used) go with the question, so the model answers in one trip. One
+the words missed, the model reads with its `look_up` tool.
 
-Two ways in. A question that plainly is about one of these is recognised by its words (`about`) and goes
-straight here, so even the question stays off the other route. One the words missed can be passed on by the
-house model itself (its `private` tool), which by then has seen the question and nothing more.
+Luna, on the pinned zero-retention route (`hub/luna.py`), still answers them (`answer`) on a Hub where Ask's
+model isn't set up yet, so these questions work either way.
 """
 import json
 import re
@@ -58,7 +57,7 @@ def about(text, rooms=()):
     return {topic for topic, pattern in TOPICS.items() if pattern.search(text)}
 
 
-def _data(text, topics):
+def data(text, topics):
     """The bounded lookups for these topics: what the old chat's model was given, and no more."""
     from ...engine import catalog
     data = {'today': home.today().isoformat(), 'weekday': home.today().strftime('%A')}
@@ -82,7 +81,7 @@ def _data(text, topics):
 
 def request(text, topics):
     """The one request this sends: Luna's pinned route, the question, and the data for its topics."""
-    content = '<question>' + luna.clip(text, 600) + '</question>\n<data>' + json.dumps(_data(text, topics), ensure_ascii=False) + '</data>'
+    content = '<question>' + luna.clip(text, 600) + '</question>\n<data>' + json.dumps(data(text, topics), ensure_ascii=False) + '</data>'
     return {'model': luna.MODEL, 'messages': [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': content}],
             'max_completion_tokens': OUTPUT_TOKENS, 'reasoning': {'effort': 'none'}, 'provider': luna.PROVIDER, 'stream': False}
 

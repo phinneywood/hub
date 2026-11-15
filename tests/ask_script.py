@@ -106,7 +106,10 @@ async def scripted(messages, info):
     words = ' '.join(spoken.lower().split())
     back = [p for p in messages[-1].parts if p.part_kind == 'tool-return'] if messages[-1].kind == 'request' else []
     places = _places(words)
-    if back:                    # a tool said "not done": for music try a band once, as a model would; else explain
+    given = [p.content for m in messages for p in m.parts if p.part_kind == 'user-prompt'][-1]
+    if back and back[0].tool_name == 'look_up' or not back and '<data>' in given:
+        yield 'From what Hub can see, ' + ('the dentist is Tuesday at three.' if back else 'two emails need you.')
+    elif back:                  # a tool said "not done": for music try a band once, as a model would; else explain
         tries = len([m for m in messages if m.kind == 'response'])
         if back[0].tool_name == 'music' and tries < 2 and 'Nothing matched' in str(back[0].content):
             yield call('music', do='play', what=[BAND['name']], kind='artist', **({'rooms': places} if places else {}))
@@ -120,7 +123,7 @@ async def scripted(messages, info):
     elif NOT_HERE.search(words):
         yield 'Locks, the alarm, the garage and the thermostat can’t be changed from here.'
     elif words.startswith('when is'):
-        yield call('private_desk')
+        yield call('look_up', topics=['calendar'])
     elif SOUND.search(words) and not re.search(r'\b(lights?|lamps?|dim)\b', words):
         yield _music(words, places)
     elif re.search(r'\b(dim|turn|switch|lights?|lamps?)\b', words) or EVERYWHERE.search(words) or (places and LIGHTS.search(words)):

@@ -1,4 +1,5 @@
-"""What Ask can do: lights, scenes, music, remembering, and passing a message to Kitchen or to the private desk.
+"""What Ask can do: lights, scenes, music, remembering, passing a message to Kitchen, and reading mail, the calendar
+and school.
 
 Few tools, each doing a whole job. Every change goes through hub/tools/house/control.py, like a tap in the app:
 the same allowlist, record and Undo, counted against Ask's own per-minute limit. A tool says what it did in a
@@ -32,8 +33,6 @@ class Turn:
     said: list = field(default_factory=list)     # what Hub tells the owner was done, a sentence per tool
     cards: list = field(default_factory=list)    # what the app draws under the answer
     again: bool = False                          # a tool needs the model to look at its answer and go on
-    private: bool = False                        # answered on the private route: never shown to the house model
-    private_usage: dict | None = None            # what that answer cost, for the record
 
 
 def _say(turn, told, card=None):
@@ -331,7 +330,7 @@ def music(ctx: RunContext[Turn], do: Literal['play', 'pause', 'resume', 'next', 
         return _say(turn, 'The house isn’t answering, so nothing was changed.')
 
 
-# ---- remembering, Kitchen, and the private desk ----
+# ---- remembering, Kitchen, and reading mail, the calendar and school ----
 
 def remember(ctx: RunContext[Turn], note: str, together: list[str] | None = None) -> dict:
     """Keep one short note, in the owner's own words, when they ask Hub to remember something or to do something
@@ -368,18 +367,15 @@ def kitchen(ctx: RunContext[Turn]) -> dict:
     return _say(turn, 'Kitchen is on it.', {'kind': 'kitchen', 'after': sent['message']})
 
 
-def private_desk(ctx: RunContext[Turn]) -> dict:
-    """Pass the owner's question to Hub's private desk, which answers about their mail, their calendar, their
-    child's school and what needs them today. You never see those. Call it once and say nothing else."""
+def look_up(ctx: RunContext[Turn], topics: list[Literal['mail', 'calendar', 'school', 'today']]) -> dict:
+    """Read the owner's mail, their calendar, their child's school (the class guide) or what needs them today, to
+    answer a question about them. Read-only: Hub can't send, file, delete or book anything from here."""
     turn = ctx.deps
+    turn.again = True
     try:
-        said, usage = private.answer(turn.text)
-    except private.Unavailable as error:
-        return _say(turn, str(error))
-    turn.private = True
-    turn.private_usage = usage
-    turn.said.append(said)
-    return {'done': 'Hub answered the owner privately. Say nothing more.'}
+        return {'data': private.data(turn.text, set(topics) or {'today'})}
+    except Exception:  # noqa: BLE001 - a reader that failed is an answer the model can pass on
+        return {'not_done': 'Hub couldn’t read that just now.'}
 
 
-ALL = (lights, scene, music, remember, kitchen, private_desk)
+ALL = (lights, scene, music, remember, kitchen, look_up)

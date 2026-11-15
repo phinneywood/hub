@@ -1,7 +1,7 @@
 """What was asked and answered, and what Hub remembers. In Hub's own database, never in Git.
 
-A turn's words are kept for 30 days, as chat text always was. A turn answered on the private route
-(`private.py`) is marked so: it is shown to the owner again, and never shown to the house model.
+A turn's words are kept for 30 days, as chat text always was. A turn Luna answered (`private.py`, on a Hub
+without Ask's own model) is marked so.
 
 What Hub remembers is the engine's one list of standing notes (`hub/engine/state.py`), the same list the older
 chat saved to with a tap, so there is one memory: a note saved either way reaches Ask, steers the morning

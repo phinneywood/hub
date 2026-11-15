@@ -93,24 +93,24 @@ Say what you want, and Hub does it or answers. Code: `hub/app/ask/`. In the app:
 1. **A few letters** find a room, a scene or a playlist in the app itself and work it in the list. Nothing is
    asked of anyone. What this person often asks around this time of day (`turns.usual`, counted from their own
    earlier requests, no model) is offered as one tap.
-2. **A question about mail, the calendar, school or today's list** is answered by the private desk
-   (`private.py`): Luna, on the pinned zero-retention route in `hub/luna.py`, from the same bounded lookups the
-   older chat used. It is recognised by its words before anything else happens, so the house model is given
-   neither the question, the data nor the answer, on that turn or a later one.
-3. **Anything else** goes once to the house model with the house beside it: rooms, lights, speakers, what is
+2. **Anything typed** goes once to the model with the house beside it: rooms, lights, speakers, what is
    playing, the scenes and what Hub remembers, as a few plain lines (`brain.house`), plus the last few
    requests and what Hub did. So the model can act at once instead of looking first.
+3. **A question about mail, the calendar, school or today's list** (owner decision, 2026-11-15, reversing the
+   14th) goes the same way, with what Hub knows about it beside it in `<data>`: the same bounded lookups the
+   older chat used (`private.data`), recognised by the question's words (`private.about`), so it is answered in
+   one trip. One the words missed, the model reads with `look_up`. On a Hub without Ask's model yet, Luna
+   answers these on its zero-retention route (`private.answer`), as before.
 
 **One trip to the model.** A tool that did the job says so itself, in a sentence Hub writes
 (“The kitchen and the living room are at 40%.”), and the turn ends there: no second trip for the model to
 describe what happened. Only when a tool could not do it as asked (nothing matched a search, a room it
-couldn't place) does the model get its answer and one more try. A turn is at most four trips.
+couldn't place, something it read with `look_up`) does the model get its answer and one more try. A turn is at most four trips.
 
 **What it can do** (`tools.py`): `lights` (rooms, floors, single lights, everywhere indoors, outside; on
 restores each lamp's last brightness), `scene`, `music` (play, pause, resume, next, previous, volume, a room
 joining or leaving), `remember`, `kitchen` (passes the owner's words to Kitchen, whose answer appears under the
-request) and `private_desk` (for a private question the words missed: the model passes it on and never sees
-the answer). Every change goes through `hub/tools/house/control.py` like a tap: the same allowlist, the same
+request) and `look_up` (reads mail, the calendar, the class guide or today's list; read-only). Every change goes through `hub/tools/house/control.py` like a tap: the same allowlist, the same
 record and Undo, counted against Ask's 30 changes a minute. Never locks, the garage, the alarm or the
 thermostat. Ask changes nothing for a program without a login, or while the owner has Home control set to
 “Suggest only” on the Engine page.
@@ -126,19 +126,20 @@ Anthropic API key, with adaptive thinking at high effort. `"ask": {"effort": "me
 changes the effort. The key is read from 1Password by reference (`op://Hub/Anthropic/credential`, or
 `HUB_ANTHROPIC_REF`), kept in memory for a few minutes and never logged or returned. A guard on the one HTTP
 client refuses any request that isn't this model at `https://api.anthropic.com/v1/messages`, so nothing else
-can send Ask's words another way. This route is not zero-retention, which is why the private desk exists.
+can send Ask's words another way. This route is not zero-retention; the owner chose it for mail, the calendar and
+school too, knowing that (2026-11-15).
 Instructions and tool definitions are cached between requests. Each turn's tokens and cost go in the engine's
 record under the chat's own $10 a month limit; the words do not.
 
 **What reaches which model.**
 
-| | House model (Claude Sonnet, the owner's key) | Private desk (Luna, zero retention) |
+| | Ask's model (Claude Sonnet, the owner's key) | Luna (zero retention), only on a Hub without Ask's model |
 | --- | --- | --- |
-| The owner's typed request | Yes, unless it is plainly a private question | Private questions only |
+| The owner's typed request | Yes | Questions about the day only |
 | Rooms, lights, speakers, scenes, what is playing | Yes | No |
 | What Hub remembers | Yes | No |
-| Earlier requests and Hub's answers | Yes, except private ones | No |
-| Mail, the calendar, school, today's list | Never | Yes, bounded as before |
+| Earlier requests and Hub's answers | Yes | No |
+| Mail, the calendar, school, today's list | Yes, the bounded lookups; never senders with AI switched off | Yes, the same lookups |
 | Kitchen's answers | Never | No |
 
 **Until it is set up.** Ask needs two things a Hub may not have yet: the Anthropic SDK among the reviewed

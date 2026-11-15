@@ -174,9 +174,23 @@ def test_as_well_joins_what_is_playing_and_pause_and_volume_reach_it(house):
     assert ask('pause')[0] == 'Paused.' and picture()['music']['playing'] is False
 
 
-# ---- what isn't the house model's ----
+# ---- mail, the calendar, school and today (owner decision, 2026-11-15: Ask's model may read them) ----
 
-def test_a_question_about_mail_never_reaches_the_house_model(house, monkeypatch):
+def test_a_question_about_mail_goes_to_the_model_with_the_mail_beside_it(house, monkeypatch):
+    from hub.engine import catalog
+    looked = []
+    monkeypatch.setattr(catalog, 'mail_lookup', lambda kind=None: looked.append(kind) or {'kind': kind, 'messages': [{'from': 'Dr. Example'}]})
+    monkeypatch.setattr(private.httpx, 'post', lambda *a, **kw: pytest.fail('Luna was asked'))
+    answer, cards, end = ask('Which emails need me?')
+    assert answer == 'From what Hub can see, two emails need you.' and end['status'] == 'ok' and len(SEEN) == 1   # one trip
+    told = said_to_model(SEEN[0])
+    assert '<data>' in told and 'Dr. Example' in told and looked == [None, 'needs']
+    # Asked again, the earlier question and answer are part of the record the model is given.
+    ask('dim the kitchen and living room')
+    assert 'Which emails need me?' in said_to_model(SEEN[1]) and turns.recent('me@example.com')[-1]['private'] is False
+
+
+def test_without_asks_own_model_luna_still_answers_about_the_day(house, monkeypatch):
     sent = []
 
     class Reply:
@@ -186,19 +200,21 @@ def test_a_question_about_mail_never_reaches_the_house_model(house, monkeypatch)
             return {'choices': [{'message': {'content': 'Two emails need you: the dentist and the plumber.'}}],
                     'usage': {'prompt_tokens': 300, 'completion_tokens': 20, 'cost': 0.0002}}
 
+    def not_set_up(http_client=None):
+        raise route.NotSetUp('Ask isn’t set up yet.')
+    monkeypatch.setattr(route, 'build', not_set_up)
     monkeypatch.setattr(luna, 'key', lambda: 'synthetic-key')
     monkeypatch.setattr(private.httpx, 'post', lambda url, **kw: sent.append((url, kw)) or Reply())
     answer, cards, end = ask('Which emails need me?')
     assert answer == 'Two emails need you: the dentist and the plumber.' and SEEN == []
     [(url, sent_with)] = sent
-    assert url == luna.URL and sent_with['json']['provider'] == luna.PROVIDER and sent_with['json']['model'] == luna.MODEL
-    assert sent_with['json']['provider']['zdr'] is True and sent_with['follow_redirects'] is False
+    assert url == luna.URL and sent_with['json']['provider'] == luna.PROVIDER and sent_with['json']['provider']['zdr'] is True
     assert state.spent(__import__('hub').home.today().isoformat(), 'chat')['month_cost'] == pytest.approx(0.0002)
-    # Asked again about the house, the model is shown neither that question nor that answer.
-    ask('dim the kitchen and living room')
-    told = json.dumps([[p.content for p in m.parts if hasattr(p, 'content')] for m in SEEN[0]], default=str)
-    assert 'emails' not in told and 'dentist' not in told
-    assert [t['private'] for t in turns.recent('me@example.com')] == [True, False]
+    assert ask('dim the kitchen')[0] == 'Ask isn’t set up yet.'
+
+
+def said_to_model(messages):
+    return json.dumps([[p.content for p in m.parts if hasattr(p, 'content')] for m in messages], default=str, ensure_ascii=False)
 
 
 def test_what_counts_as_private_and_what_is_just_a_request(house):
@@ -213,11 +229,12 @@ def test_what_counts_as_private_and_what_is_just_a_request(house):
         assert not private.about(words), words
 
 
-def test_a_private_question_the_words_missed_is_passed_on_and_its_answer_stays_private(house, monkeypatch):
-    monkeypatch.setattr(private, 'answer', lambda text, topics=None: ('The dentist is Tuesday at three.', {'tokens_in': 1, 'tokens_out': 1, 'cost': 0.0}))
+def test_a_question_the_words_missed_is_looked_up_by_the_model(house, monkeypatch):
+    from hub.engine import catalog
+    monkeypatch.setattr(catalog, 'calendar_lookup', lambda: {'events': [{'title': 'Dentist', 'when': 'Tuesday 3 PM'}]})
     answer, _, _ = ask('when is the dentist')
-    assert answer == 'The dentist is Tuesday at three.' and len(SEEN) == 1      # the model passed it on and saw no answer
-    assert turns.recent('me@example.com')[-1]['private'] is True
+    assert answer == 'From what Hub can see, the dentist is Tuesday at three.' and len(SEEN) == 2   # look, then answer
+    assert 'Dentist' in said_to_model(SEEN[1]) and '<data>' not in said_to_model(SEEN[0])
 
 
 def test_kitchen_gets_the_owners_words_and_remembering_is_kept_at_once(house, monkeypatch):
@@ -296,7 +313,7 @@ def test_what_is_asked_around_this_time_on_several_days_is_offered_again(house):
         turns.save(me, 'Jazz in the living room' if back > 1 else 'jazz in the living room.', 'Playing.', card, at=seven - back * day + 600)
     turns.save(me, 'dim the kitchen', 'Done.', [{'kind': 'rooms', 'rooms': ['kitchen']}], at=seven - day)         # once: not a habit
     for back in (1, 2):
-        turns.save(me, 'what needs me today?', 'Two things.', [], private=True, at=seven - back * day)          # private: never offered
+        turns.save(me, 'what needs me today?', 'Two things.', [], at=seven - back * day)                        # changed nothing: never offered
         turns.save(me, 'pause', 'Paused.', card, at=seven - back * day - 8 * 3600)                                # a habit of another hour
         turns.save('other@example.com', 'bedtime', 'Bedtime is on.', [{'kind': 'scene'}], at=seven - back * day)  # someone else's
     assert turns.usual(me, now=seven) == ['jazz in the living room.']                    # as they last typed it
@@ -437,7 +454,7 @@ def test_the_real_route_thinks_acts_once_and_stops(world, monkeypatch):
     body = json.loads(request.content)
     assert str(request.url) == 'https://api.anthropic.com/v1/messages' and body['model'] == 'claude-sonnet-5-5' and body['stream'] is True
     assert body['thinking'] == {'type': 'adaptive'} and body['output_config'] == {'effort': 'high'}
-    assert [tool['name'] for tool in body['tools']] == ['lights', 'scene', 'music', 'remember', 'kitchen', 'private_desk']
+    assert [tool['name'] for tool in body['tools']] == ['lights', 'scene', 'music', 'remember', 'kitchen', 'look_up']
     assert body['system'][-1]['cache_control']['type'] == 'ephemeral' and 'cache_control' in body['tools'][-1]
     [message] = body['messages']
     assert message['role'] == 'user' and message['content'][-1]['text'].endswith('<said>dim the kitchen to 40</said>')

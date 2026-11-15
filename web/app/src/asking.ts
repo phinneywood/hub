@@ -12,7 +12,7 @@ type Event = { t: "say"; text: string } | { t: "doing"; what: string } | { t: "c
 
 const SAY = "hub.say";      // the chat page reads this once and sends it (web/ask): only Hub's own pages can set it
 const DOING: Record<string, string> = { lights: "Switching the lights", scene: "Setting the scene", music: "Finding the music",
-  kitchen: "Asking Kitchen", private_desk: "Looking", remember: "Noting that" };
+  kitchen: "Asking Kitchen", look_up: "Looking", remember: "Noting that" };
 
 export const asked = signal("");                 // what is in the field
 export const talk = signal<Turn[]>([]);          // this sitting's requests and answers
