@@ -91,7 +91,8 @@ function Trouble() {
     return <div class="banner"><b>Can’t reach Hub</b><span>This device is off the home network. Turn Tailscale on and Hub will reconnect by itself.{last}</span></div>;
   }
   if (trouble.value === "house") {
-    return <div class="banner"><b>The house isn’t answering</b><span>{why.value || "Hub can’t reach Home Assistant right now."}{last}</span></div>;
+    // Said in the app's own words; why.value (Hub's wording, which names its parts) is for System.
+    return <div class="banner"><b>The house isn’t answering</b><span>Hub can’t reach the lights and speakers right now.{last}</span></div>;
   }
   return null;
 }
@@ -220,7 +221,8 @@ export function System() {
       <Top />
       <Trouble />
       <h1 class="say">{says}</h1>
-      <p class="sub">{now ? `Last read at ${clock(now.at)}. ${now.lights_on === 1 ? "One light is" : now.lights_on + " lights are"} on.` : "Nothing read yet."}</p>
+      <p class="sub">{now ? `Last read at ${clock(now.at)}. ${now.lights_on === 1 ? "One light is" : now.lights_on + " lights are"} on.` : "Nothing read yet."}
+        {trouble.value === "house" && why.value ? " " + why.value : ""}</p>
       <section class="block">
         <h2>Under the hood</h2>
         <div class="rows">
