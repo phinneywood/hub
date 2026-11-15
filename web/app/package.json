@@ -1,0 +1,21 @@
+{
+  "name": "hub-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build": "npm run check && node record-build.mjs --clean && vite build && node record-build.mjs"
+  },
+  "dependencies": {
+    "@preact/signals": "2.11.4",
+    "preact": "10.29.8"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "2.10.6",
+    "typescript": "7.0.2",
+    "vite": "8.3.7"
+  },
+  "overrides": {
+    "lru-cache": "5.1.0"
+  }
+}

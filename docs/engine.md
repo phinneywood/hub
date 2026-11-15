@@ -290,7 +290,8 @@ question through “Ask about this”; see `views.md`. Code: `hub/agent/`; page 
 - **What is kept**: chat text for 30 days. Older turns are cut from a thread, and a thread untouched for
   30 days is removed. The owner can delete a chat at any time.
 - **Sign-in**: the same rule as every Hub page.
-- **The page** is the one Hub page with a build step (React, assistant-ui, Vite). The built files are
+- **The page** is one of two parts of Hub with a build step (React, assistant-ui, Vite; the other is the
+  new app in `web/app`). The built files are
   committed in `hub/static/ask/`; Hub and the deployer need no Node. `tests/test_ask_page.py` fails if
   they do not match `web/ask/`. See `web/ask/README.md`, and `web/ask/check/` for the browser check.
 

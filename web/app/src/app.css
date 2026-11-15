@@ -1,0 +1,17 @@
+/* Placeholder styles. "/fonts/..." is hub/static/app/fonts; the build writes it as /static/app/fonts/... */
+@font-face {
+  font-family: "Jost";
+  src: url("/fonts/Jost.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+.placeholder {
+  font-family: "Jost", system-ui, sans-serif;
+  padding: 24px;
+}
+
+.placeholder button {
+  font: inherit;
+  padding: 8px 16px;
+}

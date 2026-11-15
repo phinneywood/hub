@@ -89,7 +89,7 @@ live runs are on demand from Settings → Golden tests (see docs/golden-tests.md
 
 ## Rebuild the Ask chat page
 
-The chat page (`web/ask`, React) is the only part with a build step, and its built files are committed in
+The chat page (`web/ask`, React) is one of two parts with a build step, and its built files are committed in
 `hub/static/ask/`, so the running Hub and the deployer never need Node. To change it, on the Mac mini:
 
 ```sh
@@ -101,6 +101,18 @@ personal site) into `.tools/` inside this checkout, which Git ignores, and check
 installs the locked packages and builds. Commit `web/ask/src`, `package-lock.json` and the three files in
 `hub/static/ask/` together; `tests/test_ask_page.py` fails if the bundle and the source don't match. The
 browser check is in `web/ask/check/README.md`.
+
+## Rebuild the new app
+
+The new front (`web/app`: Preact, signals, TypeScript) is the other part with a build step. It works the
+same way, with the same pinned Node, and its built files are committed in `hub/static/app/`:
+
+```sh
+tools/build-app
+```
+
+Commit `web/app/src`, `package-lock.json` and `app.js`, `app.css` and `build.json` in `hub/static/app/`
+together; `tests/test_app_page.py` fails if they don't match. See `web/app/README.md`.
 
 ## More detail
 
