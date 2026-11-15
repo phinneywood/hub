@@ -74,7 +74,7 @@ def _states():
 
 class World:
     def __init__(self):
-        self.states, self.sent, self.down = _states(), [], False
+        self.states, self.sent, self.down, self.names = _states(), [], False, {}
 
     def _registry(self):
         rooms = {e: a for e, a, *_ in [*LIGHTS, *SWITCHES, *SPEAKERS]}
@@ -113,7 +113,8 @@ class World:
                 for member in self._group(entity):
                     self.states[member]['state'] = state
                     if service == 'play_media':
-                        self.states[member]['attributes'].update(media_title='First track', media_artist='', media_album_name='')
+                        album = self.names.get(data['media_id'], '')
+                        self.states[member]['attributes'].update(media_title='First track', media_artist='', media_album_name=album)
             elif service == 'volume_set':
                 item['attributes']['volume_level'] = data['volume_level']
             elif service == 'join':

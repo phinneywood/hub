@@ -1,0 +1,245 @@
+// The screens: the house as a plan, the bar at the bottom, and System.
+import type { JSX } from "preact";
+import { useRef, useState } from "preact/hooks";
+import { go, house, look, me, play, runScene, seen, sheet, switchRoom, trouble, view, why } from "./state";
+import type { Look } from "./state";
+import type { Floor, House, Room } from "./types";
+import { Bars, Icon } from "./ui";
+import { clock, houseSays, list, musicSays, playingIn, when } from "./words";
+
+const HOLD_MS = 430;        // how long a finger rests on a room before it opens
+const TIP = "hub.tip";
+
+/** How wide each room is drawn, in sixths of the plan, so every row is full. */
+export function spans(count: number): number[] {
+  if (count === 1) return [6];
+  const out = Array<number>(count).fill(2);
+  const over = count % 3;
+  if (over === 2) out.splice(count - 2, 2, 3, 3);
+  if (over === 1) out.splice(count - 4, 4, 3, 3, 3, 3);
+  return out;
+}
+
+function RoomCell({ room, span, order }: { room: Room; span: number; order: number }) {
+  const timer = useRef(0);
+  const opened = useRef(false);
+  const [pressed, setPressed] = useState(false);
+  const open = () => {
+    try { localStorage.setItem(TIP, "1"); } catch { /* the tip just shows again */ }
+    sheet.value = { kind: "room", id: room.id };
+  };
+  const down = (e: PointerEvent) => {
+    if ((e.target as Element).closest(".room-more")) return;
+    opened.current = false;
+    setPressed(true);
+    timer.current = window.setTimeout(() => { opened.current = true; setPressed(false); open(); }, HOLD_MS);
+  };
+  const up = () => { clearTimeout(timer.current); setPressed(false); };
+  const tap = () => {
+    if (opened.current) { opened.current = false; return; }
+    void switchRoom(room.id);
+  };
+  const key = (e: KeyboardEvent) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tap(); }
+  };
+  const style = { "--lvl": room.level / 100, "--i": order } as JSX.CSSProperties;
+  const cls = ["room", "s" + span, room.on ? "lit" : "", room.on && room.level < 35 ? "low" : "", pressed ? "held" : ""].filter(Boolean).join(" ");
+  return (
+    <div class={cls} style={style} role="switch" aria-checked={room.on} aria-label={`${room.name} lights`} tabIndex={0}
+      data-room={room.id} onClick={tap} onKeyDown={key} onPointerDown={down} onPointerUp={up} onPointerCancel={up} onPointerLeave={up}
+      onContextMenu={(e) => { e.preventDefault(); up(); opened.current = true; open(); }}>
+      <div class="room-name">{room.name}</div>
+      <div class="room-val">
+        {room.on ? (room.dims ? <span class="room-num">{room.level}<small>%</small></span> : <span class="room-on">On</span>) : <span />}
+        {room.sounding && <Bars />}
+      </div>
+      <button type="button" class="room-more" aria-label={`${room.name}: everything in the room`}
+        onClick={(e) => { e.stopPropagation(); open(); }}><Icon name="more" /></button>
+    </div>
+  );
+}
+
+function Plan({ now }: { now: House }) {
+  const lit = Object.values(now.rooms).filter((r) => r.on).map((r) => r.id);
+  const floor = (f: Floor) => {
+    const rooms = f.rooms.map((id) => now.rooms[id]).filter((r): r is Room => r !== undefined);
+    const widths = spans(rooms.length);
+    return (
+      <>
+        {f.name && <p class="floor">{f.name}</p>}
+        <div class="plan">{rooms.map((r, n) => <RoomCell key={r.id} room={r} span={widths[n] ?? 2} order={Math.max(0, lit.indexOf(r.id))} />)}</div>
+      </>
+    );
+  };
+  return <div class="floors">{now.floors.map(floor)}</div>;
+}
+
+function Top() {
+  return (
+    <div class="top">
+      <span class="when">{when()}</span>
+      <button type="button" class={"who" + (trouble.value ? " bad" : "")} aria-label="System" onClick={() => go("system")}>{me.value.initial}</button>
+    </div>
+  );
+}
+
+function Trouble() {
+  const last = house.value ? ` Showing things as they were at ${clock(house.value.at)}.` : "";
+  if (trouble.value === "hub") {
+    return <div class="banner"><b>Can’t reach Hub</b><span>This device is off the home network. Turn Tailscale on and Hub will reconnect by itself.{last}</span></div>;
+  }
+  if (trouble.value === "house") {
+    return <div class="banner"><b>The house isn’t answering</b><span>{why.value || "Hub can’t reach Home Assistant right now."}{last}</span></div>;
+  }
+  return null;
+}
+
+function Skeleton() {
+  return (
+    <div class="skel">
+      <h1 class="say">Reading the house</h1>
+      <p class="sub">One moment</p>
+      <div class="floors">
+        <div class="plan">{[3, 3, 2, 2, 2].map((s) => <div class={"room s" + s} />)}</div>
+        <div class="plan">{[2, 2, 2].map((s) => <div class={"room s" + s} />)}</div>
+      </div>
+    </div>
+  );
+}
+
+export function Home() {
+  const now = seen.value;
+  let tipped = true;
+  try { tipped = localStorage.getItem(TIP) === "1"; } catch { /* show it */ }
+  if (!now) return <div class="wrap"><Top /><Trouble />{!trouble.value && <Skeleton />}</div>;
+  return (
+    <div class={"wrap" + (trouble.value ? " offline" : "")}>
+      <Top />
+      <Trouble />
+      <h1 class="say">{houseSays(now)}</h1>
+      <p class="sub">{musicSays(now.music)}</p>
+      <div class="scenes">
+        {now.scenes.map((s) => <button type="button" class="scene" key={s.id} onClick={() => void runScene(s)}>{s.name}</button>)}
+      </div>
+      <Plan now={now} />
+      {now.facts.length > 0 && (
+        <div class="facts">
+          {now.facts.map((f) => <div class={"fact" + (f.tone ? " " + f.tone : "")} key={f.label}><span>{f.label}</span><b>{f.value}</b></div>)}
+        </div>
+      )}
+      {!tipped && <p class="tip">Tap a room to switch its lights. Hold it for everything in the room.</p>}
+    </div>
+  );
+}
+
+/** A record sleeve drawn from the name, until real covers arrive. */
+export function Sleeve({ name, size }: { name: string; size?: string }) {
+  let sum = 0;
+  for (const letter of name) sum = (sum + letter.charCodeAt(0)) % 4;
+  return <div class={`sleeve ${"abcd"[sum]}${size ? " " + size : ""}`} />;
+}
+
+function Playing() {
+  const music = seen.value?.music;
+  if (!music) return null;
+  const where = playingIn(music);
+  const quiet = !music.playing;
+  const title = music.title || (quiet ? "Nothing playing" : "Music");
+  return (
+    <div class={"np" + (music.playing ? " live" : "")} role="button" tabIndex={0} aria-label="What is playing"
+      onClick={() => (sheet.value = { kind: "playing" })}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); sheet.value = { kind: "playing" }; } }}>
+      <Sleeve name={music.album || music.title} />
+      <div class="np-text">
+        <b>{title}</b>
+        <span>{music.playing ? <><Bars />{list(where) || "Playing"}</> : music.title ? "Paused" : "Choose something to play"}</span>
+      </div>
+      <button type="button" class="np-play" aria-label={music.playing ? "Pause" : "Play"}
+        onClick={(e) => { e.stopPropagation(); void play(!music.playing); }}><Icon name={music.playing ? "pause" : "play"} /></button>
+    </div>
+  );
+}
+
+// Today and Kitchen are still Hub's older pages; they move into the app in later phases.
+const ELSEWHERE = [["Today", "/today"], ["Kitchen", "/kitchen"]] as const;
+
+function Tabs() {
+  return (
+    <>
+      <button type="button" class={"tab" + (view.value === "home" ? " on" : "")} onClick={() => go("home")}>Home</button>
+      {ELSEWHERE.map(([name, href]) => <a class="tab" href={href} key={href}>{name}</a>)}
+    </>
+  );
+}
+
+export function Dock({ ask }: { ask: () => void }) {
+  return (
+    <div class="dock">
+      <Playing />
+      <div class="tabs">
+        <Tabs />
+        <button type="button" class="askbtn" onClick={ask}><Icon name="wave" />Ask</button>
+      </div>
+    </div>
+  );
+}
+
+export function Rail() {
+  const fine = !trouble.value;
+  return (
+    <nav class="rail" aria-label="Hub">
+      <div class="mark"><i />Hub</div>
+      <Tabs />
+      <div class="foot">
+        <button type="button" class={"tab" + (view.value === "system" ? " on" : "")} onClick={() => go("system")}>System</button>
+        <p class="ok">{fine ? "The house is answering." : trouble.value === "hub" ? "Can’t reach Hub." : "The house isn’t answering."}</p>
+      </div>
+    </nav>
+  );
+}
+
+const OLDER = [["Ask, the chat", "/ask"], ["Today", "/today"], ["Kitchen", "/kitchen"], ["Mail", "/gmail"], ["Calendar", "/calendar"],
+  ["Preschool", "/preschool/"], ["Trip", "/trip"], ["Bike + bus", "/mobility"], ["Network", "/network"], ["Insights", "/insights"],
+  ["Settings and checks", "/settings"]] as const;
+const LOOKS: [Look, string][] = [["auto", "Follow this device"], ["dusk", "Evening"], ["day", "Day"]];
+
+export function System() {
+  const now = house.value;
+  const links = me.value.links;
+  const says = trouble.value === "hub" ? "Can’t reach Hub." : trouble.value === "house" ? "The house isn’t answering." : "The house is answering.";
+  return (
+    <div class="wrap">
+      <Top />
+      <Trouble />
+      <h1 class="say">{says}</h1>
+      <p class="sub">{now ? `Last read at ${clock(now.at)}. ${now.lights_on === 1 ? "One light is" : now.lights_on + " lights are"} on.` : "Nothing read yet."}</p>
+      <section class="block">
+        <h2>The look</h2>
+        <div class="choices" role="radiogroup" aria-label="The look">
+          {LOOKS.map(([value, name]) => (
+            <button type="button" role="radio" aria-checked={look.value === value} class={"choice" + (look.value === value ? " on" : "")}
+              key={value} onClick={() => (look.value = value)}>{name}</button>
+          ))}
+        </div>
+      </section>
+      <section class="block">
+        <h2>Under the hood</h2>
+        <div class="rows">
+          <a class="row free" href="/house/changes"><div class="row-main"><b>Everything Hub changed</b><span>With Undo, for a day</span></div></a>
+          {links.ha && <a class="row free" href={links.ha}><div class="row-main"><b>Home Assistant</b><span>Devices, rooms and automations</span></div></a>}
+          {links.music && <a class="row free" href={links.music}><div class="row-main"><b>Music Assistant</b><span>The library, the queue and playlists</span></div></a>}
+        </div>
+      </section>
+      <section class="block">
+        <h2>Older pages</h2>
+        <p class="sub">Hub’s earlier screens, until each moves in here or goes.</p>
+        <div class="rows spaced">
+          {OLDER.map(([name, href]) => <a class="row free" href={href} key={href}><div class="row-main"><b>{name}</b></div></a>)}
+        </div>
+      </section>
+      {!me.value.signed_in && <p class="quiet">This screen is open on the Mac itself, which can look but not change the house.</p>}
+      <p class="quiet">App version {me.value.versions.js || "unknown"}.</p>
+    </div>
+  );
+}
