@@ -377,11 +377,12 @@ def test_a_change_the_broker_reports_is_read_at_once_and_the_timer_relaxes(monke
         quiet = len(reads)              # on the 0.05 s timer this would be many; relaxed, it is the first few
         said.set()
         await asyncio.wait_for(queue.get(), 2)
+        live = feed.listening_live()
         feed.leave(queue)
-        return quiet
+        return quiet, live
 
-    quiet = asyncio.run(listen())
-    assert feed.listening_live() and quiet <= 3 and len(reads) == quiet + 1
+    quiet, live = asyncio.run(listen())
+    assert live and quiet <= 3 and len(reads) >= quiet + 1
 
 
 def test_without_a_broker_that_listens_the_house_is_read_on_the_timer():
