@@ -67,16 +67,23 @@ The row of words above the plan. Three kinds, run the same way:
 
 ## The live feed
 
-`hub/app/feed.py`. While at least one app is open, one thread reads the house every 3 seconds and sends the
-picture to every open app when it differs from the last one. After a change Hub made, it reads again at once and
-twice more as speakers settle. Nobody open, nothing read. The feed is a plain event stream
-(`text/event-stream`) with a `beat` every 5 seconds when nothing has changed. A phone that leaves the home
-network is told nothing, the line just goes quiet, so an app that hears no beat for 12 seconds says it can't
-reach Hub and keeps trying to reconnect by itself.
+`hub/app/feed.py`. While at least one app is open, Hub keeps the picture of the house current and sends it to
+every open app when it differs from the last one. Nobody open, nothing read. An app that nobody is looking at
+stops listening after 20 seconds and picks up again the moment it is looked at.
 
-This asks Home Assistant on a timer because the broker (home-ops) answers one question at a time today. When the
-broker can pass on Home Assistant's own change events, `Feed._read` is the one place that changes, and the 3
-seconds become "at once".
+When Hub reads the house:
+
+- **When the house says it changed.** Hub listens to the broker (`broker.listen`, home-ops' `listen` operation),
+  which says which light, speaker or other house device changed the moment it does: the device, never its state.
+  Hub then reads the house as usual. A wall switch reaches an open app at once. While this line is up, Hub
+  otherwise reads only every 30 seconds, as a safety net.
+- **On a timer, when it can't listen.** With an older broker that has no `listen`, or the broker away, Hub reads
+  every 3 seconds instead and asks again each minute whether it may listen. Nothing else differs.
+- **After a change Hub made**: at once, and twice more as speakers settle.
+
+The feed is a plain event stream (`text/event-stream`) with a `beat` every 5 seconds when nothing has changed. A
+phone that leaves the home network is told nothing, the line just goes quiet, so an app that hears no beat for
+12 seconds says it can't reach Hub and keeps trying to reconnect by itself.
 
 ## The built files
 

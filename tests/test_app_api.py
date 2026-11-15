@@ -1,6 +1,8 @@
 """The app's data and taps (hub/app): the Home screen's picture, the live feed and every change. A made-up house."""
 import asyncio
 import json
+import socket
+import threading
 import time
 
 import pytest
@@ -14,6 +16,7 @@ from hub.tools.house import broker, control, read
 from tests import app_world
 
 client = TestClient(app)
+REAL_CONNECT = socket.socket.connect      # taken before the suite's guard replaces it; used only for a socket in a temp folder
 SIGNED_IN = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
 
 
@@ -324,6 +327,89 @@ def test_a_poke_reads_again_at_once():
 
     asyncio.run(listen())
     assert len(reads) >= 2 and reads[1] - reads[0] < 2
+
+
+def test_a_change_the_broker_reports_is_read_at_once_and_the_timer_relaxes(monkeypatch):
+    """With the broker passing changes on, the house is read when it changes, not every few seconds."""
+    reads, said = [], threading.Event()
+
+    def hear():
+        yield None                      # a beat: the line is up
+        said.wait(5)
+        yield 'light.kitchen_ceiling'   # a wall switch
+        threading.Event().wait(5)
+
+    feed = feeds.Feed(read=lambda: reads.append(time.monotonic()) or {'n': len(reads)}, every=0.05, hear=hear, relaxed=30)
+
+    async def listen():
+        queue = feed.listen(asyncio.get_running_loop())
+        await asyncio.wait_for(queue.get(), 2)
+        await asyncio.sleep(0.4)
+        quiet = len(reads)              # on the 0.05 s timer this would be many; relaxed, it is the first few
+        said.set()
+        await asyncio.wait_for(queue.get(), 2)
+        feed.leave(queue)
+        return quiet
+
+    quiet = asyncio.run(listen())
+    assert feed.listening_live() and quiet <= 3 and len(reads) == quiet + 1
+
+
+def test_without_a_broker_that_listens_the_house_is_read_on_the_timer():
+    def hear():
+        raise broker.HomeDown('The Home Assistant broker isn’t passing changes on.')
+        yield
+
+    reads = []
+    feed = feeds.Feed(read=lambda: reads.append(1) or {'n': len(reads)}, every=0.03, hear=hear, retry=30)
+
+    async def listen():
+        queue = feed.listen(asyncio.get_running_loop())
+        for _ in range(4):
+            await asyncio.wait_for(queue.get(), 2)
+        feed.leave(queue)
+
+    asyncio.run(listen())
+    assert not feed.listening_live() and len(reads) >= 4
+
+
+def test_listening_to_the_broker_is_read_only_and_names_devices_not_states(monkeypatch):
+    """The line Hub opens asks only to listen, for house devices; what comes back is a name or a beat."""
+    import socket as sockets
+    import tempfile
+    path = tempfile.mkdtemp(prefix='hb') + '/b.sock'       # a socket's path must be short; pytest's folder isn't
+    monkeypatch.setattr(config, 'HA_BROKER_SOCKET', path)
+    server = sockets.socket(sockets.AF_UNIX, sockets.SOCK_STREAM)
+    server.bind(path)
+    server.listen(1)
+    asked = []
+
+    def serve():
+        conn, _ = server.accept()
+        asked.append(json.loads(conn.makefile('rb').readline()))
+        for line in ({'ok': True, 'result': 'listening'}, {'changed': 'light.a'}, {'beat': 1}, {'changed': 'media_player.b'},
+                     {'ok': False, 'error': 'Home Assistant closed the connection.'}):
+            conn.sendall(json.dumps(line).encode() + b'\n')
+        conn.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    monkeypatch.setattr(sockets.socket, 'connect', REAL_CONNECT)
+    heard = []
+    with pytest.raises(broker.HomeDown):
+        for changed in broker.listen():
+            heard.append(changed)
+    server.close()
+    assert heard == ['light.a', None, 'media_player.b']
+    assert asked == [{'op': 'listen', 'domains': list(broker.LISTEN)}]
+    assert not {'person', 'camera', 'device_tracker'} & set(broker.LISTEN)
+
+
+def test_an_older_broker_that_cant_listen_is_a_plain_no(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, 'HA_BROKER_SOCKET', str(tmp_path / 'absent.sock'))
+    import socket as sockets
+    monkeypatch.setattr(sockets.socket, 'connect', REAL_CONNECT)
+    with pytest.raises(broker.NotSent):
+        next(broker.listen())
 
 
 def test_the_live_address_streams_the_picture_then_beats_while_nothing_changes(house, monkeypatch):
