@@ -53,6 +53,16 @@ export interface Engine {
   runs: EngineRun[]; sorts: EngineRun[];
   sources: { name: string; reads: string; sends: string }[];
 }
+// Mail settings, as Hub sends them (hub/app/mailrules.py).
+export interface PlanItem { id: number; who: string; sender: string; does: string; status: string; step: string; done: number; of: number; error: string }
+export interface MailSettings {
+  paused: boolean; charge: number; checking: boolean;
+  levels: { kind: string; name: string; level: string; levels: { value: string; name: string }[] }[];
+  senders: { sender: string; kind: string }[];
+  plan: { planned: PlanItem[]; running: PlanItem[]; problems: PlanItem[]; finished: PlanItem[]; leaving: number; working: boolean; later: number };
+  rules: { id: number; sender: string; on: boolean; stopped: boolean; check_first: boolean; last: number | null }[];
+  backlog: { text: string; planned: boolean } | null;
+}
 export interface Pick { name: string; kind: string; uri: string }
 
 // Today, as Hub sends it (hub/app/today.py).

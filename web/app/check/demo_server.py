@@ -61,6 +61,12 @@ world = app_world.install(patch)
 from hub.engine import notes as engine_notes, state as engine_state  # noqa: E402
 engine_state.add_instruction('Always tell me about school mail with a deadline.')
 engine_state.add_request('A button that warms the house before we wake')
+# Mail settings: one made-up sender in the plan, and Gmail changes not paused.
+from hub import store as mail_plan, worker as mail_worker  # noqa: E402
+from hub.tools.gmail import missions as mail_missions  # noqa: E402
+mail_plan.set_decision('news@example.com', 'archive', 120, True)
+patch.setattr(mail_missions, 'pause_state', lambda: 'ok')
+patch.setattr(mail_worker, 'start', lambda: None)
 engine_notes.propose('The porch light goes off at midnight', 'remember that the porch light goes off at midnight', login='me@example.com')
 patch.setattr(control, 'CHECK_WAIT', 0.2)
 

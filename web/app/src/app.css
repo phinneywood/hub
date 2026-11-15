@@ -422,7 +422,7 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
 }
 
 /* Versions */
-.uplink { display: inline-flex; align-items: center; min-height: 44px; font-size: var(--t-s); color: var(--ink-2); }
+.uplink { display: inline-flex; align-items: center; min-height: 44px; min-width: 64px; font-size: var(--t-s); color: var(--ink-2); }
 .uplink::before { content: "‹"; margin-right: 6px; }
 .release-when { margin-top: 2px; font-size: var(--t-s); color: var(--ink-3); }
 .release.now .release-when { color: var(--ink-2); }
@@ -433,6 +433,9 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
 .row.lit .row-main b { color: var(--lamp); }
 .btns.tight { margin-top: 10px; }
 .field.raised { margin-top: 10px; background: var(--raised); }
+.charge { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+.charge .ctl-name { grid-column: 1 / -1; }
+.charge .field { margin-top: 0; }
 .trust { padding: 14px 0; border-bottom: 1px solid var(--line); }
 h2.minor { margin-top: 18px; font-size: var(--t-s); color: var(--ink-2); }
 .ctl-name span + span { margin-top: 4px; }

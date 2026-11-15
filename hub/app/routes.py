@@ -435,6 +435,27 @@ def mail_picture():
     return mail.picture()
 
 
+@router.get('/api/mail-settings')
+def mail_settings():
+    """The Mail settings screen as data: levels, the charge alert, senders sorted by hand, the plan, the rules."""
+    from . import mailrules
+    return mailrules.picture()
+
+
+@router.post('/api/mail-settings/{do}')
+def mail_settings_tap(do: str, request: Request, body: dict = Body(default={})):
+    """A tap on Mail settings, {"key": ..., "value": ...}: through the older Mail pages' own handlers."""
+    from . import mailrules
+    if _login(request) is None:
+        return _refuse('Change mail from your phone or laptop.', 403)
+    try:
+        return {'ok': True, 'said': mailrules.tap(do, body.get('key'), body.get('value'))}
+    except mailrules.Refused as error:
+        return _refuse(error)
+    except (ValueError, TypeError):
+        return _refuse('Hub couldn’t read that request.', 400)
+
+
 @router.post('/api/mail/{do}')
 def mail_tap(do: str, request: Request, body: dict = Body(default={})):
     """A tap on the Mail screen: done, back, answered, fine, sort, file or undo, with {"key": ...}."""

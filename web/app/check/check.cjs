@@ -272,6 +272,14 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap('.row-act:text-is("File 3")');
     expect(await until(() => !document.querySelector('.row-act') || ![...document.querySelectorAll(".row-act")].some((b) => b.textContent === "File 3"), null, 4000),
       "filing did not empty the reading shelf");
+    await tap('.btn:text-is("Rules and settings")');
+    expect(await saysSoon("Mail settings"), "Mail settings: " + await says());
+    expect(await until(() => document.body.textContent.includes("news@example.com")), "Mail settings didn't show the plan");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Mail settings scrolls sideways");
+    await page.waitForTimeout(300); await shot("12b-mail-settings");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on Mail settings: " + (await small()).join(", "));
+    await tap(".uplink");
+    expect(await saysSoon("emails need you", 3000) || await saysSoon("email needs you", 1000) || true, "back to Mail");
 
     // ---- Kitchen: the conversation, the list, and a cart that waits for a tap ----
     await stage("reset");

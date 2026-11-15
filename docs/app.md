@@ -41,6 +41,7 @@ sets this in the private settings file (`household.json`):
 | `GET /app/api/versions` | Each release of Hub, newest first, in plain words, and which one is running (see “Versions”) |
 | `POST /app/api/deploy` | Ask the deployer for the checked version waiting, from a signed-in device (see “Versions”) |
 | `GET /app/api/engine`, `POST /app/api/engine/{do}` | The Engine screen, and its taps: `tell`, `forget`, `request-done`, `improvement-done`, `note-save`, `note-skip`, `recipe-save`, `recipe-skip`, `recipe-remove`, `trust`, `run` (see “Engine”) |
+| `GET /app/api/mail-settings`, `POST /app/api/mail-settings/{do}` | Mail settings, and its taps: `level`, `charge`, `sender`, `apply`, `remove`, `undo`, `rule-stop`, `rule-resume`, `rules-check`, `backlog` (see “Mail settings”) |
 | `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
 | `GET /app/api/mail` | Mail as data: what needs the owner, questions nobody answered, records worth a look, each kind Hub sorted |
 | `POST /app/api/mail/{do}` | A tap on Mail, `{"key": ...}`: `done`, `back`, `answered`, `fine`, `sort`, `file` (a kind) or `undo` (a filing) |
@@ -263,6 +264,15 @@ good, as may the typeface (`fonts/Jost.ttf`, SIL Open Font License). Everything 
 follows what it is sent (`tests/app_world.py`). It reaches no other machine and no service on this one
 (`web/check_guard.py`). Ask works there on the stand-in model, with a made-up Kitchen and private desk, so the
 conversation can be tried and photographed without a key. See `web/app/check/README.md`.
+
+## Mail settings
+
+Mail's "Rules and settings" opens Mail settings (`hub/app/mailrules.py`, `web/app/src/mailrules.tsx`): the plan of
+inbox changes with Apply, Remove and, once applied, Undo; the backlog offer; how far Hub files each kind; the charge
+alert; senders the owner sorted by hand, with "Let Hub decide"; and the archive-after-30-days rules, with Stop,
+Resume and "Check them now". Each tap calls the older Mail page's own handler and reads its redirect, so the pause,
+the checks and Undo are the same. While the plan applies or the rules are checked, the screen looks again every
+few seconds. Quieting senders one at a time, bulk clean-up and tidying filters still open the older pages.
 
 ## Engine
 
