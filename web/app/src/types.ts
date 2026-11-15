@@ -63,6 +63,9 @@ export interface MailSettings {
   rules: { id: number; sender: string; on: boolean; stopped: boolean; check_first: boolean; last: number | null }[];
   backlog: { text: string; planned: boolean } | null;
 }
+// The Changes screen, as Hub sends it (hub/app/changes.py).
+export interface Change { batch: string; what: string; at: number; via: string; unsure: string[]; not_done: string[]; undo: boolean; undone: boolean; where: "house" | "music" }
+export interface Changes { changes: Change[]; waiting: { id: string; name: string; songs: string[] }[] }
 export interface Pick { name: string; kind: string; uri: string }
 
 // Today, as Hub sends it (hub/app/today.py).

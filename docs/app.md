@@ -40,6 +40,7 @@ sets this in the private settings file (`household.json`):
 | `GET /app/api/today` | Today as data: what needs a person, the rest of today, tomorrow, the week at school, the trip |
 | `GET /app/api/versions` | Each release of Hub, newest first, in plain words, and which one is running (see “Versions”) |
 | `POST /app/api/deploy` | Ask the deployer for the checked version waiting, from a signed-in device (see “Versions”) |
+| `GET /app/api/changes`, `POST /app/api/playlist/{do}` | Everything Hub changed, and playlist taps: `make`, `skip`, `undo` (see “Changes”) |
 | `GET /app/api/engine`, `POST /app/api/engine/{do}` | The Engine screen, and its taps: `tell`, `forget`, `request-done`, `improvement-done`, `note-save`, `note-skip`, `recipe-save`, `recipe-skip`, `recipe-remove`, `trust`, `run` (see “Engine”) |
 | `GET /app/api/mail-settings`, `POST /app/api/mail-settings/{do}` | Mail settings, and its taps: `level`, `charge`, `sender`, `apply`, `remove`, `undo`, `rule-stop`, `rule-resume`, `rules-check`, `backlog` (see “Mail settings”) |
 | `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
@@ -269,6 +270,14 @@ good, as may the typeface (`fonts/Jost.ttf`, SIL Open Font License). Everything 
 follows what it is sent (`tests/app_world.py`). It reaches no other machine and no service on this one
 (`web/check_guard.py`). Ask works there on the stand-in model, with a made-up Kitchen and private desk, so the
 conversation can be tried and photographed without a key. See `web/app/check/README.md`.
+
+## Changes
+
+System's "Everything Hub changed" opens Changes (`hub/app/changes.py`, `web/app/src/changes.tsx`): every house and
+playlist change Hub made, newest first, from the records the older pages read, with Undo while it can still be
+undone, and the playlists Ask proposed, waiting for "Make it" or "Not now". A house change is undone through
+`/app/api/undo`; a playlist change, made or skipped through `/app/api/playlist`. The library itself, and deleting a
+playlist, are in Music Assistant.
 
 ## Mail settings
 

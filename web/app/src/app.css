@@ -165,7 +165,7 @@ h2 { font-size: var(--t-l); line-height: 1.2; font-weight: 500; letter-spacing: 
 .btn { height: 50px; padding: 0 22px; border-radius: 13px; font-weight: 500; display: inline-grid; place-items: center; text-align: center; transition: transform .12s ease; }
 .btn:active { transform: scale(.97); }
 .btn.go { background: var(--lamp); color: var(--on-lamp); }
-.forget { height: 44px; padding: 0 2px; font-size: var(--t-s); color: var(--ink-2); justify-self: end; }
+.forget { height: 44px; min-width: 52px; padding: 0 2px; font-size: var(--t-s); color: var(--ink-2); justify-self: end; }
 .field.named { margin-top: 18px; }
 .ctl.two:has(.forget) { grid-template-columns: 1fr auto; }
 .row { display: grid; grid-template-columns: 58px 1fr auto; align-items: center; gap: 0 8px; min-height: 60px; padding: 10px 0; border-bottom: 1px solid var(--line); width: 100%; }
@@ -439,6 +439,7 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
 .row.lit .row-main b { color: var(--lamp); }
 .btns.tight { margin-top: 10px; }
 .field.raised { margin-top: 10px; background: var(--raised); }
+.warn-line { color: var(--alarm) !important; }
 .charge { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
 .charge .ctl-name { grid-column: 1 / -1; }
 .charge .field { margin-top: 0; }

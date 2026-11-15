@@ -334,6 +334,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Versions: " + (await small()).join(", "));
     await tap(".uplink");
     expect(await saysSoon("The house is answering."), "Back from Versions: " + await says());
+    await tap('.row:has-text("Everything Hub changed")');
+    expect(await saysSoon("Everything Hub changed"), "Changes: " + await says());
+    expect(await until(() => document.querySelectorAll(".ctl").length > 0), "Changes listed nothing after the taps above");
+    await page.waitForTimeout(300); await shot("7d-changes");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on Changes: " + (await small()).join(", "));
+    await tap(".uplink");
+    expect(await saysSoon("The house is answering."), "Back from Changes: " + await says());
     await tap('.row:has-text("Engine")');
     expect(await saysSoon("Engine"), "Engine: " + await says());
     expect(await until(() => document.body.textContent.includes("Always tell me about school mail")), "Engine didn't list what Hub follows");
