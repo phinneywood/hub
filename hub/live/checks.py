@@ -117,6 +117,63 @@ def speakers():
 
 # ---- The door: Home Assistant inside Hub ----
 
+SAMPLE = {'triggers': [{'trigger': 'time', 'at': '18:45:00'}], 'conditions': [],
+          'actions': [{'action': 'light.turn_on', 'target': {'entity_id': 'light.hub_check_not_a_lamp'}}]}
+
+
+def setup():
+    """What Ask needs to change how the house is set up, asked of the real Home Assistant without changing it: the
+    whole house reads the way Hub expects, Home Assistant still checks a routine the way Hub writes one, a kept
+    scene and automation can be read back, and a move is planned from it all and not sent."""
+    from ..tools.house import admin, broker, plans
+    try:
+        w = admin.world(fresh=True)
+        core, verdicts, entries = broker.setup_read({'type': 'get_config'}, {'type': 'validate_config', **SAMPLE}, {'type': 'config_entries/get'})
+        helpers = broker.setup_read(*({'type': f'{kind}/list'} for kind in broker.HELPERS))
+    except broker.Rejected:
+        raise Failed('Home Assistant refused a read that Ask’s setup tools depend on.') from None
+    except broker.HomeDown:
+        raise Failed('Home Assistant couldn’t be read through the broker.') from None
+    things = [t for t in w['things'].values() if not t['disabled']]
+    if not w['rooms'] or not things:
+        raise Failed('Home Assistant listed no rooms or no devices.')
+    if not isinstance(verdicts, dict) or any(not isinstance(verdicts.get(part), dict) or verdicts[part].get('valid') is not True for part in SAMPLE):
+        raise Failed('Home Assistant no longer checks a routine the way Hub writes one, so Ask couldn’t save an automation.')
+    if not isinstance(core, dict) or not core.get('time_zone') or not isinstance(entries, list) or not all(isinstance(h, list) for h in helpers):
+        raise Failed('Home Assistant’s own settings, integrations or helpers didn’t read as lists Hub knows.')
+    kept = 0
+    for kind in ('scene', 'automation'):
+        one = next((t for t in things if t['domain'] == kind and t['config']), None)
+        if one is None:
+            continue
+        try:
+            found = broker.setup_config(kind, one['config'])
+        except broker.HomeDown:
+            raise Failed(f'A kept {kind} couldn’t be read back.') from None
+        if not isinstance(found, dict) or not ({'entities'} if kind == 'scene' else {'actions', 'action', 'use_blueprint'}) & set(found):
+            raise Failed(f'A kept {kind} read back in a form Hub doesn’t know.')
+        kept += 1
+    lamp = next((t for t in sorted(things, key=lambda t: t['id']) if t['domain'] in ('light', 'switch', 'fan') and t['area'] and not t['minor']), None)
+    other = next((r for r in sorted(w['rooms'].values(), key=lambda r: r['id']) if lamp and r['id'] != lamp['area']), None)
+    planned = 0
+    if lamp and other:
+        try:
+            moves = plans.arrange(w, [lamp['id']], room=other['id'])
+        except admin.Refused:
+            raise Failed('Hub couldn’t plan moving a thing to another room.') from None
+        steps = [s['ws'] for change in moves for s in change['steps']]
+        if not steps or any(s.get('type') not in ('config/entity_registry/update', 'config/device_registry/update') for s in steps):
+            raise Failed('A planned move didn’t come out as registry changes.')
+        try:
+            for step in steps:
+                broker._setup_checked(step)             # the fence's own look at each request; nothing is sent
+        except ValueError:
+            raise Failed('A planned move wouldn’t pass Hub’s own fence.') from None
+        planned = len(steps)
+    return (f'{len(w["rooms"])} rooms and {len(things)} things read. Home Assistant {str(core.get("version") or "")[:12]} checks a routine '
+            f'as Hub writes one. {kept} kept routines read back; a move was planned in {planned} steps and not sent.')
+
+
 def _door():
     from .. import door
     chosen = door.settings()
@@ -289,6 +346,31 @@ def ask():
     return f'{len(ran)} Ask scenarios passed as a dry run (${result["cost"]:.3f}).'
 
 
+ASK_SETUP_DAYS = 30
+
+
+def ask_setup():
+    """A few setup and list requests through Ask in the app with the real model, on the real house, as a dry run:
+    every change is written down and none is sent. Once it has passed on a version it isn't asked again for a
+    month, so it costs a few cents per release, not per day."""
+    from ..app.ask import trial
+    from . import runner
+    last = (runner.history(limit=1).get('ask.setup') or [None])[-1]
+    if last and last['status'] == 'pass' and last['version'] == runner.version() and time.time() - last['at'] < ASK_SETUP_DAYS * 86400:
+        raise Skipped('It passed on this version already.')
+    try:
+        result = trial.run()
+    except trial.Stopped as error:
+        raise Skipped(str(error)) from None
+    if result['failed']:
+        raise Failed(f'{len(result["failed"])} of {result["ran"]} requests went wrong: ' + ', '.join(result['failed'])
+                     + f'. What Ask did is in Hub’s private folder (${result["cost"]:.3f}).')
+    if not result['ran']:
+        raise Skipped('No request ran.')
+    left = f' {len(result["left_out"])} left out at the spending limit.' if result['left_out'] else ''
+    return f'{result["ran"]} setup and list requests went the right way as a dry run (${result["cost"]:.3f}).{left}'
+
+
 # ---- One real change, put straight back ----
 
 LOGIN = 'live-check@hub.invalid'    # who "asks" for a check's change, so Home changes shows it as a test's
@@ -343,6 +425,9 @@ CHECKS = (
     Check('hub.pages', 'Hub’s pages', 'Every main page and tool page of the running Hub loads, none slowly.', 'read', pages, 180),
     Check('house.read', 'Home Assistant', 'Hub can read the house through the broker.', 'read', house),
     Check('house.speakers', 'Speakers', 'Home Assistant lists speakers and at least one is reachable.', 'read', speakers),
+    Check('house.setup', 'Ask can set up the house', 'Everything Ask’s setup tools read from Home Assistant reads as Hub expects, '
+          'and a change is planned from it without being sent.', 'read', setup,
+          seed='A newer Home Assistant stopped saying how a thing is named, and a rename would have been written twice.'),
     Check('door.gate', 'The door is shut to strangers', 'The door to Home Assistant is up and refuses a request with no login.', 'read', door_gate),
     Check('door.sign_in', 'No second login', 'Home Assistant signs this Mac in without a password, so Home and Music open straight away.',
           'read', door_sign_in),
@@ -357,6 +442,8 @@ CHECKS = (
     Check('model.route', 'Model route', 'One call with invented data over the pinned private route.', 'spend', model, 60),
     Check('ask.golden', 'Ask, end to end', 'A few real requests through Ask with the real model, as a dry run.', 'spend', ask, 240,
           seed='Ask passed a whole sentence to the speaker as a search; “as well” started a second stream.'),
+    Check('ask.setup', 'Ask sets up the house, end to end', 'A move, an automation, a removal, an unlock and the shopping list asked of '
+          'Ask with the real model on the real house, as a dry run: nothing is sent.', 'spend', ask_setup, 300),
 )
 
 

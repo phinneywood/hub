@@ -2,7 +2,8 @@
 
 Every way Ask can change something leaves Hub through one of three doors, and this layer stands in each:
 
-  Home Assistant   broker._exchange, after broker.act has run its own allowlist check (broker._checked)
+  Home Assistant   broker._exchange, after broker.act has run its own allowlist check (broker._checked); and, for
+                   the setup door, after broker.setup_write, setup_save, setup_call and setup_reload have run theirs
   Music Assistant  music._send, after music._call has checked the command against READS and WRITES
   Kitchen          kitchen client.call, for anything but a read
 
@@ -18,6 +19,8 @@ checked like any other, and the owner's real recipes are neither used nor touche
 
 `COVERED` names every Ask tool that can change something. A test fails if the catalog gains a control or a
 hand-off this layer doesn't stand in front of, so a new capability can't skip the dry run by accident.
+`COVERED_APP` does the same for the tools of Ask in the app (hub/app/ask/tools.py), which the trial in
+hub/app/ask/trial.py runs behind this same layer.
 """
 import copy
 import sqlite3
@@ -28,6 +31,10 @@ from pathlib import Path
 
 COVERED = {'home_control': 'home', 'play_music': 'home', 'edit_playlist': 'music', 'remember': 'proposal',
            'propose_recipe': 'proposal', 'run_recipe': 'home', 'kitchen': 'kitchen'}
+# Ask in the app: each tool, and the door its changes leave by ('read' for one that changes nothing).
+COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'remember': 'note', 'groceries': 'kitchen', 'kitchen': 'kitchen',
+               'look_up': 'read', 'find': 'read', 'details': 'read', 'arrange': 'setup', 'rooms': 'setup', 'scene_setup': 'setup',
+               'routine': 'setup', 'device': 'setup', 'setting': 'setup', 'integration': 'setup'}
 DRY_ID = -1                     # the message number a held-back Kitchen hand-off is given
 
 
@@ -115,15 +122,26 @@ def layer(house_writes=False, recipes=()):
     (Music Assistant edits, Kitchen, notes, recipes, playlists to make) is still held back.
     `recipes`: (name, steps) pairs a scenario starts with, saved in the scratch database after the usual checks."""
     from ..engine import notes, recipes as recipe_book
-    from ..tools.house import broker, control, music
+    from ..tools.house import admin, broker, control, music
     from ..tools.kitchen import client
     ledger = Ledger()
     real_exchange, real_send, real_call = broker._exchange, music._send, client.call
     saved = {'broker': real_exchange, 'music_send': real_send, 'settle': music._settle, 'kitchen': real_call,
-             'control_db': control._db, 'music_db': music._db, 'notes_db': notes._db,
+             'control_db': control._db, 'music_db': music._db, 'notes_db': notes._db, 'admin_db': admin._db,
              'note': notes.propose, 'playlist': music.propose, 'recipes_db': recipe_book._db, 'recipe': recipe_book.propose}
 
     def exchange(message, timeout):
+        path, method = str(message.get('path', '')), message.get('method')
+        if message.get('op') == 'ws' and 'command' in message:      # one command alone: a change through the setup door
+            command = message['command'] if isinstance(message['command'], dict) else {}
+            ledger.add('setup', str(command.get('type')), command)
+            made = 'dry-run'            # a room, floor, group or helper that would have been made is given this id
+            return {key: made for key in ('area_id', 'floor_id', 'label_id', 'id')} if str(command.get('type')).endswith('/create') else {}
+        if message.get('op') == 'request' and path.startswith('/api/config/'):
+            if method == 'GET':
+                return real_exchange(message, timeout)                # reading a scene, an automation or a script
+            ledger.add('setup', f'{method} {path}', message.get('body'))
+            return {'result': 'ok'}
         if message.get('op') == 'ws':
             results = real_exchange(message, timeout)
             types = [c.get('type') for c in message.get('commands', ())]
@@ -182,6 +200,7 @@ def layer(house_writes=False, recipes=()):
         music._settle = lambda playlist_id, want: 'done'     # nothing was sent, so there is nothing to read back
         if not house_writes:      # live house writes keep Hub's own change log, so Undo puts them back
             control._db = _with_schema(_scratch_db(Path(folder)), control.SCHEMA)
+        admin._db = _with_schema(_scratch_db(Path(folder)), admin.SCHEMA)     # setup changes, and the cards that wait
         music._db = _with_schema(_scratch_db(Path(folder)), music.SCHEMA)
         notes._db = _with_schema(_scratch_db(Path(folder)), notes.SCHEMA)
         recipe_book._db = _with_schema(_scratch_db(Path(folder)), recipe_book.SCHEMA)
@@ -193,7 +212,8 @@ def layer(house_writes=False, recipes=()):
         finally:
             broker._exchange, music._send, music._settle, client.call = (
                 saved['broker'], saved['music_send'], saved['settle'], saved['kitchen'])
-            control._db, music._db, notes._db = saved['control_db'], saved['music_db'], saved['notes_db']
+            control._db, music._db, notes._db, admin._db = saved['control_db'], saved['music_db'], saved['notes_db'], saved['admin_db']
+            admin.forget()
             notes.propose, music.propose = saved['note'], saved['playlist']
             recipe_book._db, recipe_book.propose = saved['recipes_db'], saved['recipe']
 
