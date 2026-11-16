@@ -12,6 +12,8 @@ import { Icon, SheetFrame, Switch } from "./ui";
 
 const QUICK = 3000;         // how often to look while something is on its way into the cart
 const SLOW = 15000;
+const LONG = 5 * 60 * 1000;     // after this Kitchen's answer to one message is said to be on its way to Earlier answers
+const GIVE_UP = 30 * 60 * 1000; // and after this it is no longer looked for: Kitchen gives up on a turn after 20 minutes
 const NUMBERS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
 const DAY = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
 const TIME = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
@@ -19,6 +21,7 @@ const TIME = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-di
 export const shop = signal<Shop | ShopAway | null>(null);
 const thread = signal<KitchenMessage[]>([]);            // earlier answers, read only when they are opened
 const sending = signal(false);
+const planning = new Map<string, number>();    // a recipe's title: the message that asked Kitchen to plan it, while the app is open
 let timer = 0;
 let watchers = 0;           // Ask's cards that show the list right now
 
@@ -60,22 +63,93 @@ async function relay<T>(method: string, path: string, body?: unknown): Promise<T
   return (await answer.json()) as T & { error?: string };
 }
 
-/** Words for the kitchen assistant: what a recipe still needs, and anything typed while Kitchen is an older version. */
-export async function send(text: string): Promise<boolean> {
-  if (sending.value) return false;
+/** Words for the kitchen assistant: what a recipe still needs, and anything typed while Kitchen is an older version.
+ * Returns what Kitchen gave back (the message's `id`, to follow its answer by), or null when it wasn't sent.
+ * `followed`: the caller shows the answer as it comes, so there is nothing to say now. */
+export async function send(text: string, followed = false): Promise<{ id?: number } | null> {
+  if (sending.value) return null;
   sending.value = true;
   try {
     const found = await relay<{ id?: number }>("POST", "/messages", { text });
-    if (found.error) { say(found.error); return false; }
-    say("Kitchen is working on it. This can take a minute or two.");
+    if (found.error) { say(found.error); return null; }
+    if (!followed || typeof found.id !== "number") say("Kitchen is working on it. This can take a minute or two.");
     void loadShop().then(again);
-    return true;
+    return found;
   } catch {
     say("Kitchen isn’t answering right now.");
-    return false;
+    return null;
   } finally {
     sending.value = false;
   }
+}
+
+export interface Answer { replies: KitchenMessage[]; statuses: Statuses; state: "working" | "done" | "long" | "down" }
+
+/** Kitchen's answer to one message (`after`, the id Kitchen gave it): what it said next, up to the next thing
+ * someone asked. It can take a minute or two, so this keeps looking while Kitchen works, and while a card it brought
+ * waits for a tap. It is answered once Kitchen says a message answers this one (`reply_to`), its words or a notice
+ * that it couldn't; or, for a Kitchen that doesn't say (an older one, and checkout's answer), once something it
+ * said follows and it has nothing left to do. Other notices, such as a plan someone approved, answer nothing. */
+export function useAnswer(after: number): Answer {
+  const [replies, setReplies] = useState<KitchenMessage[]>([]);
+  const [statuses, setStatuses] = useState<Statuses>({ plans: {}, orders: {} });
+  const [state, setState] = useState<Answer["state"]>("working");
+  useEffect(() => {
+    let timer = 0, stopped = false, misses = 0, settled = false;
+    const began = Date.now();
+    const again = (ms: number) => { timer = window.setTimeout(() => void look(), document.hidden ? 15000 : ms); };
+    const look = async () => {
+      try {
+        const answer = await fetch(`/kitchen/messages?after=${after}`, { headers: { accept: "application/json" } });
+        if (!answer.ok) throw new Error("Kitchen is away");
+        const found = (await answer.json()) as { messages?: KitchenMessage[]; busy?: unknown; queued?: number } & Partial<Statuses>;
+        if (stopped) return;
+        const theirs: KitchenMessage[] = [];
+        for (const m of found.messages ?? []) {
+          if (m.role === "member") break;          // the next thing someone asked: its answer isn't this one's
+          theirs.push(m);
+        }
+        misses = 0;
+        setReplies(theirs);
+        setStatuses({ plans: found.plans ?? {}, orders: found.orders ?? {} });
+        const open = theirs.some((m) => (m.plan && ["pending", "approved"].includes(found.plans?.[String(m.plan.id)]?.status ?? m.plan.status))
+          || (m.order && ["pending", "placing"].includes(found.orders?.[String(m.order.id)]?.status ?? m.order.status)));
+        const waiting = !theirs.some((m) => m.reply_to === after)
+          && (Boolean(found.busy || found.queued) || !theirs.some((m) => m.role === "assistant"));
+        if (!waiting && !settled) { settled = true; void loadShop(); }       // what it brought shows on Kitchen at once
+        const took = Date.now() - began;
+        if (!waiting && !open) setState("done");
+        else if (waiting && took > LONG) { setState("long"); if (took < GIVE_UP) again(20000); }     // still looked for, now and then
+        else { setState(waiting ? "working" : "done"); again(open && !waiting ? 5000 : 3000); }     // a card that waits is kept current
+      } catch {
+        if (stopped) return;
+        if (++misses >= 3) setState("down");
+        else again(4000);
+      }
+    };
+    void look();
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [after]);
+  return { replies, statuses, state };
+}
+
+/** What Kitchen said in answer, drawn in full with the cards it brought, and where it stands while it works. */
+export function Answered({ answer }: { answer: Answer }) {
+  return (
+    <div class="kitchen-says">
+      <ol class="kthread">{answer.replies.map((m) => <Said m={m} statuses={answer.statuses} key={m.id} />)}</ol>
+      {answer.state === "working" && <p class="took"><span class="work" />Kitchen is working on it. This can take a minute or two.</p>}
+      {answer.state === "long" && <p class="took">Kitchen is still working. Its answer will be in Kitchen, under Earlier answers.</p>}
+      {answer.state === "down" && <p class="took">Kitchen isn’t answering right now.</p>}
+      {answer.state === "long" && (view.value !== "kitchen" || sheet.value !== null)
+        && <button type="button" class="row-act" onClick={() => go("kitchen")}>Open Kitchen</button>}
+    </div>
+  );
+}
+
+/** Kitchen's answer to what was passed on from Ask. */
+export function KitchenReply({ after }: { after: number }) {
+  return <Answered answer={useAnswer(after)} />;
 }
 
 async function decide(path: string) {
@@ -317,21 +391,46 @@ function AddField() {
 
 // ---- cards the kitchen assistant's answers bring: recipes, a cart plan, an order to place ----
 
+/** The way to ask Kitchen for a recipe's cart plan. Once asked, Kitchen's answer shows right under the recipe: the
+ * plan with its buttons, or what Kitchen said instead. Only an answer without a plan brings the button back. */
 export function RecipeCard({ recipe }: { recipe: Recipe }) {
-  const [asked, setAsked] = useState(false);
+  const [after, setAfter] = useState<number | null>(() => planning.get(recipe.title) ?? null);     // asked before this card was drawn
+  const [asking, setAsking] = useState(false);
   const facts = [recipe.active && "Active " + recipe.active, recipe.total && "Total " + recipe.total, recipe.dishes].filter(Boolean);
   const lines = (recipe.recent || recipe.check ? [["Bought recently", recipe.recent], ["Check the shelf", recipe.check]] : [["Have", recipe.have]])
     .concat([["Need", recipe.need]]).filter(([, value]) => value);
+  const plan = async () => {
+    setAsking(true);
+    const sent = await send(`Plan the ingredients we still need for “${recipe.title}”.`, true);
+    setAsking(false);
+    if (typeof sent?.id === "number") { planning.set(recipe.title, sent.id); setAfter(sent.id); }
+  };
+  const button = <button type="button" class="row-act" disabled={asking || sending.value} onClick={() => void plan()}>{asking ? "Planning" : "Plan what’s missing"}</button>;
   return (
     <div class="kcard">
       {safe(recipe.url) ? <a class="kcard-t" href={safe(recipe.url)} target="_blank" rel="noopener">{recipe.title}</a> : <b class="kcard-t">{recipe.title}</b>}
       {facts.length > 0 && <p class="kfacts">{facts.join(", ")}</p>}
       {recipe.diet && <p class={"kdiet" + (/swap|check|leave out|without|side/i.test(recipe.diet) ? " warn" : "")}>{recipe.diet}</p>}
       {lines.map(([label, value]) => <p class="kline" key={label}><b>{label}:</b> {value}</p>)}
-      <button type="button" class="row-act" disabled={asked}
-        onClick={() => { setAsked(true); void send(`Plan the ingredients we still need for “${recipe.title}”.`); }}>
-        {asked ? "Planning. It will wait in Kitchen" : "Plan what’s missing"}</button>
+      {after === null ? button : <Planned after={after} again={button} key={after} />}
     </div>
+  );
+}
+
+const OVER = ["superseded", "dismissed", "expired", "stopped"];     // a plan or order that no longer stands
+
+/** Kitchen's answer to a recipe's "Plan what's missing". `again`: the button, for when no plan that still stands
+ * came, or Kitchen has been at it so long that asking again is the way on. */
+function Planned({ after, again }: { after: number; again: preact.JSX.Element }) {
+  const answer = useAnswer(after);
+  const { plans, orders } = answer.statuses;
+  const planned = answer.replies.some((m) => (m.plan && !OVER.includes(plans[String(m.plan.id)]?.status ?? m.plan.status))
+    || (m.order && !OVER.includes(orders[String(m.order.id)]?.status ?? m.order.status)));
+  return (
+    <>
+      <Answered answer={answer} />
+      {answer.state !== "working" && !planned && again}
+    </>
   );
 }
 
@@ -505,7 +604,7 @@ function Words({ text }: { text: string }) {
   );
 }
 
-type Statuses = { plans: Record<string, { status: string; decided_by?: string | null }>; orders: Record<string, { status: string; decided_by?: string | null }> };
+export type Statuses = { plans: Record<string, { status: string; decided_by?: string | null }>; orders: Record<string, { status: string; decided_by?: string | null }> };
 
 /** One thing Kitchen said, with the cards it brought. */
 export function Said({ m, statuses }: { m: KitchenMessage; statuses?: Statuses }) {
@@ -551,7 +650,7 @@ function Older({ said }: { said: string }) {
   const go = (e: Event) => {
     e.preventDefault();
     const words = text.trim();
-    if (words) void send(words).then((ok) => { if (ok) setText(""); });
+    if (words) void send(words).then((sent) => { if (sent) setText(""); });
   };
   return (
     <>
@@ -678,10 +777,10 @@ export function Kitchen() {
         </section>
       )}
       {now.ideas && now.ideas.recipes.length > 0 && (
-        <section class="block">
+        <section class="block ideas">
           <h2>Ideas</h2>
           <p class="sub">Kitchen’s latest. For more, say “something new for dinner this week” in Ask.</p>
-          {now.ideas.recipes.map((recipe, n) => <RecipeCard recipe={recipe} key={n} />)}
+          {now.ideas.recipes.map((recipe, n) => <RecipeCard recipe={recipe} key={`${n} ${recipe.title}`} />)}
         </section>
       )}
       <Earlier />

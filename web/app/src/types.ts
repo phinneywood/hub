@@ -151,4 +151,5 @@ export interface Order { id: number; status: string; decided_by?: string | null;
     savings?: number | null; tax?: number | null };
   placed?: { status: string; order_number?: string; total?: number | null; why?: string } | null }
 export interface KitchenMessage { id: number; role: "member" | "assistant" | "notice"; text: string; author?: string | null; at: number;
-  recipes?: Recipe[] | null; plan?: Plan | null; result?: CartResult | null; order?: Order | null }
+  recipes?: Recipe[] | null; plan?: Plan | null; result?: CartResult | null; order?: Order | null;
+  reply_to?: number | null }     // the member's message this answers, when Kitchen says so

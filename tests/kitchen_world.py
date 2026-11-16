@@ -53,6 +53,13 @@ SO_FAR = [
      'plan': {'id': 7, 'status': 'pending', 'items': [{'product': 'Green Valley Butternut Squash', 'size': '1 each', 'qty': 1, 'price': '2.49'},
                                                       {'product': 'Fresh Limes', 'size': '1 each', 'qty': 3, 'price': '0.50'}]}},
 ]
+# A recipe's "Plan what's missing" is answered with a cart plan of its own, which replaces any plan still waiting.
+PLANNED = [{'product': 'Coastal Creamery Feta Crumbles', 'size': '6 oz', 'qty': 1, 'price': '4.49'},
+           {'product': 'Green Valley Mini Sweet Peppers', 'size': '1 lb', 'qty': 1, 'price': '3.99'}]
+# How Kitchen says it couldn't answer because its Claude plan is at its limit: a notice that says which message it
+# answers. An older Kitchen passed on the command line's own words as if they were the answer.
+LIMITED = 'Kitchen couldn’t answer: the Claude plan is at its usage limit until 2:10 PM. Ask again after that.'
+LIMITED_BEFORE = 'You’ve hit your session limit · resets 2:10pm'
 REVIEW = {'items': 14, 'subtotal': 52.10, 'fees': 4.95, 'savings': 3.20, 'tax': 0.0, 'total': 53.85, 'when': 'Tomorrow, 9–10 am', 'how': 'Pickup'}
 ON_THE_LIST = ['bananas', 'eggs', 'coffee beans', 'dish soap']        # how the made-up list starts; the first two are in the cart
 
@@ -80,13 +87,14 @@ def _take(asked, size, usually):
 class Kitchen:
     def __init__(self, takes=0.0, cart_waiting=True):
         self.takes = takes              # seconds the made-up Kitchen takes to answer, to fill the cart and to read checkout
-        self.calls, self.down, self.old = [], False, False
+        self.calls, self.down, self.old, self.limited = [], False, False, ''        # limited: '', 'notice' or 'before'
         self.reset(cart_waiting)
 
     def reset(self, cart_waiting=True):
         """As it started: a short list, part of it in the cart, a cart plan waiting, nothing asked yet."""
         self.items, self.asked, self.notices, self.next = [], [], [], 1
         self.plans = {'7': {'status': 'pending' if cart_waiting else 'done'}}
+        self.planned = {7: SO_FAR[3]['plan']['items']}         # each cart plan's things, by its id
         self.orders, self.review_at = {}, None
         self.auto, self.reminders = False, {'state': 'off'}
         self.cart_seen, self.moving = None, {}          # {item id: when it lands in the cart or leaves it}
@@ -149,13 +157,24 @@ class Kitchen:
                     item['state'] = 'unavailable' if 'out of stock' in (item['product'] or '') else 'cart'
         if self.review_at is not None and now >= self.review_at and not self.orders:
             self.orders['3'] = {'status': 'pending'}
+        for n, (at, text, limited) in enumerate(self.asked, 1):
+            if now - at >= self.takes and self._plans_for(text, limited) and FIRST + n * 2 not in self.planned:
+                for waiting in self.plans.values():
+                    if waiting['status'] == 'pending':
+                        waiting['status'] = 'superseded'
+                self.plans[str(FIRST + n * 2)] = {'status': 'pending'}
+                self.planned[FIRST + n * 2] = PLANNED
+
+    @staticmethod
+    def _plans_for(text, limited):
+        return not limited and text.startswith('Plan the ingredients')
 
     def _state(self):
         self._settle()
-        pending = self.plans.get('7', {}).get('status') == 'pending'
+        pending = max((int(number) for number, plan in self.plans.items() if plan['status'] == 'pending'), default=None)
         order = self.orders.get('3')
         return {'items': copy.deepcopy(self.items), 'due': [d for d in DUE if not any(_key(i['name']) == _key(d['name']) for i in self.items)],
-                'plan': {'id': 7, 'status': 'pending', 'items': SO_FAR[3]['plan']['items']} if pending else None,
+                'plan': {'id': pending, 'status': 'pending', 'items': self.planned[pending]} if pending else None,
                 'order': {'id': 3, 'review': REVIEW, 'status': order['status'], 'decided_by': order.get('decided_by'), 'placed': order.get('placed')}
                 if order else None,
                 'cart': {'seen': copy.deepcopy(self.cart_seen), 'practice': True},
@@ -167,11 +186,11 @@ class Kitchen:
     def _messages(self, after):
         self._settle()
         now, out = time.monotonic(), [dict(m, at=time.time() - 3600 + m['id'] * 60) for m in SO_FAR if m['id'] > after]
-        for n, (at, text) in enumerate(self.asked, 1):
+        for n, (at, text, limited) in enumerate(self.asked, 1):
             if FIRST + n * 2 - 1 > after:
                 out.append({'id': FIRST + n * 2 - 1, 'role': 'member', 'text': text, 'author': 'me', 'at': time.time()})
             if FIRST + n * 2 > after and now - at >= self.takes:
-                out.append(dict(SAYS, id=FIRST + n * 2, at=time.time()))
+                out.append(self._answer(FIRST + n * 2, text, limited))
         for number, words in self.notices:
             if number > after:
                 out.append({'id': number, 'role': 'notice', 'text': words, 'at': time.time()})
@@ -179,8 +198,22 @@ class Kitchen:
             out.append({'id': 500, 'role': 'assistant', 'at': time.time(), 'text': 'Here is the order, as checkout shows it. Nothing is ordered '
                         'until you tap Place order.', 'order': {'id': 3, 'status': self.orders['3']['status'], 'review': REVIEW}})
         out.sort(key=lambda m: m['id'])
-        return {'messages': out, 'busy': 'chat' if any(now - at < self.takes for at, _ in self.asked) else self._state()['busy'], 'queued': 0,
+        return {'messages': out, 'busy': 'chat' if any(now - at < self.takes for at, _, _ in self.asked) else self._state()['busy'], 'queued': 0,
                 'plans': copy.deepcopy(self.plans), 'orders': copy.deepcopy(self.orders)}
+
+    def _answer(self, number, text, limited):
+        """What the made-up assistant says to one message: while the plan is at its limit a notice (or, as an older
+        Kitchen did, the command line's words as the answer), a cart plan for a recipe's "Plan what's missing", and
+        three dinners for anything else."""
+        to = {'id': number, 'reply_to': number - 1, 'at': time.time()}
+        if limited == 'notice':
+            return dict(to, role='notice', text=LIMITED)
+        if limited:
+            return dict(to, role='assistant', text=LIMITED_BEFORE, reply_to=None)
+        if self._plans_for(text, limited):
+            return dict(to, role='assistant', text='Here is the plan. Nothing goes in the cart until you tap.',
+                        plan={'id': number, 'status': self.plans.get(str(number), {'status': 'pending'})['status'], 'items': PLANNED})
+        return dict(SAYS, **to)
 
     # ---- the service's requests ----
 
@@ -205,7 +238,7 @@ class Kitchen:
             if not body.get('login'):
                 return 403, {'error': 'the list is changed from a signed-in member’s device'}
         if path == '/messages':
-            self.asked.append((time.monotonic(), body.get('text', '')))
+            self.asked.append((time.monotonic(), body.get('text', ''), self.limited))
             return 200, {'id': FIRST + len(self.asked) * 2 - 1}
         if path.startswith(('/plans/', '/orders/')):
             _, what, number, choice = path.split('/')

@@ -637,6 +637,11 @@ h2.minor { margin-top: 18px; font-size: var(--t-s); color: var(--ink-2); }
 .kitchen-says .kthread { margin-top: 10px; }
 .kitchen-says .kmsg { max-width: 100%; }
 .ask .kcard { background: var(--ground); }
+/* a recipe's answer, under it: the plan it brought sits on the page's own ground, and a notice reads as its answer */
+.kcard .kitchen-says .kcard { background: var(--ground); }
+.ask .kcard .kitchen-says .kcard { background: var(--raised); }
+.kcard .kitchen-says .kmsg.notice { align-self: flex-start; text-align: left; font-size: var(--t-s); color: var(--ink-2); }
+.kcard .kitchen-says .kthread { margin: 10px 0 0; }
 .kitchen .block > .sub { margin: 0 0 4px; font-size: var(--t-s); }
 
 /* ---------- kitchen: what its assistant said, with cards that wait for a tap ---------- */

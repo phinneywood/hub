@@ -188,6 +188,7 @@ def stage(what: str):
         day.sorted, day.asked = fresh.sorted, fresh.asked
         shop.reset()
         shop.down = shop.old = False
+        shop.limited = ''
         day.school += todos()
         errands_world.again(week)
         with admin._db() as conn:           # the record of setup changes, and the cards that wait
@@ -213,6 +214,8 @@ def stage(what: str):
     elif what == 'kitchen-empty':
         shop.items.clear()
         shop.plans['7'] = {'status': 'done'}
+    elif what in ('kitchen-limit', 'kitchen-limit-before', 'kitchen-unlimited'):     # Kitchen's Claude plan at its limit
+        shop.limited = {'kitchen-limit': 'notice', 'kitchen-limit-before': 'before'}.get(what, '')
     elif what == 'kitchen-unsure':          # a cart turn that stopped before it could say: one thing to check
         for item in shop.items[:1]:
             item['state'] = 'unknown'

@@ -39,7 +39,9 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   files a kind; Kitchen shows the list with each thing's product and where it stands, what needs a pick, a cart
   plan and ideas, opens a thing and sets how many, adds what is typed, takes a pick, fills the cart, reads it,
   asks for a reading when a thing couldn't be confirmed, fills it by itself once switched on, reads checkout
-  back for a tap that places the order, and says so when the kitchen service is away or an older version;
+  back for a tap that places the order, shows a recipe's cart plan under the recipe once Kitchen has made it,
+  says so under the recipe and offers its button again when Kitchen couldn't answer, and says so when the
+  kitchen service is away or an older version;
 - everything meant to be tapped is at least 44 px on its short side;
 - the app says so when the house stops answering and when Hub can't be reached, still opens without Hub,
   and reconnects by itself;

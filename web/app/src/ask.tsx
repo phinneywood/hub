@@ -4,15 +4,14 @@ import { post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, stop, talk } from "./asking";
 import type { Card, Turn } from "./asking";
 import { ErrandsCard } from "./errands";
-import { GroceriesCard, Said } from "./kitchen";
+import { GroceriesCard, KitchenReply } from "./kitchen";
 import { ChatHead, DayRows, Greeting, HouseCard, NeedsCard } from "./now";
 import { RoomCell, spans } from "./screens";
 import { dragVolume, go, loadPicks, picks, playPick, runScene, say, seen, setVolume, switchRoom, undo, undone } from "./state";
 import type { View } from "./state";
-import type { House, KitchenMessage, Room } from "./types";
+import type { House, Room } from "./types";
 import { Icon, SheetFrame, Slider, Switch } from "./ui";
 
-const LONG = 5 * 60 * 1000;     // after this Kitchen's answer is left to the Kitchen screen
 
 function marked(name: string, text: string) {
   const at = name.toLowerCase().indexOf(text.toLowerCase());
@@ -71,58 +70,6 @@ function Found({ now, text }: { now: House; text: string }) {
           <span>{marked(p.name, text)}<small>Playlist. Plays where music is on now.</small></span><span class="go"><Icon name="play" /></span>
         </button>
       ))}
-    </div>
-  );
-}
-
-type Statuses = { plans: Record<string, { status: string }>; orders: Record<string, { status: string }> };
-
-/** The kitchen assistant's answer to what was passed on, drawn here in full: its words, recipes, a cart plan or
- * an order with their buttons. It can take a minute or two, so this keeps looking and says so. */
-function KitchenReply({ after }: { after: number }) {
-  const [replies, setReplies] = useState<KitchenMessage[]>([]);
-  const [statuses, setStatuses] = useState<Statuses>({ plans: {}, orders: {} });
-  const [state, setState] = useState<"working" | "done" | "long" | "down">("working");
-  useEffect(() => {
-    let timer = 0, stopped = false, misses = 0;
-    const began = Date.now();
-    const again = (ms: number) => { timer = window.setTimeout(() => void look(), document.hidden ? 15000 : ms); };
-    const look = async () => {
-      try {
-        const answer = await fetch(`/kitchen/messages?after=${after}`, { headers: { accept: "application/json" } });
-        if (!answer.ok) throw new Error("Kitchen is away");
-        const found = (await answer.json()) as { messages?: KitchenMessage[]; busy?: boolean; queued?: number } & Partial<Statuses>;
-        if (stopped) return;
-        const theirs: KitchenMessage[] = [];
-        for (const m of found.messages ?? []) {
-          if (m.role === "member") break;          // the next thing someone asked: its answer isn't this one's
-          theirs.push(m);
-        }
-        misses = 0;
-        setReplies(theirs);
-        setStatuses({ plans: found.plans ?? {}, orders: found.orders ?? {} });
-        const open = theirs.some((m) => (m.plan && (found.plans?.[String(m.plan.id)]?.status ?? m.plan.status) === "pending")
-          || (m.order && ["pending", "placing"].includes(found.orders?.[String(m.order.id)]?.status ?? m.order.status)));
-        const waiting = Boolean(found.busy || found.queued) || !theirs.some((m) => m.role === "assistant");
-        if (!waiting && !open) setState("done");
-        else if (waiting && Date.now() - began > LONG) setState("long");
-        else { setState(waiting ? "working" : "done"); again(open && !waiting ? 5000 : 3000); }     // a card that waits is kept current
-      } catch {
-        if (stopped) return;
-        if (++misses >= 3) setState("down");
-        else again(4000);
-      }
-    };
-    void look();
-    return () => { stopped = true; clearTimeout(timer); };
-  }, [after]);
-  return (
-    <div class="kitchen-says">
-      <ol class="kthread">{replies.map((m) => <Said m={m} statuses={statuses} key={m.id} />)}</ol>
-      {state === "working" && <p class="took"><span class="work" />Kitchen is working on it. This can take a minute or two.</p>}
-      {state === "long" && <p class="took">Kitchen is still working. Its answer will be in Kitchen, under Earlier answers.</p>}
-      {state === "down" && <p class="took">Kitchen isn’t answering right now.</p>}
-      {state === "long" && <button type="button" class="row-act" onClick={() => go("kitchen")}>Open Kitchen</button>}
     </div>
   );
 }

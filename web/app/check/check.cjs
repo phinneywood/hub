@@ -527,6 +527,36 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await saysSoon("Everything on the list is in the cart.", 9000) && (await stands()) === "In the cart|In the cart|In the cart|In the cart|In the cart|In the cart", "the list did not land in the cart: " + await stands());
     await tap('.kitchen .btn.ghost:text-is("Read the cart")');
     expect(await until(() => document.querySelectorAll(".kitchen .kitems li").length === 7, null, 6000), "the cart as its page shows it was not read");
+    // A recipe's "Plan what’s missing": Kitchen's answer shows under the recipe, and the button never sticks.
+    const idea = (n) => `.kitchen .ideas > .kcard:nth-of-type(${n})`;
+    await tap(idea(1) + " > .row-act");
+    expect(await until((sel) => document.querySelector(sel + " .kitchen-says .took")?.textContent.includes("working on it"), idea(1)),
+      "planning a recipe did not say that Kitchen is working on it");
+    expect(await page.locator(idea(1) + " > .row-act").count() === 0, "the recipe’s button was still offered while Kitchen worked");
+    expect(await until((sel) => document.querySelector(sel + " .kitchen-says .kcard .btn.go")?.textContent === "Add to cart", idea(1), 12000),
+      "the recipe’s cart plan did not arrive under it");
+    expect(await saysSoon("A cart waits for your tap.", 4000), "the recipe’s plan did not wait under Needs you: " + await says());
+    await page.locator(idea(1)).scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await shot("13g-kitchen-recipe-plan");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on a recipe’s plan: " + (await small()).join(", "));
+    await tap(idea(1) + ' .kitchen-says .btn.go:text-is("Add to cart")');
+    expect(await until((sel) => document.querySelector(sel + " .kitchen-says .kstate")?.textContent.startsWith("Added to the cart"), idea(1), 12000),
+      "adding the recipe’s plan did not say so under the recipe");
+    // Kitchen's Claude plan at its limit: the recipe says so, and offers the button again.
+    await stage("kitchen-limit");
+    await tap(idea(2) + " > .row-act");
+    expect(await until((sel) => document.querySelector(sel + " .kitchen-says .kmsg.notice")?.textContent.includes("usage limit"), idea(2), 12000),
+      "a Kitchen at its limit did not say so under the recipe");
+    expect(await until((sel) => { const b = document.querySelector(sel + " > .row-act"); return b?.textContent === "Plan what’s missing" && !b.disabled; }, idea(2)),
+      "the recipe’s button did not come back after Kitchen couldn’t answer");
+    await page.locator(idea(2)).scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await shot("13h-kitchen-recipe-limit");
+    // An older Kitchen passed the limit on as if it were the answer: its words show, and the button comes back again.
+    await stage("kitchen-limit-before");
+    await tap(idea(2) + " > .row-act");
+    expect(await until((sel) => document.querySelector(sel + " .kitchen-says .kwords")?.textContent.includes("session limit"), idea(2), 12000),
+      "an older Kitchen’s limit did not show under the recipe");
+    expect(await until((sel) => { const b = document.querySelector(sel + " > .row-act"); return b?.textContent === "Plan what’s missing" && !b.disabled; }, idea(2)),
+      "the recipe’s button did not come back after an older Kitchen’s limit");
+    await stage("kitchen-unlimited");
     // A cart turn that stopped before it could say: Kitchen asks for the one thing that settles it.
     await stage("kitchen-unsure");
     await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
@@ -549,6 +579,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await saysSoon("The list is empty.", 6000), "placing the order did not clear the list: " + await says());
     expect(await until(() => document.querySelector(".kitchen .block .quiet")?.textContent.startsWith("Nothing on it.")), "an empty list did not say how to add to it");
     // The kitchen service stopped, and one from before it kept the list: each says so, and nothing looks broken.
+    // (A recipe asked about above looks for its answer again when Kitchen is drawn, and is refused while it is away.)
+    quiet = true;
     await stage("kitchen-away");
     await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
     await openPage("Kitchen");
@@ -562,6 +594,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await stage("reset");
     await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
     await page.waitForSelector(".plan");
+    quiet = false;
 
     // ---- System, and the look ----
     await tap(phone ? ".who" : ".rail .foot .tab");
