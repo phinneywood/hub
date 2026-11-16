@@ -598,7 +598,7 @@ def calendar_collect(now=None, pause=0.3):
             if back != 'done':
                 upto = dt.date.fromisoformat(back) if back else _months_back(dt.date(today.year, today.month, 1), 12)
                 empty = int(_state(conn, 'empty') or 0)
-                for _ in range(24):                     # two years of months a run, until the calendar runs out
+                for _ in range(60):                     # five years of months a run, until the calendar runs out
                     start = _months_back(upto, 1)
                     found = _read_window(conn, start, upto)
                     did['back'] = did.get('back', 0) + found

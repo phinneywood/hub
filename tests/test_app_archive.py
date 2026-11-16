@@ -131,12 +131,13 @@ def test_the_sentence_hub_writes():
 # ---- the screen's search ----
 
 def test_signed_in_devices_only(served):
-    for path in ('/app/api/archive', '/app/api/archive/search?q=beach', '/app/api/archive/thumb/p:00000001-1111-4000-8000-000000000000'):
+    for path in ('/app/api/archive', '/app/api/archive/thumb/p:00000001-1111-4000-8000-000000000000'):
         assert client.get(path, headers={'origin': 'http://testserver'}).status_code == 403
+    assert client.post('/app/api/archive/search', json={'q': 'beach'}, headers={'origin': 'http://testserver'}).status_code == 403
 
 
 def test_kids_at_the_beach_from_the_screen(served):
-    found = client.get('/app/api/archive/search', params={'q': 'the kids at the beach in 2024'}, headers=OWNER).json()
+    found = client.post('/app/api/archive/search', json={'q': 'the kids at the beach in 2024'}, headers=OWNER).json()
     assert found['said'] == 'Kids at the beach in 2024: 9 photos from 2 days.'
     assert found['photos']['count'] == 9 and found['understood']['kids'] is True
     asked = dict(served.asked[-1][1])
@@ -144,15 +145,15 @@ def test_kids_at_the_beach_from_the_screen(served):
 
 
 def test_people_alone_are_found_in_photos_and_words_everywhere(served):
-    alone = client.get('/app/api/archive/search', params={'q': 'Alex and Sam'}, headers=OWNER).json()
+    alone = client.post('/app/api/archive/search', json={'q': 'Alex and Sam'}, headers=OWNER).json()
     assert alone['sources'] == ['photos'] and 'documents' not in alone
-    words = client.get('/app/api/archive/search', params={'q': 'furnace'}, headers=OWNER).json()
+    words = client.post('/app/api/archive/search', json={'q': 'furnace'}, headers=OWNER).json()
     assert words['documents']['count'] == 1 and words['chats']['count'] == 1 and words['photos']['count'] == 1
     assert words['mail'] is True                                   # the screen asks for mail next
 
 
 def test_chatgpt_history_is_the_owners_alone(served):
-    theirs = client.get('/app/api/archive/search', params={'q': 'furnace'}, headers=OTHER).json()
+    theirs = client.post('/app/api/archive/search', json={'q': 'furnace'}, headers=OTHER).json()
     assert 'chats' not in theirs and 'chats' not in theirs['sources']
     assert client.get('/app/api/archive/item/c:c0ffee00-0000-4000-8000-000000000001', headers=OTHER).status_code == 404
     assert client.get('/app/api/archive/item/c:c0ffee00-0000-4000-8000-000000000001', headers=OWNER).json()['title'] == \
@@ -173,7 +174,7 @@ def test_without_the_archive_the_screen_says_so(monkeypatch, tmp_path):
     monkeypatch.setenv('HUB_ARCHIVE_SOCKET', str(tmp_path / 'none.sock'))
     landing = client.get('/app/api/archive', headers=OWNER).json()
     assert landing['ready'] is False and landing['away'] == 'The archive isn’t set up on this Mac yet.'
-    found = client.get('/app/api/archive/search', params={'q': 'beach'}, headers=OWNER).json()
+    found = client.post('/app/api/archive/search', json={'q': 'beach'}, headers=OWNER).json()
     assert found['ready'] is False and 'photos' not in found
 
 
@@ -208,7 +209,7 @@ def test_the_kids_can_be_changed_here(served):
     said = client.post('/app/api/archive/kid', json={'name': 'alex', 'kid': True}, headers=OWNER).json()['said']
     assert said == 'Alex is one of the kids now.'
     assert {p['name']: p['kid'] for p in archive.people()} == {'Sam': True, 'Alex': True}
-    client.get('/app/api/archive/search', params={'q': 'the kids'}, headers=OWNER)
+    client.post('/app/api/archive/search', json={'q': 'the kids'}, headers=OWNER)
     assert sorted(dict(served.asked[-1][1])['anyof']) == ['Alex', 'Sam']
     assert client.post('/app/api/archive/kid', json={'name': 'Nobody'}, headers=OWNER).status_code == 409
 
@@ -223,7 +224,7 @@ def test_what_ask_may_read_is_the_owners_switch(served):
 # ---- mail, live through the bridge ----
 
 def test_mail_each_phrase_its_own_query_newest_first(served, mail):
-    found = client.get('/app/api/archive/mail', params={'q': 'furnace service in 2025'}, headers=OWNER).json()['mail']
+    found = client.post('/app/api/archive/mail', json={'q': 'furnace service in 2025'}, headers=OWNER).json()['mail']
     assert [m['subject'] for m in found] == ['Your furnace service invoice', 'Furnace service reminder']
     assert found[0]['from'] == 'Example Heating' and found[0]['day'] == '2025-10-03'
     assert mail.asked[-1] == ('/gmail/search', {'query': 'furnace service after:2025/01/01 before:2026/01/01', 'limit': 10})

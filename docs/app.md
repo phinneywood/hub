@@ -55,8 +55,8 @@ sets this in the private settings file (`household.json`):
 | `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
 | `GET /app/api/mail` | Mail as data: what needs the owner, questions nobody answered, records worth a look, each kind Hub sorted |
 | `POST /app/api/mail/{do}` | A tap on Mail, `{"key": ...}`: `done`, `back`, `answered`, `fine`, `sort`, `file` (a kind) or `undo` (a filing) |
-| `GET /app/api/archive`, `GET /app/api/archive/search?q=` | The Archive before a search, and what a search found, source by source (see “Archive”). Signed-in devices only, like every archive route |
-| `GET /app/api/archive/mail?q=` | Mail that matches, live from Gmail |
+| `GET /app/api/archive`, `POST /app/api/archive/search` | The Archive before a search, and what a search found, source by source, `{"q": ...}` (see “Archive”). Signed-in devices only, like every archive route |
+| `POST /app/api/archive/mail` | Mail that matches, live from Gmail, `{"q": ...}`. Searches are POSTs, so the words are never in Hub's request log |
 | `GET /app/api/archive/item/{id}`, `GET /app/api/archive/attachment/{id}/{part}` | One result in full; the text of a PDF attached to an email |
 | `GET /app/api/archive/thumb/{id}`, `/photo/{id}?sharp=1`, `/page/{id}/{n}`, `/file/{id}` | A preview, a photo (sharp when Photos has exported it), a document's page, a document's own bytes |
 | `POST /app/api/archive/kid`, `POST /app/api/archive/switch` | Who counts as one of the kids; what Ask may read (the owner's login only) |

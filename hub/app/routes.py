@@ -649,16 +649,19 @@ def archive_landing(request: Request):
     return _archive(request, lambda archive, login: archive.landing(login))
 
 
-@router.get('/api/archive/search')
-def archive_search(request: Request, q: str = '', source: str = '', offset: int = 0):
-    """What matched, source by source, read without a model. Mail comes from /api/archive/mail."""
-    return _archive(request, lambda archive, login: archive.search(q[:300], login, source or None, max(0, min(offset, 20000))))
+@router.post('/api/archive/search')
+def archive_search(request: Request, body: dict = Body(default={})):
+    """What matched, source by source, read without a model: {"q", "source", "offset"}. Mail comes from
+    /api/archive/mail. Both are asked with POST so the words searched for are never in Hub's request log."""
+    q, source, offset = str(body.get('q') or '')[:300], str(body.get('source') or ''), body.get('offset') or 0
+    offset = max(0, min(int(offset), 20000)) if isinstance(offset, int) else 0
+    return _archive(request, lambda archive, login: archive.search(q, login, source or None, offset))
 
 
-@router.get('/api/archive/mail')
-def archive_mail(request: Request, q: str = ''):
-    """Mail that matches, newest first, ten at most, searched live in Gmail through the bridge."""
-    return _archive(request, lambda archive, login: {'mail': archive.mail_search(q[:300], login)})
+@router.post('/api/archive/mail')
+def archive_mail(request: Request, body: dict = Body(default={})):
+    """Mail that matches, newest first, ten at most, searched live in Gmail through the bridge: {"q"}."""
+    return _archive(request, lambda archive, login: {'mail': archive.mail_search(str(body.get('q') or '')[:300], login)})
 
 
 @router.get('/api/archive/item/{ident}')

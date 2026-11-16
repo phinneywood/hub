@@ -31,9 +31,16 @@ export const activity = (kinds: string[], sources: string[], before?: number) =>
 export const mailSettings = () => get<MailSettings>("mail-settings");
 export const photos = (month = "") => get<Photos>("photos" + (month ? "?month=" + encodeURIComponent(month) : ""));
 export const archive = () => get<ArchiveLanding>("archive");
-export const archiveSearch = (q: string, source = "", offset = 0) =>
-  get<ArchiveFound>(`archive/search?q=${encodeURIComponent(q)}${source ? "&source=" + source : ""}${offset ? "&offset=" + offset : ""}`);
-export const archiveMail = (q: string) => get<{ mail: MailItem[] }>(`archive/mail?q=${encodeURIComponent(q)}`);
+/** A read sent as POST, so what is searched for stays out of Hub's request log. */
+async function asked<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const answer = await fetch("/app/api/" + path, {
+    method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body),
+  });
+  if (!answer.ok) throw new Error(String(answer.status));
+  return (await answer.json()) as T;
+}
+export const archiveSearch = (q: string, source = "", offset = 0) => asked<ArchiveFound>("archive/search", { q, source, offset });
+export const archiveMail = (q: string) => asked<{ mail: MailItem[] }>("archive/mail", { q });
 export const archiveItem = (id: string) => get<Opened>(`archive/item/${encodeURIComponent(id)}`);
 export const archiveAttachment = (id: string, part: string) =>
   get<{ name: string; text: string; cut: boolean }>(`archive/attachment/${encodeURIComponent(id)}/${encodeURIComponent(part)}`);
