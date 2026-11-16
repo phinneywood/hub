@@ -106,7 +106,7 @@ export interface Mail {
 // Kitchen, as Hub sends it (hub/app/kitchen.py): the list, each thing's product and where it stands. Data to show.
 export interface Option { product: string; size: string; why: string; times: number; last: string; price: string; url: string; note: string }
 export interface Item {
-  id: number; name: string; qty: number; source: string; by: string; note: string; product: string; size: string; why: string;
+  id: number; name: string; qty: number; asked: number | null; source: string; by: string; note: string; product: string; size: string; why: string;
   times: number; last: string; price: string; about: string; left: boolean; options: Option[];
   state: "pick" | "ready" | "adding" | "cart" | "unavailable" | "unknown" | "removing";
 }

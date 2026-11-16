@@ -507,6 +507,14 @@ h2.minor { margin-top: 18px; font-size: var(--t-s); color: var(--ink-2); }
 .chosen b { display: block; font-weight: 500; line-height: 1.25; }
 .chosen span { display: block; font-size: var(--t-s); color: var(--ink-2); margin-top: 3px; }
 .chosen .chosen-note { color: var(--ink-3); }
+.block .ctl.check { margin-top: 12px; padding: 8px 0; }
+/* how many: one fewer, the number, one more */
+.howmany { margin-top: 6px; }
+.stepper { display: inline-flex; align-items: center; gap: 2px; justify-self: end; }
+.stepper button { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--line); font-size: 22px; line-height: 1; }
+.stepper button:disabled { opacity: .35; }
+.stepper button:active:not(:disabled) { transform: scale(.94); }
+.stepper output { min-width: 34px; text-align: center; font-size: var(--t-l); font-weight: 500; font-variant-numeric: tabular-nums; }
 .groceries { margin-top: 12px; }
 .groceries .kacts { margin-top: 12px; }
 .kitchen-says .kthread { margin-top: 10px; }

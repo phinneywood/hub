@@ -17,6 +17,7 @@ from .words import are
 
 TEXT = 200
 MOST_ADDED = 20             # things added by one request
+MOST_OF_ONE = 24            # how many of one thing
 STATES = ('pick', 'ready', 'adding', 'cart', 'unavailable', 'unknown', 'removing')
 SHOP = 'https://www.fredmeyer.com/'
 OLD = 'Kitchen on this Mac is an older version without the list. Restart the kitchen service to update it.'
@@ -48,6 +49,7 @@ def _option(o):
 
 def _item(i):
     return {'id': int(i['id']), 'name': _clip(i.get('name'), 100), 'qty': i.get('qty') if isinstance(i.get('qty'), int) else 1,
+            'asked': i.get('asked') if isinstance(i.get('asked'), int) and not isinstance(i.get('asked'), bool) else None,
             'source': _clip(i.get('source'), 12), 'by': _clip(i.get('by'), 40), 'note': _clip(i.get('note')),
             'product': _clip(i.get('product')), 'size': _clip(i.get('size'), 60), 'why': _clip(i.get('why'), 12),
             'times': i.get('times') if isinstance(i.get('times'), int) else 0, 'last': _clip(i.get('last'), 10),
@@ -114,12 +116,13 @@ def written(text):
 
 
 def add(items, login, source='app'):
-    """Put things on the list, each as it was said. Returns {'added': [...], 'already': [...]} in the app's shape."""
+    """Put things on the list, each as it was said. Returns {'added': [...], 'already': [...], 'changed': [...]} in
+    the app's shape: `changed` is what was on the list already and was said again with another number."""
     wanted = [w for w in (_clip(i, 100) for i in items or ()) if w][:MOST_ADDED]
     if not wanted:
         raise Refused('Say what to add.')
     found = _ask('POST', '/items', {'login': login, 'items': wanted, 'source': source})
-    return {key: [_item(i) for i in found.get(key) or ()] for key in ('added', 'already')}
+    return {key: [_item(i) for i in found.get(key) or ()] for key in ('added', 'already', 'changed')}
 
 
 def _plain(word):
@@ -158,6 +161,8 @@ def tap(do, body, login):
     if do == 'add':
         found = add(written(body.get('text')), login)
         names = [i['name'] for i in found['added']]
+        if not names and found['changed']:
+            return f'{found["changed"][0]["name"]}: now {found["changed"][0]["qty"]}', found
         if not names:
             return ('That is already on the list.' if found['already'] else 'Nothing to add.'), found
         return (f'{names[0]} {are(names)} on the list' if len(names) == 1 else f'{len(names)} things are on the list'), found
@@ -172,6 +177,13 @@ def tap(do, body, login):
             'login': login, 'product': product, 'size': _clip(body.get('size'), 60), 'price': _clip(body.get('price'), 12),
             'url': body['url'] if str(body.get('url') or '').startswith(SHOP) else ''})
         return 'Picked. Hub will choose it next time too', {'item': _item(found['item'])}
+    if do == 'qty':
+        number = body.get('qty')
+        if not isinstance(number, int) or isinstance(number, bool) or not 1 <= number <= MOST_OF_ONE:
+            raise Refused(f'A number from 1 to {MOST_OF_ONE}.')
+        item = _item(_ask('POST', f'/items/{int(body.get("id"))}/qty', {'login': login, 'qty': number})['item'])
+        back = item['state'] == 'ready' and body.get('carted') is True          # it was in the cart: the cart is set to the new number next
+        return f'{item["name"]}: {item["qty"]}' + (', waiting for the cart again' if back else ''), {'item': item}
     if do == 'keep':
         return 'Kept in the cart', {'item': _item(_ask('POST', f'/items/{int(body.get("id"))}/keep', {'login': login})['item'])}
     if do == 'fill':

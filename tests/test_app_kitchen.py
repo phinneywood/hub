@@ -101,6 +101,24 @@ def test_a_pick_a_removal_and_the_switch(kitchen):
     assert tap('remove', id=999).json() == {'error': 'That item isn’t waiting on the list any more.'}
 
 
+def test_how_many_is_a_tap_and_a_number_written_counts_single_things(kitchen):
+    eggs = tap('add', text='6 eggs, 3 avocados').json()
+    assert eggs['ok'] and [(i['name'], i['qty'], i['asked']) for i in eggs['changed']] == [('eggs', 1, 6)]       # a dozen covers six
+    assert [(i['name'], i['qty'], i['asked']) for i in eggs['added']] == [('avocados', 3, 3)]
+    assert tap('add', text='6 eggs').json()['said'] == 'That is already on the list.'
+    avocados = by_name()['avocados']
+    more = tap('qty', id=avocados['id'], qty=5).json()
+    assert (more['ok'], more['said'], more['item']['qty'], more['item']['asked']) == (True, 'avocados: 5', 5, None)
+    tap('fill')
+    assert by_name()['avocados']['state'] == 'cart'
+    fewer = tap('qty', id=avocados['id'], qty=2, carted=True).json()
+    assert (fewer['said'], fewer['item']['state']) == ('avocados: 2, waiting for the cart again', 'ready')
+    for odd in (0, 25, '3', None, True):
+        assert tap('qty', id=avocados['id'], qty=odd).json() == {'error': 'A number from 1 to 24.'}
+    assert tap('qty', id=999, qty=2).json() == {'error': 'That item isn’t waiting on the list any more.'}
+    assert client.post('/app/api/kitchen/qty', json={'id': avocados['id'], 'qty': 2}, headers=ON_THIS_MAC).status_code in (401, 403)
+
+
 def test_every_tap_needs_a_signed_in_device(kitchen):
     for do, body in (('add', {'text': 'eggs'}), ('fill', {}), ('auto', {'on': True}), ('remove', {'id': 1}), ('order', {})):
         assert client.post(f'/app/api/kitchen/{do}', json=body, headers=ON_THIS_MAC).status_code == 403
@@ -129,6 +147,24 @@ def test_ask_adds_to_the_list_in_one_trip_and_says_only_the_owners_words(asking)
     assert ask('we’re out of dragon fruit')[0] == 'Dragon fruit is on the list. Hub hasn’t bought it before: pick one below.'
     assert ask('add eggs to the cart')[0] == 'Eggs are already on the list.'
     assert ask('add milk and eggs to the list')[0] == 'Milk is on the list. Eggs were already there.'
+
+
+def test_ask_changes_a_number_when_the_same_thing_is_said_again(asking):
+    assert ask('add avocados to the list')[0] == 'Avocados are on the list.'
+    answer, cards, _ = ask('add 5 avocados to the list')
+    assert answer == 'Avocados changed to five.' and by_name()['avocados']['qty'] == 5
+    assert cards == [{'kind': 'groceries', 'items': [by_name()['avocados']['id']]}]
+    assert ask('add 5 avocados and sponges to the list')[0] == 'Sponges are on the list. Avocados were already there.'
+
+
+def test_ask_reads_the_cart_from_its_own_page_and_says_only_how_many(asking):
+    answer, cards, _ = ask('What’s in the cart?')
+    assert answer == 'Reading the cart. This takes a minute.' and cards[0]['kind'] == 'groceries' and cards[0]['cart'] is True and cards[0]['since'] > 0
+    assert ('POST', '/cart/read', {'login': 'me@example.com'}) in asking.calls
+    answer, cards, _ = ask('what is in the cart')                        # read a moment ago: shown as it is, not read again
+    assert answer == 'Five things are in the cart.' and cards == [{'kind': 'groceries', 'cart': True}]
+    assert [c for c in asking.calls if c[1] == '/cart/read'] == [('POST', '/cart/read', {'login': 'me@example.com'})]
+    assert not any(word in json.dumps([str(m) for m in SEEN]) for word in ('Rotini', '3.19', 'Sunny Acres'))     # no product, no price to the model
 
 
 def test_nothing_of_kitchens_reaches_asks_model(asking):

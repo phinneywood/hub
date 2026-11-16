@@ -984,12 +984,14 @@ ACTIONS = [
            'Locks, the garage and the alarm have their own setting below.',
            'Undo on the Home changes page, for a day.', page='/house/changes', post='/house/do', default='undo', ceiling='undo'),
     Action('house.setup', 'Change how the house is set up',
-           'When you ask in the app’s Ask: move things between rooms and rename them, add and remove rooms, and make and '
-           'change scenes, automations, scripts and helpers in Home Assistant. Removing anything waits for your tap on a card.',
+           'When you ask in the app’s Ask: move things between rooms, rename, hide, disable and enable them, add and remove '
+           'rooms, make and change scenes, automations, scripts and helpers in Home Assistant, and reload an integration. '
+           'Removing or disabling anything waits for your tap on a card.',
            'Undo under the answer, on Activity and on Changes, for a day.', page='/app/#changes', default='undo', ceiling='undo'),
     Action('house.security', 'Lock, unlock and open',
            'When you ask in the app’s Ask: lock and unlock doors, open and close the garage, arm and disarm the alarm. '
-           'Locking, closing and arming happen at once. Unlocking, opening and disarming always wait for your tap on a card.',
+           'Locking, closing and arming happen at once. Unlocking, opening and disarming always wait for your tap on a card, '
+           'and so does a scene or routine that would do any of them.',
            'Undo under the answer and on Activity, for a day.', page='/app/#changes', default='undo', ceiling='undo'),
     Action('house.playlists', 'Edit playlists',
            'When you ask in Ask Hub: make Music Assistant playlists, add, remove and move songs, rename them, and add '

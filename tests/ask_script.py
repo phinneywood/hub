@@ -52,6 +52,7 @@ LIST = [
     (r'^we need (.+)$', lambda m: call('groceries', do='add', items=THINGS(m[1]))),
     (r'^(?:take|remove) (.+?) (?:off|from|out of) (?:the |our )?(?:shopping |grocery )?(?:list|cart)$', lambda m: call('groceries', do='remove', items=THINGS(m[1]))),
     (r'^(?:what.?s|what is|show me|show) (?:on )?(?:the |our )?(?:shopping |grocery )?list$', lambda m: call('groceries', do='show')),
+    (r'^(?:what.?s|what is|show me|show) in (?:the |our |my )?cart$', lambda m: call('groceries', do='cart')),
     (r'^(?:order the groceries|check out|place the order)(?: for (.+))?$', lambda m: call('groceries', do='order', **({'when': m[1]} if m[1] else {}))),
 ]
 EVERY = re.compile(rf'^every (evening|morning|day) at (\d{{1,2}}):(\d{{2}}),? turn (on|off) {THE}(.+)$', re.I)
@@ -175,7 +176,9 @@ async def scripted(messages, info):
         if back[0].tool_name == 'music' and tries < 2 and 'Nothing matched' in str(back[0].content):
             yield call('music', do='play', what=[BAND['name']], kind='artist', **({'rooms': places} if places else {}))
         else:
-            yield 'Hub couldn’t do that. ' + str(back[0].content.get('not_done', ''))
+            told = str(back[0].content.get('not_done', ''))
+            asks = told.startswith('Which') and back[0].tool_name not in ('lights', 'scene', 'music')       # a setup tool's question is passed on as it is
+            yield told if asks else 'Hub couldn’t do that. ' + told
     elif setup:
         yield setup
     elif COOKING.search(words):

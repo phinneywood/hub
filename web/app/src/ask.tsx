@@ -5,7 +5,7 @@ import { able, ask, asked, forgetNote, loadAble, talk } from "./asking";
 import type { Card, Turn } from "./asking";
 import { GroceriesCard, Said } from "./kitchen";
 import { RoomCell, spans } from "./screens";
-import { dragVolume, go, loadPicks, picks, playPick, runScene, seen, setVolume, sheet, switchRoom, undo, undone } from "./state";
+import { dragVolume, go, loadPicks, picks, playPick, runScene, say, seen, setVolume, sheet, switchRoom, undo, undone } from "./state";
 import type { House, KitchenMessage, Room } from "./types";
 import { Icon, SheetFrame, Slider, Switch } from "./ui";
 import { spoken } from "./words";
@@ -30,7 +30,10 @@ function Found({ now, text, brief }: { now: House; text: string; brief: boolean 
   // Two things to say, in this house's own rooms.
   const all = Object.values(now.rooms).filter((r) => !r.outside);
   const lamp = all.find((r) => r.dims), sound = all.find((r) => r.speaker && r !== lamp) ?? all.find((r) => r.speaker);
-  const such = [lamp && `“dim ${spoken(lamp.name)}”`, sound && `“play something calm in ${spoken(sound.name)}”`].filter(Boolean).join(" or ");
+  // One for the lights, one for the music, one for the list.
+  const examples = [lamp && `“dim ${spoken(lamp.name)}”`, sound && `“play something calm in ${spoken(sound.name)}”`, "“add eggs to the list”"]
+    .filter((e): e is string => Boolean(e));
+  const such = examples.length > 1 ? examples.slice(0, -1).join(", ") + " or " + examples[examples.length - 1] : examples.join("");
   return (
     <div class={brief ? "found brief" : "found"}>
       {!text && <p class="ask-hint">{set ? `Say what you’d like${such ? `, such as ${such}` : ""}. A few letters find a room, a scene or a playlist.`
@@ -134,7 +137,12 @@ function ConfirmCard({ card }: { card: Card }) {
   const tap = async (choice: "confirm" | "dismiss") => {
     setState("working");
     const answer = await post(`setup/${id}/${choice}`);
-    if (answer.error) { setSaid(answer.error); setState("gone"); return; }
+    if (answer.error) {         // not done. A card that still waits (Hub was busy this minute) stays to be tapped again
+      const still = await fetch(`/app/api/setup/${id}`, { headers: { accept: "application/json" } })
+        .then((found) => found.json() as Promise<{ status?: string }>).catch(() => ({ status: "" }));
+      if (still.status === "waiting") { say(answer.error); setState("waiting"); return; }
+      setSaid(answer.error); setState("gone"); return;
+    }
     if (choice === "confirm") setBatch(answer.batch ?? null);
     setState(choice === "confirm" ? "done" : "dismissed");
   };
@@ -149,7 +157,7 @@ function ConfirmCard({ card }: { card: Card }) {
         <>
           <p class="wait-why">{card.why}</p>
           <div class="kacts">
-            <button type="button" class={"btn " + (card.do === "Remove" ? "risk" : "go")} disabled={state === "working"}
+            <button type="button" class={"btn " + (card.do === "Remove" || card.do === "Disable" ? "risk" : "go")} disabled={state === "working"}
               onClick={() => void tap("confirm")}>{card.do ?? "Do it"}</button>
             <button type="button" class="btn ghost" disabled={state === "working"} onClick={() => void tap("dismiss")}>Not now</button>
           </div>
@@ -193,7 +201,7 @@ function CardView({ card, now }: { card: Card; now: House }) {
     ) : null;
   }
   if (card.kind === "kitchen" && card.after !== undefined) return <KitchenReply after={card.after} />;
-  if (card.kind === "groceries") return <GroceriesCard ids={card.items} all={card.all} />;
+  if (card.kind === "groceries") return <GroceriesCard ids={card.items} all={card.all} cart={card.cart} since={card.since} />;
   if (card.kind === "memory" && card.id !== undefined) {
     const id = card.id;
     const kept = !able.value || able.value.remembers.some((note) => note.id === id);

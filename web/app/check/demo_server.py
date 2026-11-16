@@ -48,7 +48,7 @@ from hub import store  # noqa: E402
 from hub.app import levels, routes, scenes  # noqa: E402
 from hub.app.ask import private, route, turns  # noqa: E402
 from hub.main import app  # noqa: E402
-from hub.tools.house import control, read  # noqa: E402
+from hub.tools.house import admin, control, read  # noqa: E402
 from hub.tools.gmail import filing, inbox, missions, triage  # noqa: E402
 from tests import app_world, ask_script, day_world, kitchen_world  # noqa: E402
 
@@ -170,6 +170,10 @@ def stage(what: str):
         day.events, day.school, day.mail, day.filed, day.cart, day.faults = fresh.events, fresh.school, fresh.mail, fresh.filed, True, []
         day.sorted, day.asked = fresh.sorted, fresh.asked
         shop.reset()
+        shop.down = shop.old = False
+        with admin._db() as conn:           # the record of setup changes, and the cards that wait
+            conn.execute('delete from house_setup')
+            conn.execute('delete from house_setup_waiting')
         with store.db() as conn:
             conn.execute('delete from today_snoozed')
             conn.commit()
@@ -182,6 +186,14 @@ def stage(what: str):
         day.events, day.school, day.mail, day.filed, day.cart = [], [], [], 0, False
         shop.reset(cart_waiting=False)
         shop.items = [i for i in shop.items if i['state'] != 'pick']
+    elif what in ('kitchen-away', 'kitchen-old', 'kitchen-back'):       # the kitchen service stopped, or from before it kept the list
+        shop.down, shop.old = what == 'kitchen-away', what == 'kitchen-old'
+    elif what == 'kitchen-empty':
+        shop.items.clear()
+        shop.plans['7'] = {'status': 'done'}
+    elif what == 'kitchen-unsure':          # a cart turn that stopped before it could say: one thing to check
+        for item in shop.items[:1]:
+            item['state'] = 'unknown'
     elif what in ('ask-away', 'ask-back'):
         patch.setattr(route, 'ready', (lambda: 'Ask isn’t set up yet: its key isn’t in 1Password.') if what == 'ask-away' else (lambda: None))
     else:

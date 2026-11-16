@@ -10,6 +10,7 @@ A tool says what it did in a plain sentence (`turn.said`), so a request that was
 second trip to the model; a tool that needs the model again (nothing matched, a name it couldn't place, something
 it read) sets `turn.again`.
 """
+import time
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -372,14 +373,18 @@ def remember(ctx: RunContext[Turn], note: str, together: list[str] | None = None
     return _say(turn, 'Hub will remember that.', {'kind': 'memory', 'id': number, 'note': kept})
 
 
-def groceries(ctx: RunContext[Turn], do: Literal['add', 'remove', 'show', 'order'], items: list[str] | None = None,
+CART_FRESH = 10 * 60        # a reading of the cart's own page this new is shown as it is; an older one is read again
+
+
+def groceries(ctx: RunContext[Turn], do: Literal['add', 'remove', 'show', 'cart', 'order'], items: list[str] | None = None,
               when: str | None = None) -> dict:
     """The household's shopping list and the shop's cart, now. add: put `items` on the list, each thing as the
     owner said it, with its number if they gave one ("sponges", "2 avocados"); Hub picks the exact product the
-    household buys and it goes in the cart, so never ask which brand or size. remove: take `items` off the list,
-    and out of the cart. show: what is on the list and where each thing stands. order: get checkout ready for the
-    owner's tap, with `when` the pickup or delivery time they asked for, in their words. Nothing is ever ordered
-    without their tap on the card."""
+    household buys and it goes in the cart, so never ask which brand or size. Said again with another number, a
+    thing is changed to that. remove: take `items` off the list, and out of the cart. show: what is on the list
+    and where each thing stands. cart: what is in the shop's cart, read from its own page. order: get checkout
+    ready for the owner's tap, with `when` the pickup or delivery time they asked for, in their words. Nothing is
+    ever ordered without their tap on the card."""
     from .. import kitchen as shop
     turn = ctx.deps
     if turn.login is None:
@@ -393,10 +398,12 @@ def groceries(ctx: RunContext[Turn], do: Literal['add', 'remove', 'show', 'order
             if old:
                 told.append(sentence(f'{_listed(old)} {"were" if are(old) == "are" else "was"} already there.' if new
                                      else f'{_listed(old)} {are(old)} already on the list.'))
+            for item in found['changed']:               # said again with another number: the same thing, changed
+                told.append(sentence(f'{item["name"]} changed to {number(item["asked"] or item["qty"]).lower()}.'))
             if picks:
                 told.append('Hub hasn’t bought it before: pick one below.' if len(new) == 1
                             else f'{counted(picks, "thing")} {"needs" if picks == 1 else "need"} a product picked below.')
-            card = {'kind': 'groceries', 'items': [i['id'] for i in found['added'] + found['already']]}
+            card = {'kind': 'groceries', 'items': [i['id'] for i in found['added'] + found['already'] + found['changed']]}
             return _say(turn, ' '.join(told) or 'Say what to add.', card if card['items'] else None)
         if do == 'remove':
             on_list = shop.picture()
@@ -425,6 +432,17 @@ def groceries(ctx: RunContext[Turn], do: Literal['add', 'remove', 'show', 'order
                 parts += [f'{number(picks)} {"needs" if picks == 1 else "need"} a pick'] if picks else []
                 told += ': ' + ', '.join(parts) if parts else ''
             return _say(turn, told + '.', {'kind': 'groceries', 'all': True})
+        if do == 'cart':
+            on_list = shop.picture()
+            if not on_list['ok']:
+                raise shop.Old(on_list['said']) if on_list['why'] == 'old' else shop.Refused(on_list['said'])
+            seen = on_list['cart']
+            if seen and seen['at'] and time.time() - seen['at'] < CART_FRESH:
+                lines = sum(line['qty'] for line in seen['lines'])
+                return _say(turn, (f'{counted(lines, "thing")} {"is" if lines == 1 else "are"} in the cart.' if lines else 'The cart is empty.'),
+                            {'kind': 'groceries', 'cart': True})
+            shop.tap('read', {}, turn.login)
+            return _say(turn, 'Reading the cart. This takes a minute.', {'kind': 'groceries', 'cart': True, 'since': time.time()})
         after = shop.order(when or '', turn.login)
         return _say(turn, 'Reading checkout. This takes a minute.',
                     {'kind': 'kitchen', 'after': after} if isinstance(after, int) else None)

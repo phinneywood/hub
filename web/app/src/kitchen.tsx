@@ -122,14 +122,27 @@ function day(iso: string): string {
   return Number.isNaN(when.getTime()) ? "" : DAY.format(when);
 }
 
-/** Why this product: the household's own habit, said plainly. */
-function why(of: { why: string; times: number; last: string }): string {
-  if (of.why === "usual") return "Your usual";
+/** Why this product: the household's own habit, said plainly. `offered`: it is one of the other choices, not the pick. */
+function why(of: { why: string; times: number; last: string }, offered = false): string {
+  if (of.why === "usual") return offered ? "One of your usuals" : "Your usual";
   if (of.why === "chosen") return "You picked this";
-  if (of.why === "history") return `Bought ${of.times} times${of.last ? ", last on " + day(of.last) : ""}`;
+  if (of.why === "history") return of.times > 1 ? `Bought ${of.times} times${of.last ? ", last on " + day(of.last) : ""}` : "One of your usuals";
   if (of.why === "once") return `Bought once${of.last ? ", on " + day(of.last) : ""}`;
   if (of.why === "maybe") return "Something you’ve bought that mentions it";
+  if (of.why === "near") return "Spelled nearly the same";
   return of.why === "shop" ? "From the shop’s search" : "";
+}
+
+/** Why a thing waits for a person, from what there is to choose between. */
+function pickWhy(item: Item): string {
+  const kinds = new Set(item.options.map((o) => o.why));
+  if (item.state === "unavailable") return `The shop doesn’t have ${item.product} right now. Pick another, or take it off the list.`;
+  if (!item.options.length) return "Hub hasn’t bought this before, and is looking in the shop. Choices will show here.";
+  if (kinds.has("history") || kinds.has("usual")) return "You buy more than one thing this could be. Pick one, and Hub will know next time.";
+  if (kinds.has("once")) return "You have bought this once. Pick it, or another, and Hub will know next time.";
+  if (kinds.has("near")) return "Hub doesn’t know this word. Is it one of these, spelled another way?";
+  if (kinds.has("maybe")) return "Nothing you’ve bought is called this, though these mention it. The shop’s own choices follow.";
+  return "Hub hasn’t bought this before. These are from the shop’s search. Pick one, and it will know next time.";
 }
 
 const them = (n: number) => (n === 1 ? "it" : n === 2 ? "both" : `all ${n}`);
@@ -141,9 +154,11 @@ export function kitchenSays(now: Shop): string {
   const going = now.items.filter((i) => i.state === "adding").length;
   const ready = now.items.filter((i) => i.state === "ready").length;
   const left = now.items.filter((i) => i.left).length;
+  const unsure = now.items.filter((i) => i.state === "unknown").length;
   if (now.order?.status === "pending") return "An order waits for your tap.";
   if (now.plan) return "A cart waits for your tap.";
   if (picks) return `${count(picks, "thing")} ${picks === 1 ? "needs" : "need"} a pick.`;
+  if (unsure) return `${count(unsure, "thing")} to check in the cart.`;
   if (left) return `${count(left, "thing")} came off your list.`;
   if (going) return `${count(going, "thing")} ${going === 1 ? "is" : "are"} going in the cart.`;
   if (ready && !now.auto) return `${count(ready, "thing")} ${ready === 1 ? "is" : "are"} ready for the cart.`;
@@ -165,27 +180,29 @@ function kitchenSub(now: Shop): string {
 // ---- the list ----
 
 function ItemRow({ item, plain }: { item: Item; plain?: boolean }) {
+  const covers = item.asked !== null && item.asked !== item.qty && Boolean(item.product);      // a pack that covers the number asked for
   const cls = "row tick item" + (item.state === "cart" ? " on" : "") + (item.state === "adding" || item.state === "removing" ? " going" : "")
     + (item.state === "pick" || item.state === "unavailable" || item.state === "unknown" ? " asks" : "");
   const inside = (
     <>
       <span class="ring"><Icon name="check" /></span>
       <span class="row-main">
-        <b>{item.name}{item.qty > 1 && <i class="qty"> × {item.qty}</i>}</b>
+        <b>{item.name}{(item.qty > 1 || covers) && <i class="qty"> × {item.qty}{covers ? ` (for ${item.asked})` : ""}</i>}</b>
         <span>{item.product ? item.product + (item.size ? ", " + item.size : "") : "No product yet"}</span>
       </span>
       <span class="row-q">{STANDS[item.state]}</span>
     </>
   );
   if (plain) return <div class={cls}>{inside}</div>;
-  return <button type="button" class={cls} aria-label={`${item.name}: ${STANDS[item.state]}`} onClick={() => (sheet.value = { kind: "item", id: item.id })}>{inside}</button>;
+  const read = [item.name + (item.qty > 1 ? `, ${item.qty}` : ""), item.product || "no product yet", STANDS[item.state]].join(". ");
+  return <button type="button" class={cls} aria-label={read} onClick={() => (sheet.value = { kind: "item", id: item.id })}>{inside}</button>;
 }
 
 function OptionRow({ option, busy, onPick }: { option: Option; busy: boolean; onPick: () => void }) {
   const each = price(option.price);
   return (
     <button type="button" class="opt" disabled={busy} onClick={onPick}>
-      <span class="row-main"><b>{option.product}</b><span>{[option.size, why(option)].filter(Boolean).join(". ")}</span></span>
+      <span class="row-main"><b>{option.product}</b><span>{[option.size, why(option, true)].filter(Boolean).join(". ")}</span></span>
       <span class="opt-pick">{each !== null ? money(each) : "Pick"}</span>
     </button>
   );
@@ -195,14 +212,10 @@ function OptionRow({ option, busy, onPick }: { option: Option; busy: boolean; on
 function PickBlock({ item }: { item: Item }) {
   const [busy, setBusy] = useState(false);
   const pick = async (o: Option) => { setBusy(true); await act("pick", { id: item.id, product: o.product, size: o.size, url: o.url, price: o.price }); setBusy(false); };
-  const gone = item.state === "unavailable";
   return (
     <div class="pickblock">
       <b class="pick-t">{item.name}{item.qty > 1 && <i class="qty"> × {item.qty}</i>}</b>
-      <p class="pick-why">{gone ? `The shop doesn’t have ${item.product} right now. Pick another, or take it off the list.`
-        : !item.options.length ? "Hub hasn’t bought this before, and is looking in the shop. Choices will show here."
-        : item.options.every((o) => o.why === "shop") ? "Hub hasn’t bought this before. These are from the shop’s search. Pick one, and it will know next time."
-        : "Hub hasn’t bought this often enough to choose. Pick one, and it will know next time."}</p>
+      <p class="pick-why">{pickWhy(item)}</p>
       {item.options.map((o) => <OptionRow option={o} busy={busy} onPick={() => void pick(o)} key={o.product} />)}
       <button type="button" class="linkish" disabled={busy} onClick={() => void act("remove", { id: item.id })}>Take it off the list</button>
     </div>
@@ -216,6 +229,25 @@ function LeftRow({ item }: { item: Item }) {
       <div class="pills">
         <button type="button" class="pill" onClick={() => void act("remove", { id: item.id })}>Take out</button>
         <button type="button" class="pill go" onClick={() => void act("keep", { id: item.id })}>Keep</button>
+      </div>
+    </div>
+  );
+}
+
+/** How many of a thing: one more, one fewer. What is already in the cart is set to the new number at the next fill. */
+function HowMany({ item }: { item: Item }) {
+  const [busy, setBusy] = useState(false);
+  const fixed = item.state === "adding" || item.state === "removing";
+  const set = async (qty: number) => { setBusy(true); await act("qty", { id: item.id, qty, carted: item.state === "cart" }); setBusy(false); };
+  const covers = item.asked !== null && item.asked !== item.qty
+    ? `You asked for ${item.asked}. ${item.qty === 1 ? "One pack covers" : `${NUMBERS[item.qty] ?? item.qty} packs cover`} that.` : "";
+  return (
+    <div class="ctl acts howmany">
+      <div class="ctl-name"><b>How many</b>{covers && <span>{covers}</span>}</div>
+      <div class="stepper" role="group" aria-label={`How many ${item.name}`}>
+        <button type="button" aria-label="One fewer" disabled={busy || fixed || item.qty <= 1} onClick={() => void set(item.qty - 1)}>−</button>
+        <output aria-live="polite">{item.qty}</output>
+        <button type="button" aria-label="One more" disabled={busy || fixed || item.qty >= 24} onClick={() => void set(item.qty + 1)}>+</button>
       </div>
     </div>
   );
@@ -244,6 +276,7 @@ export function ItemSheet({ item }: { item: Item }) {
           {item.note && <span class="chosen-note">On the list: “{item.note}”</span>}
         </div>
       )}
+      {item.product && <HowMany item={item} />}
       {can && item.options.length > 0 && <h2>{item.product ? "Or one of these" : "Pick one"}</h2>}
       {can && item.options.map((o) => <OptionRow option={o} busy={busy} onPick={() => void pick(o)} key={o.product} />)}
       {can && item.options.length > 0 && <p class="quiet-line">Hub will choose your pick next time too.</p>}
@@ -385,10 +418,44 @@ export function ResultCard({ result }: { result: CartResult }) {
 
 // ---- in Ask: the things a request touched, each with its product and where it stands ----
 
-export function GroceriesCard({ ids, all }: { ids?: number[]; all?: boolean }) {
+/** The cart as its own page showed it: what is in it, the subtotal, and when that was. */
+function CartLines({ seen }: { seen: NonNullable<Shop["cart"]> }) {
+  return (
+    <>
+      <ul class="kitems">
+        {seen.lines.map((line, n) => (
+          <li key={n}><span>{line.product}<small>{[line.size, "× " + line.qty].filter(Boolean).join(", ")}</small></span>
+            <span class="kprice">{line.price !== null ? money(line.price * line.qty) : ""}</span></li>
+        ))}
+      </ul>
+      {!seen.lines.length && <p class="quiet">The cart is empty.</p>}
+      {seen.subtotal !== null && <p class="ktotal"><span>Subtotal</span><span>{money(seen.subtotal)}</span></p>}
+      <p class="quiet-line">As the cart’s own page showed it{seen.at ? " at " + clock(seen.at) : ""}{seen.when ? `. ${seen.when}` : ""}.</p>
+    </>
+  );
+}
+
+/** In Ask: the cart, once its page has been read. `since`: when the reading was asked for; an older one isn't it. */
+function CartCard({ now, since }: { now: Shop; since?: number }) {
+  const seen = now.cart && (since === undefined || (now.cart.at ?? 0) >= since - 5) ? now.cart : null;
+  if (!seen) return <p class="took"><span class="work" />Reading the cart’s own page. This can take a minute.</p>;
+  return (
+    <div class="groceries">
+      <CartLines seen={seen} />
+      <div class="kacts">
+        {seen.lines.length > 0 && !now.order && <button type="button" class="btn go" disabled={now.working === "review"} onClick={() => void act("order")}>
+          {now.working === "review" ? "Reading checkout" : "Check out"}</button>}
+        <button type="button" class="btn ghost" onClick={() => go("kitchen")}>Open Kitchen</button>
+      </div>
+    </div>
+  );
+}
+
+export function GroceriesCard({ ids, all, cart, since }: { ids?: number[]; all?: boolean; cart?: boolean; since?: number }) {
   const now = useShop();
   if (!now) return null;
   if (!now.ok) return <p class="took">{now.said}</p>;
+  if (cart) return <CartCard now={now} since={since} />;
   const items = all ? now.items : now.items.filter((i) => ids?.includes(i.id));
   const gone = all ? 0 : (ids?.length ?? 0) - items.length;
   const picks = items.filter((i) => i.state === "pick" || i.state === "unavailable");
@@ -503,19 +570,7 @@ function Cart({ now }: { now: Shop }) {
   return (
     <section class="block">
       <h2>The cart</h2>
-      {seen ? (
-        <>
-          <ul class="kitems">
-            {seen.lines.map((line, n) => (
-              <li key={n}><span>{line.product}<small>{[line.size, "× " + line.qty].filter(Boolean).join(", ")}</small></span>
-                <span class="kprice">{line.price !== null ? money(line.price * line.qty) : ""}</span></li>
-            ))}
-          </ul>
-          {!seen.lines.length && <p class="quiet">The cart is empty.</p>}
-          {seen.subtotal !== null && <p class="ktotal"><span>Subtotal</span><span>{money(seen.subtotal)}</span></p>}
-          <p class="quiet-line">As the cart’s own page showed it{seen.at ? " at " + clock(seen.at) : ""}{seen.when ? `. ${seen.when}` : ""}.</p>
-        </>
-      ) : <p class="quiet">Hub hasn’t read the cart’s own page yet. The list says what Hub put in.</p>}
+      {seen ? <CartLines seen={seen} /> : <p class="quiet">Hub hasn’t read the cart’s own page yet. The list says what Hub put in.</p>}
       <div class="btns tight">
         <button type="button" class="btn ghost" disabled={now.working === "cartread"} onClick={() => void act("read")}>
           {now.working === "cartread" ? "Reading the cart" : seen ? "Read it again" : "Read the cart"}</button>
@@ -567,6 +622,7 @@ export function Kitchen() {
   }
   const picks = now.items.filter((i) => i.state === "pick" || i.state === "unavailable");
   const left = now.items.filter((i) => i.left);
+  const unsure = now.items.filter((i) => i.state === "unknown").length;
   const ready = now.items.filter((i) => i.state === "ready").length;
   const waiting = now.order !== null && now.order.status !== "placed";
   return (
@@ -575,12 +631,20 @@ export function Kitchen() {
       <h1 class="say">{kitchenSays(now)}</h1>
       <p class="sub">{kitchenSub(now)}</p>
       <AddField />
-      {(picks.length > 0 || left.length > 0 || now.plan !== null || waiting) && (
+      {(picks.length > 0 || left.length > 0 || unsure > 0 || now.plan !== null || waiting) && (
         <section class="block">
           <h2>Needs you</h2>
           {waiting && <OrderCard order={now.order!} />}
           {now.plan && <PlanCard plan={now.plan} />}
           {picks.map((i) => <PickBlock item={i} key={i.id} />)}
+          {unsure > 0 && (
+            <div class="ctl acts check">
+              <div class="ctl-name"><b>{count(unsure, "thing")} to check</b>
+                <span>Hub couldn’t confirm {unsure === 1 ? "it" : "they"} went in the cart. Reading the cart settles it.</span></div>
+              <div class="pills"><button type="button" class="pill go" disabled={now.working === "cartread"} onClick={() => void act("read")}>
+                {now.working === "cartread" ? "Reading" : "Read the cart"}</button></div>
+            </div>
+          )}
           {left.map((i) => <LeftRow item={i} key={i.id} />)}
         </section>
       )}

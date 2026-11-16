@@ -71,6 +71,12 @@ def _wanted(written):
     return (found.group(2).strip(), int(found.group(1))) if found else (' '.join(str(written).split()), 0)
 
 
+def _take(asked, size, usually):
+    """How many to take: a number written counts single things, and a pack of several ("12 ct") covers them."""
+    pack = re.search(r'(\d+) ct', size or '')
+    return usually if not asked else -(-asked // int(pack.group(1))) if pack and int(pack.group(1)) > 1 else asked
+
+
 class Kitchen:
     def __init__(self, takes=0.0, cart_waiting=True):
         self.takes = takes              # seconds the made-up Kitchen takes to answer, to fill the cart and to read checkout
@@ -95,11 +101,17 @@ class Kitchen:
         name, qty = _wanted(written)
         key = _key(name)
         if any(_key(i['name']) == key for i in self.items):
-            return None, next(i for i in self.items if _key(i['name']) == key)
+            twin = next(i for i in self.items if _key(i['name']) == key)
+            if qty and qty != twin['asked']:                # said again with another number
+                take = _take(qty, twin['size'], 1)         # back to waiting only when the cart must be set to a new number
+                twin.update(asked=qty, state='ready' if twin['state'] == 'cart' and take != twin['qty'] else twin['state'], qty=take)
+                return None, dict(twin, changed=True)
+            return None, twin
         buys = BUYS.get(key)
         options = [{'product': p, 'size': s, 'why': why, 'times': n, 'last': last, 'price': price, 'qty': 1, 'note': ''}
                    for p, s, why, n, last, price in ALSO.get(key, [])]
-        item = {'id': self.next, 'at': time.time(), 'name': name, 'qty': qty or (buys[6] if buys else 1), 'source': source, 'by': by, 'note': '',
+        item = {'id': self.next, 'at': time.time(), 'name': name, 'qty': _take(qty, buys[1] if buys else '', buys[6] if buys else 1),
+                'asked': qty or None, 'source': source, 'by': by, 'note': '',
                 'product': buys[0] if buys else None, 'size': buys[1] if buys else None, 'why': buys[2] if buys else None,
                 'times': buys[3] if buys else 0, 'last': buys[4] if buys else None, 'price': buys[5] if buys else None,
                 'about': buys[7] if buys else None, 'url': '', 'state': 'ready' if buys else 'pick', 'how': None, 'options': options, 'left': False}
@@ -209,17 +221,22 @@ class Kitchen:
         if path == '/learn':
             return 200, {'ok': True}
         if path == '/items':
-            added, already = [], []
+            added, already, changed = [], [], []
             for written in body.get('items') or []:
                 new, twin = self._add(written, body.get('source') or 'app', 'me')
-                (added if new else already).append(copy.deepcopy(new or twin))
-            return 200, {'added': added, 'already': already}
-        found = re.fullmatch(r'/items/(\d+)/(remove|pick|keep)', path)
+                (added if new else changed if twin.pop('changed', False) else already).append(copy.deepcopy(new or twin))
+            return 200, {'added': added, 'already': already, 'changed': changed}
+        found = re.fullmatch(r'/items/(\d+)/(remove|pick|keep|qty)', path)
         if found:
             item = next((i for i in self.items if i['id'] == int(found.group(1))), None)
             if item is None or (found.group(2) == 'pick' and item['state'] not in ('pick', 'ready', 'unavailable', 'unknown')):
                 return 409, {'error': 'That item isn’t waiting on the list any more.'}
-            if found.group(2) == 'pick':
+            if found.group(2) == 'qty':
+                if item['qty'] != body['qty']:
+                    item.update(qty=body['qty'], asked=None, state='ready' if item['state'] == 'cart' else item['state'])
+                    if self.auto:
+                        self._fill()
+            elif found.group(2) == 'pick':
                 item.update(product=body.get('product'), size=body.get('size') or '', price=body.get('price') or '', why='chosen', state='ready',
                             times=0, last=None, about=None)
                 if self.auto:
@@ -237,6 +254,9 @@ class Kitchen:
             return 200, {'ok': True, 'changes': self._fill()}
         if path == '/cart/read':
             self._settle()
+            for item in self.items:             # what nobody could confirm is settled by the cart's own page
+                if item['state'] == 'unknown':
+                    item['state'] = 'cart'
             lines = [{'product': i['product'], 'size': i['size'] or '', 'qty': i['qty'], 'price': float(i['price']) if i['price'] else None}
                      for i in self.items if i['state'] == 'cart']
             lines += [{'product': 'Sunny Grove Rotini Pasta', 'size': '12 oz', 'qty': 3, 'price': 3.19}]     # something put in by hand

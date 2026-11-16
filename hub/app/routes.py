@@ -504,7 +504,7 @@ def kitchen_picture():
 
 @router.post('/api/kitchen/{do}')
 def kitchen_tap(do: str, request: Request, body: dict = Body(default={})):
-    """A tap on the list: add, remove, pick, keep, fill, read, order, auto or reminders. Each can end in the shop's
+    """A tap on the list: add, remove, pick, qty, keep, fill, read, order, auto or reminders. Each can end in the shop's
     cart, so each needs a signed-in device; the kitchen service checks the login again."""
     from . import kitchen
     if _login(request) is None:

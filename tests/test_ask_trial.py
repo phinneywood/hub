@@ -69,7 +69,7 @@ def test_the_trial_asks_about_the_house_as_it_is_and_sends_nothing(house):
     result = trial.run()
     assert (result['ran'], result['failed'], result['left_out']) == (6, [], []) and 0 <= result['cost'] < 0.05
     assert house.sent == [] and house.setup == [] and admin.recent() == [] and admin.waiting(1) is None
-    assert [m for m in house.kitchen.asked if m[0] != 'GET'] == []          # nothing reached Kitchen
+    assert [c for c in house.kitchen.calls if c[0] != 'GET'] == []          # nothing reached Kitchen
     kept = json.loads((config.DATA_DIR / trial.FILE).read_text())
     assert [(r['id'], r['ok'], r['tools']) for r in kept['requests']] == [
         ('move', True, ['arrange']), ('read', True, ['details']), ('automation', True, ['find', 'routine']), ('remove', True, ['rooms']),
