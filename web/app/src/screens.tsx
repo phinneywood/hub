@@ -2,7 +2,7 @@
 import type { JSX } from "preact";
 import { useRef, useState } from "preact/hooks";
 import { go, house, look, me, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
-import type { Look } from "./state";
+import type { Look, View } from "./state";
 import { able, forgetNote } from "./asking";
 import type { Floor, House, Room } from "./types";
 import { Bars, Icon } from "./ui";
@@ -172,27 +172,29 @@ function Playing() {
   );
 }
 
-const TABS = [["home", "Home"], ["today", "Today"], ["mail", "Mail"], ["kitchen", "Kitchen"]] as const;
+// Two places: Ask, where Hub opens, and the house. A page Ask opened (Today, Mail, Kitchen, System) shows as a
+// third word while it is open, so the bar always says where you are and the way back is one tap.
+const TABS = [["home", "Ask"], ["house", "House"]] as const;
+const PAGES: Partial<Record<View, string>> = { today: "Today", mail: "Mail", mailsettings: "Mail", kitchen: "Kitchen", system: "System",
+  errands: "Today", versions: "System", engine: "System", changes: "System", activity: "System" };
 
-function Tabs() {
+function Tabs({ page }: { page?: boolean }) {
+  const open = PAGES[view.value];
   return (
     <>
       {TABS.map(([where, name]) => (
-        <button type="button" key={where} class={"tab" + (view.value === where || (where === "mail" && view.value === "mailsettings")
-          || (where === "today" && view.value === "errands") ? " on" : "")} onClick={() => go(where)}>{name}</button>
+        <button type="button" key={where} class={"tab" + (view.value === where ? " on" : "")} onClick={() => go(where)}>{name}</button>
       ))}
+      {page && open && <span class="tab on page" aria-current="page">{open}</span>}
     </>
   );
 }
 
-export function Dock({ ask }: { ask: () => void }) {
+export function Dock() {
   return (
     <div class="dock">
       <Playing />
-      <div class="tabs">
-        <Tabs />
-        <button type="button" class="askbtn" onClick={ask}><Icon name="wave" />Ask</button>
-      </div>
+      <div class="tabs"><Tabs page /></div>
     </div>
   );
 }
@@ -202,7 +204,7 @@ export function Rail() {
   return (
     <nav class="rail" aria-label="Hub">
       <div class="mark"><i />Hub</div>
-      <Tabs />
+      <Tabs page={PAGES[view.value] !== "System"} />
       <div class="foot">
         <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" || view.value === "changes" || view.value === "activity" ? " on" : "")} onClick={() => go("system")}>System</button>
         <p class="ok">{fine ? "The house is answering." : trouble.value === "hub" ? "Can’t reach Hub." : "The house isn’t answering."}</p>

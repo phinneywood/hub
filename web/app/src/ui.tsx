@@ -21,8 +21,10 @@ const PATHS = {
   call: <path d="M7.2 4.5h2.6l1.4 3.6-1.8 1.2a10.5 10.5 0 0 0 5.3 5.3l1.2-1.8 3.6 1.4v2.6a1.7 1.7 0 0 1-1.8 1.7A14.6 14.6 0 0 1 5.5 6.3a1.7 1.7 0 0 1 1.7-1.8z" />,
   calendar: <><rect x="4" y="5.5" width="16" height="14" rx="2.2" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /></>,
   bag: <><path d="M5.5 8.5h13l-1 11h-11z" /><path d="M9 8.5V7a3 3 0 0 1 6 0v1.5" /></>,
+  stop: <rect x="7" y="7" width="10" height="10" rx="2" />,
+  right: <path d="M9.5 6l6 6-6 6" />,
 };
-const SOLID = new Set(["more", "play", "pause", "next", "previous"]);
+const SOLID = new Set(["more", "play", "pause", "next", "previous", "stop"]);
 
 export function Icon({ name }: { name: keyof typeof PATHS }) {
   return <svg class={SOLID.has(name) ? "ic solid" : "ic"} viewBox="0 0 24 24" aria-hidden="true">{PATHS[name]}</svg>;

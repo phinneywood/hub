@@ -34,12 +34,37 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     const saysSoon = (text, ms) => until((t) => document.querySelector(".say")?.textContent.trim() === t, text, ms);
     const room = (id) => `.main .room[data-room="${id}"]`;
 
-    // ---- opening ----
+    const small = () => page.evaluate((least) => [...document.querySelectorAll("button, a, input, [role=switch], [role=button]")]
+      .map((el) => [el, el.getBoundingClientRect()]).filter(([el, r]) => r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden")
+      .filter(([, r]) => Math.min(r.width, r.height) < least)
+      .map(([el, r]) => `${(el.getAttribute("aria-label") || el.textContent || el.className).trim().slice(0, 30)} ${Math.round(r.width)}x${Math.round(r.height)}`), FINGER);
+    const openPage = async (name) => {         // Today, Mail and Kitchen have no tab: Ask finds them by a few letters
+      await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")');
+      await page.fill("#askq", name.slice(0, 4));
+      await page.locator(".found .sug", { hasText: name }).first().click();
+    };
+
+    // ---- opening: Ask, with what needs you and the house above the field ----
     await page.goto(base + "/");
     expect(new URL(page.url()).pathname === "/app/", "Hub's front door did not lead to the app");
-    await page.waitForSelector(".plan");
+    await page.waitForSelector(".askpage");
     await stage("reset");
-    await page.reload(); await page.waitForSelector(".plan"); await page.waitForTimeout(2000);      // the opening moment is over
+    await page.reload(); await page.waitForSelector(".askpage .now"); await page.waitForTimeout(2000);
+    await shot("0-ask");
+    expect(await saysSoon("Dinner at home is at seven. Three things need you."), "Ask did not open on the day: " + await says());
+    // On a phone the house card shares the screen, so two needs show and the third is a tap away in Today.
+    expect((await page.locator(".askpage .now .row.need .row-main b").allInnerTexts()).join("|")
+      === (phone ? "Email from Sam Rivera|Approve the grocery cart" : "Email from Sam Rivera|Approve the grocery cart|Email from Maple Street Dental"),
+      "Ask did not open on what needs you");
+    if (phone) expect((await page.locator(".askpage .now-more").first().innerText()).trim() === "One more in Today", "the rest of what needs you was not a tap away");
+    expect(phone ? (await page.locator(".askpage .house-now .house-words b").innerText()) === "Four rooms are lit."
+      : await page.locator(".side .plan").count() > 0, phone ? "the house card did not say the house" : "the house was not beside Ask");
+    expect(await page.evaluate(() => { const f = document.querySelector("#askq").getBoundingClientRect(); return f.bottom <= innerHeight && f.top > innerHeight / 2; }),
+      "the field was not at the bottom of the screen");
+    expect((await page.locator(phone ? ".tabs .tab" : ".rail .tab:not(.foot .tab)").allInnerTexts()).join("|") === "Ask|House", "the bar is not Ask and House");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on Ask: " + (await small()).join(", "));
+    await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
+    await page.waitForSelector(".plan"); await page.waitForTimeout(2000);      // the opening moment is over
     await shot("1-home");
     expect(await says() === "Four rooms are lit.", "the house sentence: " + await says());
     expect(await sub() === "“Paper Lanterns” is playing in the kitchen and the living room.", "the music sentence: " + await sub());
@@ -47,10 +72,6 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect((await page.locator(".floor").allInnerTexts()).join("|") === "Downstairs|Upstairs|Outside", "three floors, ground floor first");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the page scrolls sideways");
     expect(await page.evaluate(() => document.fonts.check('500 17px "Jost"')), "the typeface did not load");
-    const small = () => page.evaluate((least) => [...document.querySelectorAll("button, a, input, [role=switch], [role=button]")]
-      .map((el) => [el, el.getBoundingClientRect()]).filter(([el, r]) => r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden")
-      .filter(([, r]) => Math.min(r.width, r.height) < least)
-      .map(([el, r]) => `${(el.getAttribute("aria-label") || el.textContent || el.className).trim().slice(0, 30)} ${Math.round(r.width)}x${Math.round(r.height)}`), FINGER);
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Home: " + (await small()).join(", "));
 
     // ---- a tap shows at once, before Hub has answered ----
@@ -81,7 +102,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
 
     // ---- another device sees it without asking ----
     const other = await ctx.newPage();
-    await other.goto(base + "/app/"); await other.waitForSelector(".plan");
+    await other.goto(base + "/app/#house"); await other.waitForSelector(".plan");
     await tap(room("entry"));
     expect(await other.waitForFunction(() => document.querySelector(".say")?.textContent.trim() === "Five rooms are lit.", null, { timeout: 6000 }).then(() => true, () => false),
       "a second open app did not hear about the change within 6 s");
@@ -179,7 +200,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     const answered = (text, ms) => until((t) => [...document.querySelectorAll(".turn")].pop()?.querySelector(".answer")?.textContent.startsWith(t)
       && ![...document.querySelectorAll(".turn")].pop().querySelector(".dots"), text, ms);
     const lastAnswer = () => page.locator(".turn .answer").last().innerText().catch(() => "(nothing)");
-    if (phone) { await tap(".askbtn"); await page.waitForSelector(".sheet.in"); }
+    await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")'); await page.waitForSelector(".askpage");
     expect(await until(() => document.querySelector(".sug")?.textContent === "Dim the living room to 30You often ask this around now"), "what is often asked around now was not offered");
     await page.waitForTimeout(300); await shot("6a-ask-open");
     await page.locator(".sug").first().click();
@@ -189,7 +210,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.fill("#askq", "liv"); await page.waitForTimeout(250); await shot("6-ask");
     expect((await page.locator(".sug").first().innerText()).startsWith("Living room"), "typing did not find the room");
     await page.locator('.sug [role="switch"]').first().click();
-    expect(await until((sel) => document.querySelector(sel)?.getAttribute("aria-checked") === "false", room("living-room")), "the switch in the list did not switch the room");
+    expect(await until(() => fetch("/app/api/home").then((r) => r.json()).then((h) => !h.rooms["living-room"].on)), "the switch in the list did not switch the room");
 
     // ---- Ask: say it, and Hub does it and says so ----
     // The field sends only once the request before it has finished, so wait for that as a person would.
@@ -213,11 +234,15 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await askFor("some jazz in the bedroom, softly");
     expect(await answered("Playing Evening Jazz in the bedroom at 15%."), "Ask did not play the music: " + await lastAnswer());
     expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelector(".rows .ctl-name")?.textContent === "Bedroom"), "the speaker was not drawn under the answer");
-    expect(await until(() => document.querySelector(".sub")?.textContent.endsWith("Something else is playing in the bedroom.")), "Home did not say that two rooms play different things: " + await sub());
+    expect(await until(() => document.querySelector(".np-text span")?.textContent.endsWith("also Bedroom")), "the bar did not say that two rooms play different things");
     await askFor("what should we cook this week?");
     expect(await answered("Kitchen is on it."), "Ask did not pass the question to Kitchen: " + await lastAnswer());
     expect(await until(() => document.querySelectorAll(".kitchen-says .kcard").length === 3, null, 12000), "Kitchen’s answer did not arrive under the request");
-    expect(await until(() => { const box = document.querySelector(".ask-scroll"); return box.scrollHeight - box.scrollTop - box.clientHeight < 4; }), "Kitchen’s answer arrived out of view");
+    // An answer taller than the screen is read from its start; a shorter one sits on the field.
+    expect(await until(() => { const box = document.querySelector(".ask-scroll"), r = box.getBoundingClientRect();
+      const bubble = [...box.querySelectorAll(".turn:not(.folded) .asked")].pop()?.getBoundingClientRect();
+      return box.scrollHeight - box.scrollTop - box.clientHeight < 4 || (bubble && bubble.top >= r.top - 1 && bubble.top < r.top + 60); }),
+      "Kitchen’s answer arrived out of view");
     await page.waitForTimeout(300); await shot("6c-ask-kitchen");
     await askFor("what needs me today?");
     expect(await answered("From what Hub can see, two emails need you."), "a question about the day was not answered from what Hub read: " + await lastAnswer());
@@ -301,18 +326,17 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     if (phone) expect((await small()).length === 0, "tap targets under 44 px in Ask: " + (await small()).join(", "));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Ask made the page scroll sideways");
     await page.fill("#askq", "");
-    if (phone) { await page.keyboard.press("Escape"); await page.waitForTimeout(400); }
     await tap(phone ? ".who" : ".rail .foot .tab");
     expect(await until(() => [...document.querySelectorAll(".block h2")].some((h) => h.textContent === "Hub remembers")), "System did not list what Hub remembers");
     await page.locator(".block .forget").first().click();
     expect(await until(() => ![...document.querySelectorAll(".block h2")].some((h) => h.textContent === "Hub remembers")), "Forget did not forget");
-    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
+    await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
     await page.waitForSelector(".plan");
 
     // ---- where Ask isn't set up yet, what is typed still goes somewhere: Hub's older chat ----
     await stage("reset"); await stage("ask-away");
     await page.reload(); await page.waitForSelector(".plan");
-    if (phone) { await tap(".askbtn"); await page.waitForSelector(".sheet.in"); }
+    await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")'); await page.waitForSelector(".askpage");
     expect(await until(() => document.querySelector(".ask-hint")?.textContent.endsWith("Anything else goes to the chat.")), "Ask did not say that it hands over to the chat");
     await page.route(base + "/ask", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>The chat</title>" }));
     await askFor("play something calm");
@@ -320,11 +344,11 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.evaluate(() => sessionStorage.getItem("hub.say")) === "play something calm", "what was typed did not go to the chat with it");
     await page.unroute(base + "/ask");
     await stage("ask-back");
-    await page.goto(base + "/app/"); await page.waitForSelector(".plan"); await page.waitForTimeout(1900);
+    await page.goto(base + "/app/#house"); await page.waitForSelector(".plan"); await page.waitForTimeout(1900);
 
     // ---- Today: what needs you, then the day ----
     await stage("reset");
-    await tap(phone ? '.tabs .tab:text-is("Today")' : '.rail .tab:text-is("Today")');
+    await openPage("Today");
     expect(await saysSoon("Dinner at home is at seven. Nine things need you."), "Today’s sentence: " + await says());
     expect((await page.locator(".row.need .row-main b").allInnerTexts()).join("|") === "Email from Sam Rivera|Approve the grocery cart|Email from Maple Street Dental",
       "what needs you, the longest wait first");
@@ -430,7 +454,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await partnerCtx.close();
 
     // ---- Mail: what needs you, who never answered, what Hub sorted ----
-    await tap(phone ? '.tabs .tab:text-is("Mail")' : '.rail .tab:text-is("Mail")');
+    await openPage("Mail");
     expect(await saysSoon("Two emails need you."), "Mail’s sentence: " + await says());
     expect((await page.locator(".wrap.mail .row.need .row-main b").allInnerTexts()).join("|") === "Sam Rivera|Maple Street Dental|Saturday plans?",
       "Mail: the emails that need you, the longest wait first, then the unanswered question");
@@ -456,7 +480,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
 
     // ---- Kitchen: the list on its way into the cart, what needs a person, and no second conversation ----
     await stage("reset");
-    await tap(phone ? '.tabs .tab:text-is("Kitchen")' : '.rail .tab:text-is("Kitchen")');
+    await openPage("Kitchen");
     expect(await saysSoon("A cart waits for your tap."), "Kitchen’s sentence: " + await says());
     expect(await sub() === "Two of four are in the cart. This is a practice cart: nothing in the shop is touched.", "Kitchen’s second line: " + await sub());
     const stands = () => page.locator(".kitchen .rows .row.item .row-q").allInnerTexts().then((all) => all.join("|"));
@@ -497,8 +521,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.querySelectorAll(".kitchen .kitems li").length === 7, null, 6000), "the cart as its page shows it was not read");
     // A cart turn that stopped before it could say: Kitchen asks for the one thing that settles it.
     await stage("kitchen-unsure");
-    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
-    await tap(phone ? '.tabs .tab:text-is("Kitchen")' : '.rail .tab:text-is("Kitchen")');
+    await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
+    await openPage("Kitchen");
     expect(await saysSoon("One thing to check in the cart."), "a thing nobody could confirm: " + await says());
     expect((await page.locator(".kitchen .ctl.check .ctl-name b").innerText()) === "One thing to check", "what to check was not asked for under Needs you");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on a thing to check: " + (await small()).join(", "));
@@ -518,17 +542,17 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.querySelector(".kitchen .block .quiet")?.textContent.startsWith("Nothing on it.")), "an empty list did not say how to add to it");
     // The kitchen service stopped, and one from before it kept the list: each says so, and nothing looks broken.
     await stage("kitchen-away");
-    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
-    await tap(phone ? '.tabs .tab:text-is("Kitchen")' : '.rail .tab:text-is("Kitchen")');
+    await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
+    await openPage("Kitchen");
     expect(await until(() => document.querySelector(".kitchen .banner b")?.textContent === "Kitchen isn’t answering"), "a Kitchen that is away did not say so");
     await stage("kitchen-old");
-    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
-    await tap(phone ? '.tabs .tab:text-is("Kitchen")' : '.rail .tab:text-is("Kitchen")');
+    await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
+    await openPage("Kitchen");
     expect(await until(() => document.querySelector(".kitchen .banner b")?.textContent === "Kitchen needs its update"), "an older Kitchen did not say it needs its update");
     expect(await page.locator('.kitchen input[aria-label="Message Kitchen"]').count() === 1, "an older Kitchen was left with no way to be asked");
     await page.waitForTimeout(200); await shot("13f-kitchen-old");
     await stage("reset");
-    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
+    await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
     await page.waitForSelector(".plan");
 
     // ---- System, and the look ----
@@ -586,7 +610,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     }
     await tap(".uplink");
     expect(await saysSoon("The house is answering."), "Back from Engine: " + await says());
-    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
+    await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
     await page.waitForSelector(".plan");
 
     // ---- when the house stops answering, and when Hub can't be reached ----

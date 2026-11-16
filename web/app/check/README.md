@@ -3,7 +3,9 @@
 Drives the real app in headless Chromium at phone width (390 px, evening and day looks) and laptop width
 (1280 px), on a made-up house that follows what it is sent. It checks that:
 
-- Hub's front door leads to the app, the plan shows every room floor by floor, and the sentences are right;
+- Hub's front door leads to the app, which opens on Ask with the day's sentence, what needs you, the house beside
+  it or on a card, the field at the bottom and a bar of Ask and House; the plan shows every room floor by floor,
+  and the sentences are right;
 - a tap shows within 0.4 s while Hub is still answering, holds once the house agrees, and Undo puts it back;
 - a tap that didn't take is put right and says why;
 - a second open app hears about a change without asking;
@@ -30,6 +32,7 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   whose mail Hub doesn't read, sees only the class guide's two on Errands and Today, is told on Mail and Mail
   settings that their mail isn't connected yet with none of the owner's shown, isn't offered the older Gmail and
   Calendar pages, and finds the older Gmail page saying it isn't theirs;
+- Today, Mail and Kitchen open from Ask by a few letters of their name;
 - System opens Versions, which lists the releases and leads back;
 - Mail leads with the emails that need you and the unanswered question, takes a tick and puts it back, and
   files a kind; Kitchen shows the list with each thing's product and where it stands, what needs a pick, a cart
@@ -66,6 +69,7 @@ Run it after changing the app or updating its packages.
 To use an installed Chrome instead of Playwright's own browser, set `APP_CHECK_CHROME` to its executable.
 
 It prints `"ok": true` and exits 0 when every check passes. Keep the screenshots out of the repository.
+The made-up day is set in Pacific time, so on a machine in another time zone run it with `TZ=America/Los_Angeles`.
 
 To try the demo from a phone, set `APP_CHECK_HOST` to this machine's private tailnet address before
 starting it. The demo has no sign-in of its own, so anyone who can reach that address can tap the made-up

@@ -58,8 +58,9 @@ async function untick(need: Need) {
 
 /** Keep the day fresh while someone is looking at it. */
 export function watchDay() {
-  const due = () => view.value === "today" && !document.hidden && Date.now() - asked > EVERY - 1000;
+  const looking = () => view.value === "today" || view.value === "home";     // Ask opens on the day too
+  const due = () => looking() && !document.hidden && Date.now() - asked > EVERY - 1000;
   window.setInterval(() => { if (due()) void loadDay(); }, EVERY);
   document.addEventListener("visibilitychange", () => { if (due()) void loadDay(); });
-  view.subscribe((where) => { if (where === "today" && Date.now() - asked > 5000) void loadDay(); });
+  view.subscribe((where) => { if ((where === "today" || where === "home") && Date.now() - asked > 5000) void loadDay(); });
 }

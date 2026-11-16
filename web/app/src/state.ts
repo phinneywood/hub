@@ -15,11 +15,12 @@ const ALL_OFF = "all-off";
 const SILENCE = 12000;            // Hub sends a beat every 5 s; this long without one and the line is taken for dead
 
 export type Look = "auto" | "dusk" | "day";
-export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "ask" } | { kind: "keep" }
+export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "keep" }
   | { kind: "item"; id: number } | { kind: "card"; card: Card } | { kind: "errand"; id: number; way?: number } | null;
 export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
-export type View = "home" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity"
+// "home" is Ask, the screen Hub opens to; "house" is the plan of rooms.
+export type View = "home" | "house" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity"
   | "errands";
 
 function kept(): House | null {
@@ -46,7 +47,7 @@ export const trouble = signal<Trouble>("");   // "hub": can't reach Hub; "house"
 export const why = signal("");
 export const me = signal<Me>({ signed_in: true, initial: "", versions: { js: "", css: "" }, links: { ha: null, music: null } });
 export const sheet = signal<Sheet>(null);
-const VIEWS: View[] = ["today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "errands"];
+const VIEWS: View[] = ["house", "today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "errands"];
 const here = (): View => VIEWS.find((v) => location.hash === "#" + v) ?? "home";
 export const view = signal<View>(here());
 export const toast = signal<Toast | null>(null);

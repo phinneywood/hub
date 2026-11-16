@@ -13,10 +13,10 @@ const HERE: Record<string, string> = {
   "/engine/notes": "#engine", "/engine/recipes": "#engine", "/app/#versions": "#versions",
   "/house/changes": "#changes", "/house/playlists": "#changes", "/gmail/plan": "#mailsettings", "/gmail/delayed": "#mailsettings", "/gmail/backlog": "#mailsettings",
 };
-const inApp = (href: string) => HERE[href] ?? href;
+export const inApp = (href: string) => HERE[href] ?? href;
 import { daySays, daySub, partOfDay } from "./words";
 
-function NeedRow({ need }: { need: Need }) {
+export function NeedRow({ need }: { need: Need }) {
   const done = ticked.value.includes(need.key);
   return (
     <div class={"row tick need" + (done ? " on" : "")}>
@@ -29,7 +29,7 @@ function NeedRow({ need }: { need: Need }) {
   );
 }
 
-function SlotRow({ slot }: { slot: Slot }) {
+export function SlotRow({ slot }: { slot: Slot }) {
   const words = slot.time === "All day" || slot.time === "Now" || slot.time === "Still";
   return (
     <div class={"row" + (slot.warn ? " warn" : "") + (slot.next ? " now" : "")}>

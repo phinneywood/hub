@@ -380,10 +380,12 @@ _asking, _asking_lock = set(), __import__('threading').Lock()
 
 @router.get('/api/ask')
 def ask_status(request: Request):
-    """Whether Ask can run, this person's last few turns, what they tend to ask around now, and what Hub remembers."""
+    """Whether Ask can run, this person's turns from the last twelve hours, what they tend to ask around now, and
+    what Hub remembers. (The model is given far fewer: `brain.earlier`.)"""
     from .ask import brain, turns
     why, login = brain.warm() or brain.limits(), _login(request)
-    return {'ready': why is None, 'why': why, 'recent': turns.recent(login), 'usual': turns.usual(login) if why is None else [],
+    return {'ready': why is None, 'why': why, 'recent': turns.recent(login, turns.SHOWN_SECONDS, turns.SHOWN_TURNS),
+            'usual': turns.usual(login) if why is None else [],
             'remembers': turns.remembered()}
 
 

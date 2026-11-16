@@ -273,6 +273,8 @@ async def run(text, login, build=None):
     before = await run_in_threadpool(earlier, login)
     known = await run_in_threadpool(_known, text, topics, login) if topics else None
     turn = tools.Turn(text=text, login=login, strangers=bool(known))
+    if known:
+        tools.shown(turn, topics)
     # Names, titles and mail are other people's text. None of it can close a section and start one of its own.
     prompt = (f'<house>\n{_inside(await run_in_threadpool(house))}\n</house>\n' + (f'<earlier>\n{_inside(before)}\n</earlier>\n' if before else '')
               + (f'<data>\n{_inside(known)}\n</data>\n' if known else '') + f'<said>{_inside(text)}</said>')
@@ -319,4 +321,6 @@ async def run(text, login, build=None):
     if not answer:      # the model neither spoke nor acted: say so rather than leave the owner waiting
         answer = 'Hub didn’t catch that. Say it another way.'
         yield {'t': 'say', 'text': answer}
+    for card in turn.cards[drawn:]:      # a card no tool step drew yet, such as the day's rows under a plain answer
+        yield {'t': 'card', 'card': card}
     yield finish(answer, turn.cards, is_private=turn.strangers)

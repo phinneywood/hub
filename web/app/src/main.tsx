@@ -1,10 +1,10 @@
-// Hub's app: the house as a plan, kept live. Built into hub/static/app (see ../README.md).
+// Hub's app: Ask at the center, the house a tap away, kept live. Built into hub/static/app (see ../README.md).
 import { render } from "preact";
 import { useEffect } from "preact/hooks";
 import { signal } from "@preact/signals";
 import "./app.css";
 import { Dock, Home, Rail, System } from "./screens";
-import { Ask, AskSheet, CardSheet } from "./ask";
+import { Ask, CardSheet } from "./ask";
 import { loadAble } from "./asking";
 import { loadDay, watchDay } from "./day";
 import { Today } from "./today";
@@ -17,8 +17,9 @@ import { ItemSheet, Kitchen, shop, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
 import { ErrandSheet, Errands, watchErrands } from "./errands";
 import { HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
-import { seen, sheet, start, view } from "./state";
+import { go, seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
+import { watchDock, watchViewport } from "./viewport";
 
 const wideScreen = matchMedia("(min-width: 1040px)");
 const wide = signal(wideScreen.matches);
@@ -27,9 +28,10 @@ wideScreen.addEventListener("change", (e) => (wide.value = e.matches));
 const waking = signal(true);
 window.setTimeout(() => (waking.value = false), 1800);
 
-function ask() {
-  if (wide.value) document.getElementById("askq")?.focus();
-  else sheet.value = { kind: "ask" };
+/** Cmd-K, from anywhere: Ask, with the field ready. */
+function toAsk() {
+  if (view.value !== "home" && !wide.value) go("home");
+  requestAnimationFrame(() => document.getElementById("askq")?.focus());
 }
 
 function Sheets() {
@@ -52,28 +54,36 @@ function Sheets() {
     return now.music && speaker ? <HereSheet speaker={speaker} music={now.music} /> : null;
   }
   if (open.kind === "keep") return <KeepSheet now={now} />;
-  return wide.value ? null : <AskSheet />;
+  return null;
 }
 
 function Screen() {
   const where = view.value;
-  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "today" ? <Today /> : where === "errands" ? <Errands /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
+  return where === "home" ? <Ask home house={!wide.value} /> : where === "house" ? <Home /> : where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "today" ? <Today /> : where === "errands" ? <Errands /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
+}
+
+/** Beside the screen on a wide one: the house while Ask is in the middle, and Ask beside everything else. */
+function Side() {
+  if (view.value === "home") return <aside class="side" aria-label="The house"><Home /></aside>;
+  return <aside class="askrail" aria-label="Ask"><h2>Ask</h2><Ask /></aside>;
 }
 
 function App() {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); ask(); }
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); toAsk(); }
     };
     document.addEventListener("keydown", key);
+    watchDock();
     return () => document.removeEventListener("keydown", key);
   }, []);
+  const asking = view.value === "home";
   return (
-    <div class="app">
+    <div class={"app" + (asking ? " asking" : "")}>
       <Rail />
       <main class={"main" + (waking.value ? " wake" : "")}><Screen /></main>
-      {wide.value && <aside class="askrail" aria-label="Ask"><h2>Ask</h2><Ask /></aside>}
-      <Dock ask={ask} />
+      {wide.value && <Side />}
+      <Dock />
       <Sheets />
       <ToastLine />
     </div>
@@ -102,9 +112,10 @@ if (root) {
   start();
   void loadAble();
   watchDay();
+  watchViewport();
   watchMail();
   watchErrands();
   watchKitchen();
-  if (view.value === "today") void loadDay();
+  void loadDay();         // Ask opens on the day, so it is read at once wherever the app opens
   void keepOnDevice().catch(() => undefined);     // without it the app still works; it just needs Hub to open
 }

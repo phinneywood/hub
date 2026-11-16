@@ -62,7 +62,7 @@ body {
   font-variant-numeric: tabular-nums;
   overscroll-behavior-y: none;
 }
-button, input { font: inherit; color: inherit; }
+button, input, textarea { font: inherit; color: inherit; }
 a { color: inherit; text-decoration: none; -webkit-tap-highlight-color: transparent; }
 button { background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; text-align: left; }
 button:disabled { opacity: .45; cursor: default; }
@@ -239,7 +239,7 @@ button.row { text-align: left; }
 .tab::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: transparent; }
 .tab.on { color: var(--ink); }
 .tab.on::before { background: var(--lamp); }
-.askbtn { margin-left: auto; height: 46px; padding: 0 18px 0 14px; border-radius: 15px; background: var(--lamp); color: var(--on-lamp); font-size: 18px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+.tab.page { cursor: default; }        /* the page Ask opened, shown while it is open */
 
 /* ---------- sheets ---------- */
 .scrim { position: fixed; inset: 0; z-index: 10; background: var(--scrim); opacity: 0; transition: opacity .25s ease; }
@@ -334,6 +334,79 @@ button.row { text-align: left; }
 .send { position: absolute; right: 5px; top: 5px; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-3); transition: background .15s ease, color .15s ease; }
 .send.on { background: var(--lamp); color: var(--on-lamp); }
 .send .ic { width: 20px; height: 20px; }
+
+/* ---------- Ask as the screen Hub opens to ----------
+   On a phone it is a column the size of what can be seen (--vvh from viewport.ts), so the keyboard pushes the
+   field up instead of covering it, and the conversation scrolls inside it. The bar sits under it, and steps aside
+   while the keyboard is up. */
+.askpage { position: fixed; left: 0; right: 0; top: 0; z-index: 2; margin: 0 auto; max-width: 620px; padding: env(safe-area-inset-top, 0px) var(--gut) 10px;
+  height: calc(var(--vvh, 100dvh) - var(--dockh, 130px)); transform: translateY(var(--vvt, 0px)); background: var(--ground); }
+.kb .askpage { height: var(--vvh, 100dvh); padding-bottom: 8px; }
+.kb .app.asking .dock { visibility: hidden; }
+.askpage .ask-scroll { -webkit-mask-image: linear-gradient(#000 calc(100% - 16px), #0000); mask-image: linear-gradient(#000 calc(100% - 16px), #0000); padding-bottom: 16px; }   /* more below fades into the field */
+.askpage .ask-said { margin-top: 0; padding-top: 0; flex: 1; display: flex; flex-direction: column; }
+.askpage .nowtop { margin-bottom: 18px; }
+.askpage .top { padding-top: 10px; }       /* the page itself keeps clear of the clock, so what scrolls never runs under it */
+.askpage .nowtop .say { font-size: 29px; }
+.now .row.need { min-height: 50px; padding: 6px 0; }
+.now .row-main span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now .row-main { min-width: 0; }
+.askpage .nowtop + .turn, .askpage .nowtop + .found { margin-top: auto; }
+.askpage .found:first-child { margin-top: auto; }
+.app.asking .main { padding-bottom: 0; }
+.app.asking .toast { bottom: calc(var(--dockh, 130px) + 82px); }
+.kb .app.asking .toast { bottom: auto; top: calc(var(--vvt, 0px) + max(14px, env(safe-area-inset-top))); }
+
+/* what needs you, and the house, on cards above the conversation */
+.now { background: var(--room); border-radius: 18px; padding: 4px 16px 6px; margin-top: 14px; }
+.now > h2 { font-size: var(--t-xs); letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; padding: 10px 0 2px; }
+.now .rows { border-top: 0; }
+.now .row { border-bottom: 1px solid var(--line); }
+.now .row:last-child { border-bottom: 0; }
+.now .row:not(.need):not(.free) { grid-template-columns: 76px 1fr; }
+.now-more { display: flex; align-items: center; gap: 4px; height: 44px; font-size: var(--t-s); font-weight: 500; color: var(--ink-2); border-top: 1px solid var(--line); width: 100%; }
+.now-more .ic { width: 16px; height: 16px; }
+.house-now { padding-top: 12px; padding-bottom: 12px; }
+.house-line { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; width: 100%; min-height: 44px; }
+.house-words b { display: block; font-size: var(--t-l); font-weight: 500; line-height: 1.2; }
+.house-words span { display: flex; align-items: center; gap: 7px; font-size: var(--t-s); color: var(--ink-2); margin-top: 2px; }
+.house-words .eq { color: var(--sound); height: 11px; flex: none; }
+.tiny { display: grid; grid-template-columns: repeat(4, 13px); grid-auto-rows: 10px; gap: 2px; border-radius: 4px; overflow: hidden; }
+.tiny i { background: var(--ground); }
+.tiny i.lit { background: var(--lamp); }
+.chips { display: flex; gap: 7px; margin: 10px -16px 0; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; white-space: nowrap; }
+.chips { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), #0000); mask-image: linear-gradient(90deg, #000 calc(100% - 22px), #0000); }
+.chip { height: 44px; padding: 0 15px; border-radius: 999px; background: var(--ground); font-size: var(--t-s); font-weight: 500; color: var(--ink-2); }
+.chip.on { background: var(--lamp); color: var(--on-lamp); }
+.chip.busy { color: var(--ink); }
+
+/* the field: a few lines at most, on a card of its own */
+.composer textarea.field { display: block; height: auto; min-height: 54px; max-height: 140px; resize: none; padding: 15px 58px 15px 16px;
+  line-height: 1.35; background: var(--room); box-shadow: inset 0 0 0 1.5px var(--line-2); overflow-y: auto; }
+.composer textarea.field:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+.send { top: auto; bottom: 5px; }
+.send.stop { background: var(--ink); color: var(--ground); }
+.send.stop .ic { width: 16px; height: 16px; }
+
+/* an earlier request: one line, opened by a tap */
+.turn.folded { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 0; }
+.turn.folded + .turn.folded { border-top: 1px solid var(--line); padding-top: 0; }
+.fold { display: flex; gap: 10px; align-items: center; min-height: 46px; min-width: 0; font-size: var(--t-s); }
+.fold-asked { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.fold-more { min-height: 44px; font-size: var(--t-xs); color: var(--ink-3); text-align: left; }
+.fold-undo { height: 44px; min-width: 44px; padding: 0 2px; font-size: var(--t-xs); font-weight: 500; }
+.fold-back { font-size: var(--t-xs); color: var(--ink-3); }
+.turn.folded.back .fold-asked { color: var(--ink-3); }
+.turn:not(.folded) .asked { align-self: flex-end; font-size: var(--t-m); color: var(--ink); background: var(--room); border-radius: 18px 18px 6px 18px;
+  padding: 8px 14px; width: fit-content; max-width: 85%; margin-left: auto; white-space: pre-line; }
+.turn + .turn:not(.folded), .turn.folded + .turn:not(.folded) { border-top: 0; padding-top: 18px; }
+.dayrows { margin-top: 12px; background: var(--room); border-radius: 16px; padding: 2px 14px 4px; }
+.dayrows .rows { border-top: 0; }
+.dayrows .row:last-child { border-bottom: 0; }
+.dayrows .row:not(.need):not(.free) { grid-template-columns: 76px 1fr; }
+.dayrows .rows + .rows { border-top: 1px solid var(--line); }
 
 /* a request and its answer */
 .turn { padding: 6px 0 18px; }
@@ -431,6 +504,22 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
   .np { border-bottom: 0; padding: 12px 56px; max-width: 812px; margin: 0 auto; }
   .askrail { display: flex; flex-direction: column; grid-column: 3; grid-row: 1 / span 2; border-left: 1px solid var(--line); padding: 26px 26px 24px; min-height: 0; background: var(--raised); }
   .askrail h2 { font-size: 22px; margin-bottom: 8px; }
+  /* Ask in the middle, the house beside it */
+  .app.asking .main { overflow: hidden; padding: 0 56px; display: flex; }
+  .askpage { position: static; transform: none; height: auto; flex: 1; max-width: 760px; padding: 0 0 22px; background: none; }
+  .askpage .nowtop .top { height: 40px; }
+  .side { grid-column: 3; grid-row: 1 / span 2; border-left: 1px solid var(--line); overflow-y: auto; padding: 4px 26px 24px; background: var(--raised); }
+  .side .wrap { max-width: none; }
+  .side .say { font-size: 30px; }
+  .side .sub { font-size: var(--t-m); }
+  .side .scenes { gap: 22px; }
+  .side .scene { font-size: var(--t-m); }
+  .side .room { min-height: 86px; padding: 11px 12px 10px; }
+  .side .room.s3 { min-height: 104px; }
+  .side .room-name { font-size: 15px; }
+  .side .room-num { font-size: 28px; } .side .room.s3 .room-num { font-size: 36px; }
+  .side .room:not(.lit) { background: var(--ground); }
+  .app.asking .toast { bottom: 110px; }
   .sheet { left: 50%; right: auto; bottom: auto; top: 50%; width: 500px; max-height: 88dvh; border-radius: 26px; padding: 22px 26px 26px; transform: translate(-50%, -46%); opacity: 0; transition: opacity .2s ease, transform .3s var(--ease); }
   .sheet.in { transform: translate(-50%, -50%); opacity: 1; }
   .grab { display: none; }
@@ -622,5 +711,4 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
   .tabs { gap: 0; padding: 0 10px 0 4px; }
   .tab { position: relative; padding: 0 9px; font-size: 17px; }
   .tab::before { position: absolute; left: 50%; bottom: 3px; margin-left: -3px; }
-  .askbtn { padding: 0 15px 0 12px; gap: 6px; }
 }

@@ -1,13 +1,15 @@
 # The app
 
-Hub's new front: one small app instead of a page per tool. It opens on the house, drawn as a plan of rooms that
-are lit when their lights are, and changes under a tap. Source: `web/app/` (Preact, TypeScript). Built files,
-committed: `hub/static/app/`. The data and taps it uses: `hub/app/`.
+Hub's new front: one small app instead of a page per tool. It opens on Ask: what needs you and the house right
+now, the conversation, and a field to say what you want (see “Ask at the center”). The house is one tap away, drawn
+as a plan of rooms that are lit when their lights are, and changes under a tap. Source: `web/app/` (Preact,
+TypeScript). Built files, committed: `hub/static/app/`. The data and taps it uses: `hub/app/`.
 
-It is being built in phases (the plan is in the owner's private review notes). Phase 1 is Home and music;
-phase 2 is Ask, inside the app; phase 3 is Today; phase 4 brings Mail and Kitchen in as screens of their own. The
-bar has Home, Today, Mail and Kitchen. A Today item that belongs to Mail or Kitchen opens that screen; others (the
-trip, the class guide) still open their older pages.
+It was built in phases (the plan is in the owner's private review notes): Home and music, then Ask, Today, and
+Mail and Kitchen as screens of their own. Since 2026-11-16 (owner's choice, to keep Hub from sprawling) the bar has
+two places, Ask and House. Today, Mail and Kitchen open from Ask: from its cards, from under an answer, or by a few
+letters typed in its field. A Today item that belongs to Mail or Kitchen opens that screen; others (the trip, the
+class guide) still open their older pages.
 
 Since 2026-11-15 (owner's request) Ask can change anything in Home Assistant, not only lights and music (see
 “Setting up the house”), and Kitchen is part of Ask: the shopping list and the cart are worked from Ask, and the
@@ -15,7 +17,8 @@ Kitchen screen is the picture of the list on its way into the cart, with no seco
 
 ## The front door
 
-The app is Hub's front door: `/` sends the browser to `/app/`, and the phone's home-screen icon opens it. The
+The app is Hub's front door: `/` sends the browser to `/app/`, which opens on Ask, and the phone's home-screen icon
+opens it. `/app/#house` opens on the house. The
 older pages all still answer, listed under System; the old chat is at `/ask`. They wear the app's look (its palette and
 typeface in `hub/static/style.css`, and the Evening or Day look chosen in System through `hub/static/look.js`) and carry
 the app's tabs and a System link, so an older page is one step from the app rather than a place of its own. To open on the chat again, the owner
@@ -42,7 +45,7 @@ sets this in the private settings file (`household.json`):
 | `POST /app/api/undo/{batch}` | Put a change back: lights and speakers, or a change to how the house is set up |
 | `GET /app/api/setup/{card}`, `POST /app/api/setup/{card}/confirm`, `.../dismiss` | A change that waits for a tap: what became of it, do it, or put it away (see “Setting up the house”) |
 | `GET /app/api/kitchen`, `POST /app/api/kitchen/{do}` | The shopping list with each thing's product and where it stands, and its taps: `add`, `remove`, `pick`, `keep`, `fill`, `read`, `order`, `auto`, `reminders` (see “Kitchen”) |
-| `GET /app/api/ask` | Whether Ask can run here, the last half hour of this person's requests, what they often ask around now, and what Hub remembers |
+| `GET /app/api/ask` | Whether Ask can run here, the last twelve hours of this person's requests (the model is given only the last half hour), what they often ask around now, and what Hub remembers |
 | `POST /app/api/ask` | One request, `{"text": ...}`, answered as it happens (see “Ask”) |
 | `POST /app/api/memory/{note}/forget` | Forget one thing Hub remembers |
 | `GET /app/api/today` | Today as data: what needs a person, the rest of today, tomorrow, the week at school, the trip |
@@ -117,8 +120,43 @@ The row of words above the plan. Three kinds, run the same way:
 
 ## Ask
 
-Say what you want, and Hub does it or answers. Code: `hub/app/ask/`. In the app: `web/app/src/ask.tsx` and
-`asking.ts`. It replaces the older chat (`/ask`, `hub/agent/`), which stays until Ask runs on the live Hub.
+Say what you want, and Hub does it or answers. Code: `hub/app/ask/`. In the app: `web/app/src/ask.tsx`,
+`asking.ts` and `now.tsx`. It replaces the older chat (`/ask`, `hub/agent/`), which stays until Ask runs on the live Hub.
+
+### Ask at the center
+
+Since 2026-11-16 (owner's choice, after finding Ask hard to start on a phone) Ask is the screen Hub opens to, and the
+one way into everything else. From the top:
+
+- **Right now** (`now.tsx`). The day's sentence (Today's, “Dinner at home is at seven. Three things need you.”),
+  then at most three cards: what needs you (Today's rows, three at most, each with its circle and its button, then
+  “Open Today”), and the house in a line with a tiny plan and its scenes (a tap opens House). The third place is
+  for a feature that needs a person now, such as an errand coming due or the house unwell. Never more than three:
+  Ask stays a conversation, not a feed. On a wide screen the house card gives way to the plan beside Ask.
+- **The conversation.** The last twelve hours of this person's requests are shown, so it is still there when the
+  app opens again. Ask opens on right now; earlier requests fold to one line each (what was asked, the start of the
+  answer, and its Undo), and a tap opens one. The newest stays open while it is less than half an hour old.
+  The model still sees only the last half hour (`brain.earlier`).
+- **The field**, pinned above the bar. It grows to a few lines, Return sends, and the keyboard's own microphone
+  dictates. A request made while another is going waits under it and goes as soon as that one ends (Hub takes
+  one at a time per person); while one is going, an empty field offers Stop, which stops waiting for it: what
+  Hub already did stays done, with its Undo. On a phone the screen is sized to what the keyboard leaves
+  (`viewport.ts`, from `visualViewport`), so the field rides on the keyboard and the bar steps aside meanwhile.
+- **A few letters** find a room, a scene, a playlist or a page (Today, Mail, Kitchen, House and System's pages)
+  at once, without the model. With nothing typed and no conversation going, a hint and what this person often
+  asks around now.
+
+**Answers end in something to tap.** A question about mail, the calendar, school or what needs you ends in the
+same rows Today draws, with their circles and buttons, and a link to Today or Mail. The card names only the topics
+(`{"kind": "day", "show": ["mail"]}`, `tools.shown`); the app reads the rows from Hub for whoever is looking, so
+nothing from the model or the mail is in the card, and each person sees their own.
+
+**A new feature** joins Ask rather than the bar: a tool (and, for reading, a `look_up` topic), a card kind drawn
+under the answer (`CardView` in `ask.tsx`), and, only if it needs a person right now, the third card at the top.
+Its screen, if it has one, is a page Ask opens and the few letters find.
+
+On a wide screen Ask is the middle column with the house beside it; on any other screen Ask sits beside it
+instead. Cmd-K (Ctrl-K) puts the cursor in the field from anywhere.
 
 **Three ways a request goes** (`brain.py`), chosen by what was asked:
 

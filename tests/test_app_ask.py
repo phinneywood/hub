@@ -201,6 +201,38 @@ def test_a_question_about_mail_goes_to_the_model_with_the_mail_beside_it(house, 
     assert 'Which emails need me?' in said_to_model(SEEN[1]) and turns.recent('me@example.com')[-1]['private'] is False
 
 
+def test_an_answer_about_the_day_ends_in_its_rows_and_the_card_names_only_the_topics(house, monkeypatch):
+    from hub.engine import catalog
+    monkeypatch.setattr(catalog, 'mail_lookup', lambda kind=None: {'kind': kind, 'messages': [{'from': 'Dr. Example'}]})
+    monkeypatch.setattr(private.httpx, 'post', lambda *a, **kw: pytest.fail('Luna was asked'))
+    answer, cards, end = ask('Which emails need me?')
+    # The app draws the rows from Hub's own Today for whoever is looking; the card carries nothing from the mail.
+    assert cards == [{'kind': 'day', 'show': ['mail', 'today']}] and end['status'] == 'ok'
+    assert turns.recent('me@example.com')[-1]['cards'] == cards
+    assert ask('is there mail from the dentist')[1] == [{'kind': 'day', 'show': ['mail']}]
+    _, cards, _ = ask('dim the kitchen and living room')
+    assert all(card['kind'] != 'day' for card in cards)
+
+
+def test_a_look_up_by_the_model_adds_its_topics_to_one_day_card():
+    from hub.app.ask import tools
+    turn = tools.Turn(text='when is the dentist')
+    tools.shown(turn, {'calendar'})
+    tools.shown(turn, {'mail', 'calendar', 'the weather'})
+    assert turn.cards == [{'kind': 'day', 'show': ['calendar', 'mail']}]
+    tools.shown(tools.Turn(text='x'), set())
+
+
+def test_the_app_opens_on_the_days_conversation_while_the_model_sees_only_the_last_half_hour(house):
+    import time
+    for hours_ago in (13, 5, 2, 0.1):
+        turns.save('me@example.com', f'asked {hours_ago} hours ago', 'Done.', at=time.time() - hours_ago * 3600)
+    shown = client.get('/app/api/ask', headers=SIGNED_IN).json()['recent']
+    assert [turn['asked'] for turn in shown] == ['asked 5 hours ago', 'asked 2 hours ago', 'asked 0.1 hours ago']
+    assert [turn['asked'] for turn in turns.recent('me@example.com')] == ['asked 0.1 hours ago']
+    assert 'asked 5 hours ago' not in brain.earlier('me@example.com')
+
+
 def test_without_asks_own_model_luna_still_answers_about_the_day(house, monkeypatch):
     sent = []
 

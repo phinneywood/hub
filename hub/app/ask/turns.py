@@ -15,6 +15,8 @@ from ... import store
 TEXT_DAYS = 30
 RECENT_SECONDS = 30 * 60        # how far back a follow-up ("there too") can reach
 RECENT_TURNS = 6
+SHOWN_SECONDS = 12 * 3600       # what the app shows when it opens again: the day's conversation, folded
+SHOWN_TURNS = 30
 USUAL_WINDOW = 90               # minutes either side of now that count as "around this time"
 USUAL_DAYS = 2                  # asked on at least this many days to be offered
 USUAL_MOST = 3

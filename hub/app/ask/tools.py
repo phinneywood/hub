@@ -470,12 +470,26 @@ def kitchen(ctx: RunContext[Turn]) -> dict:
     return _say(turn, 'Kitchen is on it.', {'kind': 'kitchen', 'after': sent['message']})
 
 
+def shown(turn, topics):
+    """Under an answer about the day, mail, the calendar or school: the same rows Today draws, to act on.
+    The card names only the topics; the app reads the rows from Hub for whoever is looking, never from the model."""
+    wanted = sorted(set(topics) & {'mail', 'calendar', 'school', 'today'})
+    if not wanted:
+        return
+    for card in turn.cards:
+        if card.get('kind') == 'day':
+            card['show'] = sorted(set(card['show']) | set(wanted))
+            return
+    turn.cards.append({'kind': 'day', 'show': wanted})
+
+
 def look_up(ctx: RunContext[Turn], topics: list[Literal['mail', 'calendar', 'school', 'today']]) -> dict:
     """Read the owner's mail, their calendar, their child's school (the class guide) or what needs them today, to
     answer a question about them. Read-only: Hub can't send, file, delete or book anything from here. Mail and the
     calendar are read only for the person they belong to; anyone else is told so."""
     turn = ctx.deps
     turn.again = turn.strangers = True
+    shown(turn, set(topics) or {'today'})
     try:
         return {'data': private.data(turn.text, set(topics) or {'today'}, turn.login)}
     except Exception:  # noqa: BLE001 - a reader that failed is an answer the model can pass on
