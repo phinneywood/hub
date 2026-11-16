@@ -113,12 +113,13 @@ def fetch(path, params=()):
 
 
 def picture(path, params=()):
-    """(bytes, content type) of a preview, a photo, a page or a document, or None."""
+    """(bytes, content type, disposition, whether it is a sharp photo) of a preview, a photo, a page or a document,
+    or None."""
     response = _get(path, params, timeout=DRAWING)
     if response is None:
         return None
     return response.content, response.headers.get('content-type', 'application/octet-stream'), \
-        response.headers.get('content-disposition')
+        response.headers.get('content-disposition'), response.headers.get('x-sharp')
 
 
 ITEM = re.compile(r'[pdcg]:[A-Za-z0-9_-]{6,80}')

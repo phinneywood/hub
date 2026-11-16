@@ -9,6 +9,7 @@ changes them; what it derives (the index, previews, the curator's choices) stays
   curate    choose each month's best photos (curator.py; on the 1st)
   apply     act on the marks made in Hub: albums and prints (curator.py)
   status    print what the index holds, as counts
+  photos-access   once, with the owner at the Mac: macOS asks whether the archive may work Photos
 
 Nothing it reads or derives goes to a model or leaves this Mac.
 """

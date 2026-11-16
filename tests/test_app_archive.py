@@ -200,7 +200,7 @@ def test_pictures_pages_and_files_by_id_only(served):
                                         ('text/javascript', 'tool.js'), ('application/octet-stream', 'notes.HTM')])
 def test_a_document_a_browser_would_run_is_sent_to_be_saved(monkeypatch, kind, name):
     from hub.app import routes
-    answer = routes._bytes((b'<script>1</script>', kind, f"attachment; filename*=UTF-8''{name}"), 'file')
+    answer = routes._bytes((b'<script>1</script>', kind, f"attachment; filename*=UTF-8''{name}", None), 'file')
     assert answer.media_type == 'application/octet-stream' and answer.headers['content-security-policy'] == 'sandbox'
 
 

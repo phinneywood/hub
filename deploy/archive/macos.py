@@ -1,7 +1,7 @@
 """What the archive asks of macOS itself: pictures made smaller (ImageIO), the text and pages of PDFs (Core Graphics
-and PDFKit), text read from a picture (Vision), other documents' text (textutil), previews (Quick Look), and iCloud
-Drive files fetched to this Mac. Everything happens on this Mac; nothing here reaches a network service except
-iCloud's own download of the owner's files.
+and PDFKit), text read from a picture (Vision), other documents' text (textutil), previews (Quick Look), iCloud
+Drive files fetched to this Mac, and sharp photos exported by Photos itself. Everything happens on this Mac;
+nothing here reaches a network service except iCloud's own download of the owner's files and photos.
 
 PyObjC comes with osxphotos in the archive's own Python. It is imported only when needed, so the rest of the
 program (and Hub's tests, which stand in for this module) runs without it.
@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 OCR_PIXELS = 2600           # a page or picture is read for text at about this size
@@ -199,3 +200,27 @@ def download(path):
     if os.path.exists(BRCTL):
         return subprocess.run([BRCTL, 'download', str(path)], capture_output=True, timeout=60).returncode == 0
     return False
+
+
+# ---- Photos itself: sharp pictures, brought from iCloud ----
+
+def sharp_picture(uuid, pixels=2048, quality=0.85, folder=None, timeout=90):
+    """(JPEG bytes, w, h) of a photo about `pixels` on its longer side, exported by Photos itself, which brings the
+    photo from iCloud when the Mac keeps only a small preview. Photos asks the owner once whether the archive may work
+    it (the same question the curator's albums need). Blocks until Photos is done: call it away from anything waiting.
+    Raises when Photos can't or may not do it."""
+    import photoscript
+    out = tempfile.mkdtemp(prefix='export-', dir=folder)
+    try:
+        made = photoscript.Photo(uuid).export(out, original=False, overwrite=True, timeout=timeout)
+        found = [Path(f) for f in made or () if Path(f).is_file()] or [f for f in Path(out).iterdir() if f.is_file()]
+        return picture(found[0], pixels, quality) if found else None
+    finally:
+        shutil.rmtree(out, ignore_errors=True)
+
+
+def hello_photos():
+    """One harmless question to Photos, so macOS asks the owner, while they are at the Mac, whether the archive may
+    work Photos."""
+    import photoscript
+    return str(photoscript.PhotosLibrary().version)

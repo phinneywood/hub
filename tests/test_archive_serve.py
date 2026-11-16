@@ -108,3 +108,46 @@ def test_people_on_this_day_and_status(service):
 
 def test_it_only_answers_questions(service):
     assert service[0].post('/search', json={}).status_code == 405
+
+
+def test_a_sharp_photo_comes_from_photos_once_and_is_kept(service, monkeypatch):
+    client, uuids, _, mac = service
+    sharp = world.program('sharp')
+    monkeypatch.setattr(sharp, 'macos', mac)
+    sharp._refused['at'] = float('-inf')
+    photo = 'p:' + uuids['1']
+    mac.exported = []
+    first = client.get(f'/photo/{photo}', params={'sharp': '1'})
+    assert first.headers['x-sharp'] == '1' and first.content.startswith(b'\x89PNG')
+    again = client.get(f'/photo/{photo}', params={'sharp': '1'})
+    assert again.headers['x-sharp'] == '1' and mac.exported == [uuids['1']]          # the second time is from the cache
+    assert store.sharp_path(photo).stat().st_mode & 0o777 == 0o600
+
+
+def test_when_photos_says_no_the_viewer_keeps_the_macs_own_picture(service, monkeypatch):
+    client, uuids, _, mac = service
+    sharp = world.program('sharp')
+    monkeypatch.setattr(sharp, 'macos', mac)
+    sharp._refused['at'] = float('-inf')
+    monkeypatch.setattr(mac, 'refuse', True, raising=False)
+    mac.exported = []
+    photo = 'p:' + uuids['2']
+    got = client.get(f'/photo/{photo}', params={'sharp': '1'})
+    assert got.status_code == 200 and got.headers['x-sharp'] == '0'
+    client.get(f'/photo/p:{uuids["3"]}', params={'sharp': '1'})
+    assert mac.exported == [uuids['2']]                                               # and Photos isn't asked again for a while
+
+
+def test_the_sharp_cache_lets_the_least_recently_opened_go(tmp_path, monkeypatch):
+    import os
+    store_ = world.program('store')
+    sharp = world.program('sharp')
+    monkeypatch.setenv('HUB_ARCHIVE_DIR', str(tmp_path))
+    monkeypatch.setattr(sharp, 'MOST', 3000)
+    monkeypatch.setattr(sharp, 'KEEP', 2000)
+    for n in range(4):
+        store_.write_bytes(store_.sharp_path(f'p:photo{n:04d}'), b'x' * 1000)
+        os.utime(store_.sharp_path(f'p:photo{n:04d}'), (1000 + n, 1000 + n))
+    sharp.cached('p:photo0000')                                                       # opened again: now the newest
+    assert sharp.trim() == 2
+    assert [store_.sharp_path(f'p:photo{n:04d}').exists() for n in range(4)] == [True, False, False, True]

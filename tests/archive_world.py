@@ -118,6 +118,16 @@ class Mac:
     def video_frame(self, path, pixels, quality=0.8):
         return swatch(.3), 64, 48
 
+    def sharp_picture(self, uuid, pixels=2048, quality=0.85, folder=None, timeout=90):
+        """Photos exporting a photo: a bigger wash, unless this stand-in was told Photos says no."""
+        self.exported = getattr(self, 'exported', []) + [uuid]
+        if getattr(self, 'refuse', False):
+            raise RuntimeError('Photos said no')
+        return swatch(.75, 128, 96), 128, 96
+
+    def hello_photos(self):
+        return '10.0'
+
     def download(self, path):
         self.asked.append(Path(path).name)
         self.away.discard(str(path))

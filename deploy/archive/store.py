@@ -114,6 +114,12 @@ def thumb_path(item):
     return home() / 'thumbs' / spread / (item.replace(':', '-') + '.jpg')
 
 
+def sharp_path(item):
+    """Where a photo's sharp picture is kept, when Photos has given one (sharp.py)."""
+    spread = hashlib.sha1(item.encode()).hexdigest()[:2]
+    return home() / 'sharp' / spread / (item.replace(':', '-') + '.jpg')
+
+
 def connect(read_only=False):
     """The index. Read-only connections are what the service answers from; they never create anything."""
     path = database()
@@ -173,10 +179,8 @@ def forget(conn, ids):
         conn.execute('delete from parts where item = ?', (item,))
         conn.execute('delete from item_people where item = ?', (item,))
         conn.execute('delete from items where id = ?', (item,))
-        try:
-            thumb_path(item).unlink()
-        except FileNotFoundError:
-            pass
+        thumb_path(item).unlink(missing_ok=True)
+        sharp_path(item).unlink(missing_ok=True)
 
 
 def set_status(conn, source, **values):

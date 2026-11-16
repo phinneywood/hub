@@ -11,7 +11,8 @@ keeps on this Mac, never as its original; a document's own bytes only for a docu
   GET /people                      the people Photos knows by name, and who looks like a kid
   GET /onthisday?day=MM-DD         photos from this day in earlier years
   GET /thumb/{id}                  its 400-pixel preview
-  GET /photo/{id}?size=1600        a photo at most `size` pixels, from the biggest picture of it on this Mac
+  GET /photo/{id}?size=1600        a photo at most `size` pixels, from the biggest picture of it on this Mac;
+                                   with sharp=1, a 2048-pixel one from Photos itself when it may (sharp.py)
   GET /page/{id}/{n}?size=1600     page n of a PDF, or a picture document, drawn
   GET /file/{id}                   a document's own bytes
 
@@ -30,7 +31,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-from . import macos, photos, search, store
+from . import macos, photos, search, sharp, store
 
 ID = re.compile(r'[pdcg]:[A-Za-z0-9_-]{6,80}')
 DAY = re.compile(r'\d{4}-\d{2}-\d{2}')
@@ -153,13 +154,17 @@ def answer(path, query, conn):
     if route == 'photo' and len(parts) == 2:
         row = _row(conn, parts[1], 'photos')
         size = _number(query, 'size', 1600, 200, 2400)
+        if _one(query, 'sharp') == '1' and row['kind'] == 'photo':
+            got = sharp.get(row['id'], row['id'][2:])          # from Photos itself, by way of iCloud, when it may
+            if got:
+                return 200, _picture(got), got, {'X-Sharp': '1'}
         if not row['path']:
             raise NotFound()
         with DRAWING:
             made = macos.picture(row['path'], size, 0.82)
         if not made:
             raise NotFound()
-        return 200, _picture(made[0]), made[0], {'X-Width': str(made[1]), 'X-Height': str(made[2])}
+        return 200, _picture(made[0]), made[0], {'X-Width': str(made[1]), 'X-Height': str(made[2]), 'X-Sharp': '0'}
     if route == 'page' and len(parts) == 3:
         row = _row(conn, parts[1], 'documents')
         number = int(parts[2]) if parts[2].isdigit() else 0

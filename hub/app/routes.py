@@ -629,8 +629,10 @@ def _bytes(found, name=None):
     SVG, XML, a script) is sent as plain bytes, to be saved."""
     if found is None:
         return _refuse('Not in the archive.', 404)
-    data, kind, disposition = found
+    data, kind, disposition, sharp = found
     headers = {'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': 'sandbox'}
+    if sharp:
+        headers['X-Sharp'] = sharp
     if name == 'file':
         if disposition:
             headers['Content-Disposition'] = disposition
@@ -684,8 +686,11 @@ def archive_thumb(ident: str, request: Request):
 
 
 @router.get('/api/archive/photo/{ident}')
-def archive_photo(ident: str, request: Request, size: int = 1600):
-    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/photo/{ident}', [('size', str(max(200, min(size, 2400))))])
+def archive_photo(ident: str, request: Request, size: int = 1600, sharp: int = 0):
+    """A photo for the full-screen viewer: the Mac's best picture of it, or with sharp=1 a 2048-pixel one from
+    iCloud when the archive may ask Photos for it (it says which in X-Sharp)."""
+    asked = [('size', str(max(200, min(size, 2400))))] + ([('sharp', '1')] if sharp else [])
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/photo/{ident}', asked)
                                                            if archive.ITEM.fullmatch(ident) and ident[0] == 'p' else None))
 
 

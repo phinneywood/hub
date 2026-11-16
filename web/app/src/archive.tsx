@@ -43,6 +43,7 @@ function Marked({ text }: { text: string | undefined }) {
 
 const thumb = (id: string) => `/app/api/archive/thumb/${encodeURIComponent(id)}`;
 const big = (id: string) => `/app/api/archive/photo/${encodeURIComponent(id)}?size=1600`;
+const sharp = (id: string) => `/app/api/archive/photo/${encodeURIComponent(id)}?size=2048&sharp=1`;     // from iCloud, by way of the Mac
 
 // ---- photos ----
 
@@ -64,14 +65,16 @@ export function Grid({ photos, few }: { photos: ArchiveItem[]; few?: boolean }) 
   );
 }
 
-/** One photo at a time, as big as the screen allows: swipe or use the arrow keys for the next, Escape to close. */
+/** One photo at a time, as big as the screen allows: swipe or use the arrow keys for the next, Escape to close. The
+ * preview shows at once, the Mac's own best picture over it, and the sharp one from iCloud over that when it comes:
+ * all three in the same frame, so nothing moves. */
 export function Viewer({ photos, at }: { photos: ArchiveItem[]; at: number }) {
   const [n, setN] = useState(at);
-  const [sharp, setSharp] = useState(false);
+  const [shown, setShown] = useState({ near: false, sharp: false });
   const start = useRef<number | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const p = photos[n];
-  const move = (by: number) => { setN((now) => Math.max(0, Math.min(photos.length - 1, now + by))); setSharp(false); };
+  const move = (by: number) => { setN((now) => Math.max(0, Math.min(photos.length - 1, now + by))); setShown({ near: false, sharp: false }); };
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") sheet.value = null;
@@ -84,6 +87,8 @@ export function Viewer({ photos, at }: { photos: ArchiveItem[]; at: number }) {
   }, []);
   useEffect(() => {           // the next and the one before are fetched now, so a swipe shows them at once
     for (const near of [photos[n + 1], photos[n - 1]]) if (near) new Image().src = big(near.id);
+    const next = photos[n + 1];
+    if (next && next.kind === "photo") new Image().src = sharp(next.id);
   }, [n]);
   if (!p) return null;
   const ratio = p.w && p.h ? `${p.w} / ${p.h}` : "4 / 3";
@@ -97,8 +102,10 @@ export function Viewer({ photos, at }: { photos: ArchiveItem[]; at: number }) {
       </div>
       <div class="viewer-pic" style={{ aspectRatio: ratio } as JSX.CSSProperties}>
         <img class="lo" src={thumb(p.id)} alt="" />
-        <img class={"hi" + (sharp ? " in" : "")} src={big(p.id)} alt={[onDay(p.day, true), p.place].filter(Boolean).join(", ") || "A photo"}
-          key={p.id} onLoad={() => setSharp(true)} />
+        <img class={"hi" + (shown.near ? " in" : "")} src={big(p.id)} alt="" key={"near" + p.id}
+          onLoad={() => setShown((s) => ({ ...s, near: true }))} />
+        {p.kind === "photo" && <img class={"hi" + (shown.sharp ? " in" : "")} src={sharp(p.id)} key={"sharp" + p.id}
+          alt={[onDay(p.day, true), p.place].filter(Boolean).join(", ") || "A photo"} onLoad={() => setShown((s) => ({ ...s, sharp: true }))} />}
       </div>
       <div class="viewer-facts">
         <b>{onDay(p.day, true)}</b>
