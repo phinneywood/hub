@@ -39,6 +39,8 @@ WORDS = {
                 'dry': 'Dry', 'fan_only': 'Fan only'},
 }
 OPEN = {'lock': ('unlocked', 'open', 'opening', 'unlocking'), 'cover': ('open', 'opening', 'closing')}
+# Integrations whose own scenes only ever set their own lights, though Home Assistant doesn't list what they hold.
+LIGHT_SCENES = ('hue', 'lifx', 'deconz', 'tradfri')
 # A wall or remote button (an event entity of class button): what its presses are called.
 PRESSES = {'multi_press_1': 'Single press', 'multi_press_2': 'Double press', 'multi_press_3': 'Triple press',
            'long_press': 'Long press', 'long_release': 'Long press', 'initial_press': 'Press', 'short_release': 'Press'}
@@ -174,7 +176,7 @@ def _device(entity_id, item, registry, players_only):
             'volume': attrs.get('volume_level') if isinstance(attrs.get('volume_level'), (int, float)) else None,
             'members': [m for m in attrs.get('group_members') or () if isinstance(m, str) and m != entity_id],
             # The kinds of thing a scene sets, so Ask can tell one that only sets lights from one that holds a lock.
-            'sets': sorted({m.partition('.')[0] for m in attrs.get('entity_id') or () if isinstance(m, str)}) if domain == 'scene' else None,
+            'sets': _scene_sets(attrs, entry) if domain == 'scene' else None,
             'colours': _colours(attrs) if domain == 'light' else None,
             'dims': _dims(attrs) if domain == 'light' else False,
             'colour': _colour_now(attrs) if domain == 'light' and state == 'on' else None,
@@ -183,6 +185,15 @@ def _device(entity_id, item, registry, players_only):
             and (attrs.get('group_members') or [None])[0] == entity_id,
             **({'title': _clip(attrs.get('media_title')), 'artist': _clip(attrs.get('media_artist')),
                 'album': _clip(attrs.get('media_album_name'))} if domain == 'media_player' else {})}
+
+
+def _scene_sets(attrs, entry):
+    """The kinds of thing a scene sets, or None when it doesn't say: an integration's own scene lists nothing, so
+    it could hold anything, unless that integration's scenes only ever set its lights."""
+    members = attrs.get('entity_id')
+    if isinstance(members, list):
+        return sorted({m.partition('.')[0] for m in members if isinstance(m, str)})
+    return ['light'] if entry.get('platform') in LIGHT_SCENES else None
 
 
 COLOUR_MODES = {'hs', 'xy', 'rgb', 'rgbw', 'rgbww'}

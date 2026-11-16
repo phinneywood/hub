@@ -131,8 +131,10 @@ def test_what_a_model_is_shown_leaves_out_where_people_are_and_anything_secret(h
     assert admin.find('alex')['found'] == [{'id': 'person.alex', 'name': 'Alex', 'kind': 'person'}]
     assert admin.detail('person.alex') == {'id': 'person.alex', 'name': 'Alex', 'kind': 'person'}
     shown = admin.detail('media_player.living')
-    assert shown['state'] == 'playing' and shown['attributes']['media_title'] == 'Paper Lanterns'
+    assert shown['state'] == 'playing' and 'volume_level' in shown['attributes']
     assert not {'entity_picture', 'access_token'} & set(shown['attributes']) and 'token' not in json.dumps(shown)
+    # A song's title is written by strangers: a model about to change the house isn't shown it here.
+    assert 'Paper Lanterns' not in json.dumps(shown) and 'media_title' not in shown['attributes']
     assert admin.find('thermostat')['found'] == [{'id': 'climate.hallway', 'name': 'Thermostat', 'kind': 'climate', 'room': 'Hallway', 'state': 'heat'}]
     assert [f['name'] for f in admin.find(kind='automation')['found']] == ['Living room button', 'Porch at sunset']
     assert {'name': 'Kitchen', 'kind': 'room', 'id': 'kitchen', 'floor': 'Downstairs'} in admin.find(kind='room')['found']
@@ -234,9 +236,14 @@ def test_rooms_are_grouped_and_the_group_reaches_them(house):
     assert control.rooms_named('open plan', read.snapshot(fresh=True)) == ['Kitchen', 'Living room']
     changed = do('place', kind='group', do='set', name='open plan', rooms=['kitchen', 'dining'])
     assert changed['done'] == ['Dining added to Open plan', 'Living room taken out of Open plan']
-    one = do('place', kind='group', do='add', name='open plan', rooms=['entry'])
-    assert one['done'] == ['Entry added to Open plan']
-    assert do('place', kind='group', do='remove', name='open plan', rooms=['entry'])['done'] == ['Entry taken out of Open plan']
+    # The entry holds the front door's lock, and a routine can work a group of rooms: putting it in one, or taking
+    # it out, waits for a tap.
+    joining = plan('place', kind='group', do='add', name='open plan', rooms=['entry'])
+    assert admin.asks(joining) == 'security'
+    assert admin.carry_out(joining, login=ME, via='app')['done'] == ['Entry added to Open plan']
+    leaving = plan('place', kind='group', do='remove', name='open plan', rooms=['entry'])
+    assert admin.asks(leaving) == 'security'
+    assert admin.carry_out(leaving, login=ME, via='app')['done'] == ['Entry taken out of Open plan']
     with pytest.raises(admin.Already, match='Entry is already out of Open plan.'):
         plan('place', kind='group', do='remove', name='open plan', rooms=['entry'])
     removal = plan('place', kind='group', do='remove', name='Open plan')
@@ -989,3 +996,235 @@ def test_four_more_ways_round_are_shut(house):
     assert admin.asks(plan('act', action='scene.turn_on', things=['guest mode'])) == 'security'
     assert admin.asks(plan('act', action='scene.turn_on', things=['coffee'])) is None
     assert house.sent == []
+
+
+# ---- a third read, by a stranger: the rule is one, whatever Hub can't read as safe waits for a tap ----
+
+def _thing(house, entity, name, platform=None, state='off', **attrs):
+    house.states[entity] = {'entity_id': entity, 'state': state, 'attributes': {'friendly_name': name, **attrs}}
+    house.entries[entity] = {'entity_id': entity, 'area_id': None, 'device_id': None, 'name': None, 'icon': None, 'labels': [],
+                             'hidden_by': None, 'disabled_by': None, 'platform': platform, 'original_name': None}
+
+
+def _automation(house, key, name, triggers, actions, conditions=()):
+    house.configs['automation'][key] = {'id': key, 'alias': name, 'triggers': triggers, 'conditions': list(conditions), 'actions': actions}
+    entity = 'automation.' + app_world.slug(name)
+    house.states[entity] = {'entity_id': entity, 'state': 'on', 'attributes': {'friendly_name': name, 'id': key}}
+    admin.forget()
+    return entity
+
+
+UNLOCK = [{'action': 'lock.unlock', 'target': {'entity_id': 'lock.front_door'}}]
+
+
+def test_an_old_service_template_is_read_like_any_call_and_one_worked_out_at_run_time_waits(house):
+    quiet = {'alias': 'Quiet one', 'sequence': [{'service_template': 'lock.unlock', 'data_template': {'entity_id': 'lock.front_door'}}]}
+    assert admin.asks(plan('routine', kind='script', do='save', name='Quiet one', config=quiet)) == 'security'
+    timed = {**EVENING, 'alias': 'At three', 'actions': [{'service_template': 'cover.open_cover', 'entity_id': 'cover.garage_door'}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='At three', config=timed)) == 'security'
+    with pytest.raises(admin.Refused, match='names each action plainly'):
+        plan('routine', kind='script', do='save', name='Odd one', config={'alias': 'Odd one', 'sequence': [{'service_template': '{{ what }}'}]})
+    # One of the owner's own, whose action is worked out when it runs: Hub can't read it, so running it waits.
+    house.configs['script']['do_it'] = {'alias': 'Do it', 'sequence': [{'action': '{{ what }}', 'target': {'entity_id': '{{ which }}'}}]}
+    house.states['script.do_it'] = {'entity_id': 'script.do_it', 'state': 'off', 'attributes': {'friendly_name': 'Do it'}}
+    admin.forget()
+    assert admin.asks(plan('act', action='script.turn_on', things=['do it'], data={'variables': {'what': 'lock.unlock'}})) == 'unread'
+    assert admin.asks(plan('routine', kind='script', do='run', name='do it')) == 'unread'
+    assert house.sent == []
+
+
+def test_a_step_hub_cant_read_waits(house):
+    _thing(house, 'remote.rf_bridge', 'RF bridge', state='on')
+    admin.forget()
+    for step in ({'event': 'open_sesame', 'event_data': {'door': 'front'}},                # an event another routine may act on
+                 {'something_new': {'door': 'front'}},                                     # a kind of step Hub doesn't know
+                 {'action': 'remote.send_command', 'target': {'entity_id': 'remote.rf_bridge'}, 'data': {'command': 'open'}}):
+        body = {'alias': 'Ring', 'sequence': [{'delay': '00:00:05'}, {'choose': [{'conditions': [], 'sequence': [step]}]}]}
+        assert admin.asks(plan('routine', kind='script', do='save', name='Ring', config=body)) == 'unread', step
+    # A code learned from a remote may open the gate as well as change the channel.
+    assert admin.asks(plan('act', action='remote.send_command', things=['rf bridge'], data={'command': 'open'})) == 'unread'
+    quiet = {'alias': 'Quiet', 'sequence': [{'delay': '00:00:05'}, {'wait_template': '{{ true }}'}, {'variables': {'n': 1}}, {'stop': 'done'}]}
+    assert admin.asks(plan('routine', kind='script', do='save', name='Quiet', config=quiet)) is None
+
+
+def test_a_devices_own_action_is_read_by_its_device(house):
+    _guards(house)
+    script = lambda step: admin.asks(plan('routine', kind='script', do='save', name='Press it', config={'alias': 'Press it', 'sequence': [step]}))  # noqa: E731
+    assert script({'device_id': 'dev-garage', 'domain': 'button', 'type': 'press', 'entity_id': 'button.opener_toggle'}) == 'security'
+    assert script({'device_id': 'dev-garage', 'domain': 'cover', 'type': 'close', 'entity_id': 'cover.garage_door'}) is None
+    assert script({'device_id': 'dev-nowhere', 'domain': 'switch', 'type': 'turn_on', 'entity_id': 'switch.garage_light'}) == 'unread'
+    assert script({'device_id': 'dev-floor-lamp', 'domain': 'light', 'type': 'turn_on', 'entity_id': 'light.living_floor_lamp'}) is None
+    assert house.setup == []
+
+
+def test_a_helper_is_looked_into_wherever_an_automation_reads_it(house):
+    _guards(house)
+    guests = lambda: admin.asks(plan('act', action='input_boolean.turn_on', things=['guests are coming']))      # noqa: E731
+    automation = house.configs['automation']['a-guests']
+    # Read in a condition, not a trigger: at the door with guests coming, it unlocks.
+    automation.update(triggers=[{'trigger': 'state', 'entity_id': 'binary_sensor.front_door', 'to': 'on'}],
+                      conditions=[{'condition': 'state', 'entity_id': 'input_boolean.guests', 'state': 'on'}])
+    admin.forget()
+    assert guests() == 'security'
+    # Read in a template.
+    automation.update(triggers=[{'trigger': 'template', 'value_template': "{{ is_state('input_boolean.guests', 'on') }}"}], conditions=[])
+    admin.forget()
+    assert guests() == 'security'
+    # Made from a blueprint: what sets it going is Home Assistant's to know.
+    house.configs['automation']['a-guests'] = {'id': 'a-guests', 'alias': 'Let guests in', 'use_blueprint': {
+        'path': 'made_up/unlock_on_switch.yaml', 'input': {'switch': 'input_boolean.guests', 'lock': 'lock.front_door'}}}
+    admin.forget()
+    assert guests() == 'unread'
+    # Kept in Home Assistant's own files: Hub can't read it at all.
+    del house.configs['automation']['a-guests']
+    house.states['automation.let_guests_in']['attributes'].pop('id')
+    related = house._related
+    house._related = lambda item: {'automation': ['automation.let_guests_in']} if item == 'input_boolean.guests' else related(item)
+    admin.forget()
+    assert guests() == 'unread'
+    house._related = related
+    # Home Assistant not answering the question is not a yes.
+    asked = broker.setup_read
+    house.states['automation.let_guests_in']['attributes']['id'] = 'a-guests'
+    try:
+        broker.setup_read = lambda *commands, timeout=None: (_ for _ in ()).throw(broker.HomeDown('away'))
+        admin.forget()
+        assert plans._sets_off(admin.world(fresh=True)['things']['input_boolean.guests'], admin.world(fresh=True)) == 'unread'
+    finally:
+        broker.setup_read = asked
+
+
+def test_an_automation_that_only_works_a_lock_is_not_set_off_by_it(house):
+    _automation(house, 'a-wake', 'Open up at seven', [{'trigger': 'time', 'at': '07:00:00'}], UNLOCK)
+    house.states['lock.front_door']['state'] = 'unlocked'
+    admin.forget()
+    assert admin.asks(plan('act', action='lock.lock', things=['front door lock'])) is None      # locking stays at once
+
+
+def test_a_light_or_a_speaker_that_sets_off_an_opening_automation_waits_too(house):
+    _automation(house, 'a-porch', 'Porch welcome', [{'trigger': 'state', 'entity_id': 'light.porch_light', 'to': 'off'}], UNLOCK)
+    assert admin.asks(plan('act', action='light.turn_off', things=['porch light'])) == 'security'
+    body = {**EVENING, 'alias': 'Porch dark', 'actions': [{'action': 'light.turn_off', 'target': {'area_id': 'porch'}}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='Porch dark', config=body)) == 'security'   # by its room, too
+    house.configs['scene']['out'] = {'id': 'out', 'name': 'Out', 'entities': {'light.porch_light': {'state': 'off'}}}
+    house.states['scene.out'] = {'entity_id': 'scene.out', 'state': 'unknown', 'attributes': {'friendly_name': 'Out', 'id': 'out',
+                                                                                             'entity_id': ['light.porch_light']}}
+    admin.forget()
+    assert admin.asks(plan('act', action='scene.turn_on', things=['out'])) == 'security'
+    assert admin.asks(plan('act', action='light.turn_on', things=['path lights'])) is None
+
+
+def test_a_helpers_settings_are_looked_into_like_working_it(house):
+    house.helpers['input_select'] = [{'id': 'house_mode', 'name': 'House mode', 'options': ['Home', 'Guest', 'Away']}]
+    _thing(house, 'input_select.house_mode', 'House mode', state='Home', options=['Home', 'Guest', 'Away'])
+    _automation(house, 'a-mode', 'Guest arrival', [{'trigger': 'state', 'entity_id': 'input_select.house_mode', 'to': 'Guest'}], UNLOCK)
+    # Without "Home", Home Assistant sets the first choice left, Guest, which unlocks.
+    assert admin.asks(plan('helper', do='change', kind='input_select', name='House mode', fields={'options': ['Guest', 'Away']})) == 'security'
+    assert admin.asks(plan('helper', do='change', kind='input_select', name='House mode', new_name='Home or away')) is None
+
+
+def test_a_way_in_that_changes_rooms_waits(house):
+    assert admin.asks(plan('arrange', things=['garage door'], room='office')) == 'security'
+    assert admin.asks(plan('arrange', things=['front door lock'], room='guest room')) == 'security'
+    assert admin.asks(plan('place', kind='room', do='set', name='entry', floor='upstairs')) == 'security'      # the entry holds the lock
+    assert admin.asks(plan('place', kind='group', do='add', name='Morning', rooms=['office', 'entry'])) == 'security'
+    assert admin.asks(plan('arrange', things=['reading lamp'], room='office')) is None
+    assert admin.asks(plan('place', kind='room', do='set', name='office', floor='upstairs')) is None
+    assert admin.asks(plan('place', kind='group', do='add', name='Morning', rooms=['office', 'kitchen'])) is None
+
+
+def test_a_group_is_read_by_what_it_holds(house):
+    _owner_made(house)
+    _thing(house, 'group.ways_in', 'Ways in', state='closed', entity_id=['cover.garage_door', 'script.let_them_in'])
+    _thing(house, 'group.lamps', 'Lamps', state='off', entity_id=['light.living_floor_lamp'])
+    _thing(house, 'cover.all_blinds', 'All blinds', state='closed', entity_id=['cover.office_blind'])
+    admin.forget()
+    assert admin.asks(plan('act', action='homeassistant.toggle', things=['group.ways_in'])) == 'security'
+    assert admin.asks(plan('act', action='homeassistant.turn_on', things=['ways in'])) == 'security'
+    dawn = {**EVENING, 'alias': 'Dawn', 'actions': [{'action': 'homeassistant.toggle', 'target': {'entity_id': 'group.ways_in'}}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='Dawn', config=dawn)) == 'security'
+    assert admin.asks(plan('act', action='homeassistant.turn_on', things=['group.lamps'])) is None
+    assert admin.asks(plan('act', action='cover.open_cover', things=['all blinds'])) is None      # a group of blinds is blinds
+
+
+def test_a_cover_that_doesnt_say_what_it_is_waits_like_the_garage(house):
+    _thing(house, 'cover.side', 'Side', state='closed')
+    _thing(house, 'cover.back_window', 'Back window', state='closed', device_class='window')
+    admin.forget()
+    assert admin.asks(plan('act', action='cover.open_cover', things=['side'])) == 'unlock'
+    assert admin.asks(plan('act', action='cover.open_cover', things=['back window'])) == 'unlock'
+    house.states['cover.office_blind']['state'] = 'closed'
+    admin.forget()
+    assert admin.asks(plan('act', action='cover.open_cover', things=['blind'])) is None
+
+
+def test_a_thing_made_from_a_template_waits(house):
+    _thing(house, 'switch.open_sesame', 'Open sesame', platform='template')
+    admin.forget()
+    assert admin.asks(plan('act', action='switch.turn_on', things=['open sesame'])) == 'unread'      # it runs whatever its owner wrote
+
+
+def test_a_new_name_for_what_opens_the_house_waits(house):
+    _owner_made(house)
+    assert admin.asks(plan('scene', do='rename', name='arriving', new_name='Dinner two')) == 'security'
+    assert admin.asks(plan('arrange', things=['scene.arriving'], name='Dinner two')) == 'security'
+    assert admin.asks(plan('routine', kind='script', do='rename', name='let them in', new_name='Porch lights')) == 'security'
+
+
+def test_switching_off_what_tells_the_owner_a_way_in_is_open_waits(house):
+    _automation(house, 'a-watch', 'Garage left open', [{'trigger': 'state', 'entity_id': 'cover.garage_door', 'to': 'open', 'for': '00:10:00'}],
+                [{'action': 'notify.persistent_notification', 'data': {'message': 'The garage is open'}}])
+    assert admin.asks(plan('routine', kind='automation', do='off', name='garage left open')) == 'security'
+    _automation(house, 'a-hall', 'Hall light at the door', [{'trigger': 'state', 'entity_id': 'binary_sensor.front_door', 'to': 'on'}],
+                [{'action': 'light.turn_on', 'target': {'entity_id': 'light.hall_ceiling'}}])
+    assert admin.asks(plan('routine', kind='automation', do='off', name='hall light at the door')) is None
+
+
+def test_a_routine_card_says_what_opens_first(house):
+    body = {**EVENING, 'alias': 'Evening', 'actions': [
+        {'action': 'light.turn_on', 'target': {'entity_id': 'light.hall_ceiling'}}, {'action': 'light.turn_on', 'target': {'entity_id': 'light.entry_ceiling'}},
+        {'action': 'light.turn_on', 'target': {'entity_id': 'light.porch_light'}}, *UNLOCK]}
+    made = plan('routine', kind='automation', do='save', name='Evening', config=body)
+    assert admin.asks(made) == 'security' and made[0]['words'].startswith('Automation “Evening” made: at 6:45 pm, Front door lock unlocked')
+
+
+def test_a_card_does_only_what_it_showed(house):
+    body = {**EVENING, 'alias': 'Morning air', 'actions': [{'action': 'cover.open_cover', 'target': {'area_id': 'Office'}}]}
+    args = dict(kind='automation', do='save', name='Morning air', config=body)
+    card = admin.wait('Save Morning air?', plan('routine', **args), 'routine', args, login=ME)
+    # Only names change, at once: Office is now Snug, and the porch is called Office. The card would read the same.
+    do('place', kind='room', do='rename', name='office', new_name='Snug')
+    do('place', kind='room', do='rename', name='porch', new_name='Office')
+    with pytest.raises(admin.Refused, match='house has changed'):
+        admin.confirm(card['id'], login=ME)
+    assert not any(c.get('alias') == 'Morning air' for c in house.configs['automation'].values())
+    # A new routine's id comes from the clock: a card made a moment ago is still the same plan.
+    args = dict(kind='automation', do='save', name='At three', config={**EVENING, 'alias': 'At three', 'actions': UNLOCK})
+    card = admin.wait('Save At three?', plan('routine', **args), 'routine', args, login=ME)
+    time.sleep(0.01)
+    assert admin.confirm(card['id'], login=ME)['done'] == ['Automation “At three” made: at 6:45 pm, Front door lock unlocked']
+
+
+def test_undo_is_never_a_way_round_the_tap(house):
+    house.states['lock.front_door']['state'] = 'unlocked'
+    admin.forget()
+    locked = do('act', action='lock.lock', things=['front door lock'])
+    answer = admin.undo(locked['batch'], login=ME, via='app')
+    card = answer['card']
+    assert (card['title'], card['lines'], card['why']) == ('Put back Front door lock?', ['Front door lock unlocked'], admin.WHY['unlock'])
+    assert house.sent[-1] == ('lock/lock', {'entity_id': 'lock.front_door'})          # nothing sent on the Undo tap
+    assert admin.confirm(card['id'], login=ME)['done'] == ['Front door lock put back']    # the owner's tap on the card
+    assert house.sent[-1] == ('lock/unlock', {'entity_id': 'lock.front_door'})
+    with pytest.raises(admin.Refused, match='nothing left to undo'):
+        admin.undo(locked['batch'], login=ME, via='app')
+    # Disabled, a routine that unlocks is enabled again only by a tap; and so is one brought back as it was.
+    _guards(house)
+    off = admin.carry_out(plan('arrange', things=['let guests in'], enabled=False), login=ME, via='app')
+    assert admin.undo(off['batch'], login=ME, via='app')['card']['why'] == admin.WHY['unread']
+    changed = admin.carry_out(plan('routine', kind='automation', do='save', name='let guests in', config={
+        **house.configs['automation']['a-guests'], 'actions': [{'action': 'light.turn_on', 'target': {'entity_id': 'light.entry_ceiling'}}]}),
+        login=ME, via='app')
+    assert admin.undo(changed['batch'], login=ME, via='app')['card']['why'] == admin.WHY['security']
+    # Everyday changes are put back at once, as before.
+    renamed = do('arrange', things=['reading lamp'], name='Book lamp')
+    assert admin.undo(renamed['batch'], login=ME, via='app')['done'] == ['Book lamp put back']

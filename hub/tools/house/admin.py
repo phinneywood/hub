@@ -42,6 +42,9 @@ ROUTINES = ('automation', 'script', 'scene')
 # a relay called "Gate". Working one of these is working the lock or the alarm, so it waits for a tap like them.
 SECURE = ('lock', 'alarm_control_panel')
 DOORS = ('garage', 'door', 'gate')
+# Covers that only keep out light or weather: opening one is everyday. Any other cover, one that doesn't say what
+# it is among them, may be a way into the house and is treated like the garage.
+EVERYDAY_COVERS = ('blind', 'shade', 'curtain', 'awning', 'shutter', 'damper')
 GUARD_KINDS = ('switch', 'button', 'input_button', 'input_boolean', 'select', 'input_select', 'number', 'input_number', 'siren', 'text',
                'time', 'date', 'datetime')         # a lock's own settings too: its codes, its auto-lock, its schedule
 GUARD_WORDS = {'garage', 'gate', 'lock', 'unlock', 'alarm', 'disarm', 'arm', 'arming', 'opener', 'security'}
@@ -55,6 +58,8 @@ WATCHES = ('door', 'window', 'garage_door', 'lock', 'opening', 'smoke', 'gas', '
 NAMES_ONLY = ('person', 'device_tracker', 'zone', 'camera', 'image', 'calendar', 'todo', 'geo_location', 'conversation', 'ai_task')
 PRIVATE = re.compile(r'token|password|secret|credential|latitude|longitude|gps|location|picture|access|url|code|ssid|mac_|_mac|'
                      r'ip_address|serial|user_id|address', re.I)
+# Words written outside the house (a song's title, an update's notes): a model about to change the house isn't shown them.
+OUTSIDE = re.compile(r'^(media_(title|artist|album_name|album_artist|series_title|channel|playlist|content_id)|release_(summary|notes)|title)$')
 # What a card says under its lines, by why it waits.
 WHY = {'delete': 'This removes it. Undo can put it back for a day.',
        'many': 'One request, many changes. Undo puts them all back.',
@@ -73,7 +78,7 @@ create table if not exists house_setup(
 create index if not exists house_setup_batch on house_setup(batch);
 create table if not exists house_setup_waiting(
   id integer primary key autoincrement, ts real not null, login text, title text not null, lines text not null,
-  why text not null, plan text not null, args text not null, status text not null default 'waiting', batch text);
+  why text not null, plan text not null, args text not null, status text not null default 'waiting', batch text, steps text);
 """
 
 _lock = threading.Lock()
@@ -87,6 +92,8 @@ class Already(Refused):
 def _db():
     conn = store.db()
     conn.executescript(SCHEMA)
+    if 'steps' not in {r['name'] for r in conn.execute('pragma table_info(house_setup_waiting)')}:
+        conn.execute('alter table house_setup_waiting add column steps text')
     return conn
 
 
@@ -161,7 +168,7 @@ def _world(areas, devices, entities, labels, floors, states):
             'config': attrs.get('id') if isinstance(attrs.get('id'), str) else None}
         if device:
             devs[device]['things'].append(entity)
-    way_in = lambda t: t['domain'] in SECURE or (t['domain'] == 'cover' and t['class'] in DOORS)      # noqa: E731
+    way_in = lambda t: t['domain'] in SECURE or (t['domain'] == 'cover' and t['class'] not in EVERYDAY_COVERS)      # noqa: E731
     beside = {t['device'] for t in things.values() if t['device'] and way_in(t)}
     alarms = {t['platform'] for t in things.values() if t['domain'] == 'alarm_control_panel' and t['platform']} - SHARED_BY_ALL
     for t in things.values():
@@ -303,7 +310,7 @@ def _attributes(thing):
     """A thing's attributes for a model: nothing that names a token, an address, a picture or a place, and not much."""
     out, size = {}, 0
     for key, value in sorted(thing['attrs'].items(), key=lambda kv: len(str(kv[1]))):
-        if PRIVATE.search(key) or key in ('friendly_name', 'icon', 'id'):
+        if PRIVATE.search(key) or OUTSIDE.match(key) or key in ('friendly_name', 'icon', 'id'):
             continue
         shown = _shown(value)
         size += len(key) + len(json.dumps(shown, default=str))
@@ -543,14 +550,31 @@ def carry_out(changes, *, login, via):
 
 # ---- plans that wait for a tap ----
 
+def fingerprint(changes):
+    """The exact requests a plan would send, so that a plan made again at the tap is done only if it is the very one
+    the card showed: the same words can say something else once rooms are renamed. A new routine's or scene's id
+    comes from the clock, so it is left out."""
+    fresh = {s['id'] for c in changes if c['target'] == 'new' for s in c['steps'] if isinstance(s, dict) and 'config' in s}
+
+    def plain(value):
+        if isinstance(value, str):
+            return '$new' if value in fresh else value
+        if isinstance(value, list):
+            return [plain(v) for v in value]
+        return {k: plain(v) for k, v in value.items()} if isinstance(value, dict) else value
+
+    return json.dumps([plain(c['steps']) for c in changes], sort_keys=True)
+
+
 def wait(title, changes, plan, args, *, login):
     """Keep a plan for the owner's tap; returns the card. Nothing is sent to Home Assistant."""
     why = asks(changes) or 'many'
     lines = [c['words'] for c in changes][:24]
     with _db() as conn:
         conn.execute("update house_setup_waiting set status = 'replaced' where status = 'waiting' and login is ?", (login,))
-        number = conn.execute('insert into house_setup_waiting(ts, login, title, lines, why, plan, args) values (?,?,?,?,?,?,?)',
-                              (time.time(), login, _clip(title, 160), json.dumps(lines), why, plan, json.dumps(args))).lastrowid
+        number = conn.execute('insert into house_setup_waiting(ts, login, title, lines, why, plan, args, steps) values (?,?,?,?,?,?,?,?)',
+                              (time.time(), login, _clip(title, 160), json.dumps(lines), why, plan, json.dumps(args),
+                               fingerprint(changes))).lastrowid
     return {'kind': 'confirm', 'id': number, 'title': _clip(title, 160), 'lines': lines, 'why': WHY[why],
             'do': {'delete': 'Remove', 'disable': 'Disable', 'restart': 'Restart'}.get(why, 'Do it')}
 
@@ -577,20 +601,24 @@ def confirm(number, *, login):
     if row is None or row['status'] != 'waiting':
         raise Refused({'expired': 'That card waited more than an hour. Ask again.', 'done': 'That is already done.'}.get(
             row and row['status'], 'That card isn’t waiting any more. Ask again.'))
+    todo = None
     try:
-        changes = plans.PLANS[row['plan']](world(fresh=True), **json.loads(row['args']))
+        if row['plan'] == 'undo':           # a card from Undo: what to put back, as Undo would have
+            todo, changes = _putting_back(json.loads(row['args'])['batch'])
+        else:
+            changes = plans.PLANS[row['plan']](world(fresh=True), **json.loads(row['args']))
     except Already as error:
         settle(number, 'done')
         raise Refused(str(error)) from None
     except broker.HomeDown as error:
         raise Refused(str(error)) from None
-    if [c['words'] for c in changes][:24] != json.loads(row['lines']):
+    if [c['words'] for c in changes][:24] != json.loads(row['lines']) or fingerprint(changes) != row['steps']:
         settle(number, 'replaced')
         raise Refused('The house has changed since that card was made, so nothing was done. Ask again.')
     if not settle(number, 'working'):
         raise Refused('That card isn’t waiting any more. Ask again.')
     try:
-        result = carry_out(changes, login=login, via='app')
+        result = _put_back(todo, changes, login=login, via='app') if row['plan'] == 'undo' else carry_out(changes, login=login, via='app')
     except Refused:                 # nothing was sent (too many changes this minute): the card goes on waiting
         with _db() as conn:
             conn.execute("update house_setup_waiting set status = 'waiting' where id = ? and status = 'working'", (int(number),))
@@ -627,8 +655,10 @@ def _same(now, then):
     return now is not None and plain(now) == plain(then)
 
 
-def undo(batch, *, login, via):
-    """Put a batch back, newest change first. Returns the report. Raises Refused."""
+def _putting_back(batch):
+    """(the records of a batch still to put back, newest first; the changes that put them back, planned like any
+    other, each with why it would wait for a tap). Raises Refused."""
+    from . import plans
     rows = [r for r in _batch(batch) if not r['undone'] and r['via'] != 'undo' and r['outcome'] != 'not_sent']
     if not rows:
         raise Refused('There is nothing left to undo there.')
@@ -644,10 +674,33 @@ def undo(batch, *, login, via):
                 raise Refused(f'{r["name"]} was changed again after Hub changed it, so Hub left it alone. Change it in Home Assistant.')
         except broker.HomeDown as error:
             raise Refused(str(error)) from None
+    w = world(fresh=True)
+    changes = []
+    for r in todo:
+        steps = json.loads(r['undo'])
+        call = steps[0]['call'] if len(steps) == 1 and 'call' in steps[0] else None
+        words = plans._did(*call.partition('.')[::2], r['name'], steps[0].get('data') or {}) if call else f'{r["name"]} put back'
+        changes.append(change(r['kind'], r['target'], r['name'], words, steps, asks=plans.back_asks(steps, w)))
+    return todo, changes
+
+
+def undo(batch, *, login, via):
+    """Put a batch back, newest change first. Returns the report. Undo is never a way round the tap: putting back
+    what would unlock, open or disarm, or bring back something that does, returns {'card': ...} instead, the card
+    that waits for the owner's tap like any other, and nothing is sent. Raises Refused."""
+    todo, changes = _putting_back(batch)
+    why = next((c['asks'] for c in changes if c['asks']), None)
+    if why:
+        name = changes[0]['name'] if len(changes) == 1 else f'these {len(changes)}'
+        return {'card': wait(f'Put back {name}?', changes, 'undo', {'batch': str(batch)[:12]}, login=login)}
+    return _put_back(todo, changes, login=login, via=via)
+
+
+def _put_back(todo, changes, *, login, via):
     control._spend(len(todo), taps=via == 'app')
     new, now, out, kept = 's' + uuid.uuid4().hex[:11], time.time(), [], {}
-    for r in todo:
-        outcome, why = _run(json.loads(r['undo']), kept)
+    for r, c in zip(todo, changes):
+        outcome, why = _run(c['steps'], kept)
         words = f'{r["name"]} put back'
         out.append({'words': words, 'outcome': outcome, 'why': why, 'undoable': False})
         with _db() as conn:

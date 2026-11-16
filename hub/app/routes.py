@@ -69,7 +69,10 @@ def _signed_out():
 
 
 def _said(result):
-    """A tap's answer: what was done in plain words, and the batch for its Undo."""
+    """A tap's answer: what was done in plain words, and the batch for its Undo. An Undo that would open the house
+    answers with the card that waits for the owner's tap instead, and says nothing was done yet."""
+    if 'card' in result:
+        return JSONResponse({'error': 'That waits for your tap.', 'card': result['card']}, status_code=409)
     words = result['done'] + [f'{w} (not confirmed)' for w in result['unknown']]
     said = '; '.join(words) or 'Nothing changed.'
     if result.get('silent'):

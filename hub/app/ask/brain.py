@@ -161,10 +161,14 @@ def places():
         return []
 
 
+BRACKETS = str.maketrans({**dict.fromkeys('<＜﹤〈⟨《˂ᐸ❮⟪', '‹'), **dict.fromkeys('>＞﹥〉⟩》˃ᐳ❯⟫', '›')})
+
+
 def _inside(text):
-    """Text as it goes inside one of the prompt's sections: no angle brackets, so a song title, a device's name or
-    an email's subject can't end the section it is in and pose as another (</house><said>...)."""
-    return str(text).replace('<', '‹').replace('>', '›')
+    """Text as it goes inside one of the prompt's sections: no angle brackets, nor the brackets that look like
+    them, so a song title, a device's name or an email's subject can't end the section it is in and pose as
+    another (</house><said>...)."""
+    return str(text).translate(BRACKETS)
 
 
 READ_ALOUD = '(Answered from their mail, calendar or school. Read it again with look_up if it is needed.)'

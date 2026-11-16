@@ -526,9 +526,9 @@ def _question(plan, args, changes, why):
         return f'Disable {name}?' if len(changes) == 1 else f'Disable these {len(changes)}?'
     if why == 'hide':
         return f'Hide {name}?' if len(changes) == 1 else f'Hide these {len(changes)}?'
-    if plan == 'arrange':           # a new name for, or the return of, something that guards the house
+    if plan == 'arrange':           # a new name, a new room, or the return of something that guards the house
         was, renamed, new = changes[0]['words'].partition(' renamed ')
-        return f'Rename {was} to {new}?' if renamed else f'Enable {name}?'
+        return f'Rename {was} to {new}?' if renamed else f'Enable {name}?' if 'enabled again' in changes[0]['words'] else f'Move {name}?'
     if why == 'unlock':
         verb = OPENING.get(str(args.get('action', '')).partition('.')[2], 'Open')
         return f'{verb} {name}?' if len(changes) == 1 else f'{verb} these {len(changes)}?'
