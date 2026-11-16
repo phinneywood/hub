@@ -127,8 +127,22 @@ def test_chatgpt_history_is_searched_for_the_owner_only(archived):
 
 
 def test_without_the_archive_ask_still_answers_from_mail(house, monkeypatch, tmp_path):  # noqa: F811
+    monkeypatch.setattr(archive, '_tailscale_login', lambda: 'me@example.com')
     monkeypatch.setenv('HUB_ARCHIVE_SOCKET', str(tmp_path / 'none.sock'))
     monkeypatch.setattr(bridge, 'get', Bridge().get)
     answer, _, _ = ask('when did we last service the furnace?')
     assert answer.startswith('The last one was an email from Example Heating')
     assert 'The archive isn’t set up on this Mac yet.' in sent()
+
+
+def test_another_logins_ask_gets_no_mail_or_calendar_of_the_owners(archived):
+    answer, cards, _ = ask('when did we last service the furnace?', headers=OTHER)
+    model_saw = sent()
+    assert 'Your furnace service invoice' not in model_saw and 'Furnace service invoice.pdf' not in model_saw
+    assert not [i for c in cards if c['kind'] == 'found' for i in c['items'] if i['source'] in ('mail', 'calendar', 'documents')]
+
+
+def test_another_logins_photos_are_the_shared_librarys(archived):
+    answer, cards, _ = ask('photos of the beach', headers=OTHER)
+    assert answer == 'Beach: 2 photos from one day.'
+    assert len(next(c for c in cards if c['kind'] == 'photos')['items']) == 2

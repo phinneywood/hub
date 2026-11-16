@@ -796,7 +796,7 @@ def search(ctx: RunContext[Turn], searches: list[str], sources: list[Literal['ph
             turn.strangers = turn.strangers or bool(items)
     if 'mail' in wanted and (phrases or meaning['people']):
         try:
-            mails = archive.mail(meaning, phrases or None)
+            mails = archive.mail(meaning, turn.login, phrases or None)
         except Exception:  # noqa: BLE001 - mail that can't be searched is an answer the model can pass on
             mails, told['mail'] = [], 'Mail couldn’t be searched just now.'
         from ... import store
@@ -810,7 +810,7 @@ def search(ctx: RunContext[Turn], searches: list[str], sources: list[Literal['ph
         told.setdefault('mail', readable or 'Nothing the model may read matched.' if mails else 'Nothing matched.')
         turn.strangers = turn.strangers or bool(readable)
     if 'calendar' in wanted and (phrases or meaning['after']):
-        events = archive.calendar(meaning, phrases or None)
+        events = archive.calendar(meaning, turn.login, phrases or None)
         for n, e in enumerate(events, 1):
             turn.found[f'e{n}'] = e['id']
             lines.append({'id': e['id'], 'source': 'calendar', 'title': e['title'], 'day': e['day'], 'sub': e['location']})
@@ -853,14 +853,14 @@ def read_found(ctx: RunContext[Turn], ref: str) -> dict:
         return {'not_done': 'There is no such result. Use a ref that search gave.'}
     try:
         if ident.startswith('m:'):
-            message = archive.mail_message(ident)
+            message = archive.mail_message(ident, turn.login)
             if message is None or store.ai_blocked(message['address']):
                 return {'not_done': 'That email is from a sender Ask may not read.'}
             turn.strangers = True
             return {'from': message['from'], 'subject': message['subject'], 'date': message['day'],
                     'text': mask(message['text'][:8000]), 'attachments': [a['name'] for a in message['attachments']]}
         if ident.startswith('e:'):
-            event = archive.calendar_event(ident)
+            event = archive.calendar_event(ident, turn.login)
             turn.strangers = True
             return event or {'not_done': 'That event is gone.'}
         source = 'documents' if ident.startswith('d:') else 'chats'

@@ -277,7 +277,13 @@ def index(conn, mac=macos, now=None, wait=WAIT_SECONDS, say=print):
             conn.commit()
 
     for label, root in roots():
-        if not root.exists():
+        try:
+            if not store.readable(root):
+                continue
+        except store.NoAccess:
+            errors['NoAccess'] = errors.get('NoAccess', 0) + 1          # this root, and what it held, stay as they were
+            keep.update(i for i, s in had.items() if conn.execute('select 1 from items where id = ? and folder like ?',
+                                                                  (i, label + '%')).fetchone())
             continue
         for path, info, lab, relative in walk(label, root, skipped_inside()):
             if _size_quick(info) > BIGGEST:

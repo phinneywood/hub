@@ -33,6 +33,7 @@ def no_live_credentials_or_network(monkeypatch):
     monkeypatch.setattr(bridge, "health", lambda: False)
     from hub.app import archive
     monkeypatch.setattr(archive, "_tailscale_login", lambda: None)    # never the Mac's own Tailscale
+    archive._owner.update(at=float("-inf"), login=None)
     def denied(*args, **kwargs):
         raise AssertionError("Tests must not connect to live services")
     monkeypatch.setattr(socket.socket, "connect", denied)

@@ -219,13 +219,14 @@ def index(conn, mac=macos, now=None, say=print):
     had = {**store.known(conn, 'chats')}
     counts = {'items': 0, 'new': 0, 'changed': 0, 'messages': 0, 'attachments_read': 0, 'groups': 0}
     errors, keep = {}, set()
-    if not folder.is_dir():
+    if not store.readable(folder):                          # raises NoAccess without Full Disk Access, rather than "gone"
         if had:
             raise RuntimeError('the export folder is gone')
         return counts, errors
     files = Files(folder)
     groups = _load(folder / 'group_chats.json', {}).get('chats') or []
-    library = _signature(files.names, files.library)
+    dats = sorted((f.name, f.stat().st_size) for f in folder.glob('*.dat'))      # an attachment deleted is let go of
+    library = _signature(files.names, files.library, dats)
     every = [('c', c) for c in conversations(folder)] + [('g', g) for g in groups if isinstance(g, dict)]
     if had and not every:
         raise RuntimeError('the export answered with no conversations')

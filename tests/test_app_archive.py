@@ -242,7 +242,13 @@ def event(key, day, title, where=''):
     return {'id': key, 'status': 'confirmed', 'summary': title, 'location': where, 'start': {'date': day}, 'end': {'date': day}}
 
 
-def test_calendar_history_goes_back_until_the_calendar_runs_out(monkeypatch):
+@pytest.fixture
+def me(monkeypatch):
+    """The owner's login is the one this Mac's Tailscale is signed in with."""
+    monkeypatch.setattr(archive, '_tailscale_login', lambda: 'me@example.com')
+
+
+def test_calendar_history_goes_back_until_the_calendar_runs_out(monkeypatch, me):
     events = {'2026-10': [event('a1', '2026-10-03', 'Furnace service', 'Home')],
               '2025-10': [event('b1', '2025-10-03', 'Furnace service')], '2024-06': [event('c1', '2024-06-20', 'Dentist')]}
     fake = Bridge(events)
@@ -250,24 +256,60 @@ def test_calendar_history_goes_back_until_the_calendar_runs_out(monkeypatch):
     now = dt.datetime(2026, 11, 16, 9, tzinfo=archive.home.PACIFIC)
     for _ in range(4):
         archive.calendar_collect(now, pause=0)
-    status = archive.calendar_status()
+    status = archive.calendar_status('me@example.com')
     assert status['complete'] and status['events'] == 3 and status['first'] == '2024-06-20'
-    found = archive.calendar(archive.understand('when did we last have the furnace serviced'))
+    found = archive.calendar(archive.understand('when did we last have the furnace serviced'), 'me@example.com')
     assert [e['day'] for e in found] == ['2026-10-03', '2025-10-03']
-    assert archive.calendar(archive.understand('dentist in 2024'))[0]['title'] == 'Dentist'
+    assert archive.calendar(archive.understand('dentist in 2024'), 'me@example.com')[0]['title'] == 'Dentist'
     asked = [p for path, p in fake.asked if path == '/calendar/events']
     assert all(dt.date.fromisoformat(p['end'][:10]) - dt.date.fromisoformat(p['start'][:10]) <= dt.timedelta(days=31)
                for p in asked if p['start'][:10] < '2026-10')                     # a month at a time, as the bridge allows
     fake.events['2026-10'] = []                                                   # an event moved away is let go
     archive.calendar_collect(now + dt.timedelta(days=1), pause=0)                 # at the next night's reading
-    assert [e['day'] for e in archive.calendar(archive.understand('furnace'))] == ['2025-10-03']
+    assert [e['day'] for e in archive.calendar(archive.understand('furnace'), 'me@example.com')] == ['2025-10-03']
 
 
-def test_calendar_searches_by_date_alone_and_never_lists_everything(monkeypatch):
+def test_calendar_searches_by_date_alone_and_never_lists_everything(monkeypatch, me):
     fake = Bridge({'2026-10': [event('a1', '2026-10-03', 'Furnace service')]})
     monkeypatch.setattr(bridge, 'get', fake.get)
     archive.calendar_collect(dt.datetime(2026, 11, 16, 9, tzinfo=archive.home.PACIFIC), pause=0)
-    assert len(archive.calendar(archive.understand('october 2026'))) == 1
-    assert archive.calendar(archive.understand('')) == []
+    assert len(archive.calendar(archive.understand('october 2026'), 'me@example.com')) == 1
+    assert archive.calendar(archive.understand(''), 'me@example.com') == []
     with store.db() as conn:
         assert conn.execute('select count(*) from archive_events').fetchone()[0] >= 1
+
+
+# ---- another login: Shared Library photos, its own Google account's mail and calendar, nothing else of the owner's ----
+
+def test_another_login_sees_shared_library_photos_alone(served):
+    found = client.post('/app/api/archive/search', json={'q': 'beach'}, headers=OTHER).json()
+    assert found['photos']['count'] == 2 and all(p['shared'] for p in found['photos']['items'])
+    assert 'documents' not in found and 'chats' not in found and found['mail'] is False and 'calendar' not in found
+    assert found['sources'] == ['photos']
+    assert dict(served.asked[-1][1])['shared'] == ['1']
+    landing = client.get('/app/api/archive', headers=OTHER).json()
+    assert set(landing['counts']) == {'photos'} and landing['counts']['photos']['items'] == 2
+    assert landing['calendar'] is None and landing['switches'] == {} and landing['onthisday'] == []
+    assert landing['trouble'] == ['Your mail and calendar come here once your Google account is added.']
+
+
+def test_another_login_gets_not_there_for_anything_else(served, mail):
+    owners = ['/app/api/archive/thumb/p:00000001-1111-4000-8000-000000000000',             # not in the Shared Library
+              f'/app/api/archive/file/{archive_standin.DOCUMENTS[0]["id"]}', f'/app/api/archive/page/{archive_standin.DOCUMENTS[0]["id"]}/1',
+              f'/app/api/archive/item/{archive_standin.DOCUMENTS[0]["id"]}', '/app/api/archive/item/m:18c0000000000001',
+              '/app/api/archive/attachment/m:18c0000000000001/2', '/app/api/archive/item/c:c0ffee00-0000-4000-8000-000000000001']
+    for path in owners:
+        assert client.get(path, headers=OTHER).status_code == 404, path
+    assert client.get('/app/api/archive/thumb/p:00000002-1111-4000-8000-000000000000', headers=OTHER).status_code == 200
+    assert client.post('/app/api/archive/mail', json={'q': 'furnace'}, headers=OTHER).json() == {'mail': []}
+    assert not [a for a in mail.asked if a[0].startswith('/gmail')]                       # Gmail was never asked for them
+
+
+def test_another_logins_calendar_is_its_own(monkeypatch, me):
+    fake = Bridge({'2026-10': [event('a1', '2026-10-03', 'Furnace service')]})
+    monkeypatch.setattr(bridge, 'get', fake.get)
+    archive.calendar_collect(dt.datetime(2026, 11, 16, 9, tzinfo=archive.home.PACIFIC), pause=0)
+    mine = archive.calendar(archive.understand('furnace'), 'me@example.com')
+    assert len(mine) == 1
+    assert archive.calendar(archive.understand('furnace'), 'sam@example.com') == []
+    assert archive.calendar_event(mine[0]['id'], 'sam@example.com') is None and archive.calendar_status('sam@example.com') is None

@@ -18,13 +18,14 @@ from tests.archive_world import INVOICE, pdf, swatch
 STOP = {'the', 'a', 'an', 'of', 'at', 'in', 'on', 'and', 'or', 'to', 'for', 'with', 'from'}
 
 
-def _photo(n, day, people=(), words='', place='', kind='photo', young=False, score=.5):
+def _photo(n, day, people=(), words='', place='', kind='photo', young=False, score=.5, shared=False):
     return {'id': f'p:{n:08X}-1111-4000-8000-000000000000', 'source': 'photos', 'kind': kind, 'title': '', 'day': day,
             'at': time.mktime(time.strptime(day + ' 12', '%Y-%m-%d %H')) + n, 'place': place, 'people': list(people),
-            'words': words, 'young': young, 'score': score, 'w': 64, 'h': 48, 'favorite': False, 'shared': False, 'thumb': True}
+            'words': words, 'young': young, 'score': score, 'w': 64, 'h': 48, 'favorite': False, 'shared': shared, 'thumb': True}
 
 
-PHOTOS = ([_photo(n, '2024-07-13', ['Alex', 'Sam'] if n % 2 else ['Sam'], 'beach ocean sand', 'Seaside Cove', score=.4 + n / 20)
+PHOTOS = ([_photo(n, '2024-07-13', ['Alex', 'Sam'] if n % 2 else ['Sam'], 'beach ocean sand', 'Seaside Cove', score=.4 + n / 20,
+                  shared=n in (2, 4))                                                # two of the beach day are in the Shared Library
            for n in range(1, 7)]
           + [_photo(7, '2024-07-13', ['Sam'], 'beach ocean video', 'Seaside Cove', kind='video'),
              _photo(8, '2024-08-02', ['Sam'], 'beach kite', 'Seaside Cove', young=True),
@@ -92,10 +93,13 @@ def search(query):
     months = [int(m) for v in query.get('months', []) for m in v.split(',') if m]
     kinds = [k for v in query.get('kind', []) for k in v.split(',') if k]
     limit, offset, sort = int(one('limit', 24)), int(one('offset', 0)), one('sort')
+    shared = one('shared') == '1'
     out = {'loose': False, 'ms': 1}
     for source, items in (('photos', PHOTOS), ('documents', DOCUMENTS), ('chats', CHATS)):
-        if source not in sources:
+        if source not in sources or shared and source != 'photos':
             continue
+        if shared:
+            items = [i for i in items if i['shared']]
         found = []
         for item in items:
             matched, page, snippet = _hit(item, q) if q else (True, None, '')
@@ -156,18 +160,28 @@ def respond(path, query):
     """(status, content type, body, headers) for one request, as the archive's service would answer it."""
     parts = [urllib.parse.unquote(p) for p in path.strip('/').split('/') if p]
     route = parts[0] if parts else ''
-    known = {i['id']: i for i in PHOTOS + DOCUMENTS + CHATS}
+    shared = (query.get('shared') or [''])[-1] == '1'
+    known = {i['id']: i for i in PHOTOS + DOCUMENTS + CHATS if not shared or i['source'] == 'photos' and i['shared']}
     if route == 'health':
         return 200, 'application/json', {'ok': True, 'ready': True}, {}
     if route == 'search':
         return 200, 'application/json', search(query), {}
-    if route == 'item' and len(parts) == 2 and item(parts[1]):
+    if route == 'item' and len(parts) == 2 and parts[1] in known and item(parts[1]):
         return 200, 'application/json', item(parts[1], query.get('q', [])), {}
     if route == 'people':
+        if shared:
+            return 200, 'application/json', {'people': [dict(p, photos=sum(p['name'] in i['people'] for i in PHOTOS if i['shared']))
+                                                        for p in PEOPLE]}, {}
         return 200, 'application/json', {'people': PEOPLE}, {}
+    if route == 'onthisday' and shared:
+        return 200, 'application/json', {'day': '11-16', 'years': []}, {}
     if route == 'onthisday':
         return 200, 'application/json', {'day': '11-16', 'years': [
             {'year': 2023, 'count': 1, 'items': [{k: PHOTOS[10][k] for k in PUBLIC if k in PHOTOS[10]} | {'people': ['Alex', 'Sam']}]}]}, {}
+    if route == 'status' and shared:
+        return 200, 'application/json', {'counts': {'photos': {'items': sum(i['shared'] for i in PHOTOS), 'kinds': {'photo': 2},
+                                                               'previews': 2, 'first': '2024-07-13', 'last': '2024-07-13'}},
+                                          'runs': {}, 'people': 2, 'kids': 1, 'bytes': 4096, 'sharp': 'unknown'}, {}
     if route == 'status':
         return 200, 'application/json', {
             'counts': {'photos': {'items': len(PHOTOS), 'kinds': {'photo': 10, 'video': 1}, 'previews': 11, 'first': '2022-11-16',
@@ -181,7 +195,7 @@ def respond(path, query):
         return 200, 'image/png', swatch(len(parts[1]) / 9), {'X-Width': '64', 'X-Height': '48'}
     if route == 'page' and len(parts) == 3 and parts[1] in known and parts[1][0] == 'd' and parts[2] == '1':
         return 200, 'image/png', swatch(.4), {}
-    if route == 'file' and len(parts) == 2 and parts[1] == DOCUMENTS[0]['id']:
+    if route == 'file' and len(parts) == 2 and parts[1] == DOCUMENTS[0]['id'] and parts[1] in known:
         return 200, 'application/pdf', pdf(INVOICE), {'Content-Disposition': "attachment; filename*=UTF-8''Furnace%20service%20invoice.pdf"}
     return 404, 'application/json', {'error': 'Not in the archive.'}, {}
 

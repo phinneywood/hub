@@ -127,11 +127,24 @@ MAIL_ID = re.compile(r'm:[0-9a-f]{6,40}')
 EVENT_ID = re.compile(r'e:[0-9]{1,12}')
 
 
+def _people():
+    """hub/people.py, the household's identities: who a login is and which Google accounts it sees. Until it is part
+    of Hub, the owner's login sees the bridge's own account and no other login sees any."""
+    try:
+        from .. import people
+    except ImportError:
+        return None
+    return people
+
+
 def owner(login):
-    """Whether this login is the owner's: the one named in the private settings file ("archive": {"owner": ...}), else
-    the Tailscale login this Mac is signed in with. ChatGPT history is shown to the owner only."""
+    """Whether this login is the owner's: as people.py says when it can, else the one named in the private settings
+    file ("archive": {"owner": ...}), else the Tailscale login this Mac is signed in with."""
     if not login:
         return False
+    known = _people()
+    if known is not None and callable(getattr(known, 'owner', None)):
+        return bool(known.owner(login))
     named = settings().get('owner')
     if named:
         return str(named).lower() == login.lower()
@@ -160,8 +173,45 @@ def _tailscale_login():
     return None
 
 
+def accounts(login):
+    """The Google accounts whose mail and calendar this login may see: only its own (owner rule, 2026-11-16: "only I
+    see my own Google account stuff, and same for my wife once she adds hers")."""
+    if not login:
+        return []
+    known = _people()
+    if known is not None:
+        return [a for a in known.accounts(login) if a]
+    return ['default'] if owner(login) else []
+
+
+def sees(login, account='default'):
+    known = _people()
+    if known is not None:
+        return bool(login) and bool(known.sees(login, account))
+    return account in accounts(login)
+
+
+def may_see(login, item):
+    """Owner decision (2026-11-16, "Shared Library photos only"): the owner sees everything in the archive; any other
+    signed-in login sees the photos in the iCloud Shared Library and nothing else of it, not the owner's own library,
+    documents or ChatGPT history. Mail and the calendar are each person's own Google account's (`accounts`). A program
+    on the Mac with no login sees nothing."""
+    if not login:
+        return False
+    return owner(login) or (item.get('source') == 'photos' and bool(item.get('shared')))
+
+
+def scope(login):
+    """`may_see` said to the archive program, so its lists, counts and answers by id are cut the same way."""
+    return [] if owner(login) else [('shared', '1')]
+
+
 def sources_for(login):
-    return SOURCES if owner(login) else tuple(s for s in SOURCES if s != 'chats')
+    """What this login's searches reach: the archive by `may_see`, mail and the calendar by its own accounts."""
+    if not login:
+        return ()
+    mine = {'photos'} | ({'documents', 'chats'} if owner(login) else set()) | ({'mail', 'calendar'} if sees(login) else set())
+    return tuple(s for s in SOURCES if s in mine)
 
 
 # ---- what a search means, read without a model ----
@@ -307,9 +357,10 @@ def photo_sentence(about, found):
 # ---- one search across everything ----
 
 def people(login=None):
-    """The people Photos knows by name, with the kid flag as the archive sees it and as a person here set it."""
+    """The people Photos knows by name, with the kid flag as the archive sees it and as a person here set it, counted
+    in what this login may see."""
     try:
-        found = (fetch('/people') or {}).get('people', [])
+        found = (fetch('/people', scope(login)) or {}).get('people', [])
     except Away:
         return []
     with store.db() as conn:
@@ -326,7 +377,7 @@ KIDS_SCHEMA = 'create table if not exists archive_kids(name text primary key col
 
 def set_kid(name, kid, login):
     """A person here says whether someone is one of the kids."""
-    known = {p['name'].lower(): p['name'] for p in people()}
+    known = {p['name'].lower(): p['name'] for p in people(login)}
     if str(name or '').lower() not in known:
         raise Refused('The archive doesn’t know that person.')
     with store.db() as conn:
@@ -365,8 +416,8 @@ def local(meaning, sources, login, limit=PAGE, offset=0, sort=None, searches=Non
     if not allowed:
         return {}
     if meaning['kids'] and kids is None:
-        kids = [p['name'] for p in people() if p['kid']]
-    return fetch('/search', _local_params(meaning, allowed, limit, offset, sort, kids or (), searches)) or {}
+        kids = [p['name'] for p in people(login) if p['kid']]
+    return fetch('/search', _local_params(meaning, allowed, limit, offset, sort, kids or (), searches) + scope(login)) or {}
 
 
 def search(text, login, source=None, offset=0, limit=PAGE):
@@ -393,7 +444,7 @@ def search(text, login, source=None, offset=0, limit=PAGE):
     if 'photos' in out:
         out['said'] = photo_sentence(meaning['about'], out['photos'])
     if 'calendar' in wanted and offset == 0 and (meaning['terms'] or meaning['after']):
-        out['calendar'] = calendar(meaning)
+        out['calendar'] = calendar(meaning, login)
     out['mail'] = 'mail' in wanted and bool(meaning['terms'] or meaning['people'] or meaning['after'])
     return out
 
@@ -424,8 +475,11 @@ def gmail_queries(meaning, searches=None):
     return list(dict.fromkeys(' '.join(x for x in (phrase, named, dates) if x) for phrase in phrases or ['']))[:4]
 
 
-def mail(meaning, searches=None, most=MAIL_MOST):
-    """Mail that matches, newest first, ten at most: sender's name, subject, date, Gmail's snippet."""
+def mail(meaning, login, searches=None, most=MAIL_MOST):
+    """Mail that matches, newest first, ten at most: sender's name, subject, date, Gmail's snippet. Only for a login
+    that sees the bridge's mailbox: its owner's."""
+    if not sees(login):
+        return []
     found = {}
     for query in gmail_queries(meaning, searches):
         try:
@@ -446,9 +500,10 @@ def mail(meaning, searches=None, most=MAIL_MOST):
     return out[:most]
 
 
-def mail_message(ident):
-    """One email, read through the bridge: who, when, its text and its attachments."""
-    if not MAIL_ID.fullmatch(ident or ''):
+def mail_message(ident, login):
+    """One email, read through the bridge: who, when, its text and its attachments. None for a login that doesn't
+    see that mailbox, the same as for one that isn't there."""
+    if not MAIL_ID.fullmatch(ident or '') or not sees(login):
         return None
     found = bridge.get('/gmail/message', timeout=30, message_id=ident[2:])
     name, address = _sender(found.get('from'))
@@ -462,9 +517,9 @@ def mail_message(ident):
                             for a in found.get('attachments', []) if not a.get('inline')]}
 
 
-def mail_attachment(ident, part):
+def mail_attachment(ident, part, login):
     """The text of one PDF or text attachment, through the bridge's isolated parser."""
-    if not MAIL_ID.fullmatch(ident or '') or not re.fullmatch(r'(?:root|[0-9.]{1,100})', str(part or '')):
+    if not MAIL_ID.fullmatch(ident or '') or not re.fullmatch(r'(?:root|[0-9.]{1,100})', str(part or '')) or not sees(login):
         return None
     found = bridge.get('/gmail/document-attachment', timeout=60, message_id=ident[2:], part_id=part)
     return {'name': str(found.get('filename') or 'Attachment')[:200], 'text': str(found.get('text') or '')[:60000],
@@ -475,9 +530,10 @@ def mail_attachment(ident, part):
 
 CALENDAR_SCHEMA = """
 create table if not exists archive_events(
-  id integer primary key, key text not null unique, day text not null, start text, end_ text,
-  all_day integer not null default 0, title text not null default '', location text not null default '', seen real);
-create index if not exists archive_events_day on archive_events(day);
+  id integer primary key, account text not null default 'default', key text not null unique, day text not null,
+  start text, end_ text, all_day integer not null default 0, title text not null default '', location text not null default '',
+  seen real);
+create index if not exists archive_events_day on archive_events(account, day);
 create table if not exists archive_state(name text primary key, value text);
 """
 CALENDAR_FTS = """
@@ -495,10 +551,14 @@ CALENDAR_EMPTY_YEARS = 2        # going back stops after this many years without
 CALENDAR_EARLIEST = 2000
 HOURLY_DAYS = (14, 28)          # the weeks around now, read every hour: two back, four ahead
 NIGHTLY_MONTHS = 12             # and every night, a year back and a year ahead
+CALENDAR_ACCOUNTS = {'default': '/calendar/events'}    # each Google account the bridge reads a calendar of, by its path
 
 
 def _calendar_db():
     conn = store.db()
+    have = {r['name'] for r in conn.execute('pragma table_info(archive_events)')}
+    if have and 'account' not in have:          # kept before events had an account: they were all the bridge's own
+        conn.execute("alter table archive_events add column account text not null default 'default'")
     conn.executescript(CALENDAR_SCHEMA)
     try:
         conn.executescript(CALENDAR_FTS)
@@ -534,18 +594,18 @@ def _event(raw):
             str(raw.get('location') or '')[:300])
 
 
-def _read_window(conn, start, end):
-    """Copy the primary calendar's events between two dates into Hub, a month at most each time (the bridge's limit),
-    and let go of events no longer there. Returns how many were read."""
+def _read_window(conn, start, end, account='default'):
+    """Copy one account's primary calendar between two dates into Hub, a month at most each time (the bridge's
+    limit), and let go of events no longer there. Returns how many were read."""
     seen = 0
     while start < end:
         upto = min(end, start + dt.timedelta(days=30))
-        seen += _read_part(conn, start, upto)
+        seen += _read_part(conn, start, upto, account)
         start = upto
     return seen
 
 
-def _read_part(conn, start, end):
+def _read_part(conn, start, end, account):
     begin = dt.datetime.combine(start, dt.time(), home.PACIFIC)
     stop = dt.datetime.combine(end, dt.time(), home.PACIFIC)
     keys, token, stamp = set(), None, time.time()
@@ -553,21 +613,22 @@ def _read_part(conn, start, end):
         params = dict(start=begin.isoformat(), end=stop.isoformat(), time_zone=home.PACIFIC.key, limit=100)
         if token:
             params['page_token'] = token
-        reply = bridge.get('/calendar/events', ttl=0, timeout=30, keep=False, **params)
+        reply = bridge.get(CALENDAR_ACCOUNTS[account], ttl=0, timeout=30, keep=False, **params)
         for raw in reply.get('events', []):
             event = _event(raw)
             if event:
-                conn.execute('insert into archive_events(key, day, start, end_, all_day, title, location, seen) values (?,?,?,?,?,?,?,?) '
-                             'on conflict(key) do update set day = excluded.day, start = excluded.start, end_ = excluded.end_, '
-                             'all_day = excluded.all_day, title = excluded.title, location = excluded.location, seen = excluded.seen',
-                             (*event, stamp))
-                keys.add(event[0])
+                key = f'{account}:{event[0]}'
+                conn.execute('insert into archive_events(account, key, day, start, end_, all_day, title, location, seen) '
+                             'values (?,?,?,?,?,?,?,?,?) on conflict(key) do update set day = excluded.day, start = excluded.start, '
+                             'end_ = excluded.end_, all_day = excluded.all_day, title = excluded.title, location = excluded.location, '
+                             'seen = excluded.seen', (account, key, *event[1:], stamp))
+                keys.add(key)
         token = reply.get('next_page_token')
         if not token:
             break
     if not token:               # the whole window was read: what it no longer holds was moved or deleted
-        gone = [r['key'] for r in conn.execute('select key from archive_events where day >= ? and day < ?',
-                                                (start.isoformat(), end.isoformat())) if r['key'] not in keys]
+        gone = [r['key'] for r in conn.execute('select key from archive_events where account = ? and day >= ? and day < ?',
+                                                (account, start.isoformat(), end.isoformat())) if r['key'] not in keys]
         conn.executemany('delete from archive_events where key = ?', [(k,) for k in gone])
     return len(keys)
 
@@ -579,38 +640,16 @@ def _months_back(day, count):
 
 
 def calendar_collect(now=None, pause=0.3):
-    """Bring the calendar history up to date: the weeks around now always, the past and next year once a night,
-    and, until it is done, one more stretch of the far past each time. Returns what it did."""
+    """Bring the calendar history up to date, account by account: the weeks around now always, the past and next
+    year once a night, and, until it is done, one more stretch of the far past each time. Returns what it did."""
     if not _calendar_lock.acquire(blocking=False):
         return {'busy': True}
     try:
         today = (now or dt.datetime.now(home.PACIFIC)).date()
         did = {}
         with _calendar_db() as conn:
-            did['recent'] = _read_window(conn, today - dt.timedelta(days=HOURLY_DAYS[0]), today + dt.timedelta(days=HOURLY_DAYS[1]))
-            if _state(conn, 'nightly') != today.isoformat():
-                month = dt.date(today.year, today.month, 1)
-                for back in range(NIGHTLY_MONTHS, -NIGHTLY_MONTHS - 1, -1):      # a year back to a year ahead
-                    did['year'] = did.get('year', 0) + _read_window(conn, _months_back(month, back), _months_back(month, back - 1))
-                    time.sleep(pause)
-                _state(conn, 'nightly', today.isoformat())
-            back = _state(conn, 'back')
-            if back != 'done':
-                upto = dt.date.fromisoformat(back) if back else _months_back(dt.date(today.year, today.month, 1), 12)
-                empty = int(_state(conn, 'empty') or 0)
-                for _ in range(60):                     # five years of months a run, until the calendar runs out
-                    start = _months_back(upto, 1)
-                    found = _read_window(conn, start, upto)
-                    did['back'] = did.get('back', 0) + found
-                    empty = 0 if found else empty + 1
-                    upto = start
-                    if empty >= 12 * CALENDAR_EMPTY_YEARS or upto.year < CALENDAR_EARLIEST:
-                        _state(conn, 'back', 'done')
-                        break
-                    _state(conn, 'back', upto.isoformat())
-                    _state(conn, 'empty', empty)
-                    time.sleep(pause)
-            _state(conn, 'read_at', time.time())
+            for account in CALENDAR_ACCOUNTS:
+                did[account] = _collect(conn, account, today, pause)
         return did
     except bridge.BridgeError as error:
         store.log('archive calendar', type(error).__name__)
@@ -619,10 +658,49 @@ def calendar_collect(now=None, pause=0.3):
         _calendar_lock.release()
 
 
-def calendar(meaning, searches=None, most=CALENDAR_MOST):
-    """Events in the calendar history that match, newest first."""
+def _collect(conn, account, today, pause):
+    did = {}
+    state = lambda name, value=None: _state(conn, f'{name}:{account}', value)  # noqa: E731
+    did['recent'] = _read_window(conn, today - dt.timedelta(days=HOURLY_DAYS[0]), today + dt.timedelta(days=HOURLY_DAYS[1]), account)
+    if state('nightly') != today.isoformat():
+        month = dt.date(today.year, today.month, 1)
+        for back in range(NIGHTLY_MONTHS, -NIGHTLY_MONTHS - 1, -1):      # a year back to a year ahead
+            did['year'] = did.get('year', 0) + _read_window(conn, _months_back(month, back), _months_back(month, back - 1), account)
+            time.sleep(pause)
+        state('nightly', today.isoformat())
+    back = state('back')
+    if back != 'done':
+        upto = dt.date.fromisoformat(back) if back else _months_back(dt.date(today.year, today.month, 1), 12)
+        empty = int(state('empty') or 0)
+        for _ in range(60):                     # five years of months a run, until the calendar runs out
+            start = _months_back(upto, 1)
+            found = _read_window(conn, start, upto, account)
+            did['back'] = did.get('back', 0) + found
+            empty = 0 if found else empty + 1
+            upto = start
+            if empty >= 12 * CALENDAR_EMPTY_YEARS or upto.year < CALENDAR_EARLIEST:
+                state('back', 'done')
+                break
+            state('back', upto.isoformat())
+            state('empty', empty)
+            time.sleep(pause)
+    state('read_at', time.time())
+    return did
+
+
+def _theirs(login):
+    """The calendar accounts this login sees, as an SQL condition on archive_events (as `e`) and its values."""
+    mine = [a for a in accounts(login) if a in CALENDAR_ACCOUNTS]
+    return f'e.account in ({",".join("?" * len(mine))})', mine
+
+
+def calendar(meaning, login, searches=None, most=CALENDAR_MOST):
+    """Events in the calendar history of this login's own accounts that match, newest first."""
     phrases = [s for s in (searches if searches is not None else [meaning['terms']]) if s and s.strip()]
-    where, values = [], []
+    mine, values = _theirs(login)
+    if not values:
+        return []
+    where = [mine]
     if meaning['after']:
         where.append('e.day >= ?')
         values.append(meaning['after'])
@@ -647,7 +725,7 @@ def calendar(meaning, searches=None, most=CALENDAR_MOST):
             words = [f'%{w}%' for p in phrases for w in re.findall(r'\w+', p) for _ in (0, 1)]
             rows = conn.execute(f'select e.* from archive_events e where ({like}) {"and " + " and ".join(where) if where else ""} '
                                 'order by e.day desc limit ?', (*words, *values, most)).fetchall() if like else []
-        elif where:
+        elif len(where) > 1:            # a date or a month to go on, besides whose calendar it is
             rows = conn.execute(f'select e.* from archive_events e where {" and ".join(where)} order by e.day desc limit ?',
                                 (*values, most)).fetchall()
         else:
@@ -656,22 +734,29 @@ def calendar(meaning, searches=None, most=CALENDAR_MOST):
              'all_day': bool(r['all_day']), 'location': r['location']} for r in rows]
 
 
-def calendar_event(ident):
+def calendar_event(ident, login):
+    """One event, for a login whose account it is in; None otherwise, the same as for one that isn't there."""
     if not EVENT_ID.fullmatch(ident or ''):
         return None
     with _calendar_db() as conn:
         row = conn.execute('select * from archive_events where id = ?', (int(ident[2:]),)).fetchone()
-    if row is None:
+    if row is None or row['account'] not in accounts(login):
         return None
     return {'id': ident, 'source': 'calendar', 'title': row['title'], 'day': row['day'], 'start': row['start'], 'end': row['end_'],
             'all_day': bool(row['all_day']), 'location': row['location']}
 
 
-def calendar_status():
+def calendar_status(login):
+    """How much calendar history this login's own accounts have here, or None when it has none."""
+    mine, values = _theirs(login)
+    if not values:
+        return None
     with _calendar_db() as conn:
-        row = conn.execute('select count(*) as n, min(day) as first, max(day) as last from archive_events').fetchone()
-        return {'events': row['n'], 'first': row['first'], 'last': row['last'], 'complete': _state(conn, 'back') == 'done',
-                'read_at': float(_state(conn, 'read_at') or 0) or None}
+        row = conn.execute(f'select count(*) as n, min(day) as first, max(day) as last from archive_events e where {mine}',
+                           values).fetchone()
+        done = all(_state(conn, f'back:{a}') == 'done' for a in values)
+        read = [float(_state(conn, f'read_at:{a}') or 0) for a in values]
+        return {'events': row['n'], 'first': row['first'], 'last': row['last'], 'complete': done, 'read_at': max(read) or None}
 
 
 def start():
@@ -699,12 +784,12 @@ def item(ident, login, passages=()):
     an email. With `passages` (searches), a document's or a conversation's matching passages only, for Ask's model.
     None for one this login may not open."""
     if MAIL_ID.fullmatch(ident or ''):
-        return mail_message(ident)
+        return mail_message(ident, login)
     if EVENT_ID.fullmatch(ident or ''):
-        return calendar_event(ident)
-    if not ITEM.fullmatch(ident or '') or (ident[0] in 'cg' and not owner(login)):
+        return calendar_event(ident, login)
+    if not login or not ITEM.fullmatch(ident or '') or (ident[0] in 'dcg' and not owner(login)):
         return None
-    return fetch(f'/item/{ident}', [('q', words) for words in passages])
+    return fetch(f'/item/{ident}', [('q', words) for words in passages] + scope(login))
 
 
 def mail_search(text, login):
@@ -713,7 +798,7 @@ def mail_search(text, login):
         return []
     known = people(login)
     meaning = understand(text, [p['name'] for p in known], [p['name'] for p in known if p['kid']])
-    return mail(meaning)
+    return mail(meaning, login)
 
 
 # ---- what Ask may read, and the landing ----
@@ -745,19 +830,44 @@ def switch(name, on, login):
     return f'Ask may read {what} now.' if on else f'Ask won’t read {what}.'
 
 
+NEEDS_ACCESS = ('The archive can’t read {what} yet: HubArchive needs Full Disk Access on the Mac. In System Settings, '
+                'Privacy & Security, Full Disk Access, add HubArchive from the HubArchive folder and switch it on; the next '
+                'reading starts tonight, or at once from Termius.')
+WHAT = {'photos': 'the photos', 'documents': 'the documents', 'chats': 'the ChatGPT history'}
+NO_ACCOUNT = 'Your mail and calendar come here once your Google account is added.'
+NO_SHARP = 'Photos open sharp once HubArchive may work Photos: it asks on the Mac’s screen, the first time, for your OK.'
+
+
+def troubles(runs, sharp, login):
+    """What is wrong, in fixed sentences: a source the last reading couldn't open, and sharp photos not yet allowed.
+    Never a path or an error's own words."""
+    out = []
+    for source in ('photos', 'documents', 'chats'):
+        if source not in sources_for(login):
+            continue
+        errors = (runs.get(source) or {}).get('errors') or {}
+        if 'NoAccess' in errors:
+            out.append(NEEDS_ACCESS.format(what=WHAT[source]))
+        elif errors and not (runs.get(source) or {}).get('ok'):
+            out.append(f'The last reading of {WHAT[source]} didn’t finish. It is tried again tonight.')
+    if sharp == 'not allowed':
+        out.append(NO_SHARP)
+    return out
+
+
 def landing(login):
-    """The Archive screen before a search: what it holds, on this day in earlier years, and the switches."""
-    out = {'ready': True, 'owner': owner(login), 'switches': switches(), 'calendar': calendar_status(),
-           'sources': list(sources_for(login))}
+    """The Archive screen before a search: what it holds, on this day in earlier years, the people, the switches, and
+    what is wrong. Cut to what this login may see: another login's landing shows nothing of the owner's."""
+    mine = owner(login)
+    out = {'ready': True, 'owner': mine, 'switches': switches() if mine else {}, 'calendar': calendar_status(login),
+           'sources': list(sources_for(login)), 'google': sees(login), 'trouble': [] if sees(login) else [NO_ACCOUNT]}
     try:
-        status = fetch('/status') or {}
-        counts = status.get('counts', {})
-        if not owner(login):
-            counts.pop('chats', None)
-        out['counts'] = counts
+        status = fetch('/status', scope(login)) or {}
+        out['counts'] = {k: v for k, v in status.get('counts', {}).items() if k in sources_for(login)}
         runs = status.get('runs', {})
         out['indexed_at'] = max((r.get('ok') or 0 for r in runs.values()), default=0) or None
-        out['onthisday'] = (fetch('/onthisday', [('day', home.today().strftime('%m-%d')), ('year', str(home.today().year))])
+        out['trouble'] = troubles(runs, status.get('sharp'), login) + out['trouble']
+        out['onthisday'] = (fetch('/onthisday', [('day', home.today().strftime('%m-%d')), ('year', str(home.today().year))] + scope(login))
                             or {}).get('years', [])
         out['people'] = people(login)
     except Away as away:

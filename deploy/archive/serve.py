@@ -16,6 +16,9 @@ keeps on this Mac, never as its original; a document's own bytes only for a docu
   GET /page/{id}/{n}?size=1600     page n of a PDF, or a picture document, drawn
   GET /file/{id}                   a document's own bytes
 
+Every route takes shared=1, which Hub adds for a login that may see Shared Library photos only: then only those
+photos are counted, listed or sent, and anything else is "not in the archive".
+
 Nothing is logged about what was asked: not the words searched for, not the items opened.
 """
 import datetime as dt
@@ -80,7 +83,8 @@ def search_args(query):
             'place': (_one(query, 'place') or '')[:80] or None, 'favorite': _one(query, 'favorite') == '1',
             'months': [int(m) for m in _list(query, 'months') if m.isdigit() and 1 <= int(m) <= 12],
             'sort': _one(query, 'sort'), 'limit': _number(query, 'limit', 24, 1, 200),
-            'offset': _number(query, 'offset', 0, 0, 100000), 'prefix': _one(query, 'prefix') == '1'}
+            'offset': _number(query, 'offset', 0, 0, 100000), 'prefix': _one(query, 'prefix') == '1',
+            'shared': _one(query, 'shared') == '1'}
     for edge in ('after', 'before'):
         value = _one(query, edge)
         if value and not DAY.fullmatch(value):
@@ -91,11 +95,12 @@ def search_args(query):
     return args
 
 
-def _row(conn, ident, source=None):
+def _row(conn, ident, source=None, shared=False):
+    """An item by its id, or NotFound; with `shared`, only a photo in the Shared Library counts as found."""
     if not ID.fullmatch(ident or ''):
         raise NotFound()
     row = conn.execute('select * from items where id = ?', (ident,)).fetchone()
-    if row is None or (source and row['source'] != source):
+    if row is None or (source and row['source'] != source) or (shared and not (row['source'] == 'photos' and row['shared'])):
         raise NotFound()
     return row
 
@@ -116,32 +121,34 @@ def answer(path, query, conn):
     """(status, content type, body, extra headers) for one request. `conn` is a read-only view of the index."""
     parts = [urllib.parse.unquote(p) for p in path.strip('/').split('/') if p]
     route = parts[0] if parts else ''
+    shared = _one(query, 'shared') == '1'          # Hub asks this for a login that may see Shared Library photos only
     if route == 'search' and len(parts) == 1:
         started = time.monotonic()
         found = search.search(conn, **search_args(query))
         found['ms'] = int((time.monotonic() - started) * 1000)
         return 200, 'application/json', found, {}
     if route == 'item' and len(parts) == 2:
-        found = search.item(conn, parts[1] if ID.fullmatch(parts[1]) else '', q=[w[:300] for w in query.get('q', [])][:6])
+        found = search.item(conn, parts[1] if ID.fullmatch(parts[1]) else '', q=[w[:300] for w in query.get('q', [])][:6], shared=shared)
         if found is None:
             raise NotFound()
         return 200, 'application/json', found, {}
     if route == 'people' and len(parts) == 1:
-        return 200, 'application/json', {'people': search.people(conn)}, {}
+        return 200, 'application/json', {'people': search.people(conn, shared)}, {}
     if route == 'onthisday' and len(parts) == 1:
         today = dt.date.today()
         day = _one(query, 'day') or today.strftime('%m-%d')
         if not re.fullmatch(r'\d{2}-\d{2}', day):
             raise Bad('day is MM-DD')
         year = _number(query, 'year', today.year, 1900, 3000)
-        return 200, 'application/json', {'day': day, 'years': search.on_this_day(conn, day, year)}, {}
+        return 200, 'application/json', {'day': day, 'years': search.on_this_day(conn, day, year, shared=shared)}, {}
     if route == 'status' and len(parts) == 1:
-        return 200, 'application/json', {'counts': search.counts(conn), 'runs': store.status(conn),
+        return 200, 'application/json', {'counts': search.counts(conn, shared), 'runs': store.status(conn),
                                          'people': conn.execute('select count(*) from people').fetchone()[0],
                                          'kids': conn.execute('select count(*) from people where kid = 1').fetchone()[0],
+                                         'sharp': sharp.state(),
                                          'bytes': store.database().stat().st_size}, {}
     if route == 'thumb' and len(parts) == 2:
-        row = _row(conn, parts[1])
+        row = _row(conn, parts[1], shared=shared)
         where = store.thumb_path(row['id'])
         if not where.exists() and row['source'] == 'photos':
             with DRAWING:
@@ -152,7 +159,7 @@ def answer(path, query, conn):
             raise NotFound() from None
         return 200, _picture(data), data, {}
     if route == 'photo' and len(parts) == 2:
-        row = _row(conn, parts[1], 'photos')
+        row = _row(conn, parts[1], 'photos', shared=shared)
         size = _number(query, 'size', 1600, 200, 2400)
         if _one(query, 'sharp') == '1' and row['kind'] == 'photo':
             got = sharp.get(row['id'], row['id'][2:])          # from Photos itself, by way of iCloud, when it may
@@ -166,7 +173,7 @@ def answer(path, query, conn):
             raise NotFound()
         return 200, _picture(made[0]), made[0], {'X-Width': str(made[1]), 'X-Height': str(made[2]), 'X-Sharp': '0'}
     if route == 'page' and len(parts) == 3:
-        row = _row(conn, parts[1], 'documents')
+        row = _row(conn, parts[1], 'documents', shared=shared)
         number = int(parts[2]) if parts[2].isdigit() else 0
         size = _number(query, 'size', 1600, 200, 2400)
         if not row['local'] or number < 1:
@@ -182,7 +189,7 @@ def answer(path, query, conn):
             raise NotFound()
         return 200, _picture(made[0]), made[0], {'X-Width': str(made[1]), 'X-Height': str(made[2])}
     if route == 'file' and len(parts) == 2:
-        row = _row(conn, parts[1], 'documents')
+        row = _row(conn, parts[1], 'documents', shared=shared)
         file = Path(row['path'] or '')
         if not row['local'] or not file.is_file():
             raise NotFound()

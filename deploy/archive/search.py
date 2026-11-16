@@ -56,9 +56,11 @@ def body_only(match):
 
 
 def _filters(source, kind=(), people=(), anyof=(), young=False, place=None, after=None, before=None, months=(),
-             favorite=False, screenshots=None):
-    """SQL conditions on items (as `i`) and their values."""
+             favorite=False, screenshots=None, shared=False):
+    """SQL conditions on items (as `i`) and their values. `shared`: only photos in the iCloud Shared Library."""
     where, values = ['i.source = ?'], [source]
+    if shared:
+        where.append('i.shared = 1')
     if kind:
         where.append(f'i.kind in ({",".join("?" * len(kind))})')
         values += list(kind)
@@ -184,8 +186,11 @@ def _snippets(conn, match, rows):
 
 
 def search(conn, q=(), sources=SOURCES, sort=None, limit=24, offset=0, prefix=False, **filters):
-    """What matched, source by source: {source: {'count', 'items', ...}, 'loose': bool}."""
+    """What matched, source by source: {source: {'count', 'items', ...}, 'loose': bool}. With `shared`, photos in
+    the Shared Library alone: what Hub asks for a login that may see only those."""
     q = [s for s in (q or ()) if s and s.strip()]
+    if filters.get('shared'):
+        sources = [s for s in sources if s == 'photos']
     match = expression(q, prefix=prefix)
     found, loose = {}, False
     for attempt in ('all', 'any'):
@@ -201,7 +206,7 @@ def search(conn, q=(), sources=SOURCES, sort=None, limit=24, offset=0, prefix=Fa
                     found[source] = []      # nothing to go on: never a list of everything
                     continue
             else:
-                for name in ('people', 'anyof', 'young', 'place', 'favorite', 'screenshots'):
+                for name in ('people', 'anyof', 'young', 'place', 'favorite', 'screenshots', 'shared'):
                     these.pop(name, None)
                 named = [f'"{" ".join(WORD.findall(p.lower()))}"' for p in filters.get('people') or () if WORD.findall(p)]
                 if named and not match:
@@ -239,12 +244,12 @@ def search(conn, q=(), sources=SOURCES, sort=None, limit=24, offset=0, prefix=Fa
 PASSAGES = 6                    # the most passages of one item that a search's words are given back with
 
 
-def item(conn, ident, most=120_000, q=()):
+def item(conn, ident, most=120_000, q=(), shared=False):
     """One item in full, for Hub to show: its facts, and its text page by page or message by message. With `q`, only
     the passages that hold those words (the best PASSAGES), or its first one when only its title did: what Ask's
     model may read of it."""
     row = conn.execute('select * from items where id = ?', (ident,)).fetchone()
-    if row is None:
+    if row is None or (shared and not (row['source'] == 'photos' and row['shared'])):
         return None
     import json
     meta = json.loads(row['meta'] or '{}')
@@ -253,11 +258,14 @@ def item(conn, ident, most=120_000, q=()):
     if row['source'] == 'photos':
         out.update({k: meta.get(k) for k in ('albums', 'labels', 'keywords', 'description')})
         return out
-    match = expression([w for w in q if w and w.strip()]) if q else ''
-    if match:
-        parts = conn.execute("select p.page, p.role, p.at, p.body from fts join parts p on p.id = fts.rowid where fts match ? "
-                             "and p.item = ? and p.body != '' order by bm25(fts, 0.0, 1.0), p.n limit ?",
-                             (body_only(match), ident, PASSAGES)).fetchall()
+    searches = [w for w in q if w and w.strip()] if q else []
+    if searches:
+        parts = []
+        for match in (expression(searches), expression(searches, loose=True)):    # every word, else any of them
+            if match and not parts:
+                parts = conn.execute("select p.page, p.role, p.at, p.body from fts join parts p on p.id = fts.rowid where fts match ? "
+                                     "and p.item = ? and p.body != '' order by bm25(fts, 0.0, 1.0), p.n limit ?",
+                                     (body_only(match), ident, PASSAGES)).fetchall()
         parts = sorted(parts, key=lambda p: (p['page'] or 0)) or conn.execute(
             "select page, role, at, body from parts where item = ? and body != '' order by n limit 1", (ident,)).fetchall()
         out['passages'] = True
@@ -285,16 +293,22 @@ def item(conn, ident, most=120_000, q=()):
     return out
 
 
-def people(conn):
-    """The people Photos knows by name, most photographed first, with whether they look like a kid."""
-    return [{'name': r['name'], 'photos': r['photos'], 'kid': bool(r['kid']), 'last': r['last']}
-            for r in conn.execute('select * from people where photos > 0 order by photos desc, name')]
+def people(conn, shared=False):
+    """The people Photos knows by name, most photographed first, with whether they look like a kid. With `shared`,
+    counted in the Shared Library alone, and only those who are in it."""
+    if shared:
+        rows = conn.execute('select pe.name, pe.kid, pe.last, count(*) as photos from people pe join item_people ip on ip.person = pe.id '
+                            'join items i on i.id = ip.item where i.shared = 1 group by pe.id order by photos desc, pe.name').fetchall()
+    else:
+        rows = conn.execute('select * from people where photos > 0 order by photos desc, name').fetchall()
+    return [{'name': r['name'], 'photos': r['photos'], 'kid': bool(r['kid']), 'last': r['last']} for r in rows]
 
 
-def on_this_day(conn, month_day, year, per_year=8, most=40):
+def on_this_day(conn, month_day, year, per_year=8, most=40, shared=False):
     """Photos taken on this day of the year in earlier years, the best of each year, newest year first."""
     rows = conn.execute("select * from items where source = 'photos' and screenshot = 0 and substr(day, 6, 5) = ? "
-                        'and substr(day, 1, 4) < ? order by day desc, score desc', (month_day, str(year))).fetchall()
+                        f"and substr(day, 1, 4) < ? {'and shared = 1' if shared else ''} order by day desc, score desc",
+                        (month_day, str(year))).fetchall()
     years = {}
     for row in rows:
         years.setdefault(row['day'][:4], []).append(row)
@@ -311,11 +325,11 @@ def on_this_day(conn, month_day, year, per_year=8, most=40):
     return out
 
 
-def counts(conn):
-    """How much the index holds, source by source and kind by kind."""
+def counts(conn, shared=False):
+    """How much the index holds, source by source and kind by kind (with `shared`, the Shared Library's photos)."""
     out = {}
     for row in conn.execute('select source, kind, count(*) as n, sum(thumb) as previews, sum(local = 0) as away, '
-                            'min(day) as first, max(day) as last from items group by source, kind'):
+                            f"min(day) as first, max(day) as last from items {'where shared = 1' if shared else ''} group by source, kind"):
         here = out.setdefault(row['source'], {'items': 0, 'kinds': {}, 'previews': 0, 'first': row['first'], 'last': row['last']})
         here['items'] += row['n']
         here['previews'] += row['previews'] or 0

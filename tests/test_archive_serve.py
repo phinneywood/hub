@@ -3,6 +3,7 @@ routes, ids only, never a photo original, never where a file is."""
 import tempfile
 import threading
 import time
+from collections import deque
 from pathlib import Path
 
 import httpx
@@ -136,6 +137,53 @@ def test_when_photos_says_no_the_viewer_keeps_the_macs_own_picture(service, monk
     assert got.status_code == 200 and got.headers['x-sharp'] == '0'
     client.get(f'/photo/p:{uuids["3"]}', params={'sharp': '1'})
     assert mac.exported == [uuids['2']]                                               # and Photos isn't asked again for a while
+    assert client.get('/status').json()['sharp'] == 'not allowed'
+
+
+def test_a_photo_photos_cant_export_is_left_alone_and_the_others_carry_on(service, monkeypatch):
+    client, uuids, _, mac = service
+    sharp = world.program('sharp')
+    monkeypatch.setattr(sharp, 'macos', mac)
+    sharp._refused['at'] = float('-inf')
+    monkeypatch.setattr(mac, 'refuse', False, raising=False)
+    monkeypatch.setattr(mac, 'cant', {uuids['4']}, raising=False)
+    mac.exported = []
+    assert client.get(f'/photo/p:{uuids["4"]}', params={'sharp': '1'}).headers['x-sharp'] == '0'
+    assert client.get(f'/photo/p:{uuids["5"]}', params={'sharp': '1'}).headers['x-sharp'] == '1'
+    assert client.get(f'/photo/p:{uuids["4"]}', params={'sharp': '1'}).headers['x-sharp'] == '0'
+    assert mac.exported == [uuids['4'], uuids['5']]                                   # the one that failed isn't asked for again
+
+
+def test_only_the_newest_exports_wait_and_one_viewer_waits(tmp_path, monkeypatch):
+    import threading
+    sharp = world.program('sharp')
+    store_ = world.program('store')
+    monkeypatch.setenv('HUB_ARCHIVE_DIR', str(tmp_path))
+    sharp._refused['at'] = float('-inf')
+    gate, order = threading.Event(), []
+
+    class Slow:
+        def sharp_picture(self, uuid, pixels, folder=None):
+            gate.wait(5)
+            order.append(uuid)
+            return world.swatch(.5), 64, 48
+    slow = Slow()
+    first = threading.Thread(target=sharp.get, args=('p:first000', 'first000'), kwargs={'wait': 5, 'mac': slow})
+    first.start()
+    for _ in range(50):
+        if sharp._queue == deque() and sharp._waiting.locked():
+            break
+        threading.Event().wait(0.02)
+    for n in range(6):                                                                 # a fast swipe through six more
+        assert sharp.get(f'p:swipe000{n}', f'swipe000{n}', wait=5, mac=slow) is None  # nobody else waits
+    gate.set()
+    first.join(5)
+    for _ in range(100):
+        if len(order) >= 4:
+            break
+        threading.Event().wait(0.02)
+    assert order[0] == 'first000' and order[1:] == ['swipe0005', 'swipe0004', 'swipe0003']   # the newest first, the rest let go
+    assert store_.sharp_path('p:swipe0005').exists() and not store_.sharp_path('p:swipe0000').exists()
 
 
 def test_the_sharp_cache_lets_the_least_recently_opened_go(tmp_path, monkeypatch):

@@ -60,16 +60,23 @@ def _photo(entry, marks, applied):
             'in_album': entry['id'] in applied.get('album', []), 'saved': entry['id'] in applied.get('print', [])}
 
 
-def picture(month=''):
-    """The Photos screen: one month (the newest unless named), and the list of months to move between."""
+def _seen(login, entry):
+    """Whether this login may see a pick: the archive's own rule (`archive.may_see`)."""
+    from .archive import may_see
+    return may_see(login, {'source': 'photos', 'shared': entry.get('shared')})
+
+
+def picture(month='', login=None):
+    """The month's best: one month (the newest unless named), and the list of months to move between. Another
+    login than the owner's sees the Shared Library's picks alone."""
     found = months()
     if not found:
         return {'ok': True, 'ready': False, 'months': [], 'month': '', 'picks': [], 'more': []}
     month = month if month in found else found[0]
     chosen = _read(folder() / 'months' / f'{month}.json', {})
     marks, applied = _read(folder() / 'marks.json', {}), _read(folder() / 'applied.json', {})
-    picks = [_photo(e, marks, applied) for e in chosen.get('picks', []) if ID.fullmatch(str(e.get('id', '')))]
-    more = [_photo(e, marks, applied) for e in chosen.get('more', []) if ID.fullmatch(str(e.get('id', '')))]
+    picks = [_photo(e, marks, applied) for e in chosen.get('picks', []) if ID.fullmatch(str(e.get('id', ''))) and _seen(login, e)]
+    more = [_photo(e, marks, applied) for e in chosen.get('more', []) if ID.fullmatch(str(e.get('id', ''))) and _seen(login, e)]
     every = picks + more
     return {'ok': True, 'ready': True, 'months': [{'month': m, 'name': _name(m)} for m in found],
             'month': month, 'name': chosen.get('album') or _name(month), 'looked_at': chosen.get('looked_at', 0),
@@ -83,19 +90,22 @@ def _name(month):
     return datetime.date(int(month[:4]), int(month[5:]), 1).strftime('%B %Y')
 
 
-def thumb(photo):
-    """The path of a photo's preview, only for a photo the curator chose."""
+def thumb(photo, login=None):
+    """The path of a photo's preview, only for a photo the curator chose and this login may see."""
     if not ID.fullmatch(photo or ''):
         return None
     path = folder() / 'thumbs' / f'{photo}.jpg'
-    return path if path.is_file() and _chosen(photo) else None
+    entry = _chosen(photo)
+    return path if path.is_file() and entry and _seen(login, entry) else None
 
 
 def _chosen(photo):
+    """The curator's entry for one photo it chose, or None."""
     for month in months():
         chosen = _read(folder() / 'months' / f'{month}.json', {})
-        if any(e.get('id') == photo for e in chosen.get('picks', []) + chosen.get('more', [])):
-            return month
+        for entry in chosen.get('picks', []) + chosen.get('more', []):
+            if entry.get('id') == photo:
+                return entry
     return None
 
 
@@ -103,7 +113,8 @@ def mark(photo, do, login, now=None):
     """Mark one chosen photo Keep, Skip or Print, or clear its mark. Returns what to tell the person."""
     if do not in MARKS + ('clear',):
         raise Refused('Hub doesn’t know that mark.')
-    if not ID.fullmatch(str(photo or '')) or not _chosen(photo):
+    entry = _chosen(photo) if ID.fullmatch(str(photo or '')) else None
+    if not entry or not _seen(login, entry):
         raise Refused('That photo isn’t one the curator chose.')
     path = folder() / 'marks.json'
     with _lock:

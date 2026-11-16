@@ -66,6 +66,10 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   switch on the Archive screen, on by default, that the owner can turn off. Nothing about a photo ever reaches a
   model: not a picture, a label, a person, a place, a date or even whether any were found. Read "Archive" in
   `docs/app.md` first.
+  Owner-approved (2026-11-16): each person sees their own Google account's mail and calendar and no one else's,
+  by their Tailscale login (`hub/people.py`); in the archive, any login but the owner's sees only the photos in the
+  iCloud Shared Library, never the owner's own library, documents or ChatGPT history (`archive.may_see`). The same
+  holds for what Ask's model is given on that person's behalf.
   Owner-approved (2026-11-15): Ask may change anything in Home Assistant, through `hub/tools/house/admin.py` and
   the setup door in `broker.py` only. Keep its rule for what waits for a tap in code, its record and Undo, and
   what the door keeps shut; read "Setting up the house" in `docs/app.md` first. The same day Kitchen became part

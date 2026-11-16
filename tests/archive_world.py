@@ -122,7 +122,9 @@ class Mac:
         """Photos exporting a photo: a bigger wash, unless this stand-in was told Photos says no."""
         self.exported = getattr(self, 'exported', []) + [uuid]
         if getattr(self, 'refuse', False):
-            raise RuntimeError('Photos said no')
+            raise RuntimeError('Not authorized to send Apple events to Photos. (-1743)')
+        if uuid in getattr(self, 'cant', ()):
+            raise RuntimeError('Photos got an error: the photo could not be exported')
         return swatch(.75, 128, 96), 128, 96
 
     def hello_photos(self):

@@ -200,6 +200,8 @@ def test_an_item_asked_with_words_gives_back_only_its_passages_that_hold_them(bu
     assert all('MERV' in m['text'] for m in told['messages'])
     first = search.item(conn, chat, q=['sizes'])                                   # only the title holds it: the first passage
     assert len(first['messages']) == 1 and first['messages'][0]['n'] == 1
+    loose = search.item(conn, chat, q=['zebra MERV'])                              # found on a loose search: its loose passages
+    assert loose['messages'] and all('MERV' in m['text'] for m in loose['messages'])
 
 
 def test_what_hub_is_told_never_says_where_a_file_is(built):

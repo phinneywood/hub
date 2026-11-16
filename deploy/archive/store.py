@@ -57,6 +57,27 @@ ITEM_FIELDS = ('id', 'source', 'kind', 'title', 'at', 'day', 'until', 'place', '
                'seen')
 
 
+class NoAccess(Exception):
+    """macOS won't let the archive read a source: it needs Full Disk Access. Kept in the status by this name."""
+
+
+def readable(path):
+    """Whether a file or folder is there to read: False when it isn't. Raises NoAccess when macOS keeps it from the
+    archive (no Full Disk Access), which a plain look would take for "not there"."""
+    try:
+        if os.path.isdir(path):
+            os.listdir(path)
+        elif os.path.exists(path):
+            open(path, 'rb').close()
+        else:
+            os.stat(path)
+    except PermissionError:
+        raise NoAccess() from None
+    except FileNotFoundError:
+        return False
+    return True
+
+
 def home():
     """The archive's own folder."""
     return Path(os.environ.get('HUB_ARCHIVE_DIR') or Path.home() / 'Library' / 'Application Support' / 'HubArchive')

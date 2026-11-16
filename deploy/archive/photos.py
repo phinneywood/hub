@@ -31,6 +31,7 @@ UNKNOWN = '_UNKNOWN_'
 def library():
     import osxphotos
     path = os.environ.get('HUB_ARCHIVE_LIBRARY') or str(Path.home() / 'Pictures' / 'Photos Library.photoslibrary')
+    store.readable(Path(path) / 'database' / 'Photos.sqlite')          # without Full Disk Access, say so plainly
     return osxphotos.PhotosDB(dbfile=path)
 
 

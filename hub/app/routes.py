@@ -571,7 +571,7 @@ def photos_picture(request: Request, month: str = ''):
     from . import photos
     if _login(request) is None:
         return _refuse('Open Photos on your phone or laptop.', 403)
-    return photos.picture(month)
+    return photos.picture(month, _login(request))
 
 
 @router.get('/api/photos/thumb/{photo}')
@@ -580,7 +580,7 @@ def photos_thumb(photo: str, request: Request):
     from . import photos
     if _login(request) is None:
         return _refuse('Open Photos on your phone or laptop.', 403)
-    path = photos.thumb(photo)
+    path = photos.thumb(photo, _login(request))
     if path is None:
         return _refuse('No such photo.', 404)
     with path.open('rb') as head:
@@ -677,15 +677,15 @@ def archive_item(ident: str, request: Request):
 def archive_attachment(ident: str, part: str, request: Request):
     """The text of a PDF or text file attached to an email, read by the bridge's isolated parser."""
     def work(archive, login):
-        found = archive.mail_attachment(ident, part)
+        found = archive.mail_attachment(ident, part, login)
         return found if found is not None else _refuse('Not in the archive.', 404)
     return _archive(request, work)
 
 
 @router.get('/api/archive/thumb/{ident}')
 def archive_thumb(ident: str, request: Request):
-    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/thumb/{ident}') if archive.ITEM.fullmatch(ident)
-                                                           and ident[0] in 'pd' else None))
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/thumb/{ident}', archive.scope(login))
+                                                           if archive.ITEM.fullmatch(ident) and ident[0] in 'pd' else None))
 
 
 @router.get('/api/archive/photo/{ident}')
@@ -693,22 +693,22 @@ def archive_photo(ident: str, request: Request, size: int = 1600, sharp: int = 0
     """A photo for the full-screen viewer: the Mac's best picture of it, or with sharp=1 a 2048-pixel one from
     iCloud when the archive may ask Photos for it (it says which in X-Sharp)."""
     asked = [('size', str(max(200, min(size, 2400))))] + ([('sharp', '1')] if sharp else [])
-    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/photo/{ident}', asked)
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/photo/{ident}', asked + archive.scope(login))
                                                            if archive.ITEM.fullmatch(ident) and ident[0] == 'p' else None))
 
 
 @router.get('/api/archive/page/{ident}/{number}')
 def archive_page(ident: str, number: int, request: Request, size: int = 1600):
     return _archive(request, lambda archive, login: _bytes(archive.picture(f'/page/{ident}/{max(1, min(number, 10000))}',
-                                                                           [('size', str(max(200, min(size, 2400))))])
+                                                                           [('size', str(max(200, min(size, 2400))))] + archive.scope(login))
                                                            if archive.ITEM.fullmatch(ident) and ident[0] == 'd' else None))
 
 
 @router.get('/api/archive/file/{ident}')
 def archive_file(ident: str, request: Request):
     """A document's own bytes, to keep: documents only, never a photo's original."""
-    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/file/{ident}') if archive.ITEM.fullmatch(ident)
-                                                           and ident[0] == 'd' else None, 'file'))
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/file/{ident}', archive.scope(login))
+                                                           if archive.ITEM.fullmatch(ident) and ident[0] == 'd' else None, 'file'))
 
 
 @router.post('/api/archive/kid')

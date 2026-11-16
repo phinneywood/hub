@@ -259,6 +259,7 @@ record under the chat's own $10 a month limit; the words do not.
 | The archive's mail and calendar results (sender's name, subject, date, Gmail's snippet; an event's title, date and place), and one email or event read in full | Yes (since 2026-11-16); never senders with AI switched off | No |
 | The passages of documents and ChatGPT history that match what was asked, with card, account and ID-like numbers masked | Yes (owner decision, 2026-11-16), unless switched off on the Archive screen | No |
 | Anything about a photo: the picture, a label, a person, a place, a date, a count, whether any were found | Never. Hub draws the card and writes its sentence itself | No |
+| Someone else's mail, calendar, documents or ChatGPT history | Never: Ask reads for the person asking, by their login, only what that login may see | No |
 
 **Until it is set up.** Ask needs two things a Hub may not have yet: the Anthropic SDK among the reviewed
 wheels (`anthropic`, an extra of `pydantic-ai-slim`), and the key. Without either, `GET /app/api/ask` says
@@ -438,9 +439,15 @@ page, the passage that matched and Get the file; mail as it arrives from Gmail; 
 message that matched. Before a search: photos from this day in earlier years, the month's best (below), what the
 archive holds, the kids, and what Ask may read.
 
-**Who sees what.** Every signed-in device sees photos, documents, mail and calendar, like the rest of Hub. ChatGPT
-history is for the owner's login alone: the one named in the private settings file, `"archive": {"owner": ...}`, or
-else the login this Mac's Tailscale is signed in with. A program on the Mac with no login gets nothing.
+**Who sees what** (owner decisions, 2026-11-16). The owner's login sees everything in the archive. Any other signed-in
+login sees the photos in the iCloud Shared Library and nothing else of it: not the owner's own library, documents or
+ChatGPT history (“Shared Library photos only”, `archive.may_see`); its counts, On this day, the month's best and every
+answer by id are cut the same way, by the archive program itself. Mail and the calendar are each person's own: a
+login sees the Google accounts that are its own (`hub/people.py`, by Tailscale login), so until another person's
+account is added, they see neither, and the screen says so. Another login opening the owner's email, event or
+document by id is told it isn't there. The owner's login is the one `hub/people.py` names, else the one in the private
+settings file (`"archive": {"owner": ...}`), else the login this Mac's Tailscale is signed in with. A program on the
+Mac with no login gets nothing.
 
 **Ask** searches it with `search` and opens one result with `read` (see "Ask"). Photos: Hub searches, draws a card of
 up to 12 and writes the sentence; the model is told nothing about them, not even whether any were found, and that
