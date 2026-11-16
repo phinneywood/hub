@@ -8,6 +8,7 @@ import type { Photo, PhotoMark, Photos as PhotosData } from "./types";
 
 const DAY = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" });
 const MARKS: [Exclude<PhotoMark, "">, string][] = [["keep", "Keep"], ["print", "Print"], ["skip", "Skip"]];
+const FIRST = 6;            // the month's picks shown before "Show all"
 
 function when(photo: Photo) {
   const at = new Date(photo.taken);
@@ -41,6 +42,7 @@ export function BestOfMonth() {
   const [busy, setBusy] = useState(false);
   const [month, setMonth] = useState("");
   const [more, setMore] = useState(false);
+  const [all, setAll] = useState(false);
   const load = (which = month) => api.photos(which).then(setFound, () => setFound(null));
   useEffect(() => { void load(); }, [month]);
 
@@ -62,16 +64,18 @@ export function BestOfMonth() {
         <h2>The best of {found.name}</h2>
         <div class="pager">
           <button type="button" class="linkish" disabled={at < 0 || at >= found.months.length - 1}
-            onClick={() => { setMore(false); setMonth(found.months[at + 1]?.month ?? ""); }}>Earlier</button>
+            onClick={() => { setMore(false); setAll(false); setMonth(found.months[at + 1]?.month ?? ""); }}>Earlier</button>
           <button type="button" class="linkish" disabled={at <= 0}
-            onClick={() => { setMore(false); setMonth(found.months[at - 1]?.month ?? ""); }}>Later</button>
+            onClick={() => { setMore(false); setAll(false); setMonth(found.months[at - 1]?.month ?? ""); }}>Later</button>
         </div>
       </div>
       <p class="quiet-line">{`${found.picks.length} chosen from ${found.looked_at ?? 0} photos on this Mac. Keep puts one in the month’s album in Photos; Print also saves a full-size copy.`}
         {counts ? ` ${counts.keep} kept · ${counts.print} to print · ${counts.skip} skipped.` : ""}
         {(found.waiting ?? 0) > 0 ? ` ${found.waiting} waiting for the Mac to add or save.` : ""}</p>
-      <div class="shots">{found.picks.map((p) => <Tile key={p.id} photo={p} locked={locked} mark={(photo, value) => void mark(photo, value)} />)}</div>
-      {found.more.length > 0 && (!more
+      <div class="shots">{(all ? found.picks : found.picks.slice(0, FIRST)).map((p) =>
+        <Tile key={p.id} photo={p} locked={locked} mark={(photo, value) => void mark(photo, value)} />)}</div>
+      {!all && found.picks.length > FIRST && <button type="button" class="btn ghost more-btn" onClick={() => setAll(true)}>{`Show all ${found.picks.length}`}</button>}
+      {all && found.more.length > 0 && (!more
         ? <button type="button" class="btn ghost more-btn" onClick={() => setMore(true)}>Show {found.more.length} more</button>
         : <div class="shots">{found.more.map((p) => <Tile key={p.id} photo={p} locked={locked} mark={(photo, value) => void mark(photo, value)} />)}</div>)}
     </section>

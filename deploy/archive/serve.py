@@ -7,7 +7,7 @@ keeps on this Mac, never as its original; a document's own bytes only for a docu
   GET /health                      {"ok": true, "ready": whether there is an index}
   GET /status                      what the index holds and each source's last run, as counts
   GET /search?q=&sources=&...      what matched, source by source (search.py)
-  GET /item/{id}                   one item in full: its facts and its text
+  GET /item/{id}                   one item in full: its facts and its text (with q=, only the passages that match)
   GET /people                      the people Photos knows by name, and who looks like a kid
   GET /onthisday?day=MM-DD         photos from this day in earlier years
   GET /thumb/{id}                  its 400-pixel preview
@@ -122,7 +122,7 @@ def answer(path, query, conn):
         found['ms'] = int((time.monotonic() - started) * 1000)
         return 200, 'application/json', found, {}
     if route == 'item' and len(parts) == 2:
-        found = search.item(conn, parts[1] if ID.fullmatch(parts[1]) else '')
+        found = search.item(conn, parts[1] if ID.fullmatch(parts[1]) else '', q=[w[:300] for w in query.get('q', [])][:6])
         if found is None:
             raise NotFound()
         return 200, 'application/json', found, {}

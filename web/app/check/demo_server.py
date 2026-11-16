@@ -28,10 +28,11 @@ import time
 from pathlib import Path
 
 scratch = tempfile.mkdtemp(prefix='hub-app-check-')
+archive_socket = Path(tempfile.mkdtemp(prefix='arc-', dir='/tmp')) / 's.sock'     # the made-up archive's service; short, as macOS wants
 os.environ.update(HUB_DATA_DIR=scratch, HUB_BACKGROUND_JOBS='disabled', HUB_BRIDGE_URL='http://127.0.0.1:9',
                   HUB_BRIDGE_TOKEN_FILE=str(Path(scratch) / 'absent'), HUB_KITCHEN_SOCKET=str(Path(scratch) / 'absent.sock'),
                   HUB_HA_BROKER_SOCKET=str(Path(scratch) / 'absent-broker.sock'), HUB_ALLOWED_LOGINS='me@example.com',
-                  PYDANTIC_AI_NO_BANNER='1', HUB_RELEASES_DIR=str(Path(scratch) / 'releases'))
+                  PYDANTIC_AI_NO_BANNER='1', HUB_RELEASES_DIR=str(Path(scratch) / 'releases'), HUB_ARCHIVE_SOCKET=str(archive_socket))
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -40,7 +41,7 @@ import check_guard  # noqa: E402
 import pytest  # noqa: E402
 
 patch = pytest.MonkeyPatch()
-check_guard.apply(patch)   # before the app exists: no key store, no other machine, no local service
+check_guard.apply(patch, sockets=[archive_socket])   # before the app exists: no key store, no other machine, no local service but the demo's own
 
 import uvicorn  # noqa: E402
 
@@ -58,7 +59,8 @@ _ready = Path(scratch) / 'releases'
 (_ready / 'queue').mkdir()
 (_ready / 'pending.json').write_text(json.dumps({'sha': 'd' * 40, 'subjects': ['Home: a made-up change, ready to deploy']}))
 (Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'},
-                                                         'photos': {'dir': str(Path(scratch) / 'curator')}}))
+                                                         'photos': {'dir': str(Path(scratch) / 'curator')},
+                                                         'archive': {'owner': 'me@example.com'}}))
 world = app_world.install(patch)
 
 # The Activity screen: a made-up evening in Home Assistant's logbook, and Apple Home through a stand-in HomeClaw.
@@ -117,6 +119,28 @@ for _n, _shot in enumerate(_shots):
 (_curator / 'marks.json').write_text(json.dumps({_shots[1]['id']: {'mark': 'keep', 'by': 'me@example.com', 'at': 0},
                                                  _shots[4]['id']: {'mark': 'print', 'by': 'me@example.com', 'at': 0}}))
 (_curator / 'applied.json').write_text(json.dumps({'album': [_shots[1]['id']], 'print': []}))
+
+# The Archive: a made-up family archive (tests/archive_world.py) indexed by the archive program's real code and
+# answered by its real service on the demo's own socket, with colour washes for every picture; made-up mail behind
+# a stand-in bridge, and a calendar history read from it.
+import threading  # noqa: E402
+import types  # noqa: E402
+
+from hub import bridge as real_bridge  # noqa: E402
+from hub.app import archive as hub_archive  # noqa: E402
+from tests import archive_world  # noqa: E402
+from tests.test_app_archive import Bridge, event  # noqa: E402
+
+_archive_home, _archive_mac, _ = archive_world.build(Path(scratch) / 'archive-world', patch)
+_serve = archive_world.program('serve')
+patch.setattr(_serve, 'macos', _archive_mac)
+patch.setattr(archive_world.program('sharp'), 'macos', _archive_mac)
+threading.Thread(target=_serve.serve, args=(archive_socket,), daemon=True).start()
+_mail_bridge = Bridge({'2025-10': [event('d1', '2025-10-03', 'Furnace service', 'Home')],
+                       '2024-07': [event('d2', '2024-07-13', 'Beach day', 'Seaside Cove')]})
+patch.setattr(hub_archive, 'bridge', types.SimpleNamespace(get=_mail_bridge.get, BridgeError=real_bridge.BridgeError))
+hub_archive.calendar_collect(pause=0)
+hub_archive.calendar_collect(pause=0)
 
 # The Engine screen: a made-up instruction, something to build and a note waiting for a tap.
 from hub.engine import notes as engine_notes, state as engine_state  # noqa: E402

@@ -2,8 +2,11 @@
 
 Owner decision (2026-11-14): Ask runs on Claude Sonnet through the owner's own Anthropic API key, at high
 reasoning. What goes there: what the owner typed, the state of the lights and speakers, what Hub remembers, and
-(owner decision, 2026-11-15) the bounded mail, calendar, school and today lookups in `private.py`. What never
-does: Kitchen's replies. The key is read from 1Password by reference and is never logged or returned.
+(owner decision, 2026-11-15) the bounded mail, calendar, school and today lookups in `private.py`, and (owner
+decision, 2026-11-16) what `search` and `read` in `tools.py` find in the family archive: mail and calendar results,
+and the matching passages of documents and ChatGPT history, masked, unless the owner switched those off. What never
+does: Kitchen's replies, and anything about a photo. The key is read from 1Password by reference and is never
+logged or returned.
 
 The request guard below looks at every request on its way out and refuses any that isn't this model at this
 address, so no setting, library update or mistake elsewhere can send Ask's words another way.

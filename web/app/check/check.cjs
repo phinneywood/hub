@@ -488,6 +488,52 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
     await page.waitForSelector(".plan");
 
+    // ---- the Archive: one search, no model; photos open full screen, documents in a sheet; Ask's cards lead there ----
+    if (phone) await tap(".seekbtn"); else await tap('.rail .tab:text-is("Archive")');
+    expect(await saysSoon("39 photos, 8 documents and 3 conversations, on this Mac."), "the Archive's sentence: " + await says());
+    expect(await until(() => document.querySelectorAll(".best .shot").length === 6), "the month's best is not on the Archive");
+    expect(await until(() => [...document.querySelectorAll(".year-name")].length === 2), "on this day in earlier years is missing");
+    await page.waitForTimeout(300); await shot("10a-archive");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on the Archive: " + (await small()).join(", "));
+    await page.fill(".seek .field", "the kids at the beach in 2024");
+    await page.press(".seek .field", "Enter");
+    expect(await saysSoon("Kids at the beach in 2024: 9 photos from 2 days."), "the photos sentence: " + await says());
+    expect((await page.locator(".chips span").allInnerTexts()).join("|") === "The kids|2024", "what Hub understood: " + (await page.locator(".chips span").allInnerTexts()).join("|"));
+    expect(await until(() => document.querySelectorAll(".found-block .tile").length === 9), "nine photos in the grid");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the Archive scrolls sideways");
+    await page.waitForTimeout(500); await shot("10b-kids");
+    await tap(".found-block .tile");
+    expect(await until(() => document.querySelector(".viewer-bar span")?.textContent === "1 of 9"), "a photo did not open full screen");
+    const frame = await page.locator(".viewer-pic").boundingBox();
+    await page.keyboard.press("ArrowRight");
+    expect(await until(() => document.querySelector(".viewer-bar span")?.textContent === "2 of 9"), "the next photo did not show");
+    const moved = await page.locator(".viewer-pic").boundingBox();
+    expect(frame && moved && frame.width === moved.width && frame.height === moved.height, "the photo’s frame moved between photos");
+    await page.waitForTimeout(600); await shot("10c-viewer");
+    await page.keyboard.press("Escape");
+    expect(await until(() => !document.querySelector(".viewer")), "Escape did not close the photo");
+    await page.fill(".seek .field", "furnace");
+    await page.press(".seek .field", "Enter");
+    expect(await saysSoon("Furnace: 1 photo, 3 documents, 1 event, 2 emails and 1 conversation.", 8000), "the furnace sentence: " + await says());
+    expect(await until(() => document.querySelector(".hits mark")?.textContent.toLowerCase() === "furnace"), "a snippet didn't mark what matched");
+    await page.waitForTimeout(400); await shot("10d-furnace");
+    await tap('.found-block .hit:has-text("Furnace service invoice.pdf")');
+    expect(await until(() => document.querySelector(".sheet h1")?.textContent === "Furnace service invoice.pdf"), "the document did not open");
+    expect(await until(() => [...document.querySelectorAll(".sheet a.btn")].some((a) => a.textContent === "Get the file")), "no Get the file");
+    await page.waitForTimeout(400); await shot("10e-document");
+    await tap(".sheet .x");
+    await tap('.found-block .hit:has-text("Your furnace service invoice")');
+    expect(await until(() => document.querySelector(".sheet .mail-text")?.textContent.includes("Thanks for choosing us")), "the email did not open");
+    await tap(".sheet .x");
+    await tap('.found-block .hit:has-text("Furnace filter sizes")');
+    expect(await until(() => document.querySelector(".msg.here")?.textContent.includes("16x25 return")), "the conversation did not open at what matched");
+    await page.waitForTimeout(300); await shot("10f-chat");
+    await tap(".sheet .x");
+    await tap(".seek-clear");
+    expect(await saysSoon("39 photos, 8 documents and 3 conversations, on this Mac."), "clearing the search didn't come back to the Archive");
+    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
+    await page.waitForSelector(".plan");
+
     // ---- when the house stops answering, and when Hub can't be reached ----
     quiet = true;
     await stage("down");

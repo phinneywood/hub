@@ -60,6 +60,12 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   what Hub remembers, and, since the owner reversed the earlier rule on 2026-11-15, the bounded mail, calendar,
   school and today lookups in `hub/app/ask/private.py`. Not Kitchen's replies, and not senders with AI switched
   off. Read "Ask" in `docs/app.md` first.
+  Owner-approved (2026-11-16): Ask may also search the family archive (`hub/app/archive.py`; the archive program in
+  `deploy/archive`). Its model may be given mail and calendar results, and the passages of documents and ChatGPT
+  history that match what was asked, with card, account and ID-like numbers masked; each of the last two is a
+  switch on the Archive screen, on by default, that the owner can turn off. Nothing about a photo ever reaches a
+  model: not a picture, a label, a person, a place, a date or even whether any were found. Read "Archive" in
+  `docs/app.md` first.
   Owner-approved (2026-11-15): Ask may change anything in Home Assistant, through `hub/tools/house/admin.py` and
   the setup door in `broker.py` only. Keep its rule for what waits for a tap in code, its record and Undo, and
   what the door keeps shut; read "Setting up the house" in `docs/app.md` first. The same day Kitchen became part

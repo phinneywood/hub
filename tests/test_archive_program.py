@@ -192,6 +192,16 @@ def test_on_this_day(built):
     assert [y['year'] for y in years] == [2023, 2022] and set(years[0]['items'][0]['people']) == {'Alex', 'Sam'}
 
 
+def test_an_item_asked_with_words_gives_back_only_its_passages_that_hold_them(built):
+    conn, _, _, _ = built
+    chat = 'c:c0ffee00-0000-4000-8000-000000000001'
+    told = search.item(conn, chat, q=['MERV'])
+    assert told['passages'] and [m['n'] for m in told['messages']] == [1, 3]       # the attached notes and the reply
+    assert all('MERV' in m['text'] for m in told['messages'])
+    first = search.item(conn, chat, q=['sizes'])                                   # only the title holds it: the first passage
+    assert len(first['messages']) == 1 and first['messages'][0]['n'] == 1
+
+
 def test_what_hub_is_told_never_says_where_a_file_is(built):
     conn, _, _, _ = built
     every = find(conn, 'furnace')

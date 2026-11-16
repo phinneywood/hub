@@ -250,6 +250,9 @@ record under the chat's own $10 a month limit; the words do not.
 | Earlier requests and Hub's answers | Yes | No |
 | Mail, the calendar, school, today's list | Yes, the bounded lookups; never senders with AI switched off | Yes, the same lookups |
 | Kitchen's answers; products, prices and notes on the shopping list | Never. Ask's sentences about the list carry counts and the member's own words; the rest is drawn on cards | No |
+| The archive's mail and calendar results (sender's name, subject, date, Gmail's snippet; an event's title, date and place), and one email or event read in full | Yes (since 2026-11-16); never senders with AI switched off | No |
+| The passages of documents and ChatGPT history that match what was asked, with card, account and ID-like numbers masked | Yes (owner decision, 2026-11-16), unless switched off on the Archive screen | No |
+| Anything about a photo: the picture, a label, a person, a place, a date, a count, whether any were found | Never. Hub draws the card and writes its sentence itself | No |
 
 **Until it is set up.** Ask needs two things a Hub may not have yet: the Anthropic SDK among the reviewed
 wheels (`anthropic`, an extra of `pydantic-ai-slim`), and the key. Without either, `GET /app/api/ask` says

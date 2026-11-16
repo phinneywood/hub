@@ -28,6 +28,10 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   plan and ideas, opens a thing and sets how many, adds what is typed, takes a pick, fills the cart, reads it,
   asks for a reading when a thing couldn't be confirmed, fills it by itself once switched on, reads checkout
   back for a tap that places the order, and says so when the kitchen service is away or an older version;
+- the Archive opens from the phone's search button and the laptop's rail, says what it holds, shows on this day
+  and the month's best; a search reads people, "the kids" and years without a model and says so in the sentence,
+  photos open full screen and step with the arrow keys without the frame moving, a document opens with Get the
+  file, an email opens, and a conversation opens at what matched;
 - everything meant to be tapped is at least 44 px on its short side;
 - the app says so when the house stops answering and when Hub can't be reached, still opens without Hub,
   and reconnects by itself;
@@ -49,6 +53,10 @@ Run it after changing the app or updating its packages.
    “play it in the dining room too”, “pause”, “movie night”, “remember to start music softly”,
    “what should we cook this week?” and “what needs me today?”. It shows how Ask looks and feels, not how
    well the real model understands.
+   The Archive there is a made-up family archive (`tests/archive_world.py`) indexed by the archive program's
+   real code and answered by its real service on the demo's own socket, with colour washes for pictures; mail
+   and calendar history come from a stand-in bridge. Try “the kids at the beach in 2024” or “furnace”, there
+   or in Ask (“show me the kids at the beach in 2024”, “when did we last service the furnace?”).
 
 2. In another shell, with Playwright available to Node:
 

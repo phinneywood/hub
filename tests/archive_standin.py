@@ -134,18 +134,22 @@ def search(query):
     return out
 
 
-def item(ident):
+def item(ident, q=()):
+    """One item; with `q`, only the passages that hold one of its words, as the real service gives Ask."""
+    words = [w for search in q for w in _words(search)]
+    holds = lambda text: not words or any(w[:5] in text.lower() for w in words)  # noqa: E731
     for found in PHOTOS + DOCUMENTS + CHATS:
         if found['id'] == ident:
             shown = {k: found[k] for k in PUBLIC if k in found}
             if found['source'] == 'photos':
                 shown.update(people=found['people'], albums=[], labels=found['words'].split(), keywords=[], description='')
             elif found['source'] == 'documents':
-                shown.update(people=[], ext=found['ext'], pages_text=[{'page': p, 'role': None, 'at': None, 'text': t}
-                                                                     for p, t in found['text']])
+                pages = [(p, t) for p, t in found['text'] if holds(t)] or found['text'][:1]     # the title alone: the first
+                shown.update(people=[], ext=found['ext'], pages_text=[{'page': p, 'role': None, 'at': None, 'text': t} for p, t in pages])
             else:
+                said = [(n, r, t) for n, r, t in found['messages'] if holds(t)] or found['messages'][:1]
                 shown.update(people=[], attachments=found['attachments'],
-                             messages=[{'n': n, 'role': r, 'at': None, 'text': t} for n, r, t in found['messages']])
+                             messages=[{'n': n, 'role': r, 'at': None, 'text': t} for n, r, t in said])
             return shown
     return None
 
@@ -181,7 +185,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if route == 'search':
             return self._send(200, search(query))
         if route == 'item' and item(parts[1]):
-            return self._send(200, item(parts[1]))
+            return self._send(200, item(parts[1], query.get('q', [])))
         if route == 'people':
             return self._send(200, {'people': PEOPLE})
         if route == 'onthisday':

@@ -50,6 +50,11 @@ def expression(searches, loose=False, prefix=False):
     return ' OR '.join(dict.fromkeys(groups))
 
 
+def body_only(match):
+    """The same search, looked for in the body column alone: the words of a page or a message, not its title."""
+    return '{body} : (' + match + ')'
+
+
 def _filters(source, kind=(), people=(), anyof=(), young=False, place=None, after=None, before=None, months=(),
              favorite=False, screenshots=None):
     """SQL conditions on items (as `i`) and their values."""
@@ -161,12 +166,15 @@ def _snippets(conn, match, rows):
     for row in rows:
         snip = None
         if match and row['part'] is not None:
+            in_body = conn.execute("select p.id from fts join parts p on p.id = fts.rowid where fts match ? and p.item = ? "
+                                   "and p.body != '' order by bm25(fts, 0.0, 1.0), p.n limit 1", (body_only(match), row['id'])).fetchone()
+            part_id = in_body['id'] if in_body else row['part']     # the passage that says it, rather than the title alone
             found = conn.execute(f"select snippet(fts, 1, '{MARK}', '{END}', '…', 18) as body, "
                                  f"snippet(fts, 0, '{MARK}', '{END}', '…', 12) as head from fts where fts match ? and rowid = ?",
-                                 (match, row['part'])).fetchone()
+                                 (match, part_id)).fetchone()
             if found:
                 snip = found['body'] if MARK in (found['body'] or '') else (found['body'] or found['head'])
-            part = conn.execute('select page, role from parts where id = ?', (row['part'],)).fetchone()
+            part = conn.execute('select page, role from parts where id = ?', (part_id,)).fetchone()
         else:
             part = conn.execute("select page, role, body from parts where item = ? and body != '' order by n limit 1",
                                 (row['id'],)).fetchone()
@@ -228,8 +236,13 @@ def search(conn, q=(), sources=SOURCES, sort=None, limit=24, offset=0, prefix=Fa
     return out
 
 
-def item(conn, ident, most=120_000):
-    """One item in full, for Hub to show or to read: its facts, and its text page by page or message by message."""
+PASSAGES = 6                    # the most passages of one item that a search's words are given back with
+
+
+def item(conn, ident, most=120_000, q=()):
+    """One item in full, for Hub to show: its facts, and its text page by page or message by message. With `q`, only
+    the passages that hold those words (the best PASSAGES), or its first one when only its title did: what Ask's
+    model may read of it."""
     row = conn.execute('select * from items where id = ?', (ident,)).fetchone()
     if row is None:
         return None
@@ -240,7 +253,16 @@ def item(conn, ident, most=120_000):
     if row['source'] == 'photos':
         out.update({k: meta.get(k) for k in ('albums', 'labels', 'keywords', 'description')})
         return out
-    parts = conn.execute("select page, role, at, body from parts where item = ? and body != '' order by n", (ident,)).fetchall()
+    match = expression([w for w in q if w and w.strip()]) if q else ''
+    if match:
+        parts = conn.execute("select p.page, p.role, p.at, p.body from fts join parts p on p.id = fts.rowid where fts match ? "
+                             "and p.item = ? and p.body != '' order by bm25(fts, 0.0, 1.0), p.n limit ?",
+                             (body_only(match), ident, PASSAGES)).fetchall()
+        parts = sorted(parts, key=lambda p: (p['page'] or 0)) or conn.execute(
+            "select page, role, at, body from parts where item = ? and body != '' order by n limit 1", (ident,)).fetchall()
+        out['passages'] = True
+    else:
+        parts = conn.execute("select page, role, at, body from parts where item = ? and body != '' order by n", (ident,)).fetchall()
     kept, text = 0, []
     for part in parts:
         if kept >= most:

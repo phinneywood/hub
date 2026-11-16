@@ -600,9 +600,15 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
 .block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .block-head .count { font-size: var(--t-s); color: var(--ink-3); }
 .pager { display: flex; align-items: center; gap: 6px; }
+.pager .linkish { min-width: 48px; }
 .pager.wide { justify-content: space-between; margin-top: 8px; font-size: var(--t-s); color: var(--ink-3); }
 .more-btn { margin-top: 14px; width: 100%; }
 .ctl-say { justify-self: end; font-size: var(--t-s); color: var(--ink-3); padding-right: 4px; }
+/* the month's best, on the Archive: two a row on a phone, each with its marks */
+.best .shots { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.best .shot figcaption { padding: 8px 6px 8px; }
+.best .shot-note { font-size: var(--t-xs); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.best .shot-marks .choice { padding: 6px 2px; font-size: var(--t-xs); }
 /* photos: a grid of squares; a photo opens full screen */
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin-top: 10px; border-radius: 12px; overflow: hidden; }
 .grid.few { grid-template-columns: repeat(4, 1fr); border-radius: 10px; }
@@ -632,16 +638,18 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
 .hits mark, .text-pages mark { background: none; color: var(--ink); box-shadow: inset 0 -2px 0 var(--lamp); }
 /* one photo, full screen: the preview at once, the sharp picture over it when it arrives */
 .viewer { position: fixed; inset: 0; z-index: 30; background: #05070D; color: #F1F3F8; display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   padding: max(8px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom)); touch-action: pan-y; }
 .viewer:focus { outline: none; }
 .viewer-bar { display: flex; align-items: center; justify-content: space-between; min-height: 48px; font-size: var(--t-s); color: #AEB8D0; padding-left: 6px; }
 .viewer .x::before { background: rgba(255, 255, 255, .12); }
-.viewer-pic { position: relative; place-self: center; max-width: 100%; max-height: 100%; width: auto; height: 100%; }
+.viewer-pic { position: relative; width: 100%; height: 100%; }      /* every layer fits the same box the same way: nothing moves */
 .viewer-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .viewer-pic .hi { opacity: 0; transition: opacity .25s ease; }
 .viewer-pic .hi.in { opacity: 1; }
-.viewer-facts { padding: 12px 6px 0; min-height: 70px; }
+.viewer-facts { padding: 12px 6px 0; height: 104px; overflow: hidden; }      /* the same for every photo: the frame never moves */
 .viewer-facts b { display: block; font-weight: 500; }
+.viewer-facts b, .viewer-facts span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .viewer-facts span { display: block; font-size: var(--t-s); color: #AEB8D0; margin-top: 1px; }
 .viewer-go { position: absolute; top: 50%; width: 48px; height: 48px; margin-top: -24px; border-radius: 50%; display: none; place-items: center;
   background: rgba(255, 255, 255, .1); color: #fff; }
@@ -673,6 +681,7 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
 @media (min-width: 1040px) {
   .seekbtn { display: none; }
   .grid { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .best .shots { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
   .grid.few { grid-template-columns: repeat(6, 1fr); }
   .askrail .grid.few { grid-template-columns: repeat(4, 1fr); }
   .viewer { padding: 18px 90px 22px; }

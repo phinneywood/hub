@@ -142,6 +142,10 @@ and tell me” the morning job does it.
 - 2026-11-15: Ask in the app may change anything in Home Assistant (docs/app.md, “Setting up the house”). For
   that its model is also given the thermostat, the locks and the names of automations as they stand, and what
   a request needs of any other device or routine; never tokens, addresses, pictures, or where people are.
+- 2026-11-16: Ask in the app may search the family archive (docs/app.md, “Archive”). Its model is given mail and
+  calendar results as above, and the passages of documents and ChatGPT history that match what was asked, with
+  card, account and ID-like numbers masked; the owner can switch either off on the Archive screen. Nothing about a
+  photo reaches any model. A request that read any of it changes nothing in the house.
 - Senders with AI switched off are never read for a model.
 - Agents build and test with made-up data. Real mail stays out of coding sessions.
 - Deploying, restarting, new schedules, pushing and merging to main need the owner's yes each time.

@@ -2,7 +2,7 @@
 // with no model. Data from Hub (hub/app/archive.py), which asks the archive program on the Mac; nothing found is kept
 // on the device. Photos open full screen and swipe; documents, conversations, emails and events open in a sheet.
 import type { JSX } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import * as api from "./api";
 import { BestOfMonth } from "./photos";
 import { Top } from "./screens";
@@ -75,7 +75,7 @@ export function Viewer({ photos, at }: { photos: ArchiveItem[]; at: number }) {
   const box = useRef<HTMLDivElement>(null);
   const p = photos[n];
   const move = (by: number) => { setN((now) => Math.max(0, Math.min(photos.length - 1, now + by))); setShown({ near: false, sharp: false }); };
-  useEffect(() => {
+  useLayoutEffect(() => {     // before the first paint, so a key pressed the moment it opens is not lost
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") sheet.value = null;
       else if (e.key === "ArrowRight") move(1);
@@ -253,7 +253,8 @@ function Results({ found, setFound }: { found: ArchiveFound; setFound: (f: Archi
       {shown(found.photos) && (
         <Section title="Photos" count={found.photos!.count} busy={busy}
           more={found.photos!.items.length < found.photos!.count ? more("photos") : undefined}>
-          {found.photos!.days ? <p class="quiet-line">{`From ${counted(found.photos!.days, "day")}, ${onDay(found.photos!.first)} to ${onDay(found.photos!.last)}.`}</p> : <></>}
+          {found.photos!.days ? <p class="quiet-line">{found.photos!.days === 1 ? `On ${onDay(found.photos!.first)}.`
+            : `From ${counted(found.photos!.days, "day")}, ${onDay(found.photos!.first)} to ${onDay(found.photos!.last)}.`}</p> : <></>}
           <Grid photos={found.photos!.items} />
         </Section>
       )}
@@ -361,10 +362,10 @@ function MayRead({ landing, reload }: { landing: ArchiveLanding; reload: () => v
       <p class="quiet-line">Searching here never uses a model. When you ask Ask, its model is given only what is switched on.</p>
       <div class="rows spaced">
         <div class="ctl two"><div class="ctl-name"><b>Mail and the calendar</b><span>Yes, except senders with AI switched off</span></div><span class="ctl-say">On</span></div>
-        <div class="ctl two"><div class="ctl-name"><b>Documents</b><span>{landing.switches.documents ? "Their text, with card and account numbers hidden" : "Off: Ask only says there are matches to open"}</span></div>
+        <div class="ctl two"><div class="ctl-name"><b>Documents</b><span>{landing.switches.documents ? "The passages that match what you ask, with card and account numbers hidden" : "Off: Ask only says there are matches to open"}</span></div>
           <Switch on={landing.switches.documents} label="Ask may read documents" off={!owner} onChange={(on) => void flip("documents", on)} /></div>
         {landing.sources.includes("chats") && (
-          <div class="ctl two"><div class="ctl-name"><b>ChatGPT history</b><span>{landing.switches.chats ? "What was said, with numbers hidden" : "Off: Ask only says there are matches to open"}</span></div>
+          <div class="ctl two"><div class="ctl-name"><b>ChatGPT history</b><span>{landing.switches.chats ? "The passages that match what you ask, with numbers hidden" : "Off: Ask only says there are matches to open"}</span></div>
             <Switch on={landing.switches.chats} label="Ask may read ChatGPT history" off={!owner} onChange={(on) => void flip("chats", on)} /></div>
         )}
         <div class="ctl two"><div class="ctl-name"><b>Photos</b><span>Never. Hub shows them itself and tells the model nothing about them.</span></div><span class="ctl-say">Never</span></div>

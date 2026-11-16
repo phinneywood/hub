@@ -9,6 +9,12 @@ planned first, recorded with the way back, and left on a card for the owner's ta
 A tool says what it did in a plain sentence (`turn.said`), so a request that was simply carried out needs no
 second trip to the model; a tool that needs the model again (nothing matched, a name it couldn't place, something
 it read) sets `turn.again`.
+
+The family archive (`search`, `read`; owner decision, 2026-11-16): the model is given mail and calendar results,
+and the passages of documents and ChatGPT history that match what was asked, with card, account and ID-like numbers
+masked, unless the owner switched those off on the Archive screen. Photos are shown by Hub on a card it writes
+itself; the model is told nothing about them, not even whether any were found, and it never decides whether the
+model goes again. A request that read anything written by others changes nothing in the house.
 """
 import re
 import time
@@ -42,6 +48,7 @@ class Turn:
     again: bool = False                          # a tool needs the model to look at its answer and go on
     strangers: bool = False                      # words written by others (mail, the calendar, school, the archive) are in view
     found: dict = field(default_factory=dict)    # what search found, by the short names the model reads them by
+    searched: list = field(default_factory=list)  # what search looked for: read gives back the passages that hold it
     withheld: dict = field(default_factory=dict)  # what is kept of a sentence the model must never see (photos)
 
     def kept(self):
@@ -749,6 +756,7 @@ def search(ctx: RunContext[Turn], searches: list[str], sources: list[Literal['ph
     allowed = archive.sources_for(turn.login)
     wanted = [s for s in (sources or allowed) if s in allowed]
     phrases = [' '.join(str(s).split())[:120] for s in (searches or []) if str(s).strip()][:4]
+    turn.searched = list(dict.fromkeys(turn.searched + phrases))[:6]
     named = [str(p)[:80] for p in (people or [])][:6]
     kids = any(n.lower() in archive.KIDS or n.lower() in ('the kids', 'our kids') for n in named)
     meaning = {'terms': ' '.join(phrases[:1]), 'sources': wanted, 'kind': [], 'people': [n for n in named if n.lower() not in
@@ -834,8 +842,8 @@ def search(ctx: RunContext[Turn], searches: list[str], sources: list[Literal['ph
 
 
 def read_found(ctx: RunContext[Turn], ref: str) -> dict:
-    """Read one result search found, in full, by its ref ("m1", "e2", "d1"). Mail and calendar always; documents and
-    ChatGPT history only when the owner allows it. Read-only."""
+    """Read one result search found, by its ref ("m1", "e2", "d1"): an email or an event in full; of a document or
+    a conversation, the passages that hold what was searched for (when the owner allows it). Read-only."""
     from ... import store
     from .. import archive
     turn = ctx.deps
@@ -858,7 +866,7 @@ def read_found(ctx: RunContext[Turn], ref: str) -> dict:
         source = 'documents' if ident.startswith('d:') else 'chats'
         if not archive.switches().get(source):
             return {'not_done': LOCKED[source]}
-        found = archive.item(ident, turn.login)
+        found = archive.item(ident, turn.login, passages=turn.searched)      # the passages that hold what was asked for
         if found is None:
             return {'not_done': 'That one is gone.'}
         turn.strangers = True

@@ -68,16 +68,38 @@ def test_the_model_answers_from_mail_and_says_where_it_came_from(archived):
     assert {i['source'] for i in found['items']} >= {'mail', 'documents'}
     model_saw = sent()
     assert 'Your furnace service invoice' in model_saw and 'office@heating.example' not in model_saw
-    assert 'Furnace service invoice.pdf' not in model_saw and 'Furnace filter sizes' not in model_saw   # switched off
-    assert 'You can’t read documents.' in model_saw
+    assert 'Furnace service invoice.pdf' in model_saw                       # documents: on, by the owner's decision
 
 
-def test_documents_the_owner_switched_on_reach_the_model_with_numbers_hidden(archived):
-    archive.switch('documents', True, 'me@example.com')
+def test_documents_and_chats_switched_off_reach_the_model_only_as_matches_to_open(archived):
+    archive.switch('documents', False, 'me@example.com')
+    archive.switch('chats', False, 'me@example.com')
+    _, cards, _ = ask('find the 16x25 filter')
+    model_saw = sent()
+    assert 'Furnace filter sizes' not in model_saw and 'You can’t read ChatGPT history.' in model_saw
+    assert any(i['title'] == 'Furnace filter sizes' for c in cards if c['kind'] == 'found' for i in c['items'])   # the owner sees it
+
+
+def test_documents_reach_the_model_with_numbers_hidden(archived):
     ask('find the furnace invoice')
     model_saw = sent()
     assert 'Furnace service invoice.pdf' in model_saw
     assert '000123456789' not in model_saw and '6789' in model_saw
+
+
+def test_reading_a_document_gives_only_the_passages_that_hold_what_was_asked(archived, monkeypatch):
+    from hub.app.ask import tools
+    turn = tools.Turn(text='what did the furnace invoice say', login='me@example.com')
+    ctx = type('Ctx', (), {'deps': turn})
+    tools.search(ctx, searches=['paint'], sources=['documents'])
+    ref = next(r for r, i in turn.found.items() if i == archive_standin.DOCUMENTS[1]['id'])
+    read = tools.read_found(ctx, ref)
+    assert 'Example Grey' in read['text'] and turn.strangers
+    turn = tools.Turn(text='the invoice', login='me@example.com')
+    ctx = type('Ctx', (), {'deps': turn})
+    tools.search(ctx, searches=['aquarium'], sources=['documents'])
+    assert 'packed lunch' in tools.read_found(ctx, 'd1')['text']
+    assert 'Total' not in tools.read_found(ctx, 'd1')['text']           # only what holds the words, never other files
 
 
 def test_a_request_that_read_mail_changes_nothing_in_the_house(archived):
@@ -90,7 +112,7 @@ def test_a_request_that_read_mail_changes_nothing_in_the_house(archived):
 def test_senders_with_ai_switched_off_never_reach_the_model(archived):
     store.set_ai_blocked('office@heating.example', True)
     _, cards, _ = ask('when did we last service the furnace?')
-    assert 'Example Heating' not in sent()
+    assert 'Your furnace service invoice' not in sent() and 'Furnace service reminder' not in sent()
     assert any(i['source'] == 'mail' for c in cards if c['kind'] == 'found' for i in c['items'])    # the owner still sees it
 
 
@@ -102,7 +124,6 @@ def test_reading_one_email_in_full_with_its_card_number_hidden(archived):
 
 
 def test_chatgpt_history_is_searched_for_the_owner_only(archived):
-    archive.switch('chats', True, 'me@example.com')
     ask('find the 16x25 filter', headers=OTHER)
     assert 'Furnace filter sizes' not in sent()
     SEEN.clear()

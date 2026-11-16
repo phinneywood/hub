@@ -165,7 +165,7 @@ def test_the_landing(served):
     landing = client.get('/app/api/archive', headers=OWNER).json()
     assert landing['ready'] and landing['owner'] and landing['counts']['photos']['items'] == 12
     assert landing['onthisday'][0]['year'] == 2023
-    assert landing['switches'] == {'documents': False, 'chats': False}
+    assert landing['switches'] == {'documents': True, 'chats': True}           # the owner's decision, 2026-11-16
     assert {p['name']: p['kid'] for p in landing['people']} == {'Sam': True, 'Alex': False}
 
 
@@ -214,9 +214,9 @@ def test_the_kids_can_be_changed_here(served):
 
 
 def test_what_ask_may_read_is_the_owners_switch(served):
-    assert client.post('/app/api/archive/switch', json={'name': 'documents', 'on': True}, headers=OTHER).status_code == 409
-    on = client.post('/app/api/archive/switch', json={'name': 'documents', 'on': True}, headers=OWNER).json()
-    assert on['said'] == 'Ask may read documents now.' and on['switches'] == {'documents': True, 'chats': False}
+    assert client.post('/app/api/archive/switch', json={'name': 'documents', 'on': False}, headers=OTHER).status_code == 409
+    off = client.post('/app/api/archive/switch', json={'name': 'documents', 'on': False}, headers=OWNER).json()
+    assert off['said'] == 'Ask won’t read documents.' and off['switches'] == {'documents': False, 'chats': True}
     assert client.post('/app/api/archive/switch', json={'name': 'photos', 'on': True}, headers=OWNER).status_code == 409
 
 

@@ -694,16 +694,17 @@ def start():
 
 # ---- one item, opened ----
 
-def item(ident, login):
+def item(ident, login, passages=()):
     """One result in full, for the screen: a photo's facts, a document's text by page, a conversation, an event or
-    an email. None for one this login may not open."""
+    an email. With `passages` (searches), a document's or a conversation's matching passages only, for Ask's model.
+    None for one this login may not open."""
     if MAIL_ID.fullmatch(ident or ''):
         return mail_message(ident)
     if EVENT_ID.fullmatch(ident or ''):
         return calendar_event(ident)
     if not ITEM.fullmatch(ident or '') or (ident[0] in 'cg' and not owner(login)):
         return None
-    return fetch(f'/item/{ident}')
+    return fetch(f'/item/{ident}', [('q', words) for words in passages])
 
 
 def mail_search(text, login):
@@ -722,12 +723,13 @@ SWITCH_SCHEMA = 'create table if not exists archive_switches(name text primary k
 
 
 def switches():
-    """What the owner allows Ask's model to read from the archive: mail and calendar always (owner decision,
-    2026-11-15), documents and ChatGPT history only when switched on (off until the owner decides), photos never."""
+    """What the owner allows Ask's model to read from the archive: mail and calendar (owner decision, 2026-11-15);
+    the passages of documents and ChatGPT history that match what was asked, with card, account and ID-like numbers
+    masked (owner decision, 2026-11-16: on, and a tap turns either off); photos never."""
     with store.db() as conn:
         conn.execute(SWITCH_SCHEMA)
         on = {r['name']: bool(r['on_']) for r in conn.execute('select name, on_ from archive_switches')}
-    return {name: on.get(name, False) for name in SWITCHES}
+    return {name: on.get(name, True) for name in SWITCHES}
 
 
 def switch(name, on, login):
