@@ -51,7 +51,8 @@ function Tile({ photo, open }: { photo: ArchiveItem; open: () => void }) {
   const said = [onDay(photo.day), photo.place, (photo.people ?? []).join(", ")].filter(Boolean).join(" · ");
   return (
     <button type="button" class="tile" onClick={open} aria-label={(photo.kind === "video" ? "Video, " : "Photo, ") + (said || "no details")}>
-      <img src={thumb(photo.id)} alt="" loading="lazy" decoding="async" />
+      {photo.thumb !== false && <img src={thumb(photo.id)} alt="" loading="lazy" decoding="async"
+        onError={(e) => (e.currentTarget.style.visibility = "hidden")} />}
       {photo.kind === "video" && <span class="tile-mark"><Icon name="play" />{length(photo.duration)}</span>}
     </button>
   );

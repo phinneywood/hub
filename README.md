@@ -19,6 +19,7 @@ mail, model spend against its limits, and the home network. Behind them are the 
 | Trip | Plans, decisions and travel reference for one trip |
 | Kitchen | Shared grocery list, recipes and a grocery cart, through a separate kitchen assistant |
 | Ask Hub | A read-only chat that answers from Hub's own lookups and cites the Hub page each answer came from |
+| Archive | One search across the family's photos, documents, mail, calendar history and ChatGPT history, read on the Mac by a program of its own, with each month's best photos to keep or print |
 
 ## How it protects privacy
 
@@ -61,6 +62,7 @@ mail, model spend against its limits, and the home network. Behind them are the 
                        └─ data directory (owner-only): SQLite files, household.json
         │
         ├─▶ local mail and calendar bridge (fixed routes; no send, draft or delete)
+        ├─▶ archive program on a Unix socket (deploy/archive: the only part with Full Disk Access; read-only, by id)
         ├─▶ Home Assistant (network) · Google Routes (bike + bus)
         ├─▶ model calls on pinned zero-data-retention routes only
         └─▶ local kitchen service (Kitchen chat)

@@ -55,7 +55,12 @@ sets this in the private settings file (`household.json`):
 | `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
 | `GET /app/api/mail` | Mail as data: what needs the owner, questions nobody answered, records worth a look, each kind Hub sorted |
 | `POST /app/api/mail/{do}` | A tap on Mail, `{"key": ...}`: `done`, `back`, `answered`, `fine`, `sort`, `file` (a kind) or `undo` (a filing) |
-| `GET /app/api/photos`, `GET /app/api/photos/thumb/{photo}`, `POST /app/api/photos/{do}` | A month the photo curator chose, a preview, and a mark, `{"key": photo}`: `keep`, `print`, `skip` or `clear` (see “Photos”). Signed-in devices only |
+| `GET /app/api/archive`, `GET /app/api/archive/search?q=` | The Archive before a search, and what a search found, source by source (see “Archive”). Signed-in devices only, like every archive route |
+| `GET /app/api/archive/mail?q=` | Mail that matches, live from Gmail |
+| `GET /app/api/archive/item/{id}`, `GET /app/api/archive/attachment/{id}/{part}` | One result in full; the text of a PDF attached to an email |
+| `GET /app/api/archive/thumb/{id}`, `/photo/{id}?sharp=1`, `/page/{id}/{n}`, `/file/{id}` | A preview, a photo (sharp when Photos has exported it), a document's page, a document's own bytes |
+| `POST /app/api/archive/kid`, `POST /app/api/archive/switch` | Who counts as one of the kids; what Ask may read (the owner's login only) |
+| `GET /app/api/photos`, `GET /app/api/photos/thumb/{photo}`, `POST /app/api/photos/{do}` | A month the photo curator chose, a preview, and a mark, `{"key": photo}`: `keep`, `print`, `skip` or `clear` (see “Archive”). Signed-in devices only |
 | `/kitchen/...` | The older page's relay to the kitchen service (`hub/tools/kitchen/pages.py`): what its assistant said, approving a cart plan, placing an order, reading new orders |
 
 The picture is built in `hub/app/model.py` from the same reading of Home Assistant as the rest of Hub
@@ -141,8 +146,9 @@ couldn't place, something it read with `look_up`) does the model get its answer 
 restores each lamp's last brightness), `scene` (by its name, or by the words that single it out), `music` (play,
 pause, resume, next, previous, volume, a room joining or leaving), `remember`, `groceries` (the shopping list and
 the cart; see “Kitchen”), `kitchen` (passes the owner's words to the kitchen assistant, whose answer appears
-under the request), `look_up` (reads mail, the calendar, the class guide or today's list; read-only), and the
-tools that change how the house is set up and work every other device (next section). Lights, scenes and music go
+under the request), `look_up` (reads mail, the calendar, the class guide or today's list; read-only), `search` and
+`read` (the family archive; see “Archive”), and the tools that change how the house is set up and work every other
+device (next section). A request that read mail, the calendar, school or the archive changes nothing in the house. Lights, scenes and music go
 through `hub/tools/house/control.py` like a tap: the same allowlist, the same record and Undo, counted against
 Ask's 30 changes a minute. Ask changes nothing for a program without a login, or while the owner has that kind
 of change set to “Suggest only” on the Engine page.
@@ -376,21 +382,90 @@ before it kept the list, still works: the screen says it needs its update and sh
 Tests: `tests/test_app_kitchen.py`, on a made-up Kitchen that follows what Hub sends it
 (`tests/kitchen_world.py`). The picking itself is tested in the kitchen service's repository.
 
-## Photos
+## Archive
 
-System opens Photos (`hub/app/photos.py`, `web/app/src/photos.tsx`): each month's best photos, to mark Keep, Print
-or Skip. They are chosen by the photo curator (`deploy/archive/curator.py`), part of the archive program on the Mac with its own
-copy of Python and its own Full Disk Access, the only thing that opens the Photos library; Hub never does. On the
-1st it looks at last month (the owner's library and the shared library), drops screenshots, hidden photos and
-burst extras, keeps the best of each moment by the scores Photos already computed on the Mac, raised for favorites
-and people, and picks 25 with at most four a day, plus 25 runners-up. It writes the month and a preview of each
-to its own owner-only folder; Hub reads them from there and writes back one file, the marks. The curator watches
-that file: Keep and Print add the photo to the month's album in a "Photo picks" folder in Photos, and Print also
-saves a full-size copy (fetched from iCloud if needed) to a prints folder. It never edits, hides, deletes or
-un-albums a photo. No photo, preview or detail about one goes to a model; Ask is not given any of it. Photos is
-for signed-in devices only, previews included. Install and schedule with `deploy/install-archive`; the
-folder is the curator's default unless the private settings file names another: `"photos": {"dir": "..."}`.
-Tests: `tests/test_app_photos.py`, `tests/test_photo_curator.py`, on fictional photos.
+The family's photos and videos, documents, mail, calendar history and the owner's ChatGPT history, in one search
+(`hub/app/archive.py`, `web/app/src/archive.tsx`). It is the fifth place in the laptop's rail; on a phone it opens
+from the search button in the top bar, from System, and from Ask's cards ("See all"). Owner request, 2026-11-16.
+
+**Where each part comes from.**
+
+| | Read by | Kept where | Fresh |
+| --- | --- | --- | --- |
+| Photos and videos (the owner's library and the shared one) | The archive program, with osxphotos, from the library's own database | The archive's index and 400-pixel previews | Nightly |
+| Documents in Documents, Desktop, Downloads and iCloud Drive | The archive program: PDFKit, Vision for scans and pictures with text, textutil | The archive's index: text in pieces of about 1,000 characters, page by page | Nightly |
+| ChatGPT history (the export in Documents), the group chat, attached documents | The archive program, from the export's own files | The archive's index, message by message | Nightly |
+| Mail | Hub, live in Gmail through the bridge: each phrase its own query, newest first, ten at most | Nowhere | As asked |
+| Calendar history | Hub, through the bridge, month by month as far back as it answers | Hub's database (`archive_events`, with full-text search) | Hourly for the weeks around now, nightly for a year either side |
+
+**The archive program** (`deploy/archive`, installed by `deploy/install-archive`) is the only thing on the Mac with
+Full Disk Access; Hub never opens the Photos library, the documents or the export. It reads them and never changes
+them, and keeps what it derives in one owner-only folder (`~/Library/Application Support/HubArchive`, folders 0700,
+files 0600): `archive.db` (SQLite with FTS5: porter stemming, accents ignored), the previews, a cache of sharp photos,
+and the curator's files. It answers Hub on a Unix socket in that folder, on fixed read-only routes (`serve.py`): every
+item is named by an id the index already holds, so no request can name a file; a photo is sent as a picture made from
+what Photos keeps on the Mac, never its original; a document's own bytes only when it is on the Mac. Nothing is logged
+about what was asked. Its LaunchAgents: `hub-archive` (the service, always), `hub-archive-index` (3:30 every night),
+`hub-archive-curate` and `hub-archive-apply` (the curator, below), and `hub-archive-access` (run once, by hand).
+
+- **Photos**: every photo and video except hidden ones, those in Recently Deleted and the extra shots of a burst: when
+  and where, the people Photos knows by name, Photos' own labels and the text it read in a photo (never for a photo
+  Photos marks as an ID document), titles, captions, keywords, albums, favorite, its score. Most photos keep only a
+  small preview on the Mac (the originals are in iCloud): the viewer shows it at once and puts a 2048-pixel picture
+  over it when Photos has exported one, bringing the original from iCloud (`sharp.py`; a 2 GB cache, the least
+  recently opened going first). That needs the owner's one yes to the archive working Photos, the same one the
+  curator's albums need; without it the viewer keeps the Mac's own picture.
+- **Documents**: documents only (PDFs, Word and other text documents, spreadsheets, slides, and pictures that hold
+  text), never source code or anything inside a software project, a library or a bundle; nothing over 100 MB.
+  Numbers, Keynote, Pages and Office spreadsheets and slides are found by name and folder, with a preview. iCloud
+  Drive keeps many files only in iCloud: the archive asks iCloud for the documents among them (25 MB each at most,
+  pictures 10 MB, 3 GB a run) and reads each once it is on the Mac. It never evicts, moves or changes a file.
+- **ChatGPT**: each conversation along the branch it ended on, voice included; never ChatGPT's thinking or the
+  summaries of it. Attached PDFs, Word documents, text and Markdown are read into their conversation.
+
+**The kids.** A person Photos knows by name is one of the kids when their faces over the last two years they were
+photographed are mostly a baby's or a child's (Photos' own face age types, which match its Baby and Child groups),
+and they were photographed in the last two years: someone who was a child in old photos is not. "The kids" in a search
+means those people, and children Photos sees but hasn't named. Anyone signed in can change who counts on the Archive
+screen (`archive_kids` in Hub's database).
+
+**A search** is read in Hub with no model (`understand`): years, months, seasons, "last summer", "two years ago", the
+people Photos knows (and "Alex's"), "the kids", "last" or "first", and words that name a source ("pdf", "email",
+"chat", "video"). The rest are the words to look for, matched in the archive with all words in the same page or
+message, and with any of them when none has them all (the screen says so). The sentence on top is Hub's own: "Kids at
+the beach in 2024: 48 photos from 6 days." Photos come as a grid that opens full screen; documents with their first
+page, the passage that matched and Get the file; mail as it arrives from Gmail; events; conversations opened at the
+message that matched. Before a search: photos from this day in earlier years, the month's best (below), what the
+archive holds, the kids, and what Ask may read.
+
+**Who sees what.** Every signed-in device sees photos, documents, mail and calendar, like the rest of Hub. ChatGPT
+history is for the owner's login alone: the one named in the private settings file, `"archive": {"owner": ...}`, or
+else the login this Mac's Tailscale is signed in with. A program on the Mac with no login gets nothing.
+
+**Ask** searches it with `search` and opens one result with `read` (see "Ask"). Photos: Hub searches, draws a card of
+up to 12 and writes the sentence; the model is told nothing about them, not even whether any were found, and that
+never decides whether it goes again; what is kept for later requests says only that Hub answered from the archive.
+Mail and calendar results go to the model (a sender's name, subject, date and Gmail's snippet; an event's title, date
+and place), never senders with AI switched off. Documents and ChatGPT history: the passages that match what was asked,
+with card, account and ID-like numbers masked (owner decision, 2026-11-16); either can be switched off on the Archive
+screen, and then the model hears only that there are matches for the owner to open. A request that read anything
+written by others changes nothing in the house.
+
+**Best of the month.** The curator (`deploy/archive/curator.py`) chooses each month's best photos on the 1st: last
+month, the owner's library and the shared one, without screenshots, hidden photos or burst extras, the best of each
+moment by the scores Photos computed on the Mac, raised for favorites and people, 25 picks with at most four a day,
+and 25 runners-up. Hub reads them from the curator's folder (`hub/app/photos.py`) and writes back one file, the
+marks. The curator watches that file: Keep and Print add the photo to the month's album in a "Photo picks" folder in
+Photos, and Print also saves a full-size copy to a prints folder. It never edits, hides, deletes or un-albums a photo.
+`#photos` and System's older Photos link open the Archive.
+
+**Files from the archive** are sent with Hub's no-store rule and a sandbox, and a document a browser would run (a web
+page, an SVG, XML, a script) is sent as plain bytes, to be saved.
+
+Tests: `tests/test_archive_program.py` and `tests/test_archive_serve.py` (the archive program, on a made-up archive:
+`tests/archive_world.py`), `tests/test_app_archive.py` and `tests/test_app_ask_archive.py` (Hub and Ask, on a
+stand-in archive over a real socket: `tests/archive_standin.py`), `tests/test_app_photos.py`,
+`tests/test_photo_curator.py`.
 
 ## The live feed
 
