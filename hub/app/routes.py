@@ -506,3 +506,41 @@ def mail_tap(do: str, request: Request, body: dict = Body(default={})):
         return _refuse('Change mail from your phone or laptop.', 403)
     ok, said = mail.tap(do, body.get('key'))
     return {'ok': True, 'said': said} if ok else _refuse(said)
+
+
+# ---- Photos (hub/app/photos.py): each month's best photos, chosen on this Mac by the photo curator ----
+
+@router.get('/api/photos')
+def photos_picture(request: Request, month: str = ''):
+    """The Photos screen as data, from the curator's folder. Photos are private: a signed-in device only."""
+    from . import photos
+    if _login(request) is None:
+        return _refuse('Open Photos on your phone or laptop.', 403)
+    return photos.picture(month)
+
+
+@router.get('/api/photos/thumb/{photo}')
+def photos_thumb(photo: str, request: Request):
+    """One chosen photo's preview (Hub's no-store rule keeps it off the device)."""
+    from . import photos
+    if _login(request) is None:
+        return _refuse('Open Photos on your phone or laptop.', 403)
+    path = photos.thumb(photo)
+    if path is None:
+        return _refuse('No such photo.', 404)
+    with path.open('rb') as head:
+        png = head.read(4) == b'\x89PNG'
+    return FileResponse(path, media_type='image/png' if png else 'image/jpeg')
+
+
+@router.post('/api/photos/{do}')
+def photos_tap(do: str, request: Request, body: dict = Body(default={})):
+    """Mark a chosen photo, {"key": photo}: keep, skip, print or clear."""
+    from . import photos
+    login = _login(request)
+    if login is None:
+        return _refuse('Mark photos from your phone or laptop.', 403)
+    try:
+        return {'ok': True, 'said': photos.mark(body.get('key'), do, login)}
+    except photos.Refused as error:
+        return _refuse(error)

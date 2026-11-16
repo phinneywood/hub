@@ -1,8 +1,19 @@
 [
  {
   "sha": null,
-  "from": "3649afc7cbf4cb24b068a8df04c187934cc4b408",
+  "from": "a3ea27a7f28ce067124d16003a0fd2b1d7d93dd4",
   "live": null,
+  "title": "Each month's best photos",
+  "changes": [
+   "Photos, under System, shows each month's best photos, chosen on the Mac from the family library and the shared library, with no model and nothing leaving the house.",
+   "Mark each one Keep, Print or Skip. Kept photos go into that month's album in Photos, and Print also saves a full-size copy to a prints folder.",
+   "Earlier and Later move between months, and More shows the runners-up."
+  ]
+ },
+ {
+  "sha": "a3ea27a7f28ce067124d16003a0fd2b1d7d93dd4",
+  "from": "3649afc7cbf4cb24b068a8df04c187934cc4b408",
+  "live": "2026-11-16T02:42:38Z",
   "title": "Everything that happened in the house",
   "changes": [
    "Activity, under System, lists what happened in the house, newest first: lights, doors and locks, button presses, automations and music, from Home Assistant, Apple Home and Hub itself.",

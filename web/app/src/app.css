@@ -511,3 +511,14 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
   .tab::before { position: absolute; left: 50%; bottom: 3px; margin-left: -3px; }
   .askbtn { padding: 0 15px 0 12px; gap: 6px; }
 }
+
+/* Photos: a month's picks as a grid, each with its marks */
+.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 18px; }
+.block.shots { margin-top: 22px; }
+.shot { margin: 0; border-radius: 14px; overflow: hidden; background: var(--raised); }
+.shot img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--line); }
+.shot.skip img { opacity: .4; }
+.shot figcaption { padding: 10px 10px 12px; }
+.shot-note { display: block; color: var(--ink-2); font-size: var(--t-s); min-height: 1.4em; margin-bottom: 8px; }
+.shot-marks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; border-radius: 12px; overflow: hidden; }
+.shot-marks .choice { min-height: 44px; }

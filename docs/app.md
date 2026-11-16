@@ -49,6 +49,7 @@ sets this in the private settings file (`household.json`):
 | `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
 | `GET /app/api/mail` | Mail as data: what needs the owner, questions nobody answered, records worth a look, each kind Hub sorted |
 | `POST /app/api/mail/{do}` | A tap on Mail, `{"key": ...}`: `done`, `back`, `answered`, `fine`, `sort`, `file` (a kind) or `undo` (a filing) |
+| `GET /app/api/photos`, `GET /app/api/photos/thumb/{photo}`, `POST /app/api/photos/{do}` | A month the photo curator chose, a preview, and a mark, `{"key": photo}`: `keep`, `print`, `skip` or `clear` (see “Photos”). Signed-in devices only |
 | `/kitchen/...` | Kitchen's screen uses the same relay to the kitchen service as the older page (`hub/tools/kitchen/pages.py`) |
 
 The picture is built in `hub/app/model.py` from the same reading of Home Assistant as the rest of Hub
@@ -238,6 +239,22 @@ the cart report after an add, orders as checkout showed them with Place order, t
 orders". Approving a plan and placing an order still take a tap on a signed-in device (`pages.py`). Kitchen's
 words are drawn as text, never as HTML. Turning on notifications stays on the older page, whose worker covers
 `/kitchen/`. Ask's Kitchen reply opens this screen.
+
+## Photos
+
+System opens Photos (`hub/app/photos.py`, `web/app/src/photos.tsx`): each month's best photos, to mark Keep, Print
+or Skip. They are chosen by the photo curator (`deploy/photo_curator.py`), a separate program on the Mac with its own
+copy of Python and its own Full Disk Access, the only thing that opens the Photos library; Hub never does. On the
+1st it looks at last month (the owner's library and the shared library), drops screenshots, hidden photos and
+burst extras, keeps the best of each moment by the scores Photos already computed on the Mac, raised for favorites
+and people, and picks 25 with at most four a day, plus 25 runners-up. It writes the month and a preview of each
+to its own owner-only folder; Hub reads them from there and writes back one file, the marks. The curator watches
+that file: Keep and Print add the photo to the month's album in a "Photo picks" folder in Photos, and Print also
+saves a full-size copy (fetched from iCloud if needed) to a prints folder. It never edits, hides, deletes or
+un-albums a photo. No photo, preview or detail about one goes to a model; Ask is not given any of it. Photos is
+for signed-in devices only, previews included. Install and schedule with `deploy/install-photo-curator`; the
+folder is the curator's default unless the private settings file names another: `"photos": {"dir": "..."}`.
+Tests: `tests/test_app_photos.py`, `tests/test_photo_curator.py`, on fictional photos.
 
 ## The live feed
 

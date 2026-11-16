@@ -77,6 +77,18 @@ export interface SourceRead { read: number | null; trouble: string; off: boolean
 export interface Activity { events: Happening[]; more: boolean; kinds: ActivityKind[]; sources: ActivitySource[]; status: { ha: SourceRead; apple: SourceRead } }
 export interface Pick { name: string; kind: string; uri: string }
 
+// The Photos screen, as Hub sends it (hub/app/photos.py): a month the curator chose on this Mac.
+export type PhotoMark = "" | "keep" | "skip" | "print";
+export interface Photo {
+  id: string; taken: string; people: string[]; favorite: boolean; shared: boolean;
+  mark: PhotoMark; by: string; in_album: boolean; saved: boolean;
+}
+export interface Photos {
+  ok: true; ready: boolean; months: { month: string; name: string }[]; month: string; name?: string;
+  looked_at?: number; made?: string; picks: Photo[]; more: Photo[];
+  counts?: Record<"keep" | "skip" | "print", number>; waiting?: number;
+}
+
 // Today, as Hub sends it (hub/app/today.py).
 export interface Open { href: string; label: string }
 export interface Need { key: string; title: string; why: string; tone: string; open: Open; tick: string }
