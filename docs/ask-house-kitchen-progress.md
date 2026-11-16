@@ -84,6 +84,42 @@ How to run things here:
   web/app/check/demo_server.py`) and `node web/app/check/check.cjs <folder> http://127.0.0.1:<port>` with
   Playwright on `NODE_PATH` and `APP_CHECK_CHROME` set to an installed Chrome.
 
+## Third pass (2026-11-16)
+
+The rule became one: whatever Ask saves, runs or sets that Hub can't read as safe waits for the owner's tap.
+The first half (a read as an attacker, commit "what belongs to a lock or the alarm waits for a tap like them")
+closed guards beside the locks and the alarm, helpers that an automation unlocks on, routines that lock or arm,
+and strangers' words in later requests. A fresh reader, who hadn't seen that review, then found these, each now
+closed with a test on the made-up house (`tests/test_house_setup.py`, `tests/test_app_ask_setup.py`):
+
+- [x] A routine that unlocks through the older `service_template`: read like any call. A call worked out at run
+      time, an event another routine may act on, a step of a kind Hub doesn't know and a code sent through a
+      remote are unreadable, so they wait.
+- [x] A device's own action (pressing the garage opener's button): read by its device.
+- [x] A helper read by an opening automation in a condition or a template, or by one made from a blueprint, one
+      kept in Home Assistant's files, or when Home Assistant doesn't answer; changing a helper's settings (a
+      choice taken away): all looked into, and the same check now covers anything the setup door works, lights
+      and speakers included.
+- [x] A lock, door or garage moved into another room, or a room holding one put in a group or on a floor that
+      a routine works by: waits.
+- [x] An old-style group, or a group of covers: read by what it holds.
+- [x] A scene that doesn't list what it holds (an integration's own): the careful way, unless its integration's
+      scenes only set lights (Hue, LIFX, deCONZ, TRÅDFRI).
+- [x] A card re-aimed by renaming rooms between the card and the tap: the tap does only the exact requests the
+      card showed.
+- [x] Undo: putting back what would unlock, open or disarm, or bring back a routine or scene that does, brings
+      up the card instead (Ask, Activity and Changes).
+- [x] Smaller: a cover that doesn't say it is a blind waits like the garage; a thing made from a template waits;
+      a new name for a scene or routine that opens waits; switching off what tells the owner a way in is open
+      waits; a routine's card names what opens first; a notice is its title and its message; a model reading a
+      thing isn't shown song titles or update notes; brackets that look like the prompt's own are folded.
+- Left as it was, on purpose: the song playing still shows in `<house>`, marked as a title from the music
+  service; find() still shows states. The everyday doors (lights, lights-only scenes, music) don't yet ask what
+  an automation would do when a light or a speaker changes; that is the next step if it is wanted.
+- [x] Kitchen: the adversarial picker run, finished and reviewed (peanut butter is not butter), squashed into
+      the kitchen service's main.
+- [ ] The first-time walk-through.
+
 ## For the owner
 
 The short list of what needs the owner (the yes to merge, the two switches in Kitchen, the Groceries reminders
