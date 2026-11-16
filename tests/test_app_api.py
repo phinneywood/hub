@@ -69,14 +69,18 @@ def test_a_speaker_is_found_by_its_name_and_a_sleeping_laptop_is_not_the_houses(
     assert ('Kitchen', True) in [(s['name'], s['offline']) for s in picture()['music']['speakers']]
 
 
-def test_facts_are_the_alarm_what_stands_open_and_the_weather(house):
+def test_facts_are_the_alarm_the_locks_what_stands_open_and_the_weather(house):
     assert picture()['facts'] == [{'label': 'Alarm', 'value': 'Off', 'tone': ''},
+                                  {'label': 'Front door lock', 'value': 'Locked', 'tone': ''},
+                                  {'label': 'Garage door', 'value': 'Closed', 'tone': ''},
                                   {'label': 'Doors and windows', 'value': 'All shut', 'tone': ''},
                                   {'label': 'Outside', 'value': '52°', 'tone': ''}]
     house.states['binary_sensor.back_door']['state'] = 'on'
-    assert picture()['facts'][1] == {'label': 'Doors and windows', 'value': 'Back door', 'tone': 'warn'}
+    assert picture()['facts'][3] == {'label': 'Doors and windows', 'value': 'Back door', 'tone': 'warn'}
     house.states['binary_sensor.kitchen_window']['state'] = 'on'
-    assert picture()['facts'][1]['value'] == '2 open'
+    assert picture()['facts'][3]['value'] == '2 open'
+    house.states['lock.front_door']['state'] = 'unlocked'
+    assert picture()['facts'][1] == {'label': 'Front door lock', 'value': 'Unlocked', 'tone': 'warn'}
 
 
 def test_scenes_are_home_assistants_plus_all_off(house):
@@ -90,7 +94,7 @@ def test_a_house_that_cant_be_read_says_so_plainly(house):
 
 
 def test_a_house_without_floors_is_one_unnamed_list(house, monkeypatch):
-    monkeypatch.setattr(app_world, 'FLOORS', [])
+    house.floors = []
     found = picture()
     assert [f['name'] for f in found['floors']] == [''] and len(found['floors'][0]['rooms']) == 12
 
@@ -172,7 +176,7 @@ def test_all_off_is_every_lamp_lit_indoors_in_one_request(house):
 
 
 def test_the_owner_can_name_rooms_that_are_outdoors(house, monkeypatch):
-    monkeypatch.setattr(app_world, 'FLOORS', [])
+    house.floors = []
     assert not any(r['outside'] for r in picture()['rooms'].values())
     (config.DATA_DIR / 'household.json').write_text(json.dumps({'app': {'outside': ['Porch', 'Yard']}}))
     assert sorted(r for r, room in picture()['rooms'].items() if room['outside']) == ['porch', 'yard']

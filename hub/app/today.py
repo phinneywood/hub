@@ -51,16 +51,29 @@ def _emails():
 
 
 def _cart():
-    """Kitchen's cart plan, when one waits for a tap."""
+    """What Kitchen needs from a person: an order or a cart plan that waits for a tap, and things on the list
+    that need a product picked. One line, the most pressing."""
     from ..tools.kitchen import client
+    waiting = {'tone': 'warn', 'open': {'href': '/kitchen', 'label': 'Review'}, 'tick': 'Not today'}
     try:
-        _, data = client.call('GET', '/messages?after=999999999', timeout=2)       # plans and busy only
+        status, seen = client.call('GET', '/kitchen', timeout=2)
+        if status == 200 and isinstance(seen.get('items'), list):
+            picks = sum(i.get('state') in ('pick', 'unavailable') for i in seen['items'])
+            if (seen.get('order') or {}).get('status') == 'pending':
+                return [{'key': CART, 'title': 'Place the grocery order', 'why': 'Checkout is ready. Nothing is ordered until you tap.', **waiting}]
+            if seen.get('plan'):
+                return [{'key': CART, 'title': 'Approve the grocery cart', 'why': 'Kitchen has a cart ready. Nothing is ordered until you approve it.',
+                         **waiting}]
+            if picks:
+                return [{'key': CART, 'title': 'Pick a product for the list' if picks == 1 else f'Pick products for {picks} things on the list',
+                         'why': 'Hub hasn’t bought these before. One tap each, and it will know next time.', **dict(waiting, tone='info')}]
+            return []
+        _, data = client.call('GET', '/messages?after=999999999', timeout=2)       # an older Kitchen: plans and busy only
     except client.KitchenDown:
         return []
     if not any(p.get('status') == 'pending' for p in (data.get('plans') or {}).values()):
         return []
-    return [{'key': CART, 'title': 'Approve the grocery cart', 'why': 'Kitchen has a cart ready. Nothing is ordered until you approve it.',
-             'tone': 'warn', 'open': {'href': '/kitchen', 'label': 'Review'}, 'tick': 'Not today'}]
+    return [{'key': CART, 'title': 'Approve the grocery cart', 'why': 'Kitchen has a cart ready. Nothing is ordered until you approve it.', **waiting}]
 
 
 def _list():

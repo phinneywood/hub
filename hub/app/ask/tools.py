@@ -1,21 +1,26 @@
-"""What Ask can do: lights, scenes, music, remembering, passing a message to Kitchen, and reading mail, the calendar
-and school.
+"""What Ask can do: lights, scenes, music, how the house is set up, any other device, remembering, passing a
+message to Kitchen, and reading mail, the calendar and school.
 
-Few tools, each doing a whole job. Every change goes through hub/tools/house/control.py, like a tap in the app:
-the same allowlist, record and Undo, counted against Ask's own per-minute limit. A tool says what it did in a
-plain sentence (`turn.said`), so a request that was simply carried out needs no second trip to the model; a tool
-that needs the model again (nothing matched, a name it couldn't place) sets `turn.again`.
+Few tools, each doing a whole job. Lights, scenes and music go through hub/tools/house/control.py, like a tap in
+the app: the same allowlist, record and Undo, counted against Ask's own per-minute limit. Everything else in
+Home Assistant (owner decision, 2026-11-15: Ask may change anything there) goes through hub/tools/house/admin.py:
+planned first, recorded with the way back, and left on a card for the owner's tap where its rule says so.
+
+A tool says what it did in a plain sentence (`turn.said`), so a request that was simply carried out needs no
+second trip to the model; a tool that needs the model again (nothing matched, a name it couldn't place, something
+it read) sets `turn.again`.
 """
 from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic_ai import RunContext
+from typing_extensions import TypedDict
 
-from ...tools.house import broker, control, music as library, nowplaying, read, zones
+from ...tools.house import admin, broker, control, music as library, nowplaying, plans, read, zones
 from .. import levels, model
 from .. import scenes as kept_scenes
+from ..words import are, counted, number, sentence, spoken
 from ..words import listed as _listed
-from ..words import sentence, spoken
 from . import private, turns
 
 EVERYWHERE = ('everywhere', 'all', 'all lights', 'all the lights', 'every light', 'the house', 'house', 'whole house',
@@ -33,6 +38,7 @@ class Turn:
     said: list = field(default_factory=list)     # what Hub tells the owner was done, a sentence per tool
     cards: list = field(default_factory=list)    # what the app draws under the answer
     again: bool = False                          # a tool needs the model to look at its answer and go on
+    strangers: bool = False                      # words written by strangers (mail, the calendar, school) are in view
 
 
 def _say(turn, told, card=None):
@@ -53,14 +59,17 @@ class NotNow(Exception):
     """Hub may not change the house for this request. The message is for the owner, as it is."""
 
 
-def _may_change(turn):
-    """Ask changes the house only for someone signed in, and never while the owner has Home control set to
-    "Suggest only" (the same setting that held the older chat back)."""
+HELD = {'house.control': 'Home control', 'house.setup': 'Changing the house’s setup', 'house.security': 'Locks, the garage and the alarm'}
+
+
+def _may_change(turn, action='house.control'):
+    """Ask changes the house only for someone signed in, and never while the owner has that kind of change set to
+    "Suggest only" on the Engine page (the same setting that held the older chat back)."""
     from ...engine import catalog, state
     if turn.login is None:
         raise NotNow('Change the house from your phone or laptop.')
-    if state.trust(catalog.action('house.control')) == 'suggest':
-        raise NotNow('Home control is set to “Suggest only” on the Engine page, so Hub changed nothing.')
+    if state.trust(catalog.action(action)) == 'suggest':
+        raise NotNow(f'{HELD[action]} is set to “Suggest only” on the Engine page, so Hub changed nothing.')
 
 
 def _outcome(turn, result, told, card=None):
@@ -172,6 +181,13 @@ def lights(ctx: RunContext[Turn], where: list[str], change: Literal['on', 'off',
     return _outcome(turn, result, f'{names} {are} {words}.', {'kind': 'rooms', 'rooms': rooms})
 
 
+def _scene_like(said, scenes):
+    """The one scene whose name holds every word said: "wind down" for a scene called "Upstairs: Wind down"."""
+    asked = admin.words_of(said) - admin.FILLER
+    near = [s for s in scenes if asked and asked <= admin.words_of(s['name'])]
+    return near[0] if len(near) == 1 else None
+
+
 def scene(ctx: RunContext[Turn], name: str) -> dict:
     """Run one of the scenes named in <house>, such as "All off", now."""
     turn = ctx.deps
@@ -188,7 +204,7 @@ def scene(ctx: RunContext[Turn], name: str) -> dict:
         mine = next((s for s in kept_scenes.kept() if s['name'].lower() == said), None)
         if mine:
             return _outcome(turn, kept_scenes.run(mine['id'], login=turn.login, via=VIA), f'{mine["name"]} is on.', {'kind': 'scene'})
-        theirs = next((s for s in found['scenes'] if s['name'].lower() == said), None)
+        theirs = next((s for s in found['scenes'] if s['name'].lower() == said), None) or _scene_like(said, found['scenes'])
         if theirs:
             return _outcome(turn, control.change([theirs['id']], 'activate', login=turn.login, via=VIA), f'{theirs["name"]} is on.')
     except NotNow as error:
@@ -352,9 +368,73 @@ def remember(ctx: RunContext[Turn], note: str, together: list[str] | None = None
     return _say(turn, 'Hub will remember that.', {'kind': 'memory', 'id': number, 'note': kept})
 
 
+def groceries(ctx: RunContext[Turn], do: Literal['add', 'remove', 'show', 'order'], items: list[str] | None = None,
+              when: str | None = None) -> dict:
+    """The household's shopping list and the shop's cart, now. add: put `items` on the list, each thing as the
+    owner said it, with its number if they gave one ("sponges", "2 avocados"); Hub picks the exact product the
+    household buys and it goes in the cart, so never ask which brand or size. remove: take `items` off the list,
+    and out of the cart. show: what is on the list and where each thing stands. order: get checkout ready for the
+    owner's tap, with `when` the pickup or delivery time they asked for, in their words. Nothing is ever ordered
+    without their tap on the card."""
+    from .. import kitchen as shop
+    turn = ctx.deps
+    if turn.login is None:
+        return _say(turn, 'Change the list from your phone or laptop.')
+    try:
+        if do == 'add':
+            found = shop.add(items, turn.login, source='ask')
+            new, old = [i['name'] for i in found['added']], [i['name'] for i in found['already']]
+            picks = sum(i['state'] == 'pick' for i in found['added'])
+            told = [sentence(f'{_listed(new)} {are(new)} on the list.')] if new else []
+            if old:
+                told.append(sentence(f'{_listed(old)} {"were" if are(old) == "are" else "was"} already there.' if new
+                                     else f'{_listed(old)} {are(old)} already on the list.'))
+            if picks:
+                told.append('Hub hasn’t bought it before: pick one below.' if len(new) == 1
+                            else f'{counted(picks, "thing")} {"needs" if picks == 1 else "need"} a product picked below.')
+            card = {'kind': 'groceries', 'items': [i['id'] for i in found['added'] + found['already']]}
+            return _say(turn, ' '.join(told) or 'Say what to add.', card if card['items'] else None)
+        if do == 'remove':
+            on_list = shop.picture()
+            if not on_list['ok']:
+                raise shop.Old(on_list['said']) if on_list['why'] == 'old' else shop.Refused(on_list['said'])
+            going = shop.named(items, on_list['items'])
+            if not going:
+                return _say(turn, 'Hub didn’t find that on the list.', {'kind': 'groceries', 'all': True})
+            gone = [shop.remove(i['id'], turn.login) for i in going]
+            names = [i['name'] for i in gone]
+            told = sentence(f'{_listed(names)} {are(names)} off the list')
+            return _say(turn, told + (', and coming out of the cart.' if any(i['state'] == 'removing' for i in gone) else '.'))
+        if do == 'show':
+            on_list = shop.picture()
+            if not on_list['ok']:
+                raise shop.Old(on_list['said']) if on_list['why'] == 'old' else shop.Refused(on_list['said'])
+            things = on_list['items']
+            if not things:
+                return _say(turn, 'The list is empty.')
+            carted, picks = sum(i['state'] == 'cart' for i in things), sum(i['state'] in ('pick', 'unavailable') for i in things)
+            told = f'{counted(len(things), "thing")} {"is" if len(things) == 1 else "are"} on the list'
+            if carted == len(things):
+                told += ', in the cart' if carted == 1 else ', all in the cart'
+            else:
+                parts = [f'{number(carted)} in the cart'] if carted else []
+                parts += [f'{number(picks)} {"needs" if picks == 1 else "need"} a pick'] if picks else []
+                told += ': ' + ', '.join(parts) if parts else ''
+            return _say(turn, told + '.', {'kind': 'groceries', 'all': True})
+        after = shop.order(when or '', turn.login)
+        return _say(turn, 'Reading checkout. This takes a minute.',
+                    {'kind': 'kitchen', 'after': after} if isinstance(after, int) else None)
+    except shop.Old:                    # a Kitchen from before it kept the list itself: its assistant still takes the words
+        return kitchen(ctx)
+    except shop.Refused as error:
+        return _say(turn, str(error))
+
+
 def kitchen(ctx: RunContext[Turn]) -> dict:
-    """Pass the owner's message, word for word, to Kitchen, which answers about cooking, recipes, meal ideas,
-    groceries, the shopping list, food on hand and the shop's cart. Call it once and say nothing else."""
+    """Pass the owner's message, word for word, to the kitchen assistant, which answers about cooking, recipes,
+    meal ideas, what to make from what is on hand, past orders and prices, and can plan the ingredients a recipe
+    still needs. It takes a minute or two. Call it once and say nothing else. For the shopping list and the cart
+    themselves, use groceries."""
     from ...engine import catalog
     from ...tools.kitchen import client
     turn = ctx.deps
@@ -371,11 +451,180 @@ def look_up(ctx: RunContext[Turn], topics: list[Literal['mail', 'calendar', 'sch
     """Read the owner's mail, their calendar, their child's school (the class guide) or what needs them today, to
     answer a question about them. Read-only: Hub can't send, file, delete or book anything from here."""
     turn = ctx.deps
-    turn.again = True
+    turn.again = turn.strangers = True
     try:
         return {'data': private.data(turn.text, set(topics) or {'today'})}
     except Exception:  # noqa: BLE001 - a reader that failed is an answer the model can pass on
         return {'not_done': 'Hub couldn’t read that just now.'}
 
 
-ALL = (lights, scene, music, remember, kitchen, look_up)
+# ---- how the house is set up, and every other device (hub/tools/house/admin.py) ----
+
+SECURITY = ('lock', 'alarm_control_panel')
+OPENING = {'unlock': 'Unlock', 'open': 'Open', 'open_cover': 'Open', 'toggle': 'Open', 'set_cover_position': 'Open', 'alarm_disarm': 'Disarm',
+           'alarm_trigger': 'Set off', 'open_valve': 'Open', 'set_valve_position': 'Open'}
+
+
+def find(ctx: RunContext[Turn], words: str | None = None, kind: str | None = None) -> dict:
+    """Look in Home Assistant for things by name, when <house> doesn't already name what you need: devices,
+    rooms, scenes, automations, scripts, helpers. `words`: part of a name or a room. `kind`: a domain such as
+    "climate", "lock", "cover", "fan", "switch", "automation", "script", "scene", "input_boolean", or "room",
+    "floor", "group". Returns names and ids for the other tools. Read-only."""
+    turn = ctx.deps
+    turn.again = True
+    try:
+        return admin.find(words, kind)
+    except broker.HomeDown:
+        return {'not_done': 'The house isn’t answering.'}
+
+
+def details(ctx: RunContext[Turn], thing: str) -> dict:
+    """Everything about one thing, by its name or id: a device's state and what it can be set to, an automation's,
+    script's or scene's config as Home Assistant keeps it, or what is in a room. Read an automation or script
+    before changing it. Read-only."""
+    turn = ctx.deps
+    turn.again = True
+    try:
+        return admin.detail(thing)
+    except control.Refused as error:
+        return {'not_done': str(error)[:400]}
+    except broker.HomeDown:
+        return {'not_done': 'The house isn’t answering.'}
+
+
+def _question(plan, args, changes, why):
+    """The card's question, from what would change."""
+    name = changes[0]['name']
+    if why == 'many':
+        return f'Make these {len(changes)} changes?'
+    if why == 'delete':
+        return f'Remove {name}?' if len(changes) == 1 else f'Remove these {len(changes)}?'
+    if why == 'unlock':
+        verb = OPENING.get(str(args.get('action', '')).partition('.')[2], 'Open')
+        return f'{verb} {name}?' if len(changes) == 1 else f'{verb} these {len(changes)}?'
+    if why == 'security':
+        return f'Run {name}?' if args.get('do') == 'run' else f'Save {name}?'
+    return 'Restart Home Assistant?' if why == 'restart' else 'Change the house’s settings?'
+
+
+def _setup(turn, plan, args, action='house.setup'):
+    """Plan one change to the house's setup and make it now, or leave it on a card for the owner's tap.
+
+    Nothing is changed on a turn that has mail, the calendar or school in view: words written by strangers must
+    never be what moved a lock or rewrote an automation."""
+    args = {k: v for k, v in args.items() if v is not None}
+    try:
+        _may_change(turn, action)
+        if turn.strangers:
+            raise NotNow('Hub changes the house’s setup in a request of its own, never alongside mail, the calendar or school. '
+                         'Ask for it by itself.')
+        changes = plans.PLANS[plan](admin.world(fresh=True), **args)
+        why = admin.asks(changes)
+        if why:
+            card = admin.wait(_question(plan, args, changes, why), changes, plan, args, login=turn.login)
+            return _say(turn, 'That one waits for your tap.', card)
+        result = admin.carry_out(changes, login=turn.login, via=VIA)
+    except NotNow as error:
+        return _say(turn, str(error))
+    except admin.Already as error:
+        return _say(turn, str(error))
+    except control.Refused as error:
+        return _again(turn, error)
+    except broker.HomeDown:
+        return _say(turn, 'The house isn’t answering, so nothing was changed.')
+    from ..feed import feed
+    feed.poke()
+    done, missed = result['done'], result['unknown'] + result['not_sent']
+    if not done and result['not_sent'] and result['why']:      # Home Assistant's own no: the model may be able to put it right
+        return _again(turn, f'Home Assistant said no ({result["why"]}), so nothing was changed.')
+    if not done:
+        return _say(turn, 'Hub sent that, but the house didn’t confirm it.' if result['unknown']
+                    else 'The house couldn’t be reached, so nothing was changed.')
+    told = sentence(done[0]) + '.' if len(done) == 1 else f'{len(done)} changes made.'
+    if missed:
+        told += f' {len(missed)} didn’t take.'
+    card = {'kind': 'setup', 'lines': done if len(done) > 1 else [], 'missed': missed}
+    return _say(turn, told, dict(card, batch=result['batch']) if result['undo'] else card)
+
+
+def arrange(ctx: RunContext[Turn], things: list[str], room: str | None = None, name: str | None = None,
+            hidden: bool | None = None) -> dict:
+    """Change where things are or what they are called in Home Assistant, now. `things`: names as in <house>
+    ("living room floor lamp", "kitchen lights") or ids. `room`: move them there ("none" takes them out of every
+    room). `name`: a new name, for one thing. `hidden`: hide a thing from Hub and Home Assistant's own screens, or
+    show it again."""
+    return _setup(ctx.deps, 'arrange', {'things': things, 'room': room, 'name': name, 'hidden': hidden})
+
+
+def rooms(ctx: RunContext[Turn], kind: Literal['room', 'floor', 'group'], do: Literal['add', 'rename', 'set', 'remove'], name: str,
+          new_name: str | None = None, floor: str | None = None, rooms: list[str] | None = None, level: int | None = None) -> dict:
+    """Add, rename, set or remove a room, a floor, or a group of rooms that make one open space (a group is reached
+    by its name like a room: "the open plan"). add a room with its `floor`. A group: add with `rooms` makes it, or
+    puts those rooms in a group that exists; remove with `rooms` takes those rooms out of it; set with `rooms`
+    says all of them at once. set: a room's `floor`, a floor's `level` (0 the ground floor, 1 above, -1 below).
+    Removing a room, a floor or a whole group waits for the owner's tap."""
+    return _setup(ctx.deps, 'place', {'kind': kind, 'do': do, 'name': name, 'new_name': new_name, 'floor': floor, 'rooms': rooms,
+                                      'level': level})
+
+
+class Kept(TypedDict, total=False):
+    """One thing in a scene: a light, plug or fan, or a room for all its lights."""
+    thing: str
+    on: bool
+    level: int
+    colour: str
+
+
+def scene_setup(ctx: RunContext[Turn], do: Literal['save', 'rename', 'remove'], name: str, set: list[Kept] | None = None,     # noqa: A002
+                as_now: list[str] | None = None, leave: list[str] | None = None, new_name: str | None = None) -> dict:
+    """Make or change one of Home Assistant's scenes (to run one, use scene). save makes the scene, or changes
+    the one of that name and leaves the rest of it as it was. `set`: what it should set, each a light, plug, fan
+    or a room's lights, with on, off or a level from 1 to 100, and a colour by name if wanted. `as_now`: rooms or
+    lights to keep exactly as they are at this moment. `leave`: things to take out of the scene."""
+    return _setup(ctx.deps, 'scene', {'do': do, 'name': name, 'set': set, 'capture': as_now, 'leave': leave, 'new_name': new_name})
+
+
+def routine(ctx: RunContext[Turn], kind: Literal['automation', 'script'], do: Literal['save', 'rename', 'remove', 'on', 'off', 'run'],
+            name: str, config: dict | None = None, new_name: str | None = None) -> dict:
+    """Automations and scripts in Home Assistant. on / off switch an automation; run runs one now. save makes one,
+    or replaces the one of that name: `config` is the whole thing as Home Assistant writes it. An automation:
+    alias, description (one plain sentence saying what it does), triggers, conditions, actions, mode. A script:
+    alias, description, sequence, mode. Under entity_id and area_id give ids, or names exactly as <house> has them
+    ("bedroom floor lamp", "Kitchen"): Hub looks each id up and refuses a name that fits two things. To change one,
+    read it with details first and send the whole config back with the change made. Clock times are the house's
+    local time. One that unlocks or opens a door waits for the owner's tap, and so does removing one."""
+    return _setup(ctx.deps, 'routine', {'kind': kind, 'do': do, 'name': name, 'config': config, 'new_name': new_name})
+
+
+def device(ctx: RunContext[Turn], action: str, things: list[str] | None = None, data: dict | None = None) -> dict:
+    """Any device that isn't a plain light, scene or music request, by Home Assistant service. `action` is
+    "domain.service", `things` the names or ids it is for, `data` the service's own fields.
+    Thermostat: climate.set_temperature {"temperature": 68}, climate.set_hvac_mode {"hvac_mode": "heat"}.
+    Fans: fan.turn_on, fan.turn_off, fan.set_percentage {"percentage": 50}. Plugs: switch.turn_on.
+    A light's colour or a slow fade: light.turn_on {"color_temp_kelvin": 2700, "transition": 5}.
+    Locks: lock.lock, lock.unlock. Garage, doors and blinds: cover.open_cover, cover.close_cover,
+    cover.set_cover_position {"position": 40}. Helpers: input_boolean.turn_on, input_number.set_value {"value": 3},
+    input_select.select_option {"option": "Away"}. Also vacuum, humidifier, alarm_control_panel, button.press,
+    timer.start, a notice to a household phone (notify.mobile_app_<phone> {"message": "..."}), and
+    homeassistant.restart. Unlocking, opening a door or the garage, disarming and restarting wait for the owner's tap."""
+    domain = str(action or '').partition('.')[0]
+    doors = domain == 'cover' and any(word in ' '.join(things or ()).lower() for word in ('garage', 'door', 'gate'))
+    return _setup(ctx.deps, 'act', {'action': action, 'things': things, 'data': data},
+                  'house.security' if domain in SECURITY or doors else 'house.control')
+
+
+def setting(ctx: RunContext[Turn], do: Literal['add', 'change', 'remove'],
+            kind: Literal['input_boolean', 'input_number', 'input_select', 'input_text', 'input_datetime', 'input_button', 'timer',
+                          'counter', 'house'],
+            name: str | None = None, fields: dict | None = None, new_name: str | None = None) -> dict:
+    """Helpers that automations can use, and the house's own settings. A helper is an input_boolean (a switch),
+    input_number (`fields`: min, max, step), input_select (options), input_text, input_datetime (has_date,
+    has_time), input_button, timer (duration) or counter: add, change or remove one by `name`.
+    kind "house" with do "change" sets the whole house's own `fields`: location_name, unit_system ("metric" or
+    "us_customary"), time_zone, currency, country, language. That waits for the owner's tap."""
+    if kind == 'house':
+        return _setup(ctx.deps, 'house', {'fields': fields or {}})
+    return _setup(ctx.deps, 'helper', {'do': do, 'kind': kind, 'name': name or '', 'fields': fields, 'new_name': new_name})
+
+
+ALL = (lights, scene, music, remember, groceries, kitchen, look_up, find, details, arrange, rooms, scene_setup, routine, device, setting)

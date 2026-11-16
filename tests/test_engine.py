@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from hub import luna, today
+from hub.app.ask import tools as ask_tools
 from hub.engine import ask, auto, catalog, judge, overnight, release, state
 from hub.engine.registry import TRUST, Source
 from hub.main import app
@@ -35,7 +36,8 @@ def test_every_catalog_entry_is_complete_and_actions_never_default_above_what_th
     for action in catalog.ACTIONS:
         assert action.does and action.undo and action.page.startswith('/')
         assert TRUST.index(action.default) <= TRUST.index(action.ceiling)
-        assert action.post or action.ceiling == 'suggest' or action.slug in {c.action for c in catalog.controls()}  # one tap needs a route, or Ask's control is it
+        # one tap needs a route, or a control of the older chat's, or a tool of the app's Ask, to be what does it
+        assert action.post or action.ceiling == 'suggest' or action.slug in {c.action for c in catalog.controls()} | set(ask_tools.HELD)
         assert action.auto or action.ceiling != 'auto'     # unasked only with code that does it
     assert {s.slug for s in catalog.SOURCES if s.evidence} <= set(catalog.PAGES)
 

@@ -1,5 +1,11 @@
 # Home control (design, 2026-11-11)
 
+**Since 2026-11-15** the app's Ask goes further than this design: by the owner's decision it may change anything
+in Home Assistant (rooms, names, scenes, automations, scripts, helpers, the thermostat, locks and the garage),
+through a second door in the broker client, with every change planned, recorded and undoable and a card for what
+must wait for a tap. That is described in `docs/app.md`, “Setting up the house”. What follows is the earlier
+design, which still describes the everyday door (lights, power, speakers) and the older chat.
+
 Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playlists) built on a branch; the rest proposed. Owner decisions on 2026-11-11:
 
 - Hub talks to Home Assistant directly for devices and playback, and to Music Assistant's own API

@@ -25,3 +25,22 @@ def listed(items):
 def sentence(text):
     """The words with a capital to start."""
     return text[:1].upper() + text[1:]
+
+
+NUMBERS = ('No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve')
+
+
+def number(count):
+    """A count the way it is said: "one", "six", "14"."""
+    return NUMBERS[count].lower() if 0 <= count < len(NUMBERS) else str(count)
+
+
+def counted(count, thing):
+    """"One thing", "Six things", "14 things"."""
+    return f'{sentence(number(count))} {thing}{"" if count == 1 else "s"}'
+
+
+def are(names):
+    """"are" for several things, or one thing said in the plural ("eggs are", "dish soap is", "hummus is")."""
+    last = str(names[-1]).lower() if names else ''
+    return 'are' if len(names) > 1 or (last.endswith('s') and not last.endswith(('ss', 'us', 'is'))) else 'is'

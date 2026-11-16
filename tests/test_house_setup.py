@@ -1,0 +1,571 @@
+"""Changing how the house is set up (hub/tools/house/admin.py and plans.py), on the made-up house.
+
+Every change here goes through the real planning, the real rule for what waits for a tap, the broker's own checks
+and the real record; only Home Assistant itself is made up (tests/app_world.py), and it follows what it is sent.
+"""
+import json
+import time
+
+import pytest
+
+from hub.tools.house import admin, broker, control, plans, read
+from tests import app_world
+
+ME = 'me@example.com'
+
+
+@pytest.fixture
+def house(monkeypatch):
+    control._taps.clear()
+    control._recent.clear()
+    return app_world.install(monkeypatch)
+
+
+def plan(what, /, **args):
+    return plans.PLANS[what](admin.world(fresh=True), **args)
+
+
+def do(what, /, **args):
+    """Plan one change and make it at once, as Ask does when nothing about it needs a tap."""
+    changes = plan(what, **args)
+    assert admin.asks(changes) is None, admin.asks(changes)
+    return admin.carry_out(changes, login=ME, via='ask')
+
+
+def rooms_of(*entities):
+    found = read.snapshot(fresh=True)
+    where = {d['id']: r['name'] for r in found['rooms'] for d in r['devices']}
+    return [where.get(e) for e in entities]
+
+
+# ---- the fence ----
+
+def test_the_setup_door_lets_through_only_what_it_names(house):
+    for command in ({'type': 'auth/long_lived_access_token', 'client_name': 'x', 'lifespan': 3650},
+                    {'type': 'config/entity_registry/update', 'entity_id': 'light.kitchen_ceiling', 'new_entity_id': 'light.other'},
+                    {'type': 'config/entity_registry/remove', 'entity_id': 'light.kitchen_ceiling'},
+                    {'type': 'config/device_registry/remove_config_entry', 'device_id': 'dev-floor-lamp'},
+                    {'type': 'config_entries/remove', 'entry_id': 'abc'}, {'type': 'backup/restore', 'backup_id': 'abc'},
+                    {'type': 'supervisor/api', 'endpoint': '/host/shutdown', 'method': 'post'},
+                    {'type': 'config/core/update', 'latitude': 1.0}, {'type': 'config/area_registry/delete', 'area_id': '../x'}):
+        with pytest.raises(ValueError):
+            broker.setup_write(command)
+    for domain, service in (('shell_command', 'anything'), ('homeassistant', 'stop'), ('hassio', 'host_shutdown'), ('update', 'install'),
+                            ('notify', 'notify'), ('media_player', 'play_media'), ('python_script', 'x'), ('mqtt', 'publish'),
+                            ('script', '{{ states("input_text.x") }}'), ('recorder', 'purge')):
+        with pytest.raises(ValueError):
+            broker.setup_call(domain, service, {})
+    with pytest.raises(ValueError):
+        broker.setup_save('lovelace', 'x', {'a': 1})
+    with pytest.raises(ValueError):
+        broker.setup_save('automation', '../../x', {'a': 1})
+    with pytest.raises(ValueError):
+        broker.setup_call('lock', 'lock', {'entity_id': 'lock.front_door; rm'})
+    assert house.setup == [] and house.sent == []
+
+
+def test_home_assistants_own_no_is_told_apart_from_a_house_that_is_away(monkeypatch):
+    replies = iter([{'ok': False, 'error': 'Home Assistant rejected the request: not_found'},
+                    {'ok': False, 'error': 'Home Assistant returned HTTP 400; response body omitted.'},
+                    {'ok': False, 'error': 'Home Assistant returned HTTP 502; response body omitted.'},
+                    {'ok': False, 'error': 'Operation failed; credential-bearing diagnostics were suppressed.'}])
+
+    class Line:
+        def __init__(self, *a):
+            pass
+
+        def settimeout(self, t):
+            pass
+
+        def connect(self, path):
+            pass
+
+        def sendall(self, data):
+            pass
+
+        def makefile(self, mode):
+            import io
+            return io.BytesIO(json.dumps(next(replies)).encode() + b'\n')
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(broker.socket, 'socket', Line)
+    for code in ('not_found', 'HTTP 400'):
+        with pytest.raises(broker.Rejected) as said:
+            broker.setup_write({'type': 'config/area_registry/delete', 'area_id': 'attic'})
+        assert said.value.code == code and code in str(said.value)
+    for _ in range(2):
+        with pytest.raises(broker.HomeDown) as said:
+            broker.setup_write({'type': 'config/area_registry/delete', 'area_id': 'attic'})
+        assert not isinstance(said.value, broker.Rejected)
+
+
+# ---- finding ----
+
+def test_a_thing_is_found_by_its_name_its_room_or_what_it_is(house):
+    w = admin.world()
+    one = lambda said, kinds=None: [t['id'] for t in admin.match(said, w, kinds)]     # noqa: E731
+    assert one('floor lamp') == ['light.living_floor_lamp']
+    assert one('the Living room floor lamp') == ['light.living_floor_lamp']
+    assert one('kitchen ceiling') == ['light.kitchen_ceiling'] and one('ceiling in the kitchen') == ['light.kitchen_ceiling']
+    assert one('thermostat') == ['climate.hallway'] and one('garage door') == ['cover.garage_door']
+    assert one('bedroom fan') == ['fan.bedroom_fan'] and one('light.robin_night') == ['light.robin_night']
+    assert one('kitchen lights') == ['light.kitchen_cabinets', 'light.kitchen_ceiling', 'light.kitchen_pendants']
+    assert one('kitchen', kinds=('light',)) == ['light.kitchen_cabinets', 'light.kitchen_ceiling', 'light.kitchen_pendants']
+    assert one('porch at sunset') == ['automation.porch_at_sunset'] and one('goodnight') == ['script.goodnight']
+    with pytest.raises(admin.Refused, match=r'Which one\? Ceiling \(Entry\), Ceiling \(Guest room\)'):
+        one('ceiling')
+    with pytest.raises(admin.Refused, match='nothing called “hot tub”'):
+        one('hot tub')
+    assert admin.room('the living room', w)['id'] == 'living' and admin.room('Robin’s room', w)['id'] == 'robin'
+    with pytest.raises(admin.Refused, match='no room called “Attic”. The rooms are: Bath, Bedroom'):
+        admin.room('Attic', w)
+
+
+def test_what_a_model_is_shown_leaves_out_where_people_are_and_anything_secret(house):
+    house.states['person.alex'] = {'entity_id': 'person.alex', 'state': 'not_home', 'attributes': {
+        'friendly_name': 'Alex', 'latitude': 47.1, 'longitude': -122.1, 'gps_accuracy': 10, 'user_id': 'u-alex'}}
+    house.states['media_player.living']['attributes'].update(entity_picture='/api/media_player_proxy/x?token=abc', access_token='abc')
+    admin.forget()
+    assert admin.find('alex')['found'] == [{'id': 'person.alex', 'name': 'Alex', 'kind': 'person'}]
+    assert admin.detail('person.alex') == {'id': 'person.alex', 'name': 'Alex', 'kind': 'person'}
+    shown = admin.detail('media_player.living')
+    assert shown['state'] == 'playing' and shown['attributes']['media_title'] == 'Paper Lanterns'
+    assert not {'entity_picture', 'access_token'} & set(shown['attributes']) and 'token' not in json.dumps(shown)
+    assert admin.find('thermostat')['found'] == [{'id': 'climate.hallway', 'name': 'Thermostat', 'kind': 'climate', 'room': 'Hallway', 'state': 'heat'}]
+    assert [f['name'] for f in admin.find(kind='automation')['found']] == ['Living room button', 'Porch at sunset']
+    assert {'name': 'Kitchen', 'kind': 'room', 'id': 'kitchen', 'floor': 'Downstairs'} in admin.find(kind='room')['found']
+    routine = admin.detail('porch at sunset')
+    assert routine['config']['triggers'] == [{'trigger': 'sun', 'event': 'sunset'}]
+    assert admin.detail('dinner')['used_by'] == ['Living room button']
+    assert [t['id'] for t in admin.detail('Hallway')['things']] == ['climate.hallway', 'light.hall_ceiling']
+
+
+# ---- where things are and what they are called ----
+
+def test_a_light_moves_to_another_room_and_undo_puts_it_back(house):
+    result = do('arrange', things=['reading lamp'], room='bedroom')
+    assert result['done'] == ['Reading lamp moved from Living room to Bedroom'] and result['undo']
+    assert rooms_of('light.living_reading') == ['Bedroom']
+    assert house.setup == [{'type': 'config/entity_registry/update', 'entity_id': 'light.living_reading', 'area_id': 'bedroom'}]
+    assert admin.undo(result['batch'], login=ME, via='app')['done'] == ['Reading lamp put back']
+    assert rooms_of('light.living_reading') == ['Living room']
+    with pytest.raises(admin.Refused, match='nothing left to undo'):
+        admin.undo(result['batch'], login=ME, via='app')
+
+
+def test_a_lamp_that_is_its_own_device_takes_the_device_with_it(house):
+    result = do('arrange', things=['floor lamp'], room='Office')
+    assert result['done'] == ['Floor lamp moved from Living room to Office']
+    assert house.setup == [{'type': 'config/device_registry/update', 'device_id': 'dev-floor-lamp', 'area_id': 'office'}]
+    assert rooms_of('light.living_floor_lamp') == ['Office']
+    assert admin.world(fresh=True)['things']['sensor.floor_lamp_signal']['area'] == 'office'       # its signal reading came along
+    admin.undo(result['batch'], login=ME, via='app')
+    assert rooms_of('light.living_floor_lamp') == ['Living room']
+
+
+def test_one_of_two_things_on_a_device_moves_alone(house):
+    house.devices.append({'id': 'dev-relay', 'name': 'Two-way relay', 'name_by_user': None, 'area_id': 'hall', 'labels': []})
+    for entity in ('light.hall_ceiling', 'light.guest_ceiling'):
+        house.entries[entity].update(device_id='dev-relay')
+    do('arrange', things=['guest room ceiling'], room='bath')
+    assert house.setup == [{'type': 'config/entity_registry/update', 'entity_id': 'light.guest_ceiling', 'area_id': 'bath'}]
+    assert rooms_of('light.guest_ceiling', 'light.hall_ceiling') == ['Bath', 'Hallway']
+
+
+def test_several_things_move_together_and_one_already_there_is_left(house):
+    result = do('arrange', things=['dining lights', 'reading lamp'], room='living room')
+    assert result['done'] == ['Pendant moved from Dining to Living room', 'Sideboard lamp moved from Dining to Living room']
+    with pytest.raises(admin.Already, match='Reading lamp is already in Living room.'):
+        plan('arrange', things=['reading lamp'], room='living room')
+    assert do('arrange', things=['reading lamp'], room='none')['done'] == ['Reading lamp taken out of Living room']
+
+
+def test_a_rename_reaches_the_device_when_the_thing_is_the_device(house):
+    result = do('arrange', things=['floor lamp'], name='Arc lamp')
+    assert result['done'] == ['Floor lamp renamed Arc lamp']
+    assert house.setup == [{'type': 'config/device_registry/update', 'device_id': 'dev-floor-lamp', 'name_by_user': 'Arc lamp'}]
+    result = do('arrange', things=['reading lamp'], name='Corner lamp')
+    assert house.entries['light.living_reading']['name'] == 'Corner lamp'
+    assert 'Corner lamp' in [d['name'] for r in read.snapshot(fresh=True)['rooms'] for d in r['devices']]
+    admin.undo(result['batch'], login=ME, via='app')
+    assert house.entries['light.living_reading']['name'] is None
+    with pytest.raises(admin.Refused, match='A name is for one thing'):
+        plan('arrange', things=['kitchen lights'], name='Bright')
+
+
+def test_a_thing_can_be_hidden_and_shown_again(house):
+    assert do('arrange', things=['shelf lights'], hidden=True)['done'] == ['Shelf lights hidden']
+    assert rooms_of('light.living_shelves') == [None]
+    assert do('arrange', things=['light.living_shelves'], hidden=False)['done'] == ['Shelf lights shown again']
+    assert rooms_of('light.living_shelves') == ['Living room']
+
+
+# ---- rooms, floors and groups ----
+
+def test_a_room_is_added_renamed_and_put_on_a_floor(house):
+    result = do('place', kind='room', do='add', name='Sun room', floor='upstairs')
+    assert result['done'] == ['Room “Sun room” added on Upstairs']
+    assert do('arrange', things=['reading lamp'], room='sun room')['done'] == ['Reading lamp moved from Living room to Sun room']
+    assert do('place', kind='room', do='rename', name='Sun room', new_name='Conservatory')['done'] == ['Room Sun room renamed Conservatory']
+    assert do('place', kind='room', do='set', name='Conservatory', floor='Downstairs')['done'] == ['Conservatory moved to Downstairs']
+    assert [a for a in house.areas if a['area_id'] == 'sun_room'][0] | {} == {
+        'area_id': 'sun_room', 'name': 'Conservatory', 'floor_id': 'down', 'labels': [], 'aliases': [], 'icon': None}
+    with pytest.raises(admin.Already):
+        plan('place', kind='room', do='add', name='kitchen')
+    admin.undo(result['batch'], login=ME, via='app')                    # taking the new room away again
+    assert 'sun_room' not in [a['area_id'] for a in house.areas]
+
+
+def test_removing_a_room_waits_for_a_tap_and_undo_brings_it_back_with_what_was_in_it(house):
+    changes = plan('place', kind='room', do='remove', name='Dining')
+    assert admin.asks(changes) == 'delete' and changes[0]['words'] == 'Room “Dining” removed; its 2 things are in no room'
+    result = admin.carry_out(changes, login=ME, via='app')
+    assert rooms_of('light.dining_pendant') == ['Other'] and 'dining' not in [a['area_id'] for a in house.areas]
+    admin.undo(result['batch'], login=ME, via='app')
+    assert rooms_of('light.dining_pendant', 'light.dining_sideboard') == ['Dining', 'Dining']
+    assert [a['floor_id'] for a in house.areas if a['name'] == 'Dining'] == ['down']
+
+
+def test_rooms_are_grouped_and_the_group_reaches_them(house):
+    result = do('place', kind='group', do='add', name='Open plan', rooms=['kitchen', 'living room'])
+    assert result['done'] == ['Group “Open plan” made of Kitchen and Living room']
+    assert control.rooms_named('open plan', read.snapshot(fresh=True)) == ['Kitchen', 'Living room']
+    changed = do('place', kind='group', do='set', name='open plan', rooms=['kitchen', 'dining'])
+    assert changed['done'] == ['Dining added to Open plan', 'Living room taken out of Open plan']
+    one = do('place', kind='group', do='add', name='open plan', rooms=['entry'])
+    assert one['done'] == ['Entry added to Open plan']
+    assert do('place', kind='group', do='remove', name='open plan', rooms=['entry'])['done'] == ['Entry taken out of Open plan']
+    with pytest.raises(admin.Already, match='Entry is already out of Open plan.'):
+        plan('place', kind='group', do='remove', name='open plan', rooms=['entry'])
+    removal = plan('place', kind='group', do='remove', name='Open plan')
+    assert admin.asks(removal) == 'delete'
+    gone = admin.carry_out(removal, login=ME, via='app')
+    assert control.rooms_named('open plan', read.snapshot(fresh=True)) == []
+    admin.undo(gone['batch'], login=ME, via='app')
+    assert sorted(control.rooms_named('open plan', read.snapshot(fresh=True))) == ['Dining', 'Kitchen']
+
+
+def test_a_floor_is_added_and_removed(house):
+    assert do('place', kind='floor', do='add', name='Basement', level=-1)['done'] == ['Floor “Basement” added']
+    assert do('place', kind='room', do='set', name='office', floor='basement')['done'] == ['Office moved to Basement']
+    removal = plan('place', kind='floor', do='remove', name='Basement')
+    assert admin.asks(removal) == 'delete'
+    gone = admin.carry_out(removal, login=ME, via='app')
+    assert [a['floor_id'] for a in house.areas if a['area_id'] == 'office'] == [None]
+    admin.undo(gone['batch'], login=ME, via='app')
+    assert [a['floor_id'] for a in house.areas if a['area_id'] == 'office'] == ['basement']
+
+
+# ---- scenes ----
+
+def test_a_scene_is_changed_and_then_sets_what_it_now_says(house):
+    result = do('scene', do='save', name='Dinner', set=[{'thing': 'island pendants', 'level': 30}, {'thing': 'floor lamp', 'on': False}])
+    assert result['done'] == ['Scene “Dinner” changed: Island pendants at 30% and Floor lamp off']
+    control.change(['scene.dinner'], 'activate', login=ME, via='app')
+    lights = {d['id']: d for r in read.snapshot(fresh=True)['rooms'] for d in r['devices']}
+    assert lights['light.kitchen_pendants']['level'] == 30 and not lights['light.living_floor_lamp']['on']
+    assert lights['light.kitchen_ceiling']['level'] == 80               # what the request didn't name is as it was
+    admin.undo(result['batch'], login=ME, via='app')
+    assert house.configs['scene']['dinner']['entities']['light.kitchen_pendants'] == {'state': 'on', 'brightness': 178}
+
+
+def test_a_new_scene_keeps_rooms_as_they_are_now(house):
+    result = do('scene', do='save', name='Reading', capture=['living room'], set=[{'thing': 'kitchen', 'on': False}])
+    assert result['done'] == ['Scene “Reading” saved: living room as it is now, Under the cabinets off, Ceiling (Kitchen) off and Island pendants off']
+    (key, kept), = [(k, v) for k, v in house.configs['scene'].items() if v['name'] == 'Reading']
+    assert kept['entities']['light.living_floor_lamp'] == {'state': 'on', 'brightness': 115}
+    assert kept['entities']['light.living_shelves'] == {'state': 'off'} and kept['entities']['light.kitchen_ceiling'] == {'state': 'off'}
+    assert 'Reading' in [s['name'] for s in read.snapshot(fresh=True)['scenes']]
+    admin.undo(result['batch'], login=ME, via='app')
+    assert key not in house.configs['scene'] and 'Reading' not in [s['name'] for s in read.snapshot(fresh=True)['scenes']]
+
+
+def test_a_colour_in_a_scene_is_one_the_lamp_can_show(house):
+    do('scene', do='save', name='Movie night', set=[{'thing': 'floor lamp', 'level': 20, 'colour': 'warm white'}])
+    assert house.configs['scene']['movie_night']['entities']['light.living_floor_lamp'] == {'state': 'on', 'brightness': 51, 'color_temp_kelvin': 2700}
+    with pytest.raises(admin.Refused, match='only dims'):
+        plan('scene', do='save', name='Movie night', set=[{'thing': 'reading lamp', 'colour': 'red'}])
+
+
+def test_removing_a_scene_waits_says_what_uses_it_and_can_be_undone(house):
+    changes = plan('scene', do='remove', name='dinner')
+    assert admin.asks(changes) == 'delete' and changes[0]['words'] == 'Scene “Dinner” removed; Living room button use it'
+    gone = admin.carry_out(changes, login=ME, via='app')
+    assert 'scene.dinner' not in house.states
+    admin.undo(gone['batch'], login=ME, via='app')
+    assert house.configs['scene']['dinner']['name'] == 'Dinner' and 'scene.dinner' in house.states
+
+
+def test_a_scene_changed_again_elsewhere_is_not_put_back_over_that(house):
+    result = do('scene', do='save', name='Dinner', set=[{'thing': 'pendant', 'level': 10}])
+    house.configs['scene']['dinner']['entities']['light.dining_pendant'] = {'state': 'on', 'brightness': 200}     # by hand, in Home Assistant
+    with pytest.raises(admin.Refused, match='Dinner was changed again after Hub changed it'):
+        admin.undo(result['batch'], login=ME, via='app')
+    assert house.configs['scene']['dinner']['entities']['light.dining_pendant']['brightness'] == 200
+
+
+def test_a_scene_written_by_hand_is_run_but_not_changed(house):
+    house.states['scene.old'] = {'entity_id': 'scene.old', 'state': 'unknown', 'attributes': {'friendly_name': 'Old scene'}}
+    with pytest.raises(admin.Refused, match='Old scene was written by hand'):
+        plan('scene', do='save', name='old scene', set=[{'thing': 'pendant', 'level': 10}])
+
+
+# ---- automations and scripts ----
+
+EVENING = {'alias': 'Hall light in the evening', 'description': 'The hallway light comes on at 6:45 pm.', 'mode': 'single',
+           'triggers': [{'trigger': 'time', 'at': '18:45:00'}], 'conditions': [],
+           'actions': [{'action': 'light.turn_on', 'target': {'entity_id': 'light.hall_ceiling'}, 'data': {'brightness_pct': 30}}]}
+
+
+def test_an_automation_is_made_read_back_changed_and_undone(house):
+    result = do('routine', kind='automation', do='save', name='Hall light in the evening', config=EVENING)
+    assert result['done'] == ['Automation “Hall light in the evening” made: at 6:45 pm, Ceiling (Hallway) at 30%']
+    (key, kept), = [(k, v) for k, v in house.configs['automation'].items() if v['alias'] == EVENING['alias']]
+    assert kept == {'id': key, **EVENING}
+    assert admin.detail('hall light in the evening')['config']['triggers'] == EVENING['triggers']
+    later = {**EVENING, 'triggers': [{'trigger': 'sun', 'event': 'sunset', 'offset': '-00:30:00'}]}
+    changed = do('routine', kind='automation', do='save', name='hall light in the evening', config=later)
+    assert changed['done'] == ['Automation “Hall light in the evening” changed: 30 minutes before sunset, Ceiling (Hallway) at 30%']
+    admin.undo(changed['batch'], login=ME, via='app')
+    assert house.configs['automation'][key]['triggers'] == EVENING['triggers']
+    admin.undo(result['batch'], login=ME, via='app')
+    assert key not in house.configs['automation'] and 'automation.hall_light_in_the_evening' not in house.states
+
+
+def test_home_assistants_own_check_decides_whether_a_routine_can_be_read(house):
+    with pytest.raises(admin.Refused, match=r"can’t read its triggers: extra keys not allowed @ data\[0\]\['nonsense'\]"):
+        plan('routine', kind='automation', do='save', name='Odd', config={**EVENING, 'triggers': [{'trigger': 'time', 'nonsense': 1}]})
+    with pytest.raises(admin.Refused, match='needs triggers and actions'):
+        plan('routine', kind='automation', do='save', name='Odd', config={'alias': 'Odd', 'actions': EVENING['actions']})
+    assert house.setup == []
+
+
+def test_a_routine_may_name_devices_and_rooms_as_the_house_does(house):
+    named = {**EVENING, 'alias': 'Lights when we come in', 'triggers': [{'trigger': 'state', 'entity_id': 'front door lock', 'to': 'unlocked'}],
+             'actions': [{'action': 'light.turn_on', 'target': {'entity_id': ['hallway ceiling', 'light.entry_ceiling'], 'area_id': 'Living room'}},
+                         {'action': 'scene.turn_on', 'target': {'entity_id': 'Dinner'}}, {'scene': 'movie night'}]}
+    do('routine', kind='automation', do='save', name='Lights when we come in', config=named)
+    (kept,) = [c for c in house.configs['automation'].values() if c['alias'] == 'Lights when we come in']
+    assert kept['triggers'][0]['entity_id'] == 'lock.front_door'
+    assert kept['actions'][0]['target'] == {'entity_id': ['light.hall_ceiling', 'light.entry_ceiling'], 'area_id': 'living'}
+    assert kept['actions'][1]['target'] == {'entity_id': 'scene.dinner'} and kept['actions'][2] == {'scene': 'scene.movie_night'}
+    with pytest.raises(admin.Refused, match=r'Which one\? Ceiling \(Entry\)'):
+        plan('routine', kind='automation', do='save', name='Odd', config={**EVENING, 'actions': [
+            {'action': 'light.turn_on', 'target': {'entity_id': 'ceiling'}}]})
+    with pytest.raises(admin.Refused, match='no room called “Attic”'):
+        plan('routine', kind='automation', do='save', name='Odd', config={**EVENING, 'actions': [
+            {'action': 'light.turn_off', 'target': {'area_id': 'Attic'}}]})
+
+
+def test_a_routine_must_name_devices_that_exist(house):
+    guessed = {**EVENING, 'actions': [{'action': 'light.turn_on', 'target': {'entity_id': ['light.hallway_light', 'light.hall_ceiling']}}]}
+    with pytest.raises(admin.Refused, match='There is no light.hallway_light in Home Assistant. Look it up with find'):
+        plan('routine', kind='automation', do='save', name='Hall light in the evening', config=guessed)
+    watching = {**EVENING, 'triggers': [{'trigger': 'state', 'entity_id': 'binary_sensor.no_such_door', 'to': 'on'}]}
+    with pytest.raises(admin.Refused, match='no binary_sensor.no_such_door'):
+        plan('routine', kind='automation', do='save', name='Hall light in the evening', config=watching)
+    assert house.setup == []
+
+
+def test_a_routine_may_only_call_what_the_setup_door_lets_through(house):
+    for action in ('shell_command.tidy', 'homeassistant.stop', 'hassio.addon_stop', 'notify.notify', '{{ states("input_text.what") }}'):
+        with pytest.raises(admin.Refused, match='Nothing was saved'):
+            plan('routine', kind='automation', do='save', name='Odd', config={**EVENING, 'actions': [{'action': action}]})
+    house.configs['automation']['a-porch']['actions'].append({'action': 'shell_command.tidy'})      # the owner's own, made in Home Assistant
+    kept = {**house.configs['automation']['a-porch'], 'description': 'On at sunset, then tidy.'}
+    assert do('routine', kind='automation', do='save', name='Porch at sunset', config=kept)['done']    # is left in when the rest is changed
+
+
+def test_a_routine_that_unlocks_or_opens_waits_for_a_tap(house):
+    unlocks = {**EVENING, 'alias': 'Let us in', 'actions': [{'action': 'lock.unlock', 'target': {'entity_id': 'lock.front_door'}}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='Let us in', config=unlocks)) == 'security'
+    garage = {**EVENING, 'alias': 'Air the garage', 'actions': [{'action': 'cover.open_cover', 'target': {'entity_id': 'cover.garage_door'}}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='Air the garage', config=garage)) == 'security'
+    blind = {**EVENING, 'alias': 'Morning blind', 'actions': [{'action': 'cover.open_cover', 'target': {'entity_id': 'cover.office_blind'}}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='Morning blind', config=blind)) is None
+    locks = {**EVENING, 'alias': 'Lock up', 'actions': [{'action': 'lock.lock', 'target': {'entity_id': 'lock.front_door'}}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='Lock up', config=locks)) is None
+    watches = {**EVENING, 'alias': 'Hall light when unlocked', 'triggers': [{'trigger': 'state', 'entity_id': 'lock.front_door', 'to': 'unlocked'}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='Hall light when unlocked', config=watches)) is None
+
+
+def test_an_automation_is_switched_off_and_on_run_and_removed(house):
+    off = do('routine', kind='automation', do='off', name='porch at sunset')
+    assert off['done'] == ['Automation “Porch at sunset” switched off'] and house.states['automation.porch_at_sunset']['state'] == 'off'
+    with pytest.raises(admin.Already):
+        plan('routine', kind='automation', do='off', name='porch at sunset')
+    admin.undo(off['batch'], login=ME, via='app')
+    assert house.states['automation.porch_at_sunset']['state'] == 'on'
+    ran = do('routine', kind='automation', do='run', name='Porch at sunset')
+    assert ran['done'] == ['Automation “Porch at sunset” run'] and not ran['undo']
+    assert house.sent[-1] == ('automation/trigger', {'entity_id': 'automation.porch_at_sunset', 'skip_condition': True})
+    removal = plan('routine', kind='automation', do='remove', name='Porch at sunset')
+    assert admin.asks(removal) == 'delete'
+    gone = admin.carry_out(removal, login=ME, via='app')
+    assert 'a-porch' not in house.configs['automation']
+    admin.undo(gone['batch'], login=ME, via='app')
+    assert house.configs['automation']['a-porch']['alias'] == 'Porch at sunset'
+
+
+def test_a_script_is_made_run_and_renamed(house):
+    made = do('routine', kind='script', do='save', name='Movie time', config={
+        'sequence': [{'action': 'scene.turn_on', 'target': {'entity_id': 'scene.movie_night'}}], 'mode': 'single'})
+    assert made['done'] == ['Script “Movie time” made: Movie night on']
+    assert house.configs['script']['movie_time']['alias'] == 'Movie time'
+    assert do('routine', kind='script', do='run', name='movie time')['done'] == ['Script “Movie time” run']
+    assert house.sent[-1] == ('script/turn_on', {'entity_id': 'script.movie_time'})
+    assert do('arrange', things=['movie time'], name='Film time')['done'] == ['Script Movie time renamed Film time']
+    assert house.configs['script']['movie_time']['alias'] == 'Film time'
+    with pytest.raises(admin.Refused, match='no on or off'):
+        plan('routine', kind='script', do='off', name='goodnight')
+
+
+# ---- devices beyond lights and speakers ----
+
+def test_the_thermostat_is_set_and_put_back(house):
+    result = do('act', action='climate.set_temperature', things=['thermostat'], data={'temperature': 70})
+    assert result['done'] == ['Thermostat set to 70°'] and house.states['climate.hallway']['attributes']['temperature'] == 70
+    admin.undo(result['batch'], login=ME, via='app')
+    assert house.states['climate.hallway']['attributes']['temperature'] == 68 and house.states['climate.hallway']['state'] == 'heat'
+    off = do('act', action='climate.set_hvac_mode', things=['thermostat'], data={'hvac_mode': 'off'})
+    assert off['done'] == ['Thermostat set to off']
+    admin.undo(off['batch'], login=ME, via='app')
+    assert house.states['climate.hallway']['state'] == 'heat'
+
+
+def test_locking_happens_at_once_and_unlocking_waits_for_a_tap(house):
+    house.states['lock.front_door']['state'] = 'unlocked'
+    locked = do('act', action='lock.lock', things=['front door lock'])
+    assert locked['done'] == ['Front door lock locked'] and house.states['lock.front_door']['state'] == 'locked'
+    with pytest.raises(admin.Already, match='Front door lock is already locked.'):
+        plan('act', action='lock.lock', things=['front door lock'])
+    unlocking = plan('act', action='lock.unlock', things=['front door lock'])
+    assert admin.asks(unlocking) == 'unlock' and house.states['lock.front_door']['state'] == 'locked'
+    assert admin.asks(plan('act', action='cover.open_cover', things=['garage door'])) == 'unlock'
+    assert admin.asks(plan('act', action='cover.close_cover', things=['blind'])) is None
+    assert admin.asks(plan('act', action='homeassistant.restart')) == 'restart'
+    with pytest.raises(admin.Refused, match='own action'):
+        plan('act', action='homeassistant.turn_on', things=['front door lock'])
+
+
+def test_a_fan_a_blind_and_a_plug_are_worked_and_put_back(house):
+    fan = do('act', action='fan.set_percentage', things=['bedroom fan'], data={'percentage': 40})
+    assert fan['done'] == ['Ceiling fan (Bedroom) at 40%'] and house.states['fan.bedroom_fan']['state'] == 'on'
+    admin.undo(fan['batch'], login=ME, via='app')
+    assert house.states['fan.bedroom_fan']['state'] == 'off'
+    blind = do('act', action='cover.set_cover_position', things=['blind'], data={'position': 20})
+    assert blind['done'] == ['Blind at 20%']
+    admin.undo(blind['batch'], login=ME, via='app')
+    assert house.states['cover.office_blind']['attributes']['current_position'] == 100
+    plug = do('act', action='switch.turn_on', things=['coffee maker'])
+    assert plug['done'] == ['Coffee maker on']
+    admin.undo(plug['batch'], login=ME, via='app')
+    assert house.states['switch.coffee_maker']['state'] == 'off'
+
+
+def test_what_the_setup_door_keeps_shut_is_refused_before_anything_is_looked_up(house):
+    for action in ('shell_command.tidy', 'hassio.host_reboot', 'homeassistant.stop', 'update.install', 'media_player.play_media', 'nonsense'):
+        with pytest.raises(admin.Refused, match='can be done in Home Assistant'):
+            plan('act', action=action, things=['thermostat'])
+    assert house.sent == []
+
+
+# ---- helpers and the house's own settings ----
+
+def test_a_helper_is_added_changed_and_removed(house):
+    made = do('helper', do='add', kind='input_boolean', name='Guests staying')
+    assert made['done'] == ['Helper “Guests staying” added (switch)'] and 'input_boolean.guests_staying' in house.states
+    number = do('helper', do='add', kind='input_number', name='Wake light', fields={'min': 0, 'max': 100, 'step': 5})
+    changed = do('helper', do='change', kind='input_number', name='wake light', fields={'max': 50})
+    assert changed['done'] == ['Helper “Wake light” changed: max']
+    admin.undo(changed['batch'], login=ME, via='app')
+    assert house.helpers['input_number'][0]['max'] == 100
+    with pytest.raises(admin.Refused, match='input_number takes only'):
+        plan('helper', do='change', kind='input_number', name='wake light', fields={'colour': 'red'})
+    removal = plan('helper', do='remove', kind='input_boolean', name='Guests staying')
+    assert admin.asks(removal) == 'delete'
+    admin.undo(number['batch'], login=ME, via='app')
+    assert house.helpers['input_number'] == []
+
+
+def test_the_houses_own_settings_wait_for_a_tap(house):
+    changes = plan('house', fields={'time_zone': 'America/New_York', 'unit_system': 'metric'})
+    assert admin.asks(changes) == 'house' and changes[0]['words'] == 'The house’s time zone set to America/New_York and units set to metric'
+    done = admin.carry_out(changes, login=ME, via='app')
+    assert house.core['time_zone'] == 'America/New_York' and house.core['unit_system']['temperature'] == '°C'
+    admin.undo(done['batch'], login=ME, via='app')
+    assert house.core['time_zone'] == 'America/Los_Angeles' and house.core['unit_system']['temperature'] == '°F'
+    with pytest.raises(admin.Refused):
+        plan('house', fields={'latitude': '1'})
+
+
+# ---- waiting for a tap, the record, and when things go wrong ----
+
+def test_a_card_waits_and_the_tap_plans_again_from_the_house_as_it_is(house):
+    args = {'kind': 'room', 'do': 'remove', 'name': 'Dining'}
+    card = admin.wait('Remove the room Dining?', plan('place', **args), 'place', args, login=ME)
+    assert card == {'kind': 'confirm', 'id': card['id'], 'title': 'Remove the room Dining?', 'do': 'Remove',
+                    'lines': ['Room “Dining” removed; its 2 things are in no room'], 'why': admin.WHY['delete']}
+    assert house.setup == [] and admin.waiting(card['id'])['status'] == 'waiting'
+    result = admin.confirm(card['id'], login=ME)
+    assert result['done'] == ['Room “Dining” removed; its 2 things are in no room'] and admin.waiting(card['id'])['status'] == 'done'
+    assert admin.waiting(card['id'])['batch'] == result['batch']
+    with pytest.raises(admin.Refused, match='already done'):
+        admin.confirm(card['id'], login=ME)
+
+
+def test_a_card_is_not_carried_out_if_the_house_changed_under_it_or_it_waited_too_long(house):
+    args = {'kind': 'room', 'do': 'remove', 'name': 'Dining'}
+    card = admin.wait('Remove the room Dining?', plan('place', **args), 'place', args, login=ME)
+    do('arrange', things=['reading lamp'], room='dining')              # now three things would be left without a room
+    with pytest.raises(admin.Refused, match='changed since that card was made'):
+        admin.confirm(card['id'], login=ME)
+    assert 'dining' in [a['area_id'] for a in house.areas]
+    old = admin.wait('Remove the room Dining?', plan('place', **args), 'place', args, login=ME)
+    with admin._db() as conn:
+        conn.execute('update house_setup_waiting set ts = ? where id = ?', (time.time() - admin.WAIT_SECONDS - 5, old['id']))
+    with pytest.raises(admin.Refused, match='waited more than an hour'):
+        admin.confirm(old['id'], login=ME)
+    newer = admin.wait('Remove the room Dining?', plan('place', **args), 'place', args, login=ME)
+    again = admin.wait('Remove the room Entry?', plan('place', kind='room', do='remove', name='Entry'), 'place',
+                       {'kind': 'room', 'do': 'remove', 'name': 'Entry'}, login=ME)
+    assert admin.waiting(newer['id'])['status'] == 'replaced' and admin.waiting(again['id'])['status'] == 'waiting'
+
+
+def test_more_than_ten_things_in_one_request_wait_for_a_tap(house):
+    assert admin.asks(plan('arrange', things=['kitchen lights', 'living room lights', 'dining lights'], room='office')) is None
+    wide = plan('arrange', things=['light.kitchen_ceiling', 'light.kitchen_pendants', 'light.kitchen_cabinets', 'light.living_reading',
+                                   'light.living_shelves', 'light.dining_pendant', 'light.dining_sideboard', 'light.entry_ceiling',
+                                   'light.bedroom_left', 'light.bedroom_right', 'light.robin_night'], room='office')
+    assert len(wide) == 11 and admin.asks(wide) == 'many'
+
+
+def test_when_home_assistant_says_no_nothing_is_recorded_as_done(house):
+    house.refuse = 'config/entity_registry/update'
+    result = admin.carry_out(plan('arrange', things=['reading lamp'], room='bedroom'), login=ME, via='ask')
+    assert result['done'] == [] and result['not_sent'] == ['Reading lamp moved from Living room to Bedroom'] and result['why'] == 'invalid_format'
+    assert not result['undo'] and rooms_of('light.living_reading') == ['Living room']
+    house.refuse, house.down = None, True
+    with pytest.raises(broker.HomeDown):
+        plan('arrange', things=['reading lamp'], room='bedroom')
+
+
+def test_the_record_lists_each_request_newest_first_with_who_asked(house):
+    do('arrange', things=['reading lamp'], room='bedroom')
+    second = do('act', action='climate.set_temperature', things=['thermostat'], data={'temperature': 66})
+    admin.undo(second['batch'], login=ME, via='app')
+    rows = admin.recent()
+    assert [(r['via'], r['done'], r['undo'], r['undone']) for r in rows] == [
+        ('undo', ['Thermostat put back'], False, False), ('ask', ['Thermostat set to 66°'], False, True),
+        ('ask', ['Reading lamp moved from Living room to Bedroom'], True, False)]
+    assert rows[1]['kinds'] == ['climate'] and rows[2]['kinds'] == ['place'] and all(r['batch'].startswith('s') for r in rows)
+
+
+def test_setup_changes_count_against_the_same_limit_as_other_changes(house):
+    for n in range(control.PER_MINUTE):
+        control._spend(1)
+    with pytest.raises(admin.Refused, match='changes in the last minute'):
+        admin.carry_out(plan('arrange', things=['reading lamp'], room='bedroom'), login=ME, via='ask')
+    assert house.setup == []

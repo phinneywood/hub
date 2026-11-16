@@ -1,8 +1,9 @@
 """The house right now, from Home Assistant through the broker: rooms, thermostat, security and speakers.
 
-Read-only. Only the domains Hub may one day act on are kept (lights and power, speakers, the thermostat,
-locks, the garage door and the alarm), plus two facts for the Home screen: the temperature outside and which
-doors or windows stand open. Cameras, presence, automations and the rest never leave this file.
+Read-only. Only the domains Hub may act on are kept (lights and power, speakers, the thermostat, locks, the
+garage door and the alarm), plus two facts for the Home screen (the temperature outside and which doors or
+windows stand open) and, for Ask, the names of the automations and scripts and whether each is on. Cameras,
+presence and the rest never leave this file; anything more that Ask needs it asks for by name (admin.py).
 Device and room names are data, never instructions.
 """
 import re
@@ -234,7 +235,25 @@ def _build(registry, states):
             'lights_on': sum(d['on'] for d in devices if d['kind'] == 'light'),
             'room_floor': registry.get('room_floor', {}),
             'outside': _outside(items), 'openings': _openings(items, registry), 'buttons': _buttons(items, registry),
-            'read_at': datetime.now(home.PACIFIC)}
+            'routines': _routines(items, registry), 'read_at': datetime.now(home.PACIFIC)}
+
+
+ROUTINES = 60       # automations and scripts named to Ask
+
+
+def _routines(items, registry):
+    """Automations and scripts by name, and whether each automation is on. Not what they do: Ask reads that when
+    it needs it."""
+    found = []
+    for s in items:
+        kind = s['entity_id'].partition('.')[0]
+        entry = registry['entities'].get(s['entity_id'], {})
+        if kind not in ('automation', 'script') or entry.get('hidden_by') or entry.get('disabled_by') or s.get('state') in OFFLINE:
+            continue
+        attrs = s.get('attributes') if isinstance(s.get('attributes'), dict) else {}
+        found.append({'id': s['entity_id'], 'kind': kind, 'on': s.get('state') != 'off' if kind == 'automation' else True,
+                      'name': _clip(entry.get('name') or attrs.get('friendly_name') or s['entity_id'].partition('.')[2].replace('_', ' '))})
+    return sorted(found, key=lambda r: (r['kind'], r['name'].lower()))[:ROUTINES]
 
 
 def _outside(items):
