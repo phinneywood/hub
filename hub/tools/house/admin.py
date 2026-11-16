@@ -199,7 +199,7 @@ def _kind_said(thing):
 
 def which(things, w):
     """The refusal when a name fits several things: their names with their rooms, for the model to ask with. Two
-    that would read the same (a fan and its own light, both "Bedroom fan") are told apart by what they are."""
+    that would read the same (a fan and its own light, both "Guest fan") are told apart by what they are."""
     listed = [f'{t["name"]} ({room_name(t["area"], w)})' if t['area'] else t['name'] for t in things[:8]]
     listed = [f'{name}, the {_kind_said(t)}' if listed.count(name) > 1 else name for name, t in zip(listed, things)]
     return Refused('Which one? ' + ', '.join(listed) + ('…' if len(things) > 8 else ''))

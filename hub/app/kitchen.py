@@ -176,7 +176,9 @@ def tap(do, body, login):
         found = _ask('POST', f'/items/{int(body.get("id"))}/pick', {
             'login': login, 'product': product, 'size': _clip(body.get('size'), 60), 'price': _clip(body.get('price'), 12),
             'url': body['url'] if str(body.get('url') or '').startswith(SHOP) else ''})
-        return 'Picked. Hub will choose it next time too', {'item': _item(found['item'])}
+        # A pick made because the shop was out of their product is for this order; their own stays their own.
+        said = 'Picked. Hub will choose it next time too' if found.get('kept', True) else 'Picked for this order. Your usual stays your usual'
+        return said, {'item': _item(found['item'])}
     if do == 'qty':
         number = body.get('qty')
         if not isinstance(number, int) or isinstance(number, bool) or not 1 <= number <= MOST_OF_ONE:

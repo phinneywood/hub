@@ -136,7 +136,10 @@ function why(of: { why: string; times: number; last: string }, offered = false):
 /** Why a thing waits for a person, from what there is to choose between. */
 function pickWhy(item: Item): string {
   const kinds = new Set(item.options.map((o) => o.why));
-  if (item.state === "unavailable") return `The shop doesn’t have ${item.product} right now. Pick another, or take it off the list.`;
+  if (item.state === "unavailable") {
+    return `The shop doesn’t have ${item.product} right now. ` + (item.options.length ? "Pick another for this order, or take it off the list."
+      : "Hub is looking for others like it. You can also take it off the list.");
+  }
   if (!item.options.length) return "Hub hasn’t bought this before, and is looking in the shop. Choices will show here.";
   if (kinds.has("history") || kinds.has("usual")) return "You buy more than one thing this could be. Pick one, and Hub will know next time.";
   if (kinds.has("once")) return "You have bought this once. Pick it, or another, and Hub will know next time.";
@@ -279,7 +282,8 @@ export function ItemSheet({ item }: { item: Item }) {
       {item.product && <HowMany item={item} />}
       {can && item.options.length > 0 && <h2>{item.product ? "Or one of these" : "Pick one"}</h2>}
       {can && item.options.map((o) => <OptionRow option={o} busy={busy} onPick={() => void pick(o)} key={o.product} />)}
-      {can && item.options.length > 0 && <p class="quiet-line">Hub will choose your pick next time too.</p>}
+      {can && item.options.length > 0 && <p class="quiet-line">{item.state === "unavailable"
+        ? "A pick here is for this order. Your usual stays your usual." : "Hub will choose your pick next time too."}</p>}
       {item.state === "cart" && <p class="quiet-line">To change the product, take it out and add it again.</p>}
       {item.state === "unknown" && <p class="quiet-line">Hub couldn’t confirm this went in. Read the cart, under The cart, and Hub will know.</p>}
       <div class="btns">
@@ -600,7 +604,8 @@ function Settings({ now }: { now: Shop }) {
           <Switch on={r.wanted || r.state === "on"} label="Read the Groceries reminders list" onChange={(on) => void act("reminders", { on })} />
         </div>
       </div>
-      <p class="quiet-line">{now.history.orders ? `Hub picks from ${now.history.orders} past orders, the newest from ${day(now.history.newest)}.` : "Hub has no past orders to pick from yet."}{" "}
+      <p class="quiet-line">{now.history.orders ? `Hub picks from ${now.history.orders} past orders, the newest from ${day(now.history.newest)}.` : "Hub has no past orders to pick from yet."}
+        {now.history.orders > 0 && now.history.stale ? " Orders since then haven’t been read yet." : ""}{" "}
         <button type="button" class="linkish" onClick={() => void learn()}>Update from orders</button></p>
       <p class="quiet-line"><a href="/kitchen">Notifications and the older page</a></p>
     </section>

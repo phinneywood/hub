@@ -119,6 +119,16 @@ def test_how_many_is_a_tap_and_a_number_written_counts_single_things(kitchen):
     assert client.post('/app/api/kitchen/qty', json={'id': avocados['id'], 'qty': 2}, headers=ON_THIS_MAC).status_code in (401, 403)
 
 
+def test_a_pick_made_because_the_shop_was_out_is_for_this_order(kitchen):
+    eggs = by_name()['eggs']
+    next(i for i in kitchen.items if i['id'] == eggs['id']).update(state='unavailable', options=[
+        {'product': 'Hilltop Brown Eggs', 'size': '12 ct', 'why': 'shop', 'times': 0, 'last': '', 'price': '4.59', 'qty': 1, 'note': ''}])
+    picked = tap('pick', id=eggs['id'], product='Hilltop Brown Eggs', size='12 ct').json()
+    assert (picked['said'], picked['item']['state']) == ('Picked for this order. Your usual stays your usual', 'ready')
+    soap = by_name()['dish soap']
+    assert tap('pick', id=soap['id'], product='Clear Springs Lemon Dish Soap').json()['said'] == 'Picked. Hub will choose it next time too'
+
+
 def test_every_tap_needs_a_signed_in_device(kitchen):
     for do, body in (('add', {'text': 'eggs'}), ('fill', {}), ('auto', {'on': True}), ('remove', {'id': 1}), ('order', {})):
         assert client.post(f'/app/api/kitchen/{do}', json=body, headers=ON_THIS_MAC).status_code == 403

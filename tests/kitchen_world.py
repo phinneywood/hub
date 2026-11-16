@@ -231,6 +231,7 @@ class Kitchen:
             item = next((i for i in self.items if i['id'] == int(found.group(1))), None)
             if item is None or (found.group(2) == 'pick' and item['state'] not in ('pick', 'ready', 'unavailable', 'unknown')):
                 return 409, {'error': 'That item isn’t waiting on the list any more.'}
+            once = item['state'] == 'unavailable'
             if found.group(2) == 'qty':
                 if item['qty'] != body['qty']:
                     item.update(qty=body['qty'], asked=None, state='ready' if item['state'] == 'cart' else item['state'])
@@ -249,7 +250,7 @@ class Kitchen:
             else:
                 self.items.remove(item)
                 item = dict(item, state='gone', how='removed')
-            return 200, {'item': copy.deepcopy(item)}
+            return 200, {'item': copy.deepcopy(item), **({'kept': not once} if found.group(2) == 'pick' else {})}
         if path == '/cart/fill':
             return 200, {'ok': True, 'changes': self._fill()}
         if path == '/cart/read':
