@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from hub import bridge, config, store
 from hub.app import archive
 from hub.main import app
-from tests import archive_standin, archive_world
+from tests import archive_standin
 
 client = TestClient(app)
 OWNER = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
@@ -18,16 +18,11 @@ TODAY = dt.date(2026, 11, 16)
 
 
 @pytest.fixture
-def served(monkeypatch):
+def served(monkeypatch, tmp_path):
     monkeypatch.setattr(config, 'ALLOWED_LOGINS', {'me@example.com', 'sam@example.com'})
-    server, path = archive_standin.start()
-    archive_world.allow(path, monkeypatch)
-    monkeypatch.setenv('HUB_ARCHIVE_SOCKET', str(path))
     monkeypatch.setattr(archive, '_tailscale_login', lambda: 'me@example.com')
     archive._owner.update(at=float('-inf'), login=None)
-    yield server
-    server.shutdown()
-    server.server_close()
+    return archive_standin.install(monkeypatch, tmp_path)
 
 
 class Bridge:

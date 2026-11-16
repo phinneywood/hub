@@ -1,19 +1,17 @@
 """A stand-in for the archive program's service (deploy/archive/serve.py), for Hub's tests: the same routes and
-answers, over a real Unix socket, from a few made-up items held in memory. Hub's own client and every check on
-its side are the real ones; the archive's real search is tested on its own (tests/test_archive_*.py), and
-tests/test_app_archive.py checks the two answer alike.
+answers, from a few made-up items held in memory, given to Hub's own client in this process (no socket: the
+installed-package check allows none). Everything on Hub's side is the real code; the archive's real search and
+service are tested on their own (tests/test_archive_*.py), and tests/test_app_archive.py checks the two answer
+alike.
 
 Everyone and everything here is invented (Alex and Sam, as in tests/archive_world.py).
 """
-import http.server
-import json
 import re
-import socketserver
-import tempfile
-import threading
 import time
 import urllib.parse
 from pathlib import Path
+
+import httpx
 
 from tests.archive_world import INVOICE, pdf, swatch
 
@@ -154,70 +152,65 @@ def item(ident, q=()):
     return None
 
 
-class Handler(http.server.BaseHTTPRequestHandler):
-    protocol_version = 'HTTP/1.1'
-
-    def address_string(self):
-        return 'hub'
-
-    def log_message(self, *args):
-        return
-
-    def _send(self, status, body, kind='application/json', headers=None):
-        data = json.dumps(body).encode() if kind == 'application/json' else body
-        self.send_response(status)
-        self.send_header('Content-Type', kind)
-        self.send_header('Content-Length', str(len(data)))
-        for name, value in (headers or {}).items():
-            self.send_header(name, value)
-        self.end_headers()
-        self.wfile.write(data)
-
-    def do_GET(self):  # noqa: N802
-        url = urllib.parse.urlsplit(self.path)
-        query = urllib.parse.parse_qs(url.query)
-        parts = [urllib.parse.unquote(p) for p in url.path.strip('/').split('/') if p]
-        self.server.asked.append((url.path, query))
-        route = parts[0] if parts else ''
-        known = {i['id']: i for i in PHOTOS + DOCUMENTS + CHATS}
-        if route == 'health':
-            return self._send(200, {'ok': True, 'ready': True})
-        if route == 'search':
-            return self._send(200, search(query))
-        if route == 'item' and item(parts[1]):
-            return self._send(200, item(parts[1], query.get('q', [])))
-        if route == 'people':
-            return self._send(200, {'people': PEOPLE})
-        if route == 'onthisday':
-            return self._send(200, {'day': '11-16', 'years': [
-                {'year': 2023, 'count': 1, 'items': [{k: PHOTOS[10][k] for k in PUBLIC if k in PHOTOS[10]} | {'people': ['Alex', 'Sam']}]}]})
-        if route == 'status':
-            return self._send(200, {'counts': {'photos': {'items': len(PHOTOS), 'kinds': {'photo': 10, 'video': 1}, 'previews': 11,
-                                                          'first': '2022-11-16', 'last': '2025-10-03'},
-                                               'documents': {'items': 3, 'kinds': {'pdf': 2, 'text': 1}, 'previews': 3, 'in_icloud': 0,
-                                                             'first': '2025-10-03', 'last': '2026-04-20'},
-                                               'chats': {'items': 2, 'kinds': {'chat': 2}, 'previews': 0, 'first': '2026-03-02',
-                                                         'last': '2026-03-03'}},
-                                    'runs': {s: {'ok': 1763280000.0, 'items': 1, 'seconds': 1.0, 'errors': {}} for s in ('photos', 'documents', 'chats')},
-                                    'people': 2, 'kids': 1, 'bytes': 4096})
-        if route in ('thumb', 'photo') and len(parts) == 2 and parts[1] in known and (route == 'thumb' or parts[1][0] == 'p'):
-            return self._send(200, swatch(len(parts[1]) / 9), 'image/png', {'X-Width': '64', 'X-Height': '48'})
-        if route == 'page' and len(parts) == 3 and parts[1] in known and parts[1][0] == 'd' and parts[2] == '1':
-            return self._send(200, swatch(.4), 'image/png')
-        if route == 'file' and len(parts) == 2 and parts[1] == DOCUMENTS[0]['id']:
-            return self._send(200, pdf(INVOICE), 'application/pdf',
-                              {'Content-Disposition': "attachment; filename*=UTF-8''Furnace%20service%20invoice.pdf"})
-        return self._send(404, {'error': 'Not in the archive.'})
+def respond(path, query):
+    """(status, content type, body, headers) for one request, as the archive's service would answer it."""
+    parts = [urllib.parse.unquote(p) for p in path.strip('/').split('/') if p]
+    route = parts[0] if parts else ''
+    known = {i['id']: i for i in PHOTOS + DOCUMENTS + CHATS}
+    if route == 'health':
+        return 200, 'application/json', {'ok': True, 'ready': True}, {}
+    if route == 'search':
+        return 200, 'application/json', search(query), {}
+    if route == 'item' and len(parts) == 2 and item(parts[1]):
+        return 200, 'application/json', item(parts[1], query.get('q', [])), {}
+    if route == 'people':
+        return 200, 'application/json', {'people': PEOPLE}, {}
+    if route == 'onthisday':
+        return 200, 'application/json', {'day': '11-16', 'years': [
+            {'year': 2023, 'count': 1, 'items': [{k: PHOTOS[10][k] for k in PUBLIC if k in PHOTOS[10]} | {'people': ['Alex', 'Sam']}]}]}, {}
+    if route == 'status':
+        return 200, 'application/json', {
+            'counts': {'photos': {'items': len(PHOTOS), 'kinds': {'photo': 10, 'video': 1}, 'previews': 11, 'first': '2022-11-16',
+                                  'last': '2025-10-03'},
+                       'documents': {'items': 3, 'kinds': {'pdf': 2, 'text': 1}, 'previews': 3, 'in_icloud': 0, 'first': '2025-10-03',
+                                     'last': '2026-04-20'},
+                       'chats': {'items': 2, 'kinds': {'chat': 2}, 'previews': 0, 'first': '2026-03-02', 'last': '2026-03-03'}},
+            'runs': {s: {'ok': 1763280000.0, 'items': 1, 'seconds': 1.0, 'errors': {}} for s in ('photos', 'documents', 'chats')},
+            'people': 2, 'kids': 1, 'bytes': 4096}, {}
+    if route in ('thumb', 'photo') and len(parts) == 2 and parts[1] in known and (route == 'thumb' or parts[1][0] == 'p'):
+        return 200, 'image/png', swatch(len(parts[1]) / 9), {'X-Width': '64', 'X-Height': '48'}
+    if route == 'page' and len(parts) == 3 and parts[1] in known and parts[1][0] == 'd' and parts[2] == '1':
+        return 200, 'image/png', swatch(.4), {}
+    if route == 'file' and len(parts) == 2 and parts[1] == DOCUMENTS[0]['id']:
+        return 200, 'application/pdf', pdf(INVOICE), {'Content-Disposition': "attachment; filename*=UTF-8''Furnace%20service%20invoice.pdf"}
+    return 404, 'application/json', {'error': 'Not in the archive.'}, {}
 
 
-class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
-    daemon_threads = True
+class StandIn:
+    """The stand-in, answering Hub's own client in this process, with no socket (the installed-package check allows
+    none). `asked` lists every request: (path, query)."""
+
+    def __init__(self):
+        self.asked = []
+
+    def handle(self, request):
+        query = urllib.parse.parse_qs(request.url.query.decode() if isinstance(request.url.query, bytes) else request.url.query)
+        self.asked.append((request.url.path, query))
+        if request.method != 'GET':
+            return httpx.Response(405, json={'error': 'The archive only answers questions.'})
+        status, kind, body, headers = respond(request.url.path, query)
+        if kind == 'application/json':
+            return httpx.Response(status, json=body, headers=headers)
+        return httpx.Response(status, content=body, headers={'content-type': kind, **headers})
 
 
-def start():
-    """The stand-in, answering on a fresh socket. Returns (server, socket path); `server.asked` lists every request."""
-    path = Path(tempfile.mkdtemp(prefix='arc-', dir='/tmp')) / 's.sock'
-    server = Server(str(path), Handler)
-    server.asked = []
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    return server, path
+def install(monkeypatch, folder):
+    """Hub's archive client, answered by the stand-in. Returns it."""
+    from hub.app import archive
+    stand_in = StandIn()
+    marker = Path(folder) / 'archive.sock'
+    marker.touch()                                   # Hub looks for the socket before it asks
+    monkeypatch.setenv('HUB_ARCHIVE_SOCKET', str(marker))
+    monkeypatch.setattr(archive, '_client', lambda timeout: httpx.Client(transport=httpx.MockTransport(stand_in.handle),
+                                                                          base_url='http://archive', timeout=timeout))
+    return stand_in

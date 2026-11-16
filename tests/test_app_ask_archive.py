@@ -9,7 +9,7 @@ import pytest
 
 from hub import bridge, config, store
 from hub.app import archive
-from tests import archive_standin, archive_world
+from tests import archive_standin
 from tests.ask_script import SEEN
 from tests.test_app_archive import Bridge
 from tests.test_app_ask import ask, house, world  # noqa: F401 - the fixtures
@@ -18,18 +18,13 @@ OTHER = {'origin': 'http://testserver', 'tailscale-user-login': 'sam@example.com
 
 
 @pytest.fixture
-def archived(house, monkeypatch):  # noqa: F811
+def archived(house, monkeypatch, tmp_path):  # noqa: F811
     monkeypatch.setattr(config, 'ALLOWED_LOGINS', {'me@example.com', 'sam@example.com'})
-    server, path = archive_standin.start()
-    archive_world.allow(path, monkeypatch)
-    monkeypatch.setenv('HUB_ARCHIVE_SOCKET', str(path))
     monkeypatch.setattr(archive, '_tailscale_login', lambda: 'me@example.com')
     archive._owner.update(at=float('-inf'), login=None)
-    fake = Bridge()
-    monkeypatch.setattr(bridge, 'get', fake.get)
-    yield house
-    server.shutdown()
-    server.server_close()
+    archive_standin.install(monkeypatch, tmp_path)
+    monkeypatch.setattr(bridge, 'get', Bridge().get)
+    return house
 
 
 def sent():
