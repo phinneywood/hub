@@ -9,6 +9,10 @@ phase 2 is Ask, inside the app; phase 3 is Today; phase 4 brings Mail and Kitche
 bar has Home, Today, Mail and Kitchen. A Today item that belongs to Mail or Kitchen opens that screen; others (the
 trip, the class guide) still open their older pages.
 
+Since 2026-11-15 (owner's request) Ask can change anything in Home Assistant, not only lights and music (see
+“Setting up the house”), and Kitchen is part of Ask: the shopping list and the cart are worked from Ask, and the
+Kitchen screen is the picture of the list on its way into the cart, with no second conversation (see “Kitchen”).
+
 ## The front door
 
 The app is Hub's front door: `/` sends the browser to `/app/`, and the phone's home-screen icon opens it. The
@@ -35,7 +39,9 @@ sets this in the private settings file (`household.json`):
 | `POST /app/api/scenes`, `POST /app/api/scenes/{scene}/forget` | Keep the house as it stands as a scene; forget one |
 | `POST /app/api/music/{speaker}` | Play, pause, next, previous, a volume, a room in or out |
 | `GET /app/api/picks`, `POST /app/api/play/{speaker}` | The library's playlists, and playing one where music is on, or with `"here": true` in that speaker's room only |
-| `POST /app/api/undo/{batch}` | Put a change back |
+| `POST /app/api/undo/{batch}` | Put a change back: lights and speakers, or a change to how the house is set up |
+| `GET /app/api/setup/{card}`, `POST /app/api/setup/{card}/confirm`, `.../dismiss` | A change that waits for a tap: what became of it, do it, or put it away (see “Setting up the house”) |
+| `GET /app/api/kitchen`, `POST /app/api/kitchen/{do}` | The shopping list with each thing's product and where it stands, and its taps: `add`, `remove`, `pick`, `keep`, `fill`, `read`, `order`, `auto`, `reminders` (see “Kitchen”) |
 | `GET /app/api/ask` | Whether Ask can run here, the last half hour of this person's requests, what they often ask around now, and what Hub remembers |
 | `POST /app/api/ask` | One request, `{"text": ...}`, answered as it happens (see “Ask”) |
 | `POST /app/api/memory/{note}/forget` | Forget one thing Hub remembers |
@@ -50,7 +56,7 @@ sets this in the private settings file (`household.json`):
 | `GET /app/api/mail` | Mail as data: what needs the owner, questions nobody answered, records worth a look, each kind Hub sorted |
 | `POST /app/api/mail/{do}` | A tap on Mail, `{"key": ...}`: `done`, `back`, `answered`, `fine`, `sort`, `file` (a kind) or `undo` (a filing) |
 | `GET /app/api/photos`, `GET /app/api/photos/thumb/{photo}`, `POST /app/api/photos/{do}` | A month the photo curator chose, a preview, and a mark, `{"key": photo}`: `keep`, `print`, `skip` or `clear` (see “Photos”). Signed-in devices only |
-| `/kitchen/...` | Kitchen's screen uses the same relay to the kitchen service as the older page (`hub/tools/kitchen/pages.py`) |
+| `/kitchen/...` | The older page's relay to the kitchen service (`hub/tools/kitchen/pages.py`): what its assistant said, approving a cart plan, placing an order, reading new orders |
 
 The picture is built in `hub/app/model.py` from the same reading of Home Assistant as the rest of Hub
 (`hub/tools/house/read.py`), so nothing new leaves Home Assistant for it. Two facts were added to that reading for
@@ -129,15 +135,92 @@ Say what you want, and Hub does it or answers. Code: `hub/app/ask/`. In the app:
 **One trip to the model.** A tool that did the job says so itself, in a sentence Hub writes
 (“The kitchen and the living room are at 40%.”), and the turn ends there: no second trip for the model to
 describe what happened. Only when a tool could not do it as asked (nothing matched a search, a room it
-couldn't place, something it read with `look_up`) does the model get its answer and one more try. A turn is at most four trips.
+couldn't place, something it read with `look_up`) does the model get its answer and one more try. A turn is at most six trips.
 
 **What it can do** (`tools.py`): `lights` (rooms, floors, single lights, everywhere indoors, outside; on
-restores each lamp's last brightness), `scene`, `music` (play, pause, resume, next, previous, volume, a room
-joining or leaving), `remember`, `kitchen` (passes the owner's words to Kitchen, whose answer appears under the
-request) and `look_up` (reads mail, the calendar, the class guide or today's list; read-only). Every change goes through `hub/tools/house/control.py` like a tap: the same allowlist, the same
-record and Undo, counted against Ask's 30 changes a minute. Never locks, the garage, the alarm or the
-thermostat. Ask changes nothing for a program without a login, or while the owner has Home control set to
-“Suggest only” on the Engine page.
+restores each lamp's last brightness), `scene` (by its name, or by the words that single it out), `music` (play,
+pause, resume, next, previous, volume, a room joining or leaving), `remember`, `groceries` (the shopping list and
+the cart; see “Kitchen”), `kitchen` (passes the owner's words to the kitchen assistant, whose answer appears
+under the request), `look_up` (reads mail, the calendar, the class guide or today's list; read-only), and the
+tools that change how the house is set up and work every other device (next section). Lights, scenes and music go
+through `hub/tools/house/control.py` like a tap: the same allowlist, the same record and Undo, counted against
+Ask's 30 changes a minute. Ask changes nothing for a program without a login, or while the owner has that kind
+of change set to “Suggest only” on the Engine page.
+
+### Setting up the house
+
+Owner decision, 2026-11-15: Ask may change anything in Home Assistant, such as moving a light to another room.
+Code: `hub/tools/house/admin.py` (reading, the rule for what waits, the record, Undo), `plans.py` (what each
+change is, as requests and the requests that put it back) and the setup door in `broker.py`.
+
+| Tool | What it does |
+| --- | --- |
+| `find`, `details` | Look for things by name, and read one in full: a device's state, a routine's config, a room. Read-only |
+| `arrange` | Move things to another room, rename one, hide or show them, disable or enable them, give one an icon. A lamp that is its own device takes the device with it |
+| `rooms` | Add, rename, set or remove a room, a floor, or a group of rooms (a Home Assistant label on areas, reached by name like a room) |
+| `scene_setup` | Make or change a Home Assistant scene: what it sets, rooms kept as they are now, things left out |
+| `routine` | Automations and scripts: save (the whole config, checked by Home Assistant's own `validate_config`), rename, remove, switch on or off, run |
+| `device` | Any other device by service: the thermostat, fans, blinds, locks, the garage, helpers' values, a notice to a household phone |
+| `setting` | Helpers (switches, numbers, choices, timers) and the house's own name, units and time zone |
+| `integration` | Reload an integration whose devices stopped answering, by its title or by what it is (“hue” means every one of that kind). Nothing about how it is set up changes |
+| `dashboard` | Home Assistant's own dashboards: make one showing a view per room or a view of named things, add or take out a view, rename, remove. Hub builds the views from the house's rooms and things (a heading and tiles); a model never writes a card. Views the owner made by hand are kept as they are |
+
+**Done at once, with Undo.** A change is planned first: what it is in plain words, the exact requests, and the
+requests that put it back, read from Home Assistant before anything is sent. Hub then makes it, says so in a
+sentence (“Reading lamp moved from Living room to Bedroom.”), and Undo under the answer, on Activity and on
+Changes puts it back for a day. A scene, automation or script is only put back while it is still as Hub left
+it: one changed again in Home Assistant is left alone, and Hub says so.
+
+**What waits for a tap.** One fixed rule, in code (`admin.asks`), never a model's judgement:
+
+- anything that removes something (a room, a scene, an automation, a helper), and disabling a thing, which
+  takes it out of use until it is enabled again;
+- one request that changes more than ten things;
+- unlocking, opening a door or the garage, disarming the alarm;
+- a scene, automation or script that does any of those, when it is saved, run or set, however that is asked
+  for (by name, or through its service): itself, through a scene it sets, through another routine it runs, as a
+  device's own action, or in a way Hub can't read (a blueprint, a routine kept in Home Assistant's own files).
+  `plans.opens` follows a routine into what it runs, four deep, and asks when it can't tell;
+- the whole house's own settings, and restarting Home Assistant.
+
+What this cannot see is a chain that starts somewhere else: an automation the owner made that unlocks when a
+helper is switched, and Ask switching that helper. The rule covers what Ask itself saves, runs and sets.
+
+Ask then answers “That one waits for your tap.” with a card: the question, what would happen, and two buttons.
+Only the button, from a signed-in device, makes the change; typing “yes” does nothing, and no tool of Ask's
+can press it. On the tap Hub plans the change again from the house as it is now and, if it would no longer do
+what the card said, does nothing. A card waits an hour. Locking, closing and arming happen at once.
+
+**What a model never moves.** On a turn that has mail, the calendar or school in view (`<data>`, or a `look_up`),
+Ask changes nothing about the setup and unlocks nothing: words written by strangers are in the model's view on
+those turns. Lights and music still work, as before.
+
+**What stays in Home Assistant.** The setup door names what may leave Hub (`SETUP_WRITES`, `CONFIGS`,
+`SERVICE_DOMAINS`, and `setup_reload` for an integration). Not in it, so refused whoever asks: tokens and users,
+backups, add-ons and the system itself, adding, removing or disabling integrations, removing devices, pairing,
+updates, Home Assistant's built-in dashboards (the map, the first one) and dashboard resources, entity ids, and
+services that run code or reach other machines (shell commands, web requests, MQTT). An automation saved from Ask may only call services behind
+the same door; one the owner made in Home Assistant keeps what it already had.
+
+**What the Engine page holds back.** Three settings, each “One tap, with undo” or “Suggest only”: lights, scenes,
+speakers and other devices (`house.control`); how the house is set up (`house.setup`); locks, the garage and the
+alarm (`house.security`).
+
+Tests: `tests/test_house_setup.py` (the layer, on the made-up house, which follows setup changes too) and
+`tests/test_app_ask_setup.py` (whole turns and the card's routes).
+
+**Proved on the real house, without changing it.** Tests run on a made-up Home Assistant and a stand-in for
+the model, so two live checks (`hub/live/checks.py`, on the Checks page) do the rest after each release:
+
+- `house.setup` (reads only): everything the setup tools read from the real Home Assistant reads as Hub
+  expects, Home Assistant checks a sample routine the way Hub writes one, a kept scene and automation read
+  back, and a move is planned from it all and never sent.
+- `ask.setup` (a few cents): `hub/app/ask/trial.py` makes up a move, a question about an automation, a new
+  automation, a removal, an unlock and a list request from the house as it is and puts them to Ask with the real
+  model behind the dry-run layer (`hub/golden/dryrun.py`), which stands in front of the setup door, the everyday
+  door, Music Assistant and Kitchen: every change is written down and none is sent. Each request has one right
+  outcome, checked in code. It runs once per version. What was asked and what Ask did is kept in Hub's private
+  folder (`ask-trial.json`), since it names the house's things; the check itself says only how many.
 
 **What Hub remembers.** One list: the engine's standing notes (`hub/engine/state.py`), the same list the older
 chat saved to. Ask keeps a note at once when asked, shows it with Forget, and lists them under System. The
@@ -160,11 +243,13 @@ record under the chat's own $10 a month limit; the words do not.
 | | Ask's model (Claude Sonnet, the owner's key) | Luna (zero retention), only on a Hub without Ask's model |
 | --- | --- | --- |
 | The owner's typed request | Yes | Questions about the day only |
-| Rooms, lights, speakers, scenes, what is playing | Yes | No |
+| Rooms, lights, plugs, fans, speakers, scenes, what is playing | Yes | No |
+| The thermostat, locks, the garage door and the alarm as they stand; the names of automations and scripts | Yes (since 2026-11-15) | No |
+| Any other device, a routine's config, a room's contents | Only what a request needs, read with `find` and `details`: never tokens, addresses, pictures, or where people are | No |
 | What Hub remembers | Yes | No |
 | Earlier requests and Hub's answers | Yes | No |
 | Mail, the calendar, school, today's list | Yes, the bounded lookups; never senders with AI switched off | Yes, the same lookups |
-| Kitchen's answers | Never | No |
+| Kitchen's answers; products, prices and notes on the shopping list | Never. Ask's sentences about the list carry counts and the member's own words; the rest is drawn on cards | No |
 
 **Until it is set up.** Ask needs two things a Hub may not have yet: the Anthropic SDK among the reviewed
 wheels (`anthropic`, an extra of `pydantic-ai-slim`), and the key. Without either, `GET /app/api/ask` says
@@ -232,13 +317,61 @@ Every tap needs a signed-in device. Tests: `tests/test_app_mail.py`, on made-up 
 
 ## Kitchen
 
-The household's conversation with the kitchen service. In the app: `web/app/src/kitchen.tsx`. It uses the same
-`/kitchen/...` relay as the older page, so nothing new reaches the kitchen service and nothing about it is kept
-on the device: the conversation, recipe cards with "Add what's missing to the cart", cart plans with Add to cart,
-the cart report after an add, orders as checkout showed them with Place order, the shopping list, and "Update from
-orders". Approving a plan and placing an order still take a tap on a signed-in device (`pages.py`). Kitchen's
-words are drawn as text, never as HTML. Turning on notifications stays on the older page, whose worker covers
-`/kitchen/`. Ask's Kitchen reply opens this screen.
+The household's shopping list on its way into the shop's cart. Data and taps: `hub/app/kitchen.py`. In the app:
+`web/app/src/kitchen.tsx`. Since 2026-11-15 Kitchen is part of Ask, not a second assistant: asking happens in Ask,
+and this screen is the picture of the list, as Home is the picture of the house.
+
+**One rule: on the list means in the cart.** The separate kitchen service keeps the list. Whatever is added, from
+Ask, from this screen, by its assistant or from the household's Groceries reminders list, is given the exact
+product the household buys at once, in code and with no model: its own line for those words, else a product
+named for it (its name ends with the words) that it took more than half of the last five times it bought
+anything by that name, and at least twice. So a changed brand is followed, and two kinds bought turn about are
+asked about. Anything looser is offered and never chosen: something bought once, another of its lines that
+merely holds the words (“chicken” for “chicken thighs”; “tortillas” must never mean “tortilla chips”), a
+product that only mentions them, a word spelled nearly the same. What waits is picked by a person, once; the
+pick is kept, so next time needs nobody. A number written counts single things: a pack of several covers it
+(“6 eggs” is one carton of a dozen), and packs named are packs (“2 dozen eggs”). What is
+ready goes into the cart in one cart turn: by itself, a minute after the last thing was added, once a member
+switches “Fill the cart by itself” on; until then on one tap. Taking a thing off the list takes it out of the
+cart. A reminder ticked off on a phone leaves what is already in the cart for a person to decide.
+
+- **The sentence** says the most pressing thing: an order or a cart that waits for a tap, how many things need a
+  pick, how many are going in. Under it, how much of the list is in the cart.
+- **Add to the list**: commas part several things; a number with a thing is how many (“2 avocados”,
+  “avocados x2”), an amount is kept as a note (“2 lbs chicken”), and two known things written as one
+  (“milk and eggs”) become two.
+- **Needs you**: an order to place, a cart plan the assistant suggested, each thing that needs a pick with its
+  choices (what the household bought before, then what the shop's search offers) and why it waits, anything a
+  cart turn couldn't confirm (one tap reads the cart and settles it), and anything ticked off the reminders
+  while in the cart.
+- **The list**: each thing, the product picked for it, and where it stands. A ring fills with lamplight once it
+  is in the cart. A thing opens to say why that product (“Your usual.”, “Bought 3 times, last on Oct 20.”), how
+  many (one fewer, one more; what is in the cart is set to the new number at the next fill), the other things
+  it could be, and the way off the list.
+- **The cart**, as its own page showed it when last read, with “Read it again” and “Check out”. Checking out
+  reads checkout back as a card; only a tap on Place order, from a signed-in device, places it.
+- **Due soon** (staples past their usual gap), **Ideas** (the assistant's latest recipes), **Earlier answers**
+  (what it said before, read when opened) and **How it works** (the two switches, and how fresh the purchase
+  history is).
+
+**In Ask.** `groceries` adds (“add sponges and two avocados to the list”; said again with another number, a
+thing is changed to that), takes off, shows, reads the cart from its own page, and readies checkout, in one
+trip, and the things it touched are drawn under the answer with their products, a pick where one is needed,
+and the tap that fills the cart. Recipes, meal ideas and questions about food go to the kitchen
+assistant word for word (`kitchen`), and its answer is drawn under the request in full: recipes, a cart plan
+with Add to cart, an order with Place order.
+
+**What reaches which model.** Nothing of Kitchen's reaches Ask's model: not the list, not a product, a price or
+a note about who eats what. Ask's model is given the member's words and calls a tool; Hub writes the sentence
+from counts and those same words. The kitchen assistant is Claude Code on the owner's Claude plan (the approved
+exception for Kitchen), and sees what it always did.
+
+**Every tap** needs a signed-in device, in Hub and again in the kitchen service. An older kitchen service, from
+before it kept the list, still works: the screen says it needs its update and shows its conversation, and
+`groceries` passes the words to its assistant instead.
+
+Tests: `tests/test_app_kitchen.py`, on a made-up Kitchen that follows what Hub sends it
+(`tests/kitchen_world.py`). The picking itself is tested in the kitchen service's repository.
 
 ## Photos
 
@@ -288,8 +421,9 @@ good, as may the typeface (`fonts/Jost.ttf`, SIL Open Font License). Everything 
 
 `web/app/check/demo_server.py` runs the real app and the real change code against a fictional house that
 follows what it is sent (`tests/app_world.py`). It reaches no other machine and no service on this one
-(`web/check_guard.py`). Ask works there on the stand-in model, with a made-up Kitchen and private desk, so the
-conversation can be tried and photographed without a key. See `web/app/check/README.md`.
+(`web/check_guard.py`). Ask works there on the stand-in model, with a made-up Kitchen (a list, made-up products
+and a practice cart, `tests/kitchen_world.py`) and private desk, so the conversation, a setup change and the list
+filling a cart can be tried and photographed without a key, a house or a shop. See `web/app/check/README.md`.
 
 ## Activity
 
@@ -300,7 +434,7 @@ first, by day, from three places:
 | --- | --- | --- |
 | Home Assistant's logbook | Every state change of its devices, button presses, scenes and automation runs, and often what caused it: a person (by their Home Assistant user), an automation or a script | A wall switch or a device changing by itself has no cause |
 | Apple Home, through HomeClaw | Each accessory's change in the selected home, with its old and new value | Who or what did it; anything while HomeClaw is closed or its event log is off |
-| Hub's own changes | What Hub changed, who asked (Ask, a tap, a routine) and Undo for a day | |
+| Hub's own changes | What Hub changed, who asked (Ask, a tap, a routine) and Undo for a day: lights and speakers, and changes to how the house is set up | |
 
 **How it is read.** Every five minutes from Hub's start (`activity.start`), and when the screen opens if the last
 reading is a minute old. Home Assistant: the broker's fenced, read-only `logbook/get_events` (`broker.ASKS`, start
@@ -314,8 +448,9 @@ let go after 90 days; Home Assistant keeps about ten.
 row says who asked and has Undo. An Apple Home row for a device Home Assistant reported within 90 seconds, under the
 same name, is left out and the Home Assistant row says "and Apple Home".
 
-**What shows.** Lights and power, doors and locks, buttons, automations and music, until Motion or "Everything
-else" (sensors, a speaker going idle, a device dropping offline) is tapped; the choice is kept on the device. A
+**What shows.** Lights and power, doors and locks, buttons, automations, music and setup (things moved, renamed,
+rooms and helpers changed through Ask), until Motion or "Everything else" (sensors, a speaker going idle, a device
+dropping offline) is tapped; the choice is kept on the device. A
 source can be turned off the same way. "Hub's own changes and playlists waiting" opens Changes.
 
 Nothing here changes the house, and none of it goes to a model. Tests: `tests/test_app_activity.py`, on the
@@ -323,8 +458,8 @@ made-up house with a stand-in HomeClaw.
 
 ## Changes
 
-Activity's "Hub's own changes and playlists waiting" opens Changes (`hub/app/changes.py`, `web/app/src/changes.tsx`): every house and
-playlist change Hub made, newest first, from the records the older pages read, with Undo while it can still be
+Activity's "Hub's own changes and playlists waiting" opens Changes (`hub/app/changes.py`, `web/app/src/changes.tsx`): every house,
+setup and playlist change Hub made, newest first, from the records the older pages read, with Undo while it can still be
 undone, and the playlists Ask proposed, waiting for "Make it" or "Not now". A house change is undone through
 `/app/api/undo`; a playlist change, made or skipped through `/app/api/playlist`. The library itself, and deleting a
 playlist, are in Music Assistant.

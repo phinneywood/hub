@@ -1,10 +1,11 @@
-"""The Changes screen: everything Hub changed in the house and in the music library, newest first, each with its
-Undo for a day, and the playlists Ask proposed, waiting for a tap. For the app (web/app/src/changes.tsx).
+"""The Changes screen: everything Hub changed in the house, in how the house is set up and in the music library,
+newest first, each with its Undo for a day, and the playlists Ask proposed, waiting for a tap. For the app
+(web/app/src/changes.tsx).
 
-It reads the change records the older pages read (hub/tools/house/control.py and music.py) and makes the same
-calls on a tap; a house change is undone through the app's own /app/api/undo.
+It reads the change records the older pages read (hub/tools/house/control.py and music.py) and the setup record
+(admin.py), and makes the same calls on a tap; a house or setup change is undone through the app's own /app/api/undo.
 """
-from ..tools.house import control, music
+from ..tools.house import admin, control, music
 
 VIA = {'ask': 'from Ask', 'app': 'from the app', 'today': 'from Today', 'tap': 'from a tap', 'undo': 'Undo',
        'card': 'from Ask’s music card', 'bar': 'from the mini-player', 'music': 'from Music', 'recipe': 'from a routine'}
@@ -22,7 +23,8 @@ def _row(r, where):
 
 def picture():
     """The Changes screen as data. Reads Hub's own records; asks neither Home Assistant nor Music Assistant."""
-    rows = [_row(r, 'house') for r in control.recent()] + [_row(r, 'music') for r in music.recent_changes()]
+    rows = [_row(r, 'house') for r in control.recent()] + [_row(r, 'music') for r in music.recent_changes()] \
+        + [_row(r, 'setup') for r in admin.recent()]
     return {'changes': sorted(rows, key=lambda r: -r['at'])[:40],
             'waiting': [{'id': p['id'], 'name': p['name'], 'songs': p['songs']} for p in music.proposals()]}
 

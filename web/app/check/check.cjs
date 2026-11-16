@@ -191,7 +191,12 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until((sel) => document.querySelector(sel)?.getAttribute("aria-checked") === "false", room("living-room")), "the switch in the list did not switch the room");
 
     // ---- Ask: say it, and Hub does it and says so ----
-    const askFor = async (words) => { await page.fill("#askq", words); await page.keyboard.press("Enter"); };
+    // The field sends only once the request before it has finished, so wait for that as a person would.
+    const askFor = async (words) => {
+      await page.fill("#askq", words);
+      await until(() => document.querySelector("#askq")?.parentElement?.querySelector(".send.on") !== null);
+      await page.keyboard.press("Enter");
+    };
     const level = (id) => page.evaluate((i) => fetch("/app/api/home").then((r) => r.json()).then((h) => h.rooms[i].level), id);
     const asking = Date.now();
     await askFor("Dim the kitchen and living room for dinner");
@@ -210,16 +215,71 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.querySelector(".sub")?.textContent.endsWith("Something else is playing in the bedroom.")), "Home did not say that two rooms play different things: " + await sub());
     await askFor("what should we cook this week?");
     expect(await answered("Kitchen is on it."), "Ask did not pass the question to Kitchen: " + await lastAnswer());
-    expect(await until(() => document.querySelectorAll(".kitchen-says .recipes li").length === 3, null, 12000), "Kitchen’s answer did not arrive under the request");
+    expect(await until(() => document.querySelectorAll(".kitchen-says .kcard").length === 3, null, 12000), "Kitchen’s answer did not arrive under the request");
     expect(await until(() => { const box = document.querySelector(".ask-scroll"); return box.scrollHeight - box.scrollTop - box.clientHeight < 4; }), "Kitchen’s answer arrived out of view");
     await page.waitForTimeout(300); await shot("6c-ask-kitchen");
     await askFor("what needs me today?");
     expect(await answered("From what Hub can see, two emails need you."), "a question about the day was not answered from what Hub read: " + await lastAnswer());
     await askFor("remember to start music softly");
     expect(await answered("Hub will remember that."), "Ask did not remember: " + await lastAnswer());
-    await askFor("unlock the front door");
-    expect(await answered("Locks, the alarm"), "Ask did not say what it can’t do: " + await lastAnswer());
     await page.waitForTimeout(300); await shot("6d-ask-talk");
+
+    // ---- Ask: how the house is set up. Done at once with Undo; what removes or unlocks waits on a card ----
+    const lampIn = (id) => page.evaluate((i) => fetch("/app/api/home").then((r) => r.json()).then((h) => h.rooms[i].lights.some((l) => l.name === "Reading lamp")), id);
+    await askFor("Move the reading lamp to the bedroom");
+    expect(await answered("Reading lamp moved from Living room to Bedroom."), "Ask did not move the lamp: " + await lastAnswer());
+    expect(await lampIn("bedroom") && !(await lampIn("living-room")), "the lamp is not in the bedroom");
+    await page.locator(".turn .took button").last().click();
+    expect(await until(() => fetch("/app/api/home").then((r) => r.json()).then((h) => h.rooms["living-room"].lights.some((l) => l.name === "Reading lamp"))), "Undo did not put the lamp back");
+    await askFor("unlock the front door");
+    expect(await answered("That one waits for your tap."), "unlocking did not wait for a tap: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".wait .wait-t")].pop()?.textContent === "Unlock Front door lock?"), "the card did not ask about the door");
+    const locked = () => page.evaluate(() => fetch("/app/api/home").then((r) => r.json()).then((h) => h.facts.find((f) => f.label === "Front door lock").value));
+    expect(await locked() === "Locked", "the door was unlocked without a tap");
+    await page.waitForTimeout(300); await shot("6e-ask-card");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on a card that waits: " + (await small()).join(", "));
+    await page.locator(".wait .btn.go").last().click();
+    expect(await until(() => [...document.querySelectorAll(".wait")].pop()?.classList.contains("settled")), "the card did not settle after the tap");
+    expect(await locked() === "Unlocked", "the tap did not unlock the door");
+    await askFor("Remove the dining room");
+    expect(await until(() => [...document.querySelectorAll(".wait .wait-t")].pop()?.textContent === "Remove Dining?"), "removing a room did not wait on a card");
+    await page.locator(".wait .btn.ghost").last().click();
+    expect(await until(() => [...document.querySelectorAll(".wait .took")].pop()?.textContent === "Left as it was."), "Not now did not put the card away");
+    expect(await page.evaluate(() => fetch("/app/api/home").then((r) => r.json()).then((h) => "dining" in h.rooms)), "the room was removed without a tap");
+    await askFor("Every evening at 6:45 turn on the hallway light");
+    expect(await answered("Automation “Hallway ceiling on at 6:45 pm” made: at 6:45 pm, Ceiling (Hallway) on."), "Ask did not make the automation: " + await lastAnswer());
+    await askFor("Disable the coffee maker");
+    expect(await until(() => [...document.querySelectorAll(".wait .wait-t")].pop()?.textContent === "Disable Coffee maker?"), "disabling did not wait on a card");
+    expect((await page.locator(".wait .btn.risk").last().innerText()) === "Disable", "the card that disables did not say so on its button");
+    await page.locator(".wait .btn.ghost").last().click();
+    await askFor("Reload the hue integration");
+    expect(await answered("2 changes made."), "Ask did not reload the integration: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelectorAll(".did li").length === 2), "the two reloads were not listed under the answer");
+    expect(await until(() => ![...document.querySelectorAll(".turn")].pop()?.querySelector(".took button")), "a reload offered an Undo it doesn’t have");
+    await askFor("move the ceiling to the office");
+    expect(await until(() => [...document.querySelectorAll(".turn .answer")].pop()?.textContent.startsWith("Which one? Ceiling (Entry), Ceiling (Guest room)")),
+      "a name that fits several lamps was not asked about: " + await lastAnswer());
+
+    // ---- Ask: the shopping list. One assistant: the list is worked here, and its cards are drawn here ----
+    await askFor("Add sponges and dragon fruit to the list");
+    expect(await answered("Sponges and dragon fruit are on the list. One thing needs a product picked below."), "Ask did not add to the list: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelector(".groceries .row.item .row-main span")?.textContent === "Brightside Non-Scratch Scrub Sponges, 6 ct"),
+      "the product Hub picked was not drawn under the answer");
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelectorAll(".pickblock .opt").length === 2), "what needs a pick was not offered under the answer");
+    await page.waitForTimeout(300); await shot("6f-ask-list");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on the list in Ask: " + (await small()).join(", "));
+    await page.locator(".turn").last().locator(".pickblock .opt").first().click();
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelectorAll(".groceries .row.item").length === 2), "a pick in Ask did not take");
+    await askFor("what's in the cart");
+    expect(await answered("Reading the cart. This takes a minute."), "Ask did not read the cart: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelectorAll(".groceries .kitems li").length >= 2, null, 8000),
+      "the cart as its page showed it was not drawn under the answer");
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelector(".groceries .quiet-line")?.textContent.startsWith("As the cart’s own page showed it")),
+      "the cart under the answer did not say when it was read");
+    await askFor("add 6 eggs to the list");
+    expect(await answered("Eggs changed to six."), "a thing said again with a number was not changed: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelector(".groceries .row.item .row-main b")?.textContent === "eggs × 1 (for 6)"),
+      "a pack that covers the number asked for was not shown as one");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px in Ask: " + (await small()).join(", "));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Ask made the page scroll sideways");
     await page.fill("#askq", "");
@@ -293,21 +353,79 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap(".uplink");
     expect(await saysSoon("emails need you", 3000) || await saysSoon("email needs you", 1000) || true, "back to Mail");
 
-    // ---- Kitchen: the conversation, the list, and a cart that waits for a tap ----
+    // ---- Kitchen: the list on its way into the cart, what needs a person, and no second conversation ----
     await stage("reset");
     await tap(phone ? '.tabs .tab:text-is("Kitchen")' : '.rail .tab:text-is("Kitchen")');
     expect(await saysSoon("A cart waits for your tap."), "Kitchen’s sentence: " + await says());
-    expect(await page.locator(".kthread .kmsg").count() === 5, "Kitchen’s conversation so far");
-    expect(await page.locator(".kcard").count() === 4, "Kitchen’s recipes, plan and order");
-    await page.locator(".klist summary").click();
-    expect((await page.locator(".klist li").allInnerTexts()).join("|") === "Bananas|Eggs|Coffee beans|Dish soap", "the shopping list");
+    expect(await sub() === "Two of four are in the cart. This is a practice cart: nothing in the shop is touched.", "Kitchen’s second line: " + await sub());
+    const stands = () => page.locator(".kitchen .rows .row.item .row-q").allInnerTexts().then((all) => all.join("|"));
+    expect(await stands() === "In the cart|In the cart|Waiting|Needs a pick", "where each thing on the list stands: " + await stands());
+    expect((await page.locator(".kitchen .rows .row.item").nth(1).locator(".row-main span").innerText()) === "Meadow Farm Large Brown Eggs, 12 ct", "the product picked for eggs");
+    expect(await page.locator(".kitchen .pickblock .opt").count() === 1 && await page.locator(".kitchen .kcard").count() >= 3, "what needs you, and the ideas");
+    expect(await page.locator(".kitchen .composer").count() === 1 && await page.locator(".kitchen textarea").count() === 0, "Kitchen has a field for the list and no second conversation");
     await page.waitForTimeout(300); await shot("13-kitchen");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Kitchen: " + (await small()).join(", "));
-    await tap('.kcard .btn.go:text-is("Add to cart")');
-    expect(await until(() => [...document.querySelectorAll(".kstate")].some((p) => p.textContent.startsWith("Added to the cart")), null, 6000), "approving did not show");
-    await page.fill(".kcompose textarea", "what should we cook this week?");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Kitchen scrolls sideways");
+    await page.locator(".kitchen .rows .row.item").nth(2).click();
+    expect(await until(() => document.querySelector(".sheet h1")?.textContent === "coffee beans" && document.querySelector(".sheet .chosen span:last-child")?.textContent === "Your usual."),
+      "a thing on the list did not open with why Hub chose its product");
+    await page.waitForTimeout(350); await shot("13b-kitchen-item");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on a thing’s sheet: " + (await small()).join(", "));
+    await page.locator('.sheet .stepper button[aria-label="One more"]').click();
+    expect(await until(() => document.querySelector(".sheet h1")?.textContent === "coffee beans × 2" && document.querySelector(".sheet .stepper output")?.textContent === "2"),
+      "one more did not make it two");
+    expect(await page.locator('.sheet .stepper button[aria-label="One fewer"]').isEnabled(), "one fewer was not offered at two");
+    await page.locator('.sheet .stepper button[aria-label="One fewer"]').click();
+    expect(await until(() => document.querySelector(".sheet h1")?.textContent === "coffee beans"), "one fewer did not make it one again");
+    expect(await page.locator('.sheet .stepper button[aria-label="One fewer"]').isDisabled(), "one fewer was offered at one");
+    await page.keyboard.press("Escape");
+    await page.fill(".kadd .field", "sponges, 2 avocados");
     await page.keyboard.press("Enter");
-    expect(await until(() => document.querySelectorAll(".kthread .kmsg.them .kcard").length >= 6, null, 12000), "Kitchen’s answer to a new message did not arrive");
+    expect(await until(() => document.querySelectorAll(".kitchen .rows .row.item").length === 6), "typing on the list did not add to it");
+    expect((await page.locator(".kitchen .rows .row.item").nth(5).locator(".row-main").innerText()).replace(/\s+/g, " ") === "avocados × 2 Green Valley Large Ripe Avocado, 1 each", "two avocados, and which");
+    await tap('.kitchen .kcard .btn.go:text-is("Add to cart")');
+    expect(await saysSoon("One thing needs a pick."), "approving the plan: " + await says());
+    await page.locator(".kitchen .pickblock .opt").first().click();
+    expect(await saysSoon("Four things are ready for the cart."), "after a pick: " + await says());
+    await tap('.kitchen .btn.go:text-is("Add all 4 to the cart")');
+    expect(await saysSoon("Four things are going in the cart."), "filling the cart: " + await says());
+    expect(await page.locator(".kitchen .row.item.going").count() === 4, "the things going in are not marked");
+    await page.waitForTimeout(200); await shot("13c-kitchen-going");
+    expect(await saysSoon("Everything on the list is in the cart.", 9000) && (await stands()) === "In the cart|In the cart|In the cart|In the cart|In the cart|In the cart", "the list did not land in the cart: " + await stands());
+    await tap('.kitchen .btn.ghost:text-is("Read the cart")');
+    expect(await until(() => document.querySelectorAll(".kitchen .kitems li").length === 7, null, 6000), "the cart as its page shows it was not read");
+    // A cart turn that stopped before it could say: Kitchen asks for the one thing that settles it.
+    await stage("kitchen-unsure");
+    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
+    await tap(phone ? '.tabs .tab:text-is("Kitchen")' : '.rail .tab:text-is("Kitchen")');
+    expect(await saysSoon("One thing to check in the cart."), "a thing nobody could confirm: " + await says());
+    expect((await page.locator(".kitchen .ctl.check .ctl-name b").innerText()) === "One thing to check", "what to check was not asked for under Needs you");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on a thing to check: " + (await small()).join(", "));
+    await page.waitForTimeout(200); await shot("13e-kitchen-check");
+    await tap('.kitchen .ctl.check .pill');
+    expect(await saysSoon("Everything on the list is in the cart.", 6000), "reading the cart did not settle it: " + await says());
+    await page.locator('.kitchen [role="switch"]').first().click();
+    expect(await until(() => document.querySelector('.kitchen [role="switch"]')?.getAttribute("aria-checked") === "true"), "the switch that fills the cart by itself did not switch");
+    await page.fill(".kadd .field", "limes");
+    await page.keyboard.press("Enter");
+    expect(await saysSoon("One thing is going in the cart."), "switched on, a new thing did not go in by itself: " + await says());
+    await tap('.kitchen .btn.go:text-is("Check out")');
+    expect(await saysSoon("An order waits for your tap.", 9000), "checkout was not read back: " + await says());
+    await page.waitForTimeout(300); await shot("13d-kitchen-order");
+    await tap('.kitchen .kcard .btn.go:text-is("Place order")');
+    expect(await saysSoon("The list is empty.", 6000), "placing the order did not clear the list: " + await says());
+    expect(await until(() => document.querySelector(".kitchen .block .quiet")?.textContent.startsWith("Nothing on it.")), "an empty list did not say how to add to it");
+    // The kitchen service stopped, and one from before it kept the list: each says so, and nothing looks broken.
+    await stage("kitchen-away");
+    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
+    await tap(phone ? '.tabs .tab:text-is("Kitchen")' : '.rail .tab:text-is("Kitchen")');
+    expect(await until(() => document.querySelector(".kitchen .banner b")?.textContent === "Kitchen isn’t answering"), "a Kitchen that is away did not say so");
+    await stage("kitchen-old");
+    await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
+    await tap(phone ? '.tabs .tab:text-is("Kitchen")' : '.rail .tab:text-is("Kitchen")');
+    expect(await until(() => document.querySelector(".kitchen .banner b")?.textContent === "Kitchen needs its update"), "an older Kitchen did not say it needs its update");
+    expect(await page.locator('.kitchen input[aria-label="Message Kitchen"]').count() === 1, "an older Kitchen was left with no way to be asked");
+    await page.waitForTimeout(200); await shot("13f-kitchen-old");
     await stage("reset");
     await tap(phone ? '.tabs .tab:text-is("Home")' : '.rail .tab:text-is("Home")');
     await page.waitForSelector(".plan");

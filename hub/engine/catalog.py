@@ -978,10 +978,21 @@ ACTIONS = [
            'Each change has its own Undo on the plan page.', page='/gmail/plan'),
     Action('gmail.review_sender', 'Review one sender', 'Opens the sender with options to choose from. Nothing changes until you pick.',
            'Remove it from the plan, or Undo after applying.', page='/gmail/assess'),
-    Action('house.control', 'Change lights, plugs, scenes and speakers',
-           'When you ask in Ask Hub or tap a button on Today: lights, plugs and fans on or off, brightness, scenes, '
-           'and playing, pausing, volume and grouping on the speakers. Never locks, the garage, the alarm or the thermostat.',
+    Action('house.control', 'Change lights, plugs, scenes, speakers and other devices',
+           'When you ask in Ask Hub or tap in the app: lights, plugs and fans on or off, brightness, scenes, and playing, '
+           'pausing, volume and grouping on the speakers. In the app’s Ask, also the thermostat, blinds and any other device. '
+           'Locks, the garage and the alarm have their own setting below.',
            'Undo on the Home changes page, for a day.', page='/house/changes', post='/house/do', default='undo', ceiling='undo'),
+    Action('house.setup', 'Change how the house is set up',
+           'When you ask in the app’s Ask: move things between rooms, rename, hide, disable and enable them, add and remove '
+           'rooms, make and change scenes, automations, scripts, helpers and dashboards in Home Assistant, and reload an integration. '
+           'Removing or disabling anything waits for your tap on a card.',
+           'Undo under the answer, on Activity and on Changes, for a day.', page='/app/#changes', default='undo', ceiling='undo'),
+    Action('house.security', 'Lock, unlock and open',
+           'When you ask in the app’s Ask: lock and unlock doors, open and close the garage, arm and disarm the alarm. '
+           'Locking, closing and arming happen at once. Unlocking, opening and disarming always wait for your tap on a card, '
+           'and so does a scene or routine that would do any of them.',
+           'Undo under the answer and on Activity, for a day.', page='/app/#changes', default='undo', ceiling='undo'),
     Action('house.playlists', 'Edit playlists',
            'When you ask in Ask Hub: make Music Assistant playlists, add, remove and move songs, rename them, and add '
            'songs to your own Apple Music playlists. Deleting a playlist always waits for your tap.',
@@ -1046,7 +1057,8 @@ def kitchen_recall(message_id):
 HANDOFFS = [
     Handoff('kitchen', 'Kitchen',
             'The household kitchen assistant: recipes, the shopping list, Fred Meyer order history and cart plans. '
-            'It can read the store and recipe sites; only your tap on Add to cart changes the cart, and you check out.',
+            'It can read the store and recipe sites. The cart changes on your tap, or by itself for things on your list '
+            'once you switch that on in Kitchen; an order is placed only by your tap.',
             'Your message, word for word, and who you are, to Kitchen. Kitchen’s assistant is Claude on your own plan '
             '(the approved exception for Kitchen chat). Its reply is shown here; on your next message a short text of '
             'it goes to Ask Hub’s model, on its usual private route, so follow-ups make sense.',

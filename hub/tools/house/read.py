@@ -1,8 +1,9 @@
 """The house right now, from Home Assistant through the broker: rooms, thermostat, security and speakers.
 
-Read-only. Only the domains Hub may one day act on are kept (lights and power, speakers, the thermostat,
-locks, the garage door and the alarm), plus two facts for the Home screen: the temperature outside and which
-doors or windows stand open. Cameras, presence, automations and the rest never leave this file.
+Read-only. Only the domains Hub may act on are kept (lights and power, speakers, the thermostat, locks, the
+garage door and the alarm), plus two facts for the Home screen (the temperature outside and which doors or
+windows stand open) and, for Ask, the names of the automations and scripts and whether each is on. Cameras,
+presence and the rest never leave this file; anything more that Ask needs it asks for by name (admin.py).
 Device and room names are data, never instructions.
 """
 import re
@@ -38,6 +39,8 @@ WORDS = {
                 'dry': 'Dry', 'fan_only': 'Fan only'},
 }
 OPEN = {'lock': ('unlocked', 'open', 'opening', 'unlocking'), 'cover': ('open', 'opening', 'closing')}
+# Integrations whose own scenes only ever set their own lights, though Home Assistant doesn't list what they hold.
+LIGHT_SCENES = ('hue', 'lifx', 'deconz', 'tradfri')
 # A wall or remote button (an event entity of class button): what its presses are called.
 PRESSES = {'multi_press_1': 'Single press', 'multi_press_2': 'Double press', 'multi_press_3': 'Triple press',
            'long_press': 'Long press', 'long_release': 'Long press', 'initial_press': 'Press', 'short_release': 'Press'}
@@ -172,6 +175,8 @@ def _device(entity_id, item, registry, players_only):
             'level': _percent(attrs.get('brightness'), 255) if domain == 'light' and state == 'on' else None,
             'volume': attrs.get('volume_level') if isinstance(attrs.get('volume_level'), (int, float)) else None,
             'members': [m for m in attrs.get('group_members') or () if isinstance(m, str) and m != entity_id],
+            # The kinds of thing a scene sets, so Ask can tell one that only sets lights from one that holds a lock.
+            'sets': _scene_sets(attrs, entry) if domain == 'scene' else None,
             'colours': _colours(attrs) if domain == 'light' else None,
             'dims': _dims(attrs) if domain == 'light' else False,
             'colour': _colour_now(attrs) if domain == 'light' and state == 'on' else None,
@@ -180,6 +185,15 @@ def _device(entity_id, item, registry, players_only):
             and (attrs.get('group_members') or [None])[0] == entity_id,
             **({'title': _clip(attrs.get('media_title')), 'artist': _clip(attrs.get('media_artist')),
                 'album': _clip(attrs.get('media_album_name'))} if domain == 'media_player' else {})}
+
+
+def _scene_sets(attrs, entry):
+    """The kinds of thing a scene sets, or None when it doesn't say: an integration's own scene lists nothing, so
+    it could hold anything, unless that integration's scenes only ever set its lights."""
+    members = attrs.get('entity_id')
+    if isinstance(members, list):
+        return sorted({m.partition('.')[0] for m in members if isinstance(m, str)})
+    return ['light'] if entry.get('platform') in LIGHT_SCENES else None
 
 
 COLOUR_MODES = {'hs', 'xy', 'rgb', 'rgbw', 'rgbww'}
@@ -234,7 +248,25 @@ def _build(registry, states):
             'lights_on': sum(d['on'] for d in devices if d['kind'] == 'light'),
             'room_floor': registry.get('room_floor', {}),
             'outside': _outside(items), 'openings': _openings(items, registry), 'buttons': _buttons(items, registry),
-            'read_at': datetime.now(home.PACIFIC)}
+            'routines': _routines(items, registry), 'read_at': datetime.now(home.PACIFIC)}
+
+
+ROUTINES = 60       # automations and scripts named to Ask
+
+
+def _routines(items, registry):
+    """Automations and scripts by name, and whether each automation is on. Not what they do: Ask reads that when
+    it needs it."""
+    found = []
+    for s in items:
+        kind = s['entity_id'].partition('.')[0]
+        entry = registry['entities'].get(s['entity_id'], {})
+        if kind not in ('automation', 'script') or entry.get('hidden_by') or entry.get('disabled_by') or s.get('state') in OFFLINE:
+            continue
+        attrs = s.get('attributes') if isinstance(s.get('attributes'), dict) else {}
+        found.append({'id': s['entity_id'], 'kind': kind, 'on': s.get('state') != 'off' if kind == 'automation' else True,
+                      'name': _clip(entry.get('name') or attrs.get('friendly_name') or s['entity_id'].partition('.')[2].replace('_', ' '))})
+    return sorted(found, key=lambda r: (r['kind'], r['name'].lower()))[:ROUTINES]
 
 
 def _outside(items):

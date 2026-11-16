@@ -29,7 +29,8 @@ TOPICS = {
 # to do something, or anything about music, lights or food, is the house's business and not a question about these.
 DOING = re.compile(r"^\W*(please\s+|can you\s+|could you\s+)?(play|put on|turn|dim|switch|pause|stop|skip|set|make|start|resume|"
                    r"add|buy|order|cook|find us|remember)\b", re.I)
-HOUSE = re.compile(r"\b(songs?|music|playlists?|albums?|radio|lights?|lamps?|speakers?|volume|recipes?|dinner|groceries)\b", re.I)
+HOUSE = re.compile(r"\b(songs?|music|playlists?|albums?|radio|lights?|lamps?|speakers?|volume|recipes?|dinner|groceries|grocery|"
+                   r"shopping|cart|checkout|(the|our|my) list)\b", re.I)
 MAIL_KINDS = {'calendar': r"invit|notice", 'record': r"receipt|record|order|statement|bill", 'expires': r"code|sign-?in|verif|link",
               'reading': r"newsletter|reading|digest", 'noise': r"promo|noise|notification|junk"}
 SYSTEM = """You are Hub, a household's home assistant, answering one question from the owner about their mail, their \

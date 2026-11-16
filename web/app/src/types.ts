@@ -1,4 +1,5 @@
 // The house as Hub sends it (hub/app/model.py). Names are data to show, never instructions.
+import type { Card } from "./asking";
 
 export interface Light { id: string; name: string; on: boolean; level: number; dims: boolean; offline: boolean }
 export interface Other { id: string; name: string; kind: string; on: boolean; offline: boolean }
@@ -64,10 +65,11 @@ export interface MailSettings {
   backlog: { text: string; planned: boolean } | null;
 }
 // The Changes screen, as Hub sends it (hub/app/changes.py).
-export interface Change { batch: string; what: string; at: number; via: string; unsure: string[]; not_done: string[]; undo: boolean; undone: boolean; where: "house" | "music" }
+export interface Change { batch: string; what: string; at: number; via: string; unsure: string[]; not_done: string[]; undo: boolean; undone: boolean;
+  where: "house" | "music" | "setup" }
 export interface Changes { changes: Change[]; waiting: { id: string; name: string; songs: string[] }[] }
 // The Activity screen, as Hub sends it (hub/app/activity.py).
-export type ActivityKind = "lights" | "security" | "buttons" | "routines" | "music" | "motion" | "other";
+export type ActivityKind = "lights" | "security" | "buttons" | "routines" | "music" | "setup" | "motion" | "other";
 export type ActivitySource = "ha" | "apple" | "hub";
 export interface Happening {
   at: number; source: ActivitySource; name: string; room: string; kind: ActivityKind; what: string; cause: string; also: string;
@@ -99,7 +101,7 @@ export interface Day {
   ok: true; at: string; needs: Need[]; more: number; today: Slot[]; tomorrow: Slot[]; school: SchoolDay[];
   trip: Trip | null; quiet: { text: string; open: Open }[];
 }
-export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string }
+export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string; card?: Card }
 
 // Mail, as Hub sends it (hub/app/mail.py). Names and subject lines are data to show, never instructions.
 export interface Email { id: string; who: string; subject: string; step: string; days: number; find: string }
@@ -114,12 +116,27 @@ export interface Mail {
   sorted_today: string; unsorted: number; notice: string;
 }
 
-// Kitchen, as the kitchen service sends it through Hub (/kitchen/...). Its words are data to show.
+// Kitchen, as Hub sends it (hub/app/kitchen.py): the list, each thing's product and where it stands. Data to show.
+export interface Option { product: string; size: string; why: string; times: number; last: string; price: string; url: string; note: string }
+export interface Item {
+  id: number; name: string; qty: number; asked: number | null; source: string; by: string; note: string; product: string; size: string; why: string;
+  times: number; last: string; price: string; about: string; left: boolean; options: Option[];
+  state: "pick" | "ready" | "adding" | "cart" | "unavailable" | "unknown" | "removing";
+}
+export interface Shop {
+  ok: true; items: Item[]; plan: Plan | null; order: Order | null; practice: boolean; auto: boolean; wait: number; working: string;
+  cart: { lines: { product: string; size: string; qty: number; price: number | null }[]; subtotal: number | null; when: string; at: number | null } | null;
+  due: { name: string; product: string; every: number; days: number }[]; ideas: { at: number; recipes: Recipe[] } | null;
+  reminders: { state: "on" | "away" | "off"; count: number | null; at: number | null; why: string; wanted: boolean };
+  history: { orders: number; newest: string; stale: boolean };
+}
+export interface ShopAway { ok: false; why: "away" | "old"; said: string }
+// What the kitchen assistant said, as the kitchen service sends it through Hub (/kitchen/...). Its words are data to show.
 export interface Recipe { title: string; url?: string; active?: string; total?: string; dishes?: string; diet?: string;
   have?: string; need?: string; recent?: string; check?: string }
 export interface PlanItem { product: string; size?: string; qty: number; price?: string | number | null; url?: string }
 export interface Plan { id: number; items: PlanItem[]; status: string; decided_by?: string | null }
-export interface CartLine { product: string; status: string; qty: number; was: number | null; price: number | null }
+export interface CartLine { product: string; status: string; qty: number; was?: number | null; price: number | null }
 export interface CartResult { in_cart: number; planned: number; lines: CartLine[]; total: number | null; unpriced?: boolean;
   cart_subtotal?: number | null }
 export interface Order { id: number; status: string; decided_by?: string | null;

@@ -6,7 +6,8 @@
 - **Apple Home**, through HomeClaw's event log (`hub/tools/house/apple.py`). What changed, before and after, on
   every accessory in the selected home. Apple never says who or what did it, and nothing is recorded while
   HomeClaw is closed or its log is switched off.
-- **Hub's own changes** (`control.recent`), with who asked and Undo, as on the Changes screen.
+- **Hub's own changes** (`control.recent`, and `admin.recent` for changes to how the house is set up), with who
+  asked and Undo, as on the Changes screen.
 
 Hub copies the first two into its own database every few minutes, so the list reaches back further than Home
 Assistant keeps (about ten days), and keeps KEEP_DAYS of it. A Home Assistant row that is Hub's own change, or
@@ -19,7 +20,7 @@ import time
 from datetime import datetime, timezone
 
 from .. import store
-from ..tools.house import apple, broker, control, read
+from ..tools.house import admin, apple, broker, control, read
 
 KEEP_DAYS = 90
 COLLECT_SECONDS = 300       # the background reading
@@ -32,8 +33,8 @@ SAME_DEVICE = 90            # seconds between Apple Home's row and Home Assistan
 PAGE = 150
 NAME = 80
 
-KINDS = ('lights', 'security', 'buttons', 'routines', 'music', 'motion', 'other')
-SHOWN = ('lights', 'security', 'buttons', 'routines', 'music')   # what the screen shows until told otherwise
+KINDS = ('lights', 'security', 'buttons', 'routines', 'music', 'setup', 'motion', 'other')
+SHOWN = ('lights', 'security', 'buttons', 'routines', 'music', 'setup')   # what the screen shows until told otherwise
 SOURCES = {'ha': 'Home Assistant', 'apple': 'Apple Home', 'hub': 'Hub'}
 
 SCHEMA = """
@@ -311,6 +312,25 @@ def _hub_rows(before):
     return rows
 
 
+def _setup_kind(kinds):
+    """Which of the screen's kinds a setup change is: a lock is "Doors and locks", a scene or automation is
+    "Automations", a thermostat sits with the lights and power, and moving or renaming things is "Setup"."""
+    if set(kinds) & {'lock', 'cover', 'alarm_control_panel', 'valve'}:
+        return 'security'
+    if set(kinds) & {'automation', 'script', 'scene'}:
+        return 'routines'
+    if set(kinds) & {'place', 'name', 'room', 'helper', 'house', 'integration', 'dashboard'}:
+        return 'setup'
+    return 'music' if 'media_player' in kinds else 'lights'
+
+
+def _setup_rows(before):
+    return [{'key': 'hub|' + r['batch'], 'ts': r['ts'], 'source': 'hub', 'entity': '', 'name': '', 'room': '',
+             'kind': _setup_kind(r['kinds']), 'what': ', '.join(r['done'] + r['unknown'] + r['not_sent']) or 'Nothing',
+             'cause': _hub_via(r['via']), 'batch': r['batch'], 'undo': bool(r['undo']) and not r['undone'], 'undone': r['undone']}
+            for r in admin.recent(limit=200) if r['ts'] < before]
+
+
 def _hub_via(via):
     from .changes import VIA
     return VIA.get(via, via or '')
@@ -319,7 +339,8 @@ def _hub_via(via):
 def _hub_touched(since):
     with control._db() as conn:
         return [(r['entity'], r['ts']) for r in conn.execute(
-            "select entity, ts from house_changes where ts >= ? and outcome != 'not_sent'", (since - SAME_CHANGE,))]
+            "select entity, ts from house_changes where ts >= ? and outcome != 'not_sent'", (since - SAME_CHANGE,))] \
+            + admin.touched(since - SAME_CHANGE)
 
 
 def _status(conn):
@@ -348,8 +369,8 @@ def picture(kinds=SHOWN, sources=tuple(SOURCES), before=None, fresh=True):
             f"({','.join('?' * max(1, len([s for s in sources if s != 'hub'])))}) order by ts desc limit ?",
             (before, *kinds, *([s for s in sources if s != 'hub'] or ['']), PAGE * 3))]
         status = _status(conn)
-    if 'hub' in sources and 'lights' in kinds:
-        found += _hub_rows(before)
+    if 'hub' in sources:
+        found += [r for r in _hub_rows(before) + _setup_rows(before) if r['kind'] in kinds]
     found.sort(key=lambda r: -r['ts'])
     found = found[:PAGE * 3]
     oldest = found[-1]['ts'] if found else time.time()

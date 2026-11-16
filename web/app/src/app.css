@@ -358,6 +358,22 @@ button.row { text-align: left; }
 .ask .ctl.two { margin-top: 10px; border-top: 1px solid var(--line); }
 .turn .ctl:last-child { border-bottom: 0; }       /* the line between turns is enough */
 .kitchen-says .row-act { display: inline-grid; place-items: center; margin-top: 12px; height: 44px; padding: 0 14px; border-radius: 11px; font-size: var(--t-s); font-weight: 500; box-shadow: inset 0 0 0 1.5px var(--line-2); }
+/* several changes from one request, each on its line */
+.did { list-style: none; padding: 0; margin-top: 12px; border-top: 1px solid var(--line); }
+.did li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: var(--t-s); }
+.did li.missed { color: var(--alarm); }
+.did small { flex: none; font-size: var(--t-xs); }
+/* a change that waits for a tap: the question, what would happen, and the two answers */
+.wait { margin-top: 14px; padding: 16px 16px 14px; border-radius: 16px; background: var(--ground); }
+.wait-t { display: block; font-size: var(--t-l); line-height: 1.2; font-weight: 500; letter-spacing: -.005em; text-wrap: balance; }
+.wait-cap { margin-top: 12px; font-size: var(--t-xs); color: var(--ink-3); }
+.wait-lines { list-style: none; padding: 0; margin-top: 2px; }
+.wait-lines li { padding: 7px 0; border-bottom: 1px solid var(--line); font-size: var(--t-s); line-height: 1.35; text-wrap: pretty; }
+.wait-lines li:last-child { border-bottom: 0; }
+.wait-why { margin-top: 6px; font-size: var(--t-xs); color: var(--ink-3); text-wrap: pretty; }
+.wait.settled .wait-t, .wait.settled .wait-lines { color: var(--ink-2); }
+.wait .took { margin-top: 2px; }
+.btn.risk { box-shadow: inset 0 0 0 1.5px var(--alarm); color: var(--alarm); }
 .dots { display: inline-flex; gap: 5px; margin-top: 14px; }
 .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); animation: dots 1s ease-in-out infinite; }
 .dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
@@ -460,7 +476,53 @@ h2.minor { margin-top: 18px; font-size: var(--t-s); color: var(--ink-2); }
 .linkish { color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; min-height: 44px; padding: 0 4px; }
 .btn.ghost { box-shadow: inset 0 0 0 1.5px var(--line-2); }
 
-/* ---------- kitchen: a conversation, with cards that wait for a tap ---------- */
+/* ---------- kitchen: the list on its way into the cart ----------
+   A thing's ring fills with lamplight when it is in the cart, as a room does when its lights are on. */
+.kadd { margin-top: 22px; }
+.kadd .field { background: var(--raised); }
+[data-theme="day"] .kadd .field { background: var(--room); }
+.row.item { grid-template-columns: 38px 1fr auto; min-height: 64px; padding: 10px 0; text-align: left; }
+.row.tick.item .row-main b { color: var(--ink); font-weight: 500; }
+.row.item .row-main span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.row.item .row-q { white-space: nowrap; padding-left: 4px; color: var(--ink-2); }      /* where a thing stands is read, not skimmed past */
+.row.item.asks .row-q { color: var(--alarm); }
+.row.item.going .ring { box-shadow: inset 0 0 0 2px var(--lamp); animation: breathe .8s ease-in-out infinite alternate; }
+.qty { font-style: normal; font-weight: 400; color: var(--ink-3); margin-left: 3px; }
+/* a thing that needs a person: why, then the choices as rows to tap */
+.pickblock { margin-top: 10px; padding: 15px 16px 4px; border-radius: 16px; background: var(--raised); }
+.ask .pickblock, .sheet .pickblock { background: var(--ground); }
+.pick-t { display: block; font-size: var(--t-l); line-height: 1.2; font-weight: 500; }
+.pick-why { margin-top: 5px; font-size: var(--t-s); color: var(--ink-2); text-wrap: pretty; }
+.pickblock .opt:first-of-type { margin-top: 12px; }
+.opt { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; width: 100%; min-height: 60px; padding: 9px 0; border-top: 1px solid var(--line); text-align: left; }
+.opt .row-main b { font-weight: 500; line-height: 1.25; }
+.opt .row-main span { font-size: var(--t-xs); color: var(--ink-2); margin-top: 2px; }
+.opt-pick { display: inline-grid; place-items: center; height: 44px; min-width: 68px; padding: 0 12px; border-radius: 11px; background: var(--lamp); color: var(--on-lamp); font-size: var(--t-s); font-weight: 500; }
+.pickblock .linkish { display: inline-flex; align-items: center; border-top: 1px solid var(--line); width: 100%; font-size: var(--t-s); }
+.sheet .opt:last-of-type { border-bottom: 1px solid var(--line); }
+/* one thing, opened: the product Hub chose and why */
+.chosen { margin-top: 18px; padding: 14px 16px 15px; border-radius: 14px; background: var(--ground); }
+[data-theme="day"] .chosen { background: var(--raised); }
+.chosen b { display: block; font-weight: 500; line-height: 1.25; }
+.chosen span { display: block; font-size: var(--t-s); color: var(--ink-2); margin-top: 3px; }
+.chosen .chosen-note { color: var(--ink-3); }
+.block .ctl.check { margin-top: 12px; padding: 8px 0; }
+/* how many: one fewer, the number, one more */
+.howmany { margin-top: 6px; }
+.howmany .ctl-name span { color: var(--ink-2); }
+.stepper { display: inline-flex; align-items: center; gap: 2px; justify-self: end; }
+.stepper button { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--line); font-size: 22px; line-height: 1; }
+.stepper button:disabled { opacity: .35; }
+.stepper button:active:not(:disabled) { transform: scale(.94); }
+.stepper output { min-width: 34px; text-align: center; font-size: var(--t-l); font-weight: 500; font-variant-numeric: tabular-nums; }
+.groceries { margin-top: 12px; }
+.groceries .kacts { margin-top: 12px; }
+.kitchen-says .kthread { margin-top: 10px; }
+.kitchen-says .kmsg { max-width: 100%; }
+.ask .kcard { background: var(--ground); }
+.kitchen .block > .sub { margin: 0 0 4px; font-size: var(--t-s); }
+
+/* ---------- kitchen: what its assistant said, with cards that wait for a tap ---------- */
 .klist { margin-top: 26px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .klist summary { list-style: none; display: flex; justify-content: space-between; align-items: center; min-height: 56px; cursor: pointer; }
 .klist summary::-webkit-details-marker { display: none; }
@@ -500,9 +562,8 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
 .kstate { margin-top: 12px; font-size: var(--t-s); color: var(--ink-2); }
 .kstate.ok { color: var(--sound); }
 .kfine { margin-top: 8px; font-size: var(--t-xs); color: var(--ink-3); }
-.kcompose { margin-top: 18px; }
-.kcompose .field { height: auto; min-height: 54px; padding: 15px 58px 15px 16px; resize: none; display: block; line-height: 1.35; font-family: inherit; color: inherit; }
-[data-theme="day"] .kcompose .field { background: var(--room); }
+.klist .kthread { margin: 4px 0 16px; }
+.klist .quiet { margin: 0 0 14px; }
 
 /* four places and Ask fit a phone's width: the dot that marks where you are sits under the word */
 @media (max-width: 1039px) {

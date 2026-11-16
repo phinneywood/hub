@@ -163,10 +163,13 @@ def test_snapshot_keeps_only_allowed_devices_in_their_rooms(fake):
     assert [r['name'] for r in found['rooms']] == ['Kitchen', 'Living room', 'Other']
     assert [d['name'] for d in found['speakers']] == ['Kitchen speaker', 'Living room']  # Music Assistant only
     assert [d['name'] for d in found['security']] == ['Alarm', 'Front door', 'Garage door']  # blinds aren't a garage
+    # An automation is kept by name and whether it is on, for Ask (owner decision, 2026-11-15): never what it does.
+    assert found.pop('routines') == [{'id': 'automation.morning', 'kind': 'automation', 'on': True, 'name': 'Morning'}]
     everything = json.dumps(found, default=str)
     for never in ('Porch camera', 'Alex', 'Morning', 'Sonos twin', 'Blinds'):
         assert never not in everything
     assert found['lights_on'] == 1
+    assert 'Morning' not in json.dumps(catalog.home_lookup(), default=str)              # and the older chat's lookup shares what it always did
 
 
 def test_snapshot_words(fake):

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "preact/hooks";
 import * as api from "./api";
 import { Top } from "./screens";
-import { go, me, say } from "./state";
+import { go, me, told } from "./state";
 import type { Changes as ChangesData } from "./types";
 
 const WHEN = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
@@ -19,7 +19,7 @@ export function Changes() {
     setBusy(true);
     const answer = await api.post(path, body);
     setBusy(false);
-    say(answer.error ?? answer.said ?? "Done");
+    told(answer, "Done");
     await load();
   }
 
@@ -30,7 +30,7 @@ export function Changes() {
       <button type="button" class="uplink" onClick={() => go("activity")}>Activity</button>
       <h1 class="say">Everything Hub changed</h1>
       <p class="sub">{failed ? "Can’t reach Hub to read it." : !found ? "Reading…"
-        : "Lights, plugs, fans, scenes, speakers and playlists, newest first. Each can be undone for a day."}</p>
+        : "Lights, speakers, playlists and how the house is set up, newest first. Each can be undone for a day."}</p>
       {found && found.waiting.length > 0 && (
         <section class="block">
           <h2>Playlists waiting for you</h2>
@@ -50,7 +50,7 @@ export function Changes() {
           {found.changes.map((c) => (
             <div class={c.undo ? "ctl two" : "ctl one"} key={c.where + c.batch}>
               <div class="ctl-name"><b>{c.what || "Nothing"}</b>
-                <span>{`${WHEN.format(new Date(c.at * 1000))} · ${c.via}${c.where === "music" ? " · playlist" : ""}${c.undone ? " · undone" : ""}`}</span>
+                <span>{`${WHEN.format(new Date(c.at * 1000))} · ${c.via}${c.where === "music" ? " · playlist" : c.where === "setup" ? " · setup" : ""}${c.undone ? " · undone" : ""}`}</span>
                 {c.unsure.length > 0 && <span class="warn-line">Not confirmed: {c.unsure.join(", ")}</span>}
                 {c.not_done.length > 0 && <span class="warn-line">Not done: {c.not_done.join(", ")}</span>}</div>
               {c.undo && <button type="button" class="forget" disabled={locked}

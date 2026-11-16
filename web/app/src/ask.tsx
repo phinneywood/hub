@@ -1,16 +1,18 @@
 // Ask, as the app shows it: a field, what a few letters reach at once, and the conversation.
 import { useEffect, useRef, useState } from "preact/hooks";
+import { post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, talk } from "./asking";
 import type { Card, Turn } from "./asking";
 import { FoundCard, PhotoCard } from "./archive";
 import type { FoundLine } from "./archive";
+import { GroceriesCard, Said } from "./kitchen";
 import { RoomCell, spans } from "./screens";
-import { dragVolume, loadPicks, picks, playPick, runScene, seen, setVolume, sheet, switchRoom, undo, undone } from "./state";
-import type { ArchiveItem, House, Room } from "./types";
+import { dragVolume, go, loadPicks, picks, playPick, runScene, say, seen, setVolume, sheet, switchRoom, undo, undone } from "./state";
+import type { ArchiveItem, House, KitchenMessage, Room } from "./types";
 import { Icon, SheetFrame, Slider, Switch } from "./ui";
 import { spoken } from "./words";
 
-const LONG = 5 * 60 * 1000;     // after this Kitchen's answer is left to the Kitchen tab
+const LONG = 5 * 60 * 1000;     // after this Kitchen's answer is left to the Kitchen screen
 
 function marked(name: string, text: string) {
   const at = name.toLowerCase().indexOf(text.toLowerCase());
@@ -30,7 +32,10 @@ function Found({ now, text, brief }: { now: House; text: string; brief: boolean 
   // Two things to say, in this house's own rooms.
   const all = Object.values(now.rooms).filter((r) => !r.outside);
   const lamp = all.find((r) => r.dims), sound = all.find((r) => r.speaker && r !== lamp) ?? all.find((r) => r.speaker);
-  const such = [lamp && `“dim ${spoken(lamp.name)}”`, sound && `“play something calm in ${spoken(sound.name)}”`].filter(Boolean).join(" or ");
+  // One for the lights, one for the music, one for the list.
+  const examples = [lamp && `“dim ${spoken(lamp.name)}”`, sound && `“play something calm in ${spoken(sound.name)}”`, "“add eggs to the list”"]
+    .filter((e): e is string => Boolean(e));
+  const such = examples.length > 1 ? examples.slice(0, -1).join(", ") + " or " + examples[examples.length - 1] : examples.join("");
   return (
     <div class={brief ? "found brief" : "found"}>
       {!text && <p class="ask-hint">{set ? `Say what you’d like${such ? `, such as ${such}` : ""}. A few letters find a room, a scene or a playlist.`
@@ -61,12 +66,13 @@ function Found({ now, text, brief }: { now: House; text: string; brief: boolean 
   );
 }
 
-interface KitchenSays { id: number; role: string; text?: string; recipes?: { title?: string; total?: string }[]; plan?: unknown;
-  result?: unknown; order?: unknown }
+type Statuses = { plans: Record<string, { status: string }>; orders: Record<string, { status: string }> };
 
-/** Kitchen's answer to what was passed on. It can take a minute or two, so this keeps looking and says so. */
+/** The kitchen assistant's answer to what was passed on, drawn here in full: its words, recipes, a cart plan or
+ * an order with their buttons. It can take a minute or two, so this keeps looking and says so. */
 function KitchenReply({ after }: { after: number }) {
-  const [replies, setReplies] = useState<KitchenSays[]>([]);
+  const [replies, setReplies] = useState<KitchenMessage[]>([]);
+  const [statuses, setStatuses] = useState<Statuses>({ plans: {}, orders: {} });
   const [state, setState] = useState<"working" | "done" | "long" | "down">("working");
   useEffect(() => {
     let timer = 0, stopped = false, misses = 0;
@@ -76,19 +82,22 @@ function KitchenReply({ after }: { after: number }) {
       try {
         const answer = await fetch(`/kitchen/messages?after=${after}`, { headers: { accept: "application/json" } });
         if (!answer.ok) throw new Error("Kitchen is away");
-        const found = (await answer.json()) as { messages?: KitchenSays[]; busy?: boolean; queued?: number };
+        const found = (await answer.json()) as { messages?: KitchenMessage[]; busy?: boolean; queued?: number } & Partial<Statuses>;
         if (stopped) return;
-        const theirs: KitchenSays[] = [];
+        const theirs: KitchenMessage[] = [];
         for (const m of found.messages ?? []) {
           if (m.role === "member") break;          // the next thing someone asked: its answer isn't this one's
           theirs.push(m);
         }
         misses = 0;
         setReplies(theirs);
+        setStatuses({ plans: found.plans ?? {}, orders: found.orders ?? {} });
+        const open = theirs.some((m) => (m.plan && (found.plans?.[String(m.plan.id)]?.status ?? m.plan.status) === "pending")
+          || (m.order && ["pending", "placing"].includes(found.orders?.[String(m.order.id)]?.status ?? m.order.status)));
         const waiting = Boolean(found.busy || found.queued) || !theirs.some((m) => m.role === "assistant");
-        if (!waiting) setState("done");
-        else if (Date.now() - began > LONG) setState("long");
-        else { setState("working"); again(3000); }
+        if (!waiting && !open) setState("done");
+        else if (waiting && Date.now() - began > LONG) setState("long");
+        else { setState(waiting ? "working" : "done"); again(open && !waiting ? 5000 : 3000); }     // a card that waits is kept current
       } catch {
         if (stopped) return;
         if (++misses >= 3) setState("down");
@@ -98,28 +107,83 @@ function KitchenReply({ after }: { after: number }) {
     void look();
     return () => { stopped = true; clearTimeout(timer); };
   }, [after]);
-  const more = replies.some((m) => m.plan || m.result || m.order);
   return (
     <div class="kitchen-says">
-      {replies.map((m) => (
-        <div key={m.id}>
-          {m.text && <p class={m.role === "notice" ? "took" : "says"}>{m.result ? m.text.split(/\n{2,}/).slice(1).join("\n\n") : m.text}</p>}
-          {(m.recipes?.length ?? 0) > 0 && (
-            <ul class="recipes">{m.recipes!.map((r, n) => <li key={n}><b>{r.title}</b>{r.total && <small>{r.total}</small>}</li>)}</ul>
-          )}
-        </div>
-      ))}
+      <ol class="kthread">{replies.map((m) => <Said m={m} statuses={statuses} key={m.id} />)}</ol>
       {state === "working" && <p class="took"><span class="work" />Kitchen is working on it. This can take a minute or two.</p>}
-      {state === "long" && <p class="took">Kitchen is still working. Its answer will be in Kitchen.</p>}
+      {state === "long" && <p class="took">Kitchen is still working. Its answer will be in Kitchen, under Earlier answers.</p>}
       {state === "down" && <p class="took">Kitchen isn’t answering right now.</p>}
-      {(more || state === "long" || replies.some((m) => m.recipes?.length)) && (
-        <a class="row-act" href="#kitchen">{more ? "Open Kitchen to see the cart" : "Open Kitchen"}</a>
+      {state === "long" && <button type="button" class="row-act" onClick={() => go("kitchen")}>Open Kitchen</button>}
+    </div>
+  );
+}
+
+/** A change that waits for a tap: what would happen, and the two ways to answer. Typing "yes" does nothing;
+ * only this button, on a signed-in device, makes the change. */
+function ConfirmCard({ card }: { card: Card }) {
+  const id = card.id ?? 0;
+  const [state, setState] = useState<"waiting" | "working" | "done" | "dismissed" | "gone">("waiting");
+  const [batch, setBatch] = useState<string | null>(null);
+  const [said, setSaid] = useState("");
+  useEffect(() => {           // opened again later: what became of the card
+    let stopped = false;
+    fetch(`/app/api/setup/${id}`, { headers: { accept: "application/json" } })
+      .then((answer) => answer.json() as Promise<{ status: string; batch: string | null }>)
+      .then((found) => {
+        if (stopped || found.status === "waiting") return;
+        if (found.status === "done") setBatch(found.batch);
+        setState(found.status === "done" ? "done" : found.status === "dismissed" ? "dismissed" : "gone");
+      }, () => undefined);
+    return () => { stopped = true; };
+  }, [id]);
+  const tap = async (choice: "confirm" | "dismiss") => {
+    setState("working");
+    const answer = await post(`setup/${id}/${choice}`);
+    if (answer.error) {         // not done. A card that still waits (Hub was busy this minute) stays to be tapped again
+      const still = await fetch(`/app/api/setup/${id}`, { headers: { accept: "application/json" } })
+        .then((found) => found.json() as Promise<{ status?: string }>).catch(() => ({ status: "" }));
+      if (still.status === "waiting") { say(answer.error); setState("waiting"); return; }
+      setSaid(answer.error); setState("gone"); return;
+    }
+    if (choice === "confirm") setBatch(answer.batch ?? null);
+    setState(choice === "confirm" ? "done" : "dismissed");
+  };
+  const open = state === "waiting" || state === "working";
+  const back = batch !== null && undone.value.includes(batch);
+  return (
+    <div class={"wait" + (open ? "" : " settled")}>
+      <b class="wait-t">{card.title}</b>
+      <p class="wait-cap">{open ? "After your tap" : state === "done" ? "Done" : "Not done"}</p>
+      <ul class="wait-lines">{(card.lines ?? []).map((line) => <li key={line}>{line}</li>)}</ul>
+      {open && (
+        <>
+          <p class="wait-why">{card.why}</p>
+          <div class="kacts">
+            <button type="button" class={"btn " + (card.do === "Remove" || card.do === "Disable" ? "risk" : "go")} disabled={state === "working"}
+              onClick={() => void tap("confirm")}>{card.do ?? "Do it"}</button>
+            <button type="button" class="btn ghost" disabled={state === "working"} onClick={() => void tap("dismiss")}>Not now</button>
+          </div>
+        </>
       )}
+      {state === "done" && (back ? <p class="took"><span>Put back as it was</span></p>
+        : batch ? <p class="took"><button type="button" onClick={() => void undo(batch)}>Undo</button></p> : null)}
+      {state === "dismissed" && <p class="took"><span>Left as it was.</span></p>}
+      {state === "gone" && <p class="took"><span>{said || "This card isn’t waiting any more. Ask again."}</span></p>}
     </div>
   );
 }
 
 function CardView({ card, now }: { card: Card; now: House }) {
+  if (card.kind === "confirm" && card.id !== undefined) return <ConfirmCard card={card} />;
+  if (card.kind === "setup") {      // several changes from one request: each on its own line, under one Undo
+    const lines = card.lines ?? [], missed = card.missed ?? [];
+    return lines.length + missed.length ? (
+      <ul class="did">
+        {lines.map((line) => <li key={line}>{line}</li>)}
+        {missed.map((line) => <li class="missed" key={line}>{line}<small>Didn’t take</small></li>)}
+      </ul>
+    ) : null;
+  }
   if (card.kind === "rooms") {
     const rooms = (card.rooms ?? []).map((id) => now.rooms[id]).filter((r): r is Room => r !== undefined).slice(0, 6);
     const widths = rooms.length === 1 ? [6] : rooms.length === 2 ? [3, 3] : spans(rooms.length);
@@ -141,6 +205,7 @@ function CardView({ card, now }: { card: Card; now: House }) {
   if (card.kind === "kitchen" && card.after !== undefined) return <KitchenReply after={card.after} />;
   if (card.kind === "photos") return <PhotoCard title={card.title} items={(card.items ?? []) as ArchiveItem[]} search={card.search} />;
   if (card.kind === "found") return <FoundCard items={(card.items ?? []) as FoundLine[]} count={card.count} search={card.search} />;
+  if (card.kind === "groceries") return <GroceriesCard ids={card.items as number[]} all={card.all} cart={card.cart} since={card.since} />;
   if (card.kind === "memory" && card.id !== undefined) {
     const id = card.id;
     const kept = !able.value || able.value.remembers.some((note) => note.id === id);
@@ -187,8 +252,15 @@ export function Ask({ focus }: { focus?: boolean }) {
   useEffect(() => {           // and what arrives under it stays in view, unless a finger has scrolled back to read
     const box = scroll.current, said = box?.firstElementChild;
     if (!box || !said) return undefined;
-    let pinned = true;
-    const moved = () => { pinned = box.scrollHeight - box.scrollTop - box.clientHeight < 80; };
+    // Only a finger scrolling back unpins it. What arrives late (a card under an answer) makes the box taller
+    // without moving it, and must not be mistaken for that.
+    let pinned = true, last = box.scrollTop;
+    const moved = () => {
+      const gap = box.scrollHeight - box.scrollTop - box.clientHeight;
+      if (box.scrollTop < last - 2) pinned = gap < 80;
+      else if (gap < 80) pinned = true;
+      last = box.scrollTop;
+    };
     const grew = new ResizeObserver(() => { if (pinned) box.scrollTop = box.scrollHeight; });
     box.addEventListener("scroll", moved, { passive: true });
     grew.observe(said);
@@ -210,6 +282,11 @@ export function Ask({ focus }: { focus?: boolean }) {
       </form>
     </div>
   );
+}
+
+/** A card that came from elsewhere than Ask (an Undo that waits for a tap), as a sheet of its own. */
+export function CardSheet({ card }: { card: Card }) {
+  return <SheetFrame title="Waiting for your tap"><ConfirmCard card={card} /></SheetFrame>;
 }
 
 export function AskSheet() {

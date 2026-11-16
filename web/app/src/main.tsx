@@ -4,7 +4,7 @@ import { useEffect } from "preact/hooks";
 import { signal } from "@preact/signals";
 import "./app.css";
 import { Dock, Home, Rail, System } from "./screens";
-import { Ask, AskSheet } from "./ask";
+import { Ask, AskSheet, CardSheet } from "./ask";
 import { loadAble } from "./asking";
 import { loadDay, watchDay } from "./day";
 import { Today } from "./today";
@@ -14,7 +14,7 @@ import { MailSettings } from "./mailrules";
 import { Activity } from "./activity";
 import { Changes } from "./changes";
 import { Archive, FoundSheet, Viewer } from "./archive";
-import { Kitchen, watchKitchen } from "./kitchen";
+import { ItemSheet, Kitchen, shop, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
 import { HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { seen, sheet, start, view } from "./state";
@@ -36,6 +36,12 @@ function Sheets() {
   const open = sheet.value, now = seen.value;
   if (open?.kind === "found") return <FoundSheet key={open.id} id={open.id} source={open.source} page={open.page} title={open.title} />;
   if (open?.kind === "viewer") return <Viewer photos={open.photos} at={open.at} />;
+  if (open?.kind === "card") return <CardSheet card={open.card} />;
+  if (open?.kind === "item") {        // one thing on the shopping list: it needs Kitchen's picture, not the house's
+    const list = shop.value;
+    const item = list?.ok ? list.items.find((i) => i.id === open.id) : undefined;
+    return item ? <ItemSheet item={item} /> : null;
+  }
   if (!open || !now) return null;
   if (open.kind === "room") {
     const room = now.rooms[open.id];

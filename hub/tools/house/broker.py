@@ -1,8 +1,19 @@
 """Talks to the HA broker over its owner-only Unix socket. Never reaches the network itself.
 
 The broker (home-ops `ha-maintenance/ha_broker.py`) is the one holder of the owner's Home Assistant
-administrator token; Hub never sees it. The broker passes on whatever it is sent, so the fence is here:
-only the reads in READS and the actions in WRITES ever leave Hub, and an action's data is checked first.
+administrator token; Hub never sees it. The broker passes on whatever it is sent, so the fence is here. There
+are two doors, and nothing else leaves Hub:
+
+- **The everyday door**: the reads in READS and ASKS and the actions in WRITES. Lights, power and speakers: what a
+  tap in the app or a plain request to Ask needs.
+- **The setup door** (owner decision, 2026-11-15: Ask may change anything in Home Assistant): the named commands in
+  SETUP_READS and SETUP_WRITES, the scene, automation and script configs in CONFIGS, and services in
+  SERVICE_DOMAINS, reloading an integration, and the dashboards a person made. Used only by admin.py, which records every change with the way
+  back and asks for a tap first where its rules say so. Still shut: tokens and users, backups, add-ons and the
+  system itself, adding, removing or disabling integrations, removing devices, and services that run code or
+  reach other machines.
+
+Every request's data is checked before it is sent.
 """
 import json
 import re
@@ -58,6 +69,20 @@ class NotSent(HomeDown):
     """The broker couldn't be reached, so nothing was sent: a change certainly didn't happen."""
 
 
+class Rejected(HomeDown):
+    """Home Assistant answered and said no, so nothing was changed. `code` is its own short reason
+    ("not_found", "invalid_format", "HTTP 400"): letters, digits and dashes only, safe to show."""
+
+    def __init__(self, code):
+        super().__init__(f'Home Assistant said no ({code}).')
+        self.code = code
+
+
+# How the broker words a refusal by Home Assistant itself; anything else it says means the outcome is unknown.
+_REJECTED = re.compile(r'^Home Assistant rejected the request: ([A-Za-z0-9_-]{1,80})$')
+_STATUS = re.compile(r'^Home Assistant returned HTTP (4\d\d);')
+
+
 def _exchange(message, timeout):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.settimeout(timeout)
@@ -80,6 +105,10 @@ def _exchange(message, timeout):
     except ValueError:
         raise HomeDown('The Home Assistant broker gave an answer Hub couldn’t read.') from None
     if not isinstance(reply, dict) or not reply.get('ok'):
+        said = str(reply.get('error') or '') if isinstance(reply, dict) else ''
+        refused, status = _REJECTED.match(said), _STATUS.match(said)
+        if refused or status:
+            raise Rejected(refused.group(1) if refused else 'HTTP ' + status.group(1))
         raise HomeDown('Home Assistant couldn’t be read just now.')
     return reply.get('result')
 
@@ -196,4 +225,241 @@ def playable(uri, kind):
 def act(domain, service, data, timeout=TIMEOUT):
     """Ask Home Assistant to do one allowed thing. NotSent: certainly not done. HomeDown: outcome unknown."""
     data = _checked(domain, service, data)
+    return _exchange({'op': 'request', 'method': 'POST', 'path': f'/api/services/{domain}/{service}', 'body': data}, timeout)
+
+
+# ---- the setup door: how the house is set up, and devices beyond lights and speakers. Used only by admin.py ----
+
+ANY_ENTITY = re.compile(r'^[a-z0-9_]{1,40}\.[a-z0-9_]{1,120}$')
+ID = re.compile(r'^[A-Za-z0-9_-]{1,80}$')                   # a room, floor, label, device, helper or config id
+NAME = re.compile(r'^[a-z0-9_]{1,60}$')                     # a domain or a service
+ICON = re.compile(r'^mdi:[a-z0-9-]{1,60}$')
+TEXT = 200                                                  # a name
+CONFIG_BYTES = 64 * 1024                                    # one scene, automation or script
+DATA_BYTES = 16 * 1024                                      # one service call's data
+DEPTH = 14
+# Helpers Ask may make, and the fields each may be given besides its name and icon.
+HELPERS = {
+    'input_boolean': {'initial'}, 'input_number': {'min', 'max', 'step', 'mode', 'unit_of_measurement', 'initial'},
+    'input_select': {'options', 'initial'}, 'input_text': {'min', 'max', 'pattern', 'mode', 'initial'},
+    'input_datetime': {'has_date', 'has_time', 'initial'}, 'input_button': set(),
+    'timer': {'duration', 'restore'}, 'counter': {'initial', 'step', 'minimum', 'maximum', 'restore'},
+}
+# Reads that take arguments: one thing's own settings, what refers to it, whether a routine is well formed.
+SETUP_READS = {
+    'config/entity_registry/get': {'entity_id'}, 'search/related': {'item_type', 'item_id'},
+    'automation/config': {'entity_id'}, 'script/config': {'entity_id'},
+    'validate_config': {'triggers', 'conditions', 'actions'}, 'get_config': set(), 'config_entries/get': set(),
+    'lovelace/dashboards/list': set(), 'lovelace/config': {'url_path'},
+    **{f'{helper}/list': set() for helper in HELPERS},
+}
+_REGISTRY = {'name', 'icon', 'labels', 'aliases'}
+SETUP_WRITES = {
+    'config/entity_registry/update': {'entity_id', 'name', 'icon', 'area_id', 'hidden_by', 'disabled_by', 'labels', 'aliases'},
+    'config/device_registry/update': {'device_id', 'name_by_user', 'area_id', 'labels', 'disabled_by'},
+    'config/area_registry/create': {*_REGISTRY, 'floor_id'}, 'config/area_registry/update': {*_REGISTRY, 'area_id', 'floor_id'},
+    'config/area_registry/delete': {'area_id'},
+    'config/floor_registry/create': {'name', 'icon', 'aliases', 'level'},
+    'config/floor_registry/update': {'floor_id', 'name', 'icon', 'aliases', 'level'},
+    'config/floor_registry/delete': {'floor_id'},
+    'config/label_registry/create': {'name', 'icon', 'color', 'description'},
+    'config/label_registry/update': {'label_id', 'name', 'icon', 'color', 'description'},
+    'config/label_registry/delete': {'label_id'},
+    # The house's own name and units. Never where it is: that stays in Home Assistant.
+    'config/core/update': {'location_name', 'unit_system', 'time_zone', 'currency', 'country', 'language'},
+    **{f'{helper}/create': {'name', 'icon', *fields} for helper, fields in HELPERS.items()},
+    **{f'{helper}/update': {f'{helper}_id', 'name', 'icon', *fields} for helper, fields in HELPERS.items()},
+    **{f'{helper}/delete': {f'{helper}_id'} for helper in HELPERS},
+}
+CONFIGS = ('automation', 'scene', 'script')
+# Services Ask may call when the owner asks, by domain. Not here, so never from Hub: anything that runs code or
+# reaches other machines (shell commands, scripts in other languages, web requests, MQTT), radios and pairing,
+# updates and firmware, backups, add-ons, the recorder, cameras, people and where they are.
+SERVICE_DOMAINS = frozenset((
+    'light', 'switch', 'fan', 'cover', 'climate', 'humidifier', 'water_heater', 'media_player', 'vacuum', 'lawn_mower', 'lock',
+    'alarm_control_panel', 'valve', 'siren', 'remote', 'scene', 'script', 'automation', 'input_boolean', 'input_number',
+    'input_select', 'input_text', 'input_datetime', 'input_button', 'timer', 'counter', 'number', 'select', 'button', 'text',
+    'time', 'date', 'datetime', 'notify', 'tts', 'persistent_notification', 'homeassistant'))
+# Domains where only some services are open. Restarting is the most Hub may do to Home Assistant itself.
+ONLY = {'homeassistant': {'turn_on', 'turn_off', 'toggle', 'update_entity', 'reload_all', 'check_config', 'restart'}}
+# Playing goes through the everyday door alone, which checks that it is something Music Assistant found.
+SHUT = {('media_player', 'play_media')}
+TELLS = re.compile(r'^(mobile_app_[a-z0-9_]{1,60}|persistent_notification)$')    # notify.<this>: a household phone, or Home Assistant's own list
+TARGETS = ('entity_id', 'device_id', 'area_id', 'floor_id', 'label_id')
+
+
+def _plain(value, most, depth=0):
+    """Whether `value` is plain data (text, numbers, lists, dicts with text keys) of at most `most` bytes."""
+    def ok(v, d):
+        if v is None or isinstance(v, (bool, int, float, str)):
+            return True
+        if d >= DEPTH:
+            return False
+        if isinstance(v, list):
+            return all(ok(x, d + 1) for x in v)
+        return isinstance(v, dict) and all(isinstance(k, str) and ok(x, d + 1) for k, x in v.items())
+    try:
+        return ok(value, depth) and len(json.dumps(value, allow_nan=False)) <= most
+    except (TypeError, ValueError):
+        return False
+
+
+def _is(pattern, value, empty=False):
+    return (empty and value is None) or (isinstance(value, str) and bool(pattern.fullmatch(value)))
+
+
+def _words(value, most=TEXT, empty=False):
+    return (empty and value is None) or (isinstance(value, str) and 0 < len(value) <= most and '\n' not in value)
+
+
+def _list_of(pattern, value, most=40):
+    return isinstance(value, list) and len(value) <= most and all(_is(pattern, v) for v in value)
+
+
+def _setup_checked(command):
+    """One setup command with every field looked at, or ValueError. The refusal is the same for every reason:
+    which field failed is a detail for the code that built it, never for a model."""
+    no = ValueError('Hub may not do that in Home Assistant.')
+    kind = command.get('type') if isinstance(command, dict) else None
+    allowed = SETUP_WRITES.get(kind)
+    if allowed is None or set(command) - allowed - {'type'}:
+        raise no
+    checks = {
+        'entity_id': lambda v: _is(ANY_ENTITY, v), 'device_id': lambda v: _is(ID, v),
+        'area_id': lambda v: _is(ID, v, empty=not kind.startswith('config/area_registry')),
+        'floor_id': lambda v: _is(ID, v, empty=not kind.startswith('config/floor_registry')), 'label_id': lambda v: _is(ID, v),
+        'name': lambda v: _words(v, empty=kind == 'config/entity_registry/update'), 'name_by_user': lambda v: _words(v, empty=True),
+        'icon': lambda v: _is(ICON, v, empty=True), 'labels': lambda v: _list_of(ID, v),
+        'aliases': lambda v: isinstance(v, list) and len(v) <= 12 and all(_words(a) for a in v),
+        'hidden_by': lambda v: v in (None, 'user'), 'disabled_by': lambda v: v in (None, 'user'),
+        'level': lambda v: v is None or (isinstance(v, int) and not isinstance(v, bool) and -9 <= v <= 99),
+        'color': lambda v: _words(v, 30, empty=True), 'description': lambda v: _words(v, 400, empty=True),
+    }
+    for key, value in command.items():
+        if key == 'type':
+            continue
+        if key in checks and kind.startswith('config/') and kind != 'config/core/update':
+            if not checks[key](value):
+                raise no
+        elif key.endswith('_id') and key.removesuffix('_id') in HELPERS:
+            if not _is(ID, value):
+                raise no
+        elif key in ('name', 'icon'):                       # a helper's own
+            if not (checks[key](value) and value is not None):
+                raise no
+        elif not _plain(value, 2000):                       # a helper's fields, or the house's name and units
+            raise no
+    needs = {'update': 1, 'delete': 1, 'create': 0}[kind.rpartition('/')[2]] if kind != 'config/core/update' else 0
+    if needs and not any(key.endswith('_id') for key in command):
+        raise no
+    if kind.endswith('/create') and not _words(command.get('name')):
+        raise no
+    return command
+
+
+def setup_read(*commands, timeout=TIMEOUT):
+    """Results of the setup door's read-only commands, in order, over one connection."""
+    if not commands or any(not isinstance(c, dict) or c.get('type') not in SETUP_READS or set(c) - {'type'} - SETUP_READS[c['type']]
+                           or not _plain(c, CONFIG_BYTES) for c in commands):
+        raise ValueError('Hub only reads from Home Assistant here.')
+    results = _exchange({'op': 'ws', 'commands': list(commands)}, timeout)
+    if not isinstance(results, list) or len(results) != len(commands):
+        raise HomeDown('The Home Assistant broker gave an answer Hub couldn’t read.')
+    return results
+
+
+def setup_write(command, timeout=TIMEOUT):
+    """One change to a registry, a helper or the house's own name and units; returns Home Assistant's answer.
+    Rejected: it said no and nothing changed. NotSent: certainly not done. HomeDown: outcome unknown."""
+    return _exchange({'op': 'ws', 'command': _setup_checked(command)}, timeout)
+
+
+def _config_path(kind, config_id):
+    if kind not in CONFIGS or not _is(ID, config_id):
+        raise ValueError('Hub may not do that in Home Assistant.')
+    return f'/api/config/{kind}/config/{config_id}'
+
+
+def setup_config(kind, config_id, timeout=TIMEOUT):
+    """One scene, automation or script as Home Assistant keeps it, or None when it keeps none by that id (one
+    written by hand in its files has no id and can't be read or changed from here)."""
+    try:
+        found = _exchange({'op': 'request', 'method': 'GET', 'path': _config_path(kind, config_id)}, timeout)
+    except Rejected:
+        return None
+    return found if isinstance(found, dict) else None
+
+
+def setup_save(kind, config_id, body, timeout=TIMEOUT):
+    """Write one scene, automation or script, or with `body` None remove it. Home Assistant checks it and takes it
+    up at once. Raises as setup_write does."""
+    path = _config_path(kind, config_id)
+    if body is None:
+        return _exchange({'op': 'request', 'method': 'DELETE', 'path': path}, timeout)
+    if not isinstance(body, dict) or not body or not _plain(body, CONFIG_BYTES):
+        raise ValueError('Hub may not do that in Home Assistant.')
+    return _exchange({'op': 'request', 'method': 'POST', 'path': path, 'body': body}, timeout)
+
+
+# Home Assistant's own dashboards. One made by a person has a hyphen in its address, which is how Home Assistant
+# tells them from its built-in ones (the map, the energy page); those, and the first dashboard, are left alone.
+DASHBOARD = re.compile(r'^[a-z0-9]+(?:-[a-z0-9]+){1,6}$')
+DASHBOARD_BYTES = 256 * 1024
+DASHBOARDS = {
+    'lovelace/dashboards/create': {'url_path', 'title', 'icon', 'show_in_sidebar', 'require_admin', 'mode'},
+    'lovelace/dashboards/update': {'dashboard_id', 'title', 'icon', 'show_in_sidebar', 'require_admin'},
+    'lovelace/dashboards/delete': {'dashboard_id'},
+    'lovelace/config/save': {'url_path', 'config'}, 'lovelace/config/delete': {'url_path'},
+}
+
+
+def setup_dashboard(command, timeout=TIMEOUT):
+    """One change to a dashboard a person made in Home Assistant: make one, retitle it, remove it, or write or
+    clear what it shows. Raises as setup_write does."""
+    no = ValueError('Hub may not do that in Home Assistant.')
+    kind = command.get('type') if isinstance(command, dict) else None
+    allowed = DASHBOARDS.get(kind)
+    if allowed is None or set(command) - allowed - {'type'}:
+        raise no
+    checks = {'url_path': lambda v: _is(DASHBOARD, v), 'dashboard_id': lambda v: _is(ID, v), 'title': _words, 'icon': lambda v: _is(ICON, v, empty=True),
+              'show_in_sidebar': lambda v: isinstance(v, bool), 'require_admin': lambda v: isinstance(v, bool), 'mode': lambda v: v == 'storage',
+              'config': lambda v: isinstance(v, dict) and bool(v) and _plain(v, DASHBOARD_BYTES)}
+    needs = {'create': ('url_path', 'title', 'mode'), 'update': ('dashboard_id',), 'delete': ('dashboard_id',) if 'dashboards' in kind else ('url_path',),
+             'save': ('url_path', 'config')}[kind.rpartition('/')[2]]
+    if any(key not in command for key in needs) or any(not checks[key](value) for key, value in command.items() if key != 'type'):
+        raise no
+    return _exchange({'op': 'ws', 'command': command}, timeout)
+
+
+ENTRY = re.compile(r'^[A-Za-z0-9]{8,64}$')                     # an integration's entry id
+
+
+def setup_reload(entry_id, timeout=30):
+    """Reload one integration, as its own Reload button does: it reconnects to its devices and nothing about how
+    it is set up changes. Removing, disabling and adding integrations stay in Home Assistant. Raises as
+    setup_write does."""
+    if not _is(ENTRY, entry_id):
+        raise ValueError('Hub may not do that in Home Assistant.')
+    return _exchange({'op': 'request', 'method': 'POST', 'path': f'/api/config/config_entries/entry/{entry_id}/reload'}, timeout)
+
+
+def service_open(domain, service):
+    """Whether a service is behind the setup door at all. A name that isn't plain letters (a template) never is."""
+    if not _is(NAME, domain) or not _is(NAME, service) or domain not in SERVICE_DOMAINS or (domain, service) in SHUT:
+        return False
+    if domain in ONLY:
+        return service in ONLY[domain]
+    return bool(TELLS.fullmatch(service)) if domain == 'notify' else True
+
+
+def setup_call(domain, service, data, timeout=TIMEOUT):
+    """One service call for the owner: a thermostat, a fan's speed, a lock, a helper's value, a routine run now.
+    Raises as setup_write does."""
+    if not service_open(domain, service) or not isinstance(data, dict) or not _plain(data, DATA_BYTES):
+        raise ValueError('Hub may not do that in Home Assistant.')
+    for key in TARGETS:
+        named = data.get(key, [])
+        pattern = ANY_ENTITY if key == 'entity_id' else ID
+        if not (_is(pattern, named) or _list_of(pattern, named, MOST)):
+            raise ValueError('Hub may not do that in Home Assistant.')
     return _exchange({'op': 'request', 'method': 'POST', 'path': f'/api/services/{domain}/{service}', 'body': data}, timeout)

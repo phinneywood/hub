@@ -13,7 +13,7 @@ from fastapi import APIRouter, Body, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
 from .. import bridge
-from ..tools.house import control, nowplaying, read, zones
+from ..tools.house import admin, control, nowplaying, read, zones
 from . import levels, model
 from . import scenes as kept_scenes
 from .feed import feed
@@ -71,7 +71,10 @@ def _signed_out():
 
 
 def _said(result):
-    """A tap's answer: what was done in plain words, and the batch for its Undo."""
+    """A tap's answer: what was done in plain words, and the batch for its Undo. An Undo that would open the house
+    answers with the card that waits for the owner's tap instead, and says nothing was done yet."""
+    if 'card' in result:
+        return JSONResponse({'error': 'That waits for your tap.', 'card': result['card']}, status_code=409)
     words = result['done'] + [f'{w} (not confirmed)' for w in result['unknown']]
     said = '; '.join(words) or 'Nothing changed.'
     if result.get('silent'):
@@ -434,7 +437,32 @@ def forget_note(note: int, request: Request):
 
 @router.post('/api/undo/{batch}')
 def undo(batch: str, request: Request):
+    if batch.startswith('s'):       # a change to how the house is set up (hub/tools/house/admin.py)
+        return _change(request, lambda login: admin.undo(batch, login=login, via='app'))
     return _change(request, lambda login: control.undo(batch, login=login, via='app', at_once=True))
+
+
+# ---- Cards that wait for a tap (hub/tools/house/admin.py): removing something, unlocking, the whole house ----
+
+@router.get('/api/setup/{number}')
+def setup_card(number: int):
+    """What became of one card, for an app that was closed while it waited."""
+    row = admin.waiting(number)
+    return {'status': row['status'], 'batch': row['batch']} if row else {'status': 'gone', 'batch': None}
+
+
+@router.post('/api/setup/{number}/{choice}')
+def setup_tap(number: int, choice: str, request: Request):
+    """The owner's tap on a card: `confirm` does what the card says, planned again from the house as it is now;
+    `dismiss` puts the card away. Only a signed-in device can do either, and no tool of Ask's can."""
+    if choice == 'confirm':
+        return _change(request, lambda login: admin.confirm(number, login=login))
+    if choice != 'dismiss':
+        return _refuse('Hub couldn’t read that request.', 404)
+    if _login(request) is None:
+        return _signed_out()
+    admin.settle(number, 'dismissed')
+    return {'ok': True, 'said': 'Left as it was'}
 
 
 # ---- Activity (hub/app/activity.py): what happened in the house, from Home Assistant, Apple Home and Hub ----
@@ -468,6 +496,31 @@ def playlist_tap(do: str, request: Request, body: dict = Body(default={})):
         return _refuse(error)
     feed.poke()
     return {'ok': True, 'said': said[:300]}
+
+
+# ---- Kitchen (hub/app/kitchen.py): the list, each thing's product, the cart and what waits for a tap ----
+
+@router.get('/api/kitchen')
+def kitchen_picture():
+    """The Kitchen screen as data, from the kitchen service. No model."""
+    from . import kitchen
+    return kitchen.picture()
+
+
+@router.post('/api/kitchen/{do}')
+def kitchen_tap(do: str, request: Request, body: dict = Body(default={})):
+    """A tap on the list: add, remove, pick, qty, keep, fill, read, order, auto or reminders. Each can end in the shop's
+    cart, so each needs a signed-in device; the kitchen service checks the login again."""
+    from . import kitchen
+    if _login(request) is None:
+        return _refuse('Change the list from your phone or laptop.', 403)
+    try:
+        said, more = kitchen.tap(do[:20], body, _login(request))
+    except kitchen.Refused as error:
+        return _refuse(error)
+    except (ValueError, TypeError):
+        return _refuse('Hub couldn’t read that request.', 400)
+    return {'ok': True, 'said': said, **more}
 
 
 # ---- Mail (hub/app/mail.py): what needs the owner, then what Hub sorted ----

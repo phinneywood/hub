@@ -83,7 +83,7 @@ def test_documents_the_owner_switched_on_reach_the_model_with_numbers_hidden(arc
 def test_a_request_that_read_mail_changes_nothing_in_the_house(archived):
     before = archived.states['light.kitchen_ceiling']['state']
     answer, _, _ = ask('find the furnace invoice and turn off the kitchen lights')
-    assert 'Hub doesn’t change the house in a request that read mail, the calendar or the archive.' in answer
+    assert 'Hub changes the house in a request of its own, never alongside mail' in answer
     assert archived.states['light.kitchen_ceiling']['state'] == before
 
 

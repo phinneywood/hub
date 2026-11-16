@@ -124,6 +124,9 @@ and tell me” the morning job does it.
   whose assistant is Claude Code on the owner's Claude plan, because only it can drive the signed-in
   Chrome. Hub itself makes no model call for Kitchen. Only a member's tap on Approve (a signed-in
   device, never a program on this Mac) lets that assistant add to the Fred Meyer cart.
+  Since 2026-11-15 (owner's request) what a member puts on the shopping list, in Ask, on the Kitchen screen or
+  on the household's Groceries reminders, goes into the cart without a tap once a member has switched “Fill the
+  cart by itself” on in Kitchen. A cart plan the assistant suggests, and placing an order, still take a tap.
   Since 2026-11-11 Ask Hub can pass a cooking or grocery message to Kitchen too (see “Hand-offs”).
   The message goes word for word; Kitchen's reply is shown on the page, and a short text of it is given
   to Ask's model on later turns, on Luna's zero-retention route.
@@ -134,7 +137,11 @@ and tell me” the morning job does it.
   on the owner's own Anthropic API key. That route is not zero-retention. It is given what the owner typed,
   the rooms, lights and speakers, what is playing and what Hub remembers, and, by the owner's explicit
   reversal on 2026-11-15, the same bounded mail, calendar, school and today lookups the older chat used.
-  Kitchen's replies never go there. Every other tool keeps the zero-retention routes.
+  Kitchen's replies never go there, nor the shopping list, its products, prices or notes. Every other tool
+  keeps the zero-retention routes.
+- 2026-11-15: Ask in the app may change anything in Home Assistant (docs/app.md, “Setting up the house”). For
+  that its model is also given the thermostat, the locks and the names of automations as they stand, and what
+  a request needs of any other device or routine; never tokens, addresses, pictures, or where people are.
 - Senders with AI switched off are never read for a model.
 - Agents build and test with made-up data. Real mail stays out of coding sessions.
 - Deploying, restarting, new schedules, pushing and merging to main need the owner's yes each time.
