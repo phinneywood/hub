@@ -8,7 +8,7 @@ are two doors, and nothing else leaves Hub:
   tap in the app or a plain request to Ask needs.
 - **The setup door** (owner decision, 2026-11-15: Ask may change anything in Home Assistant): the named commands in
   SETUP_READS and SETUP_WRITES, the scene, automation and script configs in CONFIGS, and services in
-  SERVICE_DOMAINS, and reloading an integration. Used only by admin.py, which records every change with the way
+  SERVICE_DOMAINS, reloading an integration, and the dashboards a person made. Used only by admin.py, which records every change with the way
   back and asks for a tap first where its rules say so. Still shut: tokens and users, backups, add-ons and the
   system itself, adding, removing or disabling integrations, removing devices, and services that run code or
   reach other machines.
@@ -250,6 +250,7 @@ SETUP_READS = {
     'config/entity_registry/get': {'entity_id'}, 'search/related': {'item_type', 'item_id'},
     'automation/config': {'entity_id'}, 'script/config': {'entity_id'},
     'validate_config': {'triggers', 'conditions', 'actions'}, 'get_config': set(), 'config_entries/get': set(),
+    'lovelace/dashboards/list': set(), 'lovelace/config': {'url_path'},
     **{f'{helper}/list': set() for helper in HELPERS},
 }
 _REGISTRY = {'name', 'icon', 'labels', 'aliases'}
@@ -398,6 +399,36 @@ def setup_save(kind, config_id, body, timeout=TIMEOUT):
     if not isinstance(body, dict) or not body or not _plain(body, CONFIG_BYTES):
         raise ValueError('Hub may not do that in Home Assistant.')
     return _exchange({'op': 'request', 'method': 'POST', 'path': path, 'body': body}, timeout)
+
+
+# Home Assistant's own dashboards. One made by a person has a hyphen in its address, which is how Home Assistant
+# tells them from its built-in ones (the map, the energy page); those, and the first dashboard, are left alone.
+DASHBOARD = re.compile(r'^[a-z0-9]+(?:-[a-z0-9]+){1,6}$')
+DASHBOARD_BYTES = 256 * 1024
+DASHBOARDS = {
+    'lovelace/dashboards/create': {'url_path', 'title', 'icon', 'show_in_sidebar', 'require_admin', 'mode'},
+    'lovelace/dashboards/update': {'dashboard_id', 'title', 'icon', 'show_in_sidebar', 'require_admin'},
+    'lovelace/dashboards/delete': {'dashboard_id'},
+    'lovelace/config/save': {'url_path', 'config'}, 'lovelace/config/delete': {'url_path'},
+}
+
+
+def setup_dashboard(command, timeout=TIMEOUT):
+    """One change to a dashboard a person made in Home Assistant: make one, retitle it, remove it, or write or
+    clear what it shows. Raises as setup_write does."""
+    no = ValueError('Hub may not do that in Home Assistant.')
+    kind = command.get('type') if isinstance(command, dict) else None
+    allowed = DASHBOARDS.get(kind)
+    if allowed is None or set(command) - allowed - {'type'}:
+        raise no
+    checks = {'url_path': lambda v: _is(DASHBOARD, v), 'dashboard_id': lambda v: _is(ID, v), 'title': _words, 'icon': lambda v: _is(ICON, v, empty=True),
+              'show_in_sidebar': lambda v: isinstance(v, bool), 'require_admin': lambda v: isinstance(v, bool), 'mode': lambda v: v == 'storage',
+              'config': lambda v: isinstance(v, dict) and bool(v) and _plain(v, DASHBOARD_BYTES)}
+    needs = {'create': ('url_path', 'title', 'mode'), 'update': ('dashboard_id',), 'delete': ('dashboard_id',) if 'dashboards' in kind else ('url_path',),
+             'save': ('url_path', 'config')}[kind.rpartition('/')[2]]
+    if any(key not in command for key in needs) or any(not checks[key](value) for key, value in command.items() if key != 'type'):
+        raise no
+    return _exchange({'op': 'ws', 'command': command}, timeout)
 
 
 ENTRY = re.compile(r'^[A-Za-z0-9]{8,64}$')                     # an integration's entry id

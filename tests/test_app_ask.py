@@ -457,7 +457,7 @@ def test_the_real_route_thinks_acts_once_and_stops(world, monkeypatch):
     assert str(request.url) == 'https://api.anthropic.com/v1/messages' and body['model'] == 'claude-sonnet-5-5' and body['stream'] is True
     assert body['thinking'] == {'type': 'adaptive'} and body['output_config'] == {'effort': 'high'}
     assert [tool['name'] for tool in body['tools']] == ['lights', 'scene', 'music', 'remember', 'groceries', 'kitchen', 'look_up', 'find', 'details',
-                                                       'arrange', 'rooms', 'scene_setup', 'routine', 'device', 'setting', 'integration']
+                                                       'arrange', 'rooms', 'scene_setup', 'routine', 'device', 'setting', 'integration', 'dashboard']
     assert body['system'][-1]['cache_control']['type'] == 'ephemeral' and 'cache_control' in body['tools'][-1]
     [message] = body['messages']
     assert message['role'] == 'user' and message['content'][-1]['text'].endswith('<said>dim the kitchen to 40</said>')

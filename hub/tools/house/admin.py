@@ -306,6 +306,10 @@ def find(said=None, kind=None):
     `kind`: a Home Assistant domain ("light", "automation", "climate"), or "room", "floor" or "group"."""
     w = world()
     asked = words_of(said) - FILLER if said else set()
+    if kind == 'dashboard':
+        hits = [r for r in dashboards() if asked <= words_of(r['name'])]
+        return {'found': [{'name': r['name'], 'kind': 'dashboard', **({'views': r['views']} if r['views'] is not None else {'made_by': 'Home Assistant itself'})}
+                          for r in hits[:30]]}
     if kind == 'integration':
         hits = [r for r in integrations() if asked <= words_of(r['name']) | words_of(r['kind'])]
         return {'found': [{'name': r['name'], 'kind': 'integration', 'of': r['kind'], 'state': r['state']} for r in hits[:60]]}
@@ -325,6 +329,32 @@ def find(said=None, kind=None):
     hits.sort(key=lambda h: h[:4])
     return {'found': [_brief(h[4], w) for h in hits[:60 if kind and not asked else FOUND]],
             **({'more': len(hits) - FOUND} if len(hits) > FOUND and (asked or not kind) else {})}
+
+
+def board(path):
+    """What one dashboard shows, as Home Assistant keeps it, or None when it keeps nothing for it (a dashboard Home
+    Assistant draws by itself). Raises broker.HomeDown."""
+    try:
+        (found,) = broker.setup_read({'type': 'lovelace/config', 'url_path': path})
+    except broker.Rejected:
+        return None
+    return found if isinstance(found, dict) else None
+
+
+def dashboards():
+    """The dashboards a person made in Home Assistant: [{'id', 'path', 'name', 'icon', 'sidebar', 'admin', 'views'}].
+    `views` is the titles of its views, or None for one Home Assistant draws by itself or keeps in its files."""
+    (rows,) = broker.setup_read({'type': 'lovelace/dashboards/list'})
+    out = []
+    for r in rows or ():
+        if not isinstance(r, dict) or not isinstance(r.get('id'), str) or not isinstance(r.get('url_path'), str):
+            continue
+        kept = board(r['url_path']) if r.get('mode') == 'storage' and broker.DASHBOARD.fullmatch(r['url_path']) else None
+        views = kept.get('views') if isinstance(kept, dict) and isinstance(kept.get('views'), list) else None
+        out.append({'id': r['id'], 'path': r['url_path'], 'name': _clip(r.get('title')) or r['url_path'], 'icon': r.get('icon'),
+                    'sidebar': r.get('show_in_sidebar') is not False, 'admin': bool(r.get('require_admin')), 'config': kept if views is not None else None,
+                    'views': [_clip(v.get('title')) or f'View {n}' for n, v in enumerate(views, 1) if isinstance(v, dict)] if views is not None else None})
+    return sorted(out, key=lambda r: r['name'].lower())
 
 
 MAIL = re.compile(r'\S+@\S+')
@@ -396,6 +426,7 @@ def change(kind, target, name, words, steps, undo=None, asks=None, after=None):
       {'config': 'scene', 'id': '...', 'body': {...} or None} None removes it
       {'call': 'climate.set_temperature', 'data': {...}}
       {'reload': '<an integration's entry id>'}
+      {'board': {...a dashboard command...}, 'keep': ['board', 'id']}
     `asks`: why it must wait for a tap (a key of WHY), or None. `after`: {'config', 'id', 'body'} as written, so
     Undo can tell whether it is still as Hub left it."""
     return {'kind': kind, 'target': str(target)[:200], 'name': _clip(name), 'words': _clip(words, 300), 'steps': steps,
@@ -424,6 +455,8 @@ def _send(step, kept):
         answer = broker.setup_write(sent['ws'])
     elif 'reload' in sent:
         answer = broker.setup_reload(sent['reload'])
+    elif 'board' in sent:
+        answer = broker.setup_dashboard(sent['board'])
     elif 'config' in sent:
         answer = broker.setup_save(sent['config'], sent['id'], sent.get('body'))
     else:
@@ -584,7 +617,7 @@ def undo(batch, *, login, via):
     for r in todo:
         after = json.loads(r['after']) if r['after'] else None
         try:
-            if after and not _same(broker.setup_config(after['config'], after['id']), after['body']):
+            if after and not _same(board(after['id']) if after['config'] == 'dashboard' else broker.setup_config(after['config'], after['id']), after['body']):
                 raise Refused(f'{r["name"]} was changed again after Hub changed it, so Hub left it alone. Change it in Home Assistant.')
         except broker.HomeDown as error:
             raise Refused(str(error)) from None

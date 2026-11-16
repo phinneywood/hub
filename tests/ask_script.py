@@ -31,6 +31,8 @@ SETUP = [
     (rf'^hide {THE}(.+)$', lambda m: call('arrange', things=[m[1]], hidden=True)),
     (rf'^(disable|enable) {THE}(.+)$', lambda m: call('arrange', things=[m[2]], enabled=m[1].lower() == 'enable')),
     (rf'^reload {THE}(.+?)(?: integration)?$', lambda m: call('integration', name=m[1])),
+    (rf'^make a dashboard (?:called|for) {THE}(.+?) (?:with|showing) {THE}(.+)$', lambda m: call('dashboard', do='add', name=m[1], rooms=THINGS(m[2]))),
+    (rf'^(?:remove|delete) {THE}(.+?) dashboard$', lambda m: call('dashboard', do='remove', name=m[1])),
     (r'^add a room called (.+?)(?: (upstairs|downstairs))?$', lambda m: call('rooms', kind='room', do='add', name=m[1], **({'floor': m[2]} if m[2] else {}))),
     (rf'^(?:remove|delete) {THE}(.+?) room$', lambda m: call('rooms', kind='room', do='remove', name=m[1])),
     (rf'^(?:set|turn) {THE}thermostat to (\d+)', lambda m: call('device', action='climate.set_temperature', things=['thermostat'], data={'temperature': int(m[1])})),

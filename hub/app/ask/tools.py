@@ -491,7 +491,7 @@ def find(ctx: RunContext[Turn], words: str | None = None, kind: str | None = Non
     """Look in Home Assistant for things by name, when <house> doesn't already name what you need: devices,
     rooms, scenes, automations, scripts, helpers. `words`: part of a name or a room. `kind`: a domain such as
     "climate", "lock", "cover", "fan", "switch", "automation", "script", "scene", "input_boolean", or "room",
-    "floor", "group", or "integration". Returns names and ids for the other tools. Read-only."""
+    "floor", "group", "integration" or "dashboard". Returns names and ids for the other tools. Read-only."""
     turn = ctx.deps
     turn.again = True
     try:
@@ -648,6 +648,16 @@ def integration(ctx: RunContext[Turn], name: str) -> dict:
     return _setup(ctx.deps, 'integration', {'name': name})
 
 
+def dashboard(ctx: RunContext[Turn], do: Literal['add', 'add_view', 'remove_view', 'rename', 'remove'], name: str,
+              rooms: list[str] | None = None, things: list[str] | None = None, view: str | None = None, new_name: str | None = None) -> dict:
+    """Home Assistant's own dashboards (its screens, not Hub's). add makes a dashboard called `name` showing a view
+    for each of `rooms` (what is in the room, as tiles), or one view of `things` titled `view`. add_view adds such
+    a view to the dashboard `name`; remove_view takes the view titled `view` out. rename with `new_name`; remove.
+    Removing a dashboard or a view waits for the owner's tap. Look with find and kind "dashboard" to see which
+    there are and their views."""
+    return _setup(ctx.deps, 'dashboard', {'do': do, 'name': name, 'rooms': rooms, 'things': things, 'view': view, 'new_name': new_name})
+
+
 def setting(ctx: RunContext[Turn], do: Literal['add', 'change', 'remove'],
             kind: Literal['input_boolean', 'input_number', 'input_select', 'input_text', 'input_datetime', 'input_button', 'timer',
                           'counter', 'house'],
@@ -663,4 +673,4 @@ def setting(ctx: RunContext[Turn], do: Literal['add', 'change', 'remove'],
 
 
 ALL = (lights, scene, music, remember, groceries, kitchen, look_up, find, details, arrange, rooms, scene_setup, routine, device, setting,
-       integration)
+       integration, dashboard)

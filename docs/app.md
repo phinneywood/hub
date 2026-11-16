@@ -162,6 +162,7 @@ change is, as requests and the requests that put it back) and the setup door in 
 | `device` | Any other device by service: the thermostat, fans, blinds, locks, the garage, helpers' values, a notice to a household phone |
 | `setting` | Helpers (switches, numbers, choices, timers) and the house's own name, units and time zone |
 | `integration` | Reload an integration whose devices stopped answering, by its title or by what it is (“hue” means every one of that kind). Nothing about how it is set up changes |
+| `dashboard` | Home Assistant's own dashboards: make one showing a view per room or a view of named things, add or take out a view, rename, remove. Hub builds the views from the house's rooms and things (a heading and tiles); a model never writes a card. Views the owner made by hand are kept as they are |
 
 **Done at once, with Undo.** A change is planned first: what it is in plain words, the exact requests, and the
 requests that put it back, read from Home Assistant before anything is sent. Hub then makes it, says so in a
@@ -196,8 +197,8 @@ those turns. Lights and music still work, as before.
 **What stays in Home Assistant.** The setup door names what may leave Hub (`SETUP_WRITES`, `CONFIGS`,
 `SERVICE_DOMAINS`, and `setup_reload` for an integration). Not in it, so refused whoever asks: tokens and users,
 backups, add-ons and the system itself, adding, removing or disabling integrations, removing devices, pairing,
-updates, dashboards, entity ids, and services that run code or reach other machines (shell commands, web
-requests, MQTT). An automation saved from Ask may only call services behind
+updates, Home Assistant's built-in dashboards (the map, the first one) and dashboard resources, entity ids, and
+services that run code or reach other machines (shell commands, web requests, MQTT). An automation saved from Ask may only call services behind
 the same door; one the owner made in Home Assistant keeps what it already had.
 
 **What the Engine page holds back.** Three settings, each “One tap, with undo” or “Suggest only”: lights, scenes,

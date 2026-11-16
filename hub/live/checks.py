@@ -130,6 +130,7 @@ def setup():
         w = admin.world(fresh=True)
         core, verdicts, entries = broker.setup_read({'type': 'get_config'}, {'type': 'validate_config', **SAMPLE}, {'type': 'config_entries/get'})
         helpers = broker.setup_read(*({'type': f'{kind}/list'} for kind in broker.HELPERS))
+        boards = admin.dashboards()
     except broker.Rejected:
         raise Failed('Home Assistant refused a read that Ask’s setup tools depend on.') from None
     except broker.HomeDown:
@@ -139,8 +140,9 @@ def setup():
         raise Failed('Home Assistant listed no rooms or no devices.')
     if not isinstance(verdicts, dict) or any(not isinstance(verdicts.get(part), dict) or verdicts[part].get('valid') is not True for part in SAMPLE):
         raise Failed('Home Assistant no longer checks a routine the way Hub writes one, so Ask couldn’t save an automation.')
-    if not isinstance(core, dict) or not core.get('time_zone') or not isinstance(entries, list) or not all(isinstance(h, list) for h in helpers):
-        raise Failed('Home Assistant’s own settings, integrations or helpers didn’t read as lists Hub knows.')
+    if not isinstance(core, dict) or not core.get('time_zone') or not isinstance(entries, list) or not all(isinstance(h, list) for h in helpers) \
+            or not isinstance(boards, list):
+        raise Failed('Home Assistant’s own settings, integrations, helpers or dashboards didn’t read as lists Hub knows.')
     kept = 0
     for kind in ('scene', 'automation'):
         one = next((t for t in things if t['domain'] == kind and t['config']), None)

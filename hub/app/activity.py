@@ -319,7 +319,7 @@ def _setup_kind(kinds):
         return 'security'
     if set(kinds) & {'automation', 'script', 'scene'}:
         return 'routines'
-    if set(kinds) & {'place', 'name', 'room', 'helper', 'house', 'integration'}:
+    if set(kinds) & {'place', 'name', 'room', 'helper', 'house', 'integration', 'dashboard'}:
         return 'setup'
     return 'music' if 'media_player' in kinds else 'lights'
 

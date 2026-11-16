@@ -591,6 +591,78 @@ def test_an_integration_is_reloaded_and_nothing_else_about_it_is_touched(house):
     assert said['done'] == [] and said['not_sent'] == ['Kitchen bridge reloaded (hue)'] and said['why'] == 'HTTP 404'
 
 
+def test_a_dashboard_is_made_from_rooms_and_things_and_undone(house):
+    made = do('dashboard', do='add', name='Upstairs', rooms=['bedroom', 'robin'])
+    assert made['done'] == ['Dashboard “Upstairs” made, showing Bedroom and Robin’s room']
+    assert [b['url_path'] for b in house.boards] == ['map', 'wall-tablet', 'hub-upstairs']
+    views = house.board_configs['hub-upstairs']['views']
+    assert [v['title'] for v in views] == ['Bedroom', 'Robin’s room'] and views[0]['type'] == 'sections'
+    cards = views[0]['sections'][0]['cards']
+    assert cards[0] == {'type': 'heading', 'heading': 'Bedroom'}
+    assert [c['entity'] for c in cards[1:]] == ['light.bedroom_left', 'light.bedroom_right', 'fan.bedroom_fan', 'media_player.bedroom']
+    assert {c['type'] for c in cards[1:]} == {'tile'}                                   # Home Assistant's own cards, and nothing a model wrote
+    assert {'name': 'Upstairs', 'kind': 'dashboard', 'views': ['Bedroom', 'Robin’s room']} in admin.find(kind='dashboard')['found']
+    assert {'name': 'Map', 'kind': 'dashboard', 'made_by': 'Home Assistant itself'} in admin.find(kind='dashboard')['found']
+    with pytest.raises(admin.Already):
+        plan('dashboard', do='add', name='upstairs', rooms=['bedroom'])
+    admin.undo(made['batch'], login=ME, via='app')
+    assert [b['url_path'] for b in house.boards] == ['map', 'wall-tablet'] and 'hub-upstairs' not in house.board_configs
+    things = do('dashboard', do='add', name='Evening', things=['reading lamp', 'thermostat', 'front door lock'], view='Evening things')
+    assert things['done'] == ['Dashboard “Evening” made, showing Evening things']
+    assert [c.get('entity') for c in house.board_configs['hub-evening']['views'][0]['sections'][0]['cards'][1:]] == [
+        'light.living_reading', 'climate.hallway', 'lock.front_door']
+    with pytest.raises(admin.Refused, match='Say what the dashboard shows'):
+        plan('dashboard', do='add', name='Empty')
+
+
+def test_a_view_is_added_to_a_dashboard_its_owner_made_and_their_own_cards_are_kept(house):
+    before = house.board_configs['wall-tablet']
+    added = do('dashboard', do='add_view', name='wall tablet', rooms=['office'])
+    assert added['done'] == ['View “Office” added to dashboard “Wall tablet”']
+    now = house.board_configs['wall-tablet']
+    assert now['views'][:2] == before['views'] and now['views'][2]['title'] == 'Office'      # what the owner wrote by hand is left as it was
+    with pytest.raises(admin.Already):
+        plan('dashboard', do='add_view', name='Wall tablet', rooms=['office'])
+    gone = plan('dashboard', do='remove_view', name='Wall tablet', view='clock')
+    assert admin.asks(gone) == 'delete' and gone[0]['words'] == 'View “Clock” taken out of dashboard “Wall tablet”'
+    taken = admin.carry_out(gone, login=ME, via='app')
+    assert [v['title'] for v in house.board_configs['wall-tablet']['views']] == ['Downstairs', 'Office']
+    admin.undo(taken['batch'], login=ME, via='app')
+    assert [v['title'] for v in house.board_configs['wall-tablet']['views']] == ['Downstairs', 'Clock', 'Office']
+    # Changed again in Home Assistant since: Undo leaves it alone and says so.
+    house.board_configs['wall-tablet']['views'].append({'title': 'Added by hand', 'cards': []})
+    with pytest.raises(admin.Refused, match='was changed again after Hub changed it'):
+        admin.undo(added['batch'], login=ME, via='app')
+    with pytest.raises(admin.Refused, match='Which view\\? Wall tablet has: Downstairs, Clock, Office, Added by hand'):
+        plan('dashboard', do='remove_view', name='Wall tablet', view='garden')
+
+
+def test_a_dashboard_is_renamed_and_removed_and_home_assistants_own_are_left_alone(house):
+    assert do('dashboard', do='rename', name='Wall tablet', new_name='Hall tablet')['done'] == ['Dashboard Wall tablet renamed Hall tablet']
+    removal = plan('dashboard', do='remove', name='Hall tablet')
+    assert admin.asks(removal) == 'delete'
+    gone = admin.carry_out(removal, login=ME, via='app')
+    assert [b['title'] for b in house.boards] == ['Map']
+    admin.undo(gone['batch'], login=ME, via='app')
+    assert [b['title'] for b in house.boards] == ['Map', 'Hall tablet'] and len(house.board_configs['wall-tablet']['views']) == 2
+    for change in ({'do': 'rename', 'new_name': 'Atlas'}, {'do': 'remove'}, {'do': 'add_view', 'rooms': ['office']}):
+        with pytest.raises(admin.Refused, match='one of Home Assistant’s own dashboards'):
+            plan('dashboard', name='map', **change)
+    with pytest.raises(admin.Refused, match='There is no dashboard called “Garden”. There are: Hall tablet, Map'):
+        plan('dashboard', do='remove', name='Garden')
+    # The fence: only a dashboard a person made (a hyphen in its address), only the fields Hub knows, only plain data.
+    for odd in ({'type': 'lovelace/config/save', 'url_path': 'map', 'config': {'views': []}},
+                {'type': 'lovelace/config/save', 'url_path': None, 'config': {'views': []}},
+                {'type': 'lovelace/config/save', 'url_path': 'wall-tablet', 'config': {}},
+                {'type': 'lovelace/config/save', 'url_path': 'wall-tablet', 'config': {'views': ['x' * 300_000]}},
+                {'type': 'lovelace/dashboards/create', 'url_path': 'hub-x', 'title': 'X', 'mode': 'yaml'},
+                {'type': 'lovelace/dashboards/create', 'url_path': '../x-y', 'title': 'X', 'mode': 'storage'},
+                {'type': 'lovelace/dashboards/update', 'dashboard_id': 'wall_tablet', 'url_path': 'other-path'},
+                {'type': 'lovelace/dashboards/delete'}, {'type': 'lovelace/resources/create', 'url': 'https://example.com/x.js', 'res_type': 'module'}):
+        with pytest.raises(ValueError):
+            broker.setup_dashboard(odd)
+
+
 # ---- devices beyond lights and speakers ----
 
 def test_the_thermostat_is_set_and_put_back(house):

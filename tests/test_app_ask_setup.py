@@ -291,3 +291,11 @@ def test_disabling_waits_on_a_card_and_reloading_an_integration_happens_at_once(
     assert answer == '2 changes made.' and cards[0]['lines'] == ['Kitchen bridge reloaded (hue)', 'Upstairs bridge reloaded (hue)']
     assert 'batch' not in cards[0]                                          # nothing to undo about a reload
     assert ask('reload the upstairs bridge')[0] == 'Upstairs bridge reloaded (hue).'
+
+
+def test_a_dashboard_is_made_in_one_trip_and_removing_it_waits(house):
+    answer, cards, _ = ask('Make a dashboard called Evenings with the living room and the kitchen')
+    assert answer == 'Dashboard “Evenings” made, showing Living room and Kitchen.' and cards[0]['batch']
+    assert [v['title'] for v in house.board_configs['hub-evenings']['views']] == ['Living room', 'Kitchen']
+    answer, cards, _ = ask('Remove the evenings dashboard')
+    assert answer == 'That one waits for your tap.' and cards[0]['title'] == 'Remove Evenings?' and 'hub-evenings' in house.board_configs

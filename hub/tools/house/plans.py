@@ -1070,5 +1070,97 @@ def integration(w, name):
                    [{'reload': r['id']}]) for r in found]
 
 
+# ---- Home Assistant's own dashboards: made from the house's rooms and things, never from a model's markup ----
+
+ON_A_BOARD = ('light', 'switch', 'fan', 'climate', 'cover', 'lock', 'media_player', 'vacuum', 'humidifier', 'scene', 'script', 'input_boolean')
+
+
+def _board_view(title, things):
+    """One view: a heading and a tile for each thing. Only Home Assistant's own card kinds, and only things Hub found."""
+    cards = [{'type': 'heading', 'heading': title}, *({'type': 'tile', 'entity': t['id']} for t in things)]
+    return {'title': title, 'path': re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-') or 'view', 'type': 'sections',
+            'sections': [{'type': 'grid', 'cards': cards}]}
+
+
+def _board_views(w, rooms, things, view):
+    """The views asked for: one per room named, with what is in it; and one of the things named, under `view`."""
+    out = []
+    for said in rooms or ():
+        here = admin.room(said, w)
+        inside = sorted((t for t in w['things'].values() if t['area'] == here['id'] and t['domain'] in ON_A_BOARD
+                         and not (t['minor'] or t['hidden'] or t['disabled'])), key=lambda t: (ON_A_BOARD.index(t['domain']), t['name'].lower()))
+        if not inside:
+            raise Refused(f'There is nothing in {here["name"]} to show.')
+        out.append(_board_view(here['name'], inside[:40]))
+    if things:
+        found = [t for t in _things(things, w) if t['domain'] in ON_A_BOARD or not t['minor']]
+        out.append(_board_view(admin._clip(view) or 'Home', found[:40]))
+    if not out:
+        raise Refused('Say what the dashboard shows: which rooms, or which things.')
+    return out
+
+
+def dashboard(w, do, name, rooms=None, things=None, view=None, new_name=None):
+    """Make, change, rename or remove one of Home Assistant's own dashboards. What it shows is built here from
+    the house's rooms and things."""
+    boards, title = admin.dashboards(), admin._clip(name)
+    if not title:
+        raise Refused('Say the dashboard’s name.')
+    here = next((b for b in boards if admin._plainly(b['name']) == admin._plainly(title)), None)
+    save = lambda path, config: {'board': {'type': 'lovelace/config/save', 'url_path': path, 'config': config}}       # noqa: E731
+    if do == 'add':
+        if here:
+            raise Already(f'There is already a dashboard called {here["name"]}. Add a view to it, or give this one another name.')
+        views = _board_views(w, rooms, things, view)
+        path = 'hub-' + (re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')[:40] or 'board')
+        while any(b['path'] == path for b in boards):
+            path += '-2'
+        make = {'board': {'type': 'lovelace/dashboards/create', 'url_path': path, 'title': title, 'mode': 'storage', 'show_in_sidebar': True,
+                          'require_admin': False}, 'keep': ['board', 'id']}
+        return [change('dashboard', 'new', title, f'Dashboard “{title}” made, showing {_listed([v["title"] for v in views])}',
+                       [make, save(path, {'views': views})], [{'board': {'type': 'lovelace/dashboards/delete', 'dashboard_id': '$board'}}])]
+    if here is None:
+        names = ', '.join(b['name'] for b in boards) or 'none yet'
+        raise Refused(f'There is no dashboard called “{title}”. There are: {names}.')
+    if not broker.DASHBOARD.fullmatch(here['path']):
+        raise Refused(f'{here["name"]} is one of Home Assistant’s own dashboards, so it is changed there.')
+    if do == 'rename':
+        new = admin._clip(new_name)
+        if not new or new == here['name']:
+            raise Refused('Say the new name.') if not new else Already(f'It is already called {new}.')
+        return [change('dashboard', here['id'], new, f'Dashboard {here["name"]} renamed {new}',
+                       [{'board': {'type': 'lovelace/dashboards/update', 'dashboard_id': here['id'], 'title': new}}],
+                       [{'board': {'type': 'lovelace/dashboards/update', 'dashboard_id': here['id'], 'title': here['name']}}])]
+    if do == 'remove':
+        again = [{'board': {'type': 'lovelace/dashboards/create', 'url_path': here['path'], 'title': here['name'], 'mode': 'storage',
+                            'show_in_sidebar': here['sidebar'], 'require_admin': here['admin'], **({'icon': here['icon']} if here['icon'] else {})}}]
+        again += [save(here['path'], here['config'])] if here['config'] else []
+        return [change('dashboard', here['id'], here['name'], f'Dashboard “{here["name"]}” removed',
+                       [{'board': {'type': 'lovelace/dashboards/delete', 'dashboard_id': here['id']}}], again, asks='delete')]
+    if here['views'] is None:
+        raise Refused(f'{here["name"]} is drawn by Home Assistant itself, so there are no views of its own to change. Make a new dashboard.')
+    before = here['config']
+    if do == 'add_view':
+        new = [v for v in _board_views(w, rooms, things, view) if v['title'] not in here['views']]
+        if not new:
+            raise Already(f'{here["name"]} already has that view.')
+        body = {**before, 'views': [*before['views'], *new]}
+        words = f'View {_listed(["“" + v["title"] + "”" for v in new])} added to dashboard “{here["name"]}”'
+        return [change('dashboard', here['id'], here['name'], words, [save(here['path'], body)], [save(here['path'], before)],
+                       after={'config': 'dashboard', 'id': here['path'], 'body': body})]
+    if do == 'remove_view':
+        said = admin._plainly(view)
+        gone = [n for n, v in enumerate(here['views']) if admin._plainly(v) == said]
+        if len(gone) != 1:
+            raise Refused(f'Which view? {here["name"]} has: {", ".join(here["views"]) or "none"}.')
+        if len(here['views']) == 1:
+            raise Refused(f'That is the only view of {here["name"]}. Remove the dashboard instead.')
+        body = {**before, 'views': [v for n, v in enumerate(before['views']) if n != gone[0]]}
+        return [change('dashboard', here['id'], here['name'], f'View “{here["views"][gone[0]]}” taken out of dashboard “{here["name"]}”',
+                       [save(here['path'], body)], [save(here['path'], before)], asks='delete',
+                       after={'config': 'dashboard', 'id': here['path'], 'body': body})]
+    raise Refused('Say add, add_view, remove_view, rename or remove.')
+
+
 PLANS = {'arrange': arrange, 'place': place, 'scene': scene, 'routine': routine, 'act': act, 'helper': helper, 'house': house,
-         'integration': integration}
+         'integration': integration, 'dashboard': dashboard}

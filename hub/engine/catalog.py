@@ -985,7 +985,7 @@ ACTIONS = [
            'Undo on the Home changes page, for a day.', page='/house/changes', post='/house/do', default='undo', ceiling='undo'),
     Action('house.setup', 'Change how the house is set up',
            'When you ask in the app’s Ask: move things between rooms, rename, hide, disable and enable them, add and remove '
-           'rooms, make and change scenes, automations, scripts and helpers in Home Assistant, and reload an integration. '
+           'rooms, make and change scenes, automations, scripts, helpers and dashboards in Home Assistant, and reload an integration. '
            'Removing or disabling anything waits for your tap on a card.',
            'Undo under the answer, on Activity and on Changes, for a day.', page='/app/#changes', default='undo', ceiling='undo'),
     Action('house.security', 'Lock, unlock and open',

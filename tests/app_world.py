@@ -153,6 +153,13 @@ class World:
         self.floors, self.labels, self.devices = copy.deepcopy(FLOORS), [], copy.deepcopy(DEVICES)
         self.configs = {'scene': _scene_configs(), 'automation': copy.deepcopy(AUTOMATIONS), 'script': copy.deepcopy(SCRIPTS)}
         self.helpers, self.core = {kind: [] for kind in broker.HELPERS}, copy.deepcopy(CORE)
+        # Home Assistant's dashboards: its own map, which it draws by itself, and one a person made.
+        self.boards = [{'id': 'map', 'url_path': 'map', 'title': 'Map', 'mode': 'storage', 'icon': 'mdi:map', 'show_in_sidebar': True, 'require_admin': False},
+                       {'id': 'wall_tablet', 'url_path': 'wall-tablet', 'title': 'Wall tablet', 'mode': 'storage', 'icon': None, 'show_in_sidebar': True,
+                        'require_admin': False}]
+        self.board_configs = {'map': {'strategy': {'type': 'map'}}, 'wall-tablet': {'views': [
+            {'title': 'Downstairs', 'path': 'downstairs', 'cards': [{'type': 'entities', 'entities': ['light.kitchen_ceiling']}]},
+            {'title': 'Clock', 'path': 'clock', 'cards': [{'type': 'markdown', 'content': 'A card its owner wrote by hand'}]}]}}
 
     def _registry(self):
         for entity in self.states:      # anything that appeared since (a new scene, a helper) is in the registry too
@@ -276,6 +283,8 @@ class World:
         if kind == self.refuse:
             raise broker.Rejected('invalid_format')
         fields = {k: v for k, v in command.items() if k != 'type'}
+        if kind.startswith('lovelace/'):
+            return self._board(kind, fields)
         if kind == 'config/core/update':
             units = fields.pop('unit_system', None)
             self.core.update(fields, **({'unit_system': {'temperature': '°C' if units == 'metric' else '°F'}} if units else {}))
@@ -328,8 +337,40 @@ class World:
             self.states.pop(f'{table}.{gone}', None)
         return {}
 
+    def _board(self, kind, fields):
+        """One change to a dashboard, as Home Assistant answers it."""
+        if kind == 'lovelace/dashboards/create':
+            if any(b['url_path'] == fields['url_path'] for b in self.boards):
+                raise broker.Rejected('home_assistant_error')
+            made = {'id': fields['url_path'].replace('-', '_'), 'icon': None, 'show_in_sidebar': True, 'require_admin': False, **fields}
+            self.boards.append(made)
+            return copy.deepcopy(made)
+        if kind.startswith('lovelace/dashboards/'):
+            row = next((b for b in self.boards if b['id'] == fields.get('dashboard_id')), None)
+            if row is None:
+                raise broker.Rejected('not_found')
+            if kind.endswith('/delete'):
+                self.boards.remove(row)
+                self.board_configs.pop(row['url_path'], None)
+                return {}
+            row.update({k: v for k, v in fields.items() if k != 'dashboard_id'})
+            return copy.deepcopy(row)
+        if not any(b['url_path'] == fields['url_path'] for b in self.boards):
+            raise broker.Rejected('config_not_found')
+        if kind == 'lovelace/config/save':
+            self.board_configs[fields['url_path']] = copy.deepcopy(fields['config'])
+        else:
+            self.board_configs.pop(fields['url_path'], None)
+        return {}
+
     def _read(self, command):
         kind = command['type']
+        if kind == 'lovelace/dashboards/list':
+            return copy.deepcopy(self.boards)
+        if kind == 'lovelace/config':
+            if command.get('url_path') not in self.board_configs:
+                raise broker.Rejected('config_not_found')
+            return copy.deepcopy(self.board_configs[command['url_path']])
         if kind == 'search/related':
             if command['item_id'] == BUTTON[0]:
                 return {'automation': ['automation.living_room_button']}
