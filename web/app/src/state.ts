@@ -15,7 +15,7 @@ const SILENCE = 12000;            // Hub sends a beat every 5 s; this long witho
 
 export type Look = "auto" | "dusk" | "day";
 export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "ask" } | { kind: "keep" }
-  | null;
+  | { kind: "item"; id: number } | null;
 export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
 export type View = "home" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity";

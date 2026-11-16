@@ -7,10 +7,10 @@ import { go, me, say } from "./state";
 import type { Activity as ActivityData, ActivityKind, ActivitySource, Happening, SourceRead } from "./types";
 
 const KINDS: [ActivityKind, string][] = [["lights", "Lights"], ["security", "Doors and locks"], ["buttons", "Buttons"],
-  ["routines", "Automations"], ["music", "Music"], ["motion", "Motion"], ["other", "Everything else"]];
-const SHOWN: ActivityKind[] = ["lights", "security", "buttons", "routines", "music"];
+  ["routines", "Automations"], ["music", "Music"], ["setup", "Setup"], ["motion", "Motion"], ["other", "Everything else"]];
+const SHOWN: ActivityKind[] = ["lights", "security", "buttons", "routines", "music", "setup"];
 const SOURCES: [ActivitySource, string][] = [["ha", "Home Assistant"], ["apple", "Apple Home"], ["hub", "Hub"]];
-const KEPT = "hub.activity";
+const KEPT = "hub.activity.2";      // the choice of what to show; a new name whenever a kind is added, so it shows
 const TIME = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 const DAY = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric" });
 

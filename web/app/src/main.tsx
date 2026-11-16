@@ -13,7 +13,7 @@ import { Engine } from "./engine";
 import { MailSettings } from "./mailrules";
 import { Activity } from "./activity";
 import { Changes } from "./changes";
-import { Kitchen, watchKitchen } from "./kitchen";
+import { ItemSheet, Kitchen, shop, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
 import { HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { seen, sheet, start, view } from "./state";
@@ -33,6 +33,11 @@ function ask() {
 
 function Sheets() {
   const open = sheet.value, now = seen.value;
+  if (open?.kind === "item") {        // one thing on the shopping list: it needs Kitchen's picture, not the house's
+    const list = shop.value;
+    const item = list?.ok ? list.items.find((i) => i.id === open.id) : undefined;
+    return item ? <ItemSheet item={item} /> : null;
+  }
   if (!open || !now) return null;
   if (open.kind === "room") {
     const room = now.rooms[open.id];

@@ -12,15 +12,19 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   all work;
 - Ask offers what is often asked around now, does what is typed and says so in a sentence, draws the rooms
   or speakers it changed, puts a change back from under the answer, shows Kitchen's reply when it arrives,
-  answers a question about the day from what Hub read, remembers and forgets, and says what it can't do;
+  answers a question about the day from what Hub read, and remembers and forgets;
+- Ask moves a lamp to another room and puts it back, makes an automation, leaves unlocking a door and removing a
+  room on a card until it is tapped, and does nothing when the card is put away;
+- Ask adds to the shopping list, draws the product Hub picked under the answer, and takes a pick there;
 - on a Hub where Ask isn't set up, what is typed still reaches the older chat;
 - Today says the right sentence, lists what needs you with the longest wait first, shows the evening,
   tomorrow, the week at school and the trip, marks two things at once, takes a tick and puts it back, and
   says so when nothing needs you;
 - System opens Versions, which lists the releases and leads back;
 - Mail leads with the emails that need you and the unanswered question, takes a tick and puts it back, and
-  files a kind; Kitchen shows the conversation, recipes, a cart plan and an order, the shopping list, takes an
-  approval and answers a new message;
+  files a kind; Kitchen shows the list with each thing's product and where it stands, what needs a pick, a cart
+  plan and ideas, opens a thing, adds what is typed, takes a pick, fills the cart, reads it, fills it by itself
+  once switched on, and reads checkout back for a tap that places the order;
 - everything meant to be tapped is at least 44 px on its short side;
 - the app says so when the house stops answering and when Hub can't be reached, still opens without Hub,
   and reconnects by itself;
