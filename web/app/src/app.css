@@ -484,8 +484,7 @@ h2.minor { margin-top: 18px; font-size: var(--t-s); color: var(--ink-2); }
 .row.item { grid-template-columns: 38px 1fr auto; min-height: 64px; padding: 10px 0; text-align: left; }
 .row.tick.item .row-main b { color: var(--ink); font-weight: 500; }
 .row.item .row-main span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.row.item .row-q { white-space: nowrap; padding-left: 4px; }
-.row.item.on .row-q { color: var(--ink-2); }
+.row.item .row-q { white-space: nowrap; padding-left: 4px; color: var(--ink-2); }      /* where a thing stands is read, not skimmed past */
 .row.item.asks .row-q { color: var(--alarm); }
 .row.item.going .ring { box-shadow: inset 0 0 0 2px var(--lamp); animation: breathe .8s ease-in-out infinite alternate; }
 .qty { font-style: normal; font-weight: 400; color: var(--ink-3); margin-left: 3px; }
@@ -497,7 +496,7 @@ h2.minor { margin-top: 18px; font-size: var(--t-s); color: var(--ink-2); }
 .pickblock .opt:first-of-type { margin-top: 12px; }
 .opt { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; width: 100%; min-height: 60px; padding: 9px 0; border-top: 1px solid var(--line); text-align: left; }
 .opt .row-main b { font-weight: 500; line-height: 1.25; }
-.opt .row-main span { font-size: var(--t-xs); color: var(--ink-3); margin-top: 2px; }
+.opt .row-main span { font-size: var(--t-xs); color: var(--ink-2); margin-top: 2px; }
 .opt-pick { display: inline-grid; place-items: center; height: 44px; min-width: 68px; padding: 0 12px; border-radius: 11px; background: var(--lamp); color: var(--on-lamp); font-size: var(--t-s); font-weight: 500; }
 .pickblock .linkish { display: inline-flex; align-items: center; border-top: 1px solid var(--line); width: 100%; font-size: var(--t-s); }
 .sheet .opt:last-of-type { border-bottom: 1px solid var(--line); }
@@ -510,6 +509,7 @@ h2.minor { margin-top: 18px; font-size: var(--t-s); color: var(--ink-2); }
 .block .ctl.check { margin-top: 12px; padding: 8px 0; }
 /* how many: one fewer, the number, one more */
 .howmany { margin-top: 6px; }
+.howmany .ctl-name span { color: var(--ink-2); }
 .stepper { display: inline-flex; align-items: center; gap: 2px; justify-self: end; }
 .stepper button { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--line); font-size: 22px; line-height: 1; }
 .stepper button:disabled { opacity: .35; }
