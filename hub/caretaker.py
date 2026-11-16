@@ -11,6 +11,10 @@ Assistant, the network, the devices, Hub and its helpers, fixes a fenced few thi
 Hub only reads these, the journal read-only. The one thing it writes is a request note in the folder's
 `queue/` (Try again, Done, Ignore, Pause, Resume, a drill), after checking it here. The caretaker checks it
 again, answers it in its journal and deletes it. Nothing here reaches the house or starts anything.
+
+Ask is the way in (hub/app/ask): `brief()` rides along with every request, `lines()` is what it reads to answer
+a question about the house's health, and `plan()` turns what the owner asked for into one of these notes, or a
+card that waits for their tap.
 """
 import json
 import os
@@ -33,6 +37,10 @@ NOTE_TONES = ('fixed', 'by_itself', 'info')
 
 class Refused(Exception):
     """A request Hub won't pass on. The message says why, in words for the owner."""
+
+
+class Unclear(Exception):
+    """Ask's model named nothing open, or more than one thing. The message says what is open, for it to try again."""
 
 
 def _utc(moment):
@@ -291,6 +299,53 @@ def _drill(found):
             'steps': steps}
 
 
+def _open_needs(now, found):
+    """Every open needs-you item, not a drill: those on Today, those held for the morning, and those for this screen
+    only (a battery)."""
+    fixable = {n.get('id'): n for n in found.get('needs', []) if isinstance(n, dict)}
+    out = []
+    for r in _rows("select * from incidents where status = 'needs_you' and drill is null order by id"):
+        extra = fixable.get(r['id'], {})
+        held = bool(r['today_from'] and _parse(r['today_from']) > now)
+        out.append({'id': r['id'], 'title': r['title'], 'words': r['needs'] or r['title'], 'cause': r['cause'],
+                    'ask': r['ask'], 'fixable': bool(extra.get('fixable')), 'today': bool(r['today']),
+                    'held': held, 'urgent': bool(r['urgent']), 'since': _when(_parse(r['first_seen']), now)})
+    return out
+
+
+def _says(watching, looked, waiting, held):
+    """The screen's headline: is it watching, and what needs the owner now."""
+    if not watching:
+        return looked
+    if waiting:
+        return f'{counted(len(waiting), "thing", True)} need{"s" if len(waiting) == 1 else ""} you.'
+    if held:
+        return f'All quiet for now. {counted(len(held), "thing", True)} wait{"s" if len(held) == 1 else ""} for the morning.'
+    return 'All quiet.'
+
+
+def _until(found, now):
+    """'until 3:00 PM' or 'until you resume' while it is paused, else ''."""
+    if not found.get('paused'):
+        return ''
+    until = found.get('paused_until')
+    return 'until you resume' if until == 'forever' or not _parse(until) else f'until {_when(_parse(until), now)}'
+
+
+def _night_of(now, waiting):
+    """The night from 9 PM: tonight's after 9 PM, else last night's (to 6 AM once it is past noon)."""
+    local = now.astimezone(home.PACIFIC)
+    tonight = local.hour >= 21
+    day = local.date() if tonight else local.date() - timedelta(days=1)
+    start = datetime(day.year, day.month, day.day, 21, 0, tzinfo=home.PACIFIC)
+    end = now if tonight or local.hour < 12 else start + timedelta(hours=15)
+    lines = _night(start, end)
+    fixed = sum(1 for line in lines if line['tone'] == 'fixed')
+    by_itself = sum(1 for line in lines if line['tone'] == 'by_itself')
+    return {'title': 'Tonight, from 9:00 PM' if tonight else 'Last night', 'headline': headline(fixed, by_itself, waiting),
+            'lines': lines}
+
+
 def picture(now=None):
     """The House health screen as data. Reads the caretaker's folder; calls nothing."""
     now = now or _now()
@@ -300,14 +355,7 @@ def picture(now=None):
     found = status() or {}
     watching, looked = alive(now)
     waiting = needs(now)
-    fixable = {n.get('id'): n for n in found.get('needs', []) if isinstance(n, dict)}
-    open_needs = []
-    for r in _rows("select * from incidents where status = 'needs_you' and drill is null order by id"):
-        extra = fixable.get(r['id'], {})
-        held = bool(r['today_from'] and _parse(r['today_from']) > now)
-        open_needs.append({'id': r['id'], 'title': r['title'], 'words': r['needs'] or r['title'], 'cause': r['cause'],
-                           'ask': r['ask'], 'fixable': bool(extra.get('fixable')), 'today': bool(r['today']),
-                           'held': held, 'urgent': bool(r['urgent']), 'since': _when(_parse(r['first_seen']), now)})
+    open_needs = _open_needs(now, found)
     days, watched, week, by_system = _history(now)
     systems = []
     for system in found.get('systems', []):
@@ -315,29 +363,10 @@ def picture(now=None):
         systems.append({'id': system.get('id'), 'name': system.get('name'), 'state': system.get('state'),
                         'line': system.get('line'), 'days': _dots(days, watched, mine),
                         'history': [{k: v for k, v in inc.items() if k not in ('start', 'end')} for inc in reversed(mine)]})
-    local = now.astimezone(home.PACIFIC)
-    tonight = local.hour >= 21
-    day = local.date() if tonight else local.date() - timedelta(days=1)
-    start = datetime(day.year, day.month, day.day, 21, 0, tzinfo=home.PACIFIC)
-    end = now if tonight or local.hour < 12 else start + timedelta(hours=15)
-    night = _night(start, end)
-    fixed = sum(1 for line in night if line['tone'] == 'fixed')
-    by_itself = sum(1 for line in night if line['tone'] == 'by_itself')
-    held = [n for n in open_needs if n['held']]
-    if not watching:
-        says = looked
-    elif waiting:
-        says = f'{counted(len(waiting), "thing", True)} need{"s" if len(waiting) == 1 else ""} you.'
-    elif held:
-        says = f'All quiet for now. {counted(len(held), "thing", True)} wait{"s" if len(held) == 1 else ""} for the morning.'
-    else:
-        says = 'All quiet.'
     mode = found.get('mode')
-    paused = bool(found.get('paused'))
-    until = found.get('paused_until')
     sub = [looked if watching else 'It may have stopped; the Mac’s screen or Termius will say why.']
-    if paused:
-        sub.append('Paused until you resume.' if until == 'forever' or not _parse(until) else f'Paused until {_when(_parse(until), now)}.')
+    if found.get('paused'):
+        sub.append(f'Paused {_until(found, now)}.')
     elif mode == 'watch':
         sub.append('Watching only: it says what it would fix and leaves it to you.')
     elif mode == 'fix':
@@ -345,10 +374,9 @@ def picture(now=None):
     answers = [{'id': r['id'], 'do': r['do'], 'status': r['status'], 'words': r['words']}
                for r in _rows("select * from requests where id like 'hub-%' order by received_at desc limit 10")]
     return {
-        'set_up': True, 'alive': watching, 'headline': says, 'sub': ' '.join(sub), 'mode': mode, 'paused': paused,
-        'needs': open_needs, 'today': len(waiting),
-        'night': {'title': 'Tonight, from 9:00 PM' if tonight else 'Last night',
-                  'headline': headline(fixed, by_itself, len(waiting)), 'lines': night},
+        'set_up': True, 'alive': watching, 'headline': _says(watching, looked, waiting, [n for n in open_needs if n['held']]),
+        'sub': ' '.join(sub), 'mode': mode, 'paused': bool(found.get('paused')),
+        'needs': open_needs, 'today': len(waiting), 'night': _night_of(now, len(waiting)),
         'systems': systems, 'week': week, 'week_says': week_words(week),
         'sturdier': [s for s in found.get('sturdier', []) if isinstance(s, dict)],
         'batteries': found.get('batteries', []), 'ignoring': found.get('ignoring', []),
@@ -370,19 +398,26 @@ def ask(do, target, login, now=None):
     target = str(target or '').strip()[:200]
     said = _check(do, target)
     note = {'id': 'hub-' + secrets.token_hex(6), 'do': do, 'target': target, 'by': str(login or '')[:100], 'at': _utc(now)}
+    _leave(note)
+    return said, note['id']
+
+
+def _leave(note):
+    """The one write Hub makes in the caretaker's folder: a checked request note, put in its queue whole. The
+    golden dry run (hub/golden/dryrun.py) stands here and writes the note down instead."""
+    queue = folder() / 'queue'
     scratch = queue / f'.{note["id"]}.tmp'
     fd = os.open(scratch, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, 'w') as handle:
         json.dump(note, handle)
     os.replace(scratch, queue / f'{note["id"]}.json')
-    return said, note['id']
 
 
 def _check(do, target):
     if do == 'resume':
         return 'Asked the caretaker to start fixing again.'
     if do == 'pause':
-        if target not in ('', 'forever') and not (target.isdigit() and 1 <= int(target) <= 7 * 24 * 60):
+        if target not in ('', 'forever') and not (target.isdigit() and 1 <= int(target) <= PAUSE_MOST):
             raise Refused('Pause for a number of minutes, or until you resume.')
         return 'Asked the caretaker to pause.'
     if do == 'drill':
@@ -412,3 +447,221 @@ def _check(do, target):
     if do == 'done':
         return 'Marked as sorted.'
     return 'The caretaker will leave it alone from now on.'
+
+
+# ---- Ask: what goes with every request, what it reads, and what it may ask for ----
+
+LINK = re.compile(r'\b(?:[a-z][a-z0-9+.-]*://|www\.)\S+', re.I)
+EMAIL = re.compile(r'[\w.+-]+@[\w-]+(?:\.[\w-]+)+')
+IP = re.compile(r'\b\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?\b'                    # IPv4, with a port or not
+                r'|\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{1,4}\b'                   # IPv6 written out (and a hardware address)
+                r'|\b(?:[0-9a-f]{1,4}:){1,6}:(?:[0-9a-f]{1,4}\b)?|(?<![\w:])::[0-9a-f]{1,4}\b', re.I)     # IPv6 with ::
+# A question plainly about the house's health: it gets House health with it, and its answer ends with Open House health.
+ABOUT = re.compile(
+    r"\b(house health|caretaker|how(?:’|')?s the house|how is the house|house doing|how(?:’|')?s everything"
+    r"|is (?:everything|the house|all) (?:ok|okay|alright|all right|fine|working)|what (?:broke|went wrong|failed|got fixed|was fixed)"
+    r"|anything (?:broken|wrong|down)|(?:keeps?|kept) (?:dropping|failing|going (?:off|out)|falling off)|drop(?:s|ped|ping)? (?:off|out)"
+    r"|sturdier|hue channel|zigbee channel)\b", re.I)
+ASKS = ('pause', 'resume', 'try_again', 'done', 'ignore', 'restart_home_assistant', 'drill', 'sturdier_done', 'sturdier_ignore')
+PAUSE_MOST = 7 * 24 * 60        # minutes
+FILLER = {'the', 'an', 'one', 'that', 'this', 'it', 'its', 'thing', 'problem', 'about', 'of', 'for', 'on', 'my', 'our', 'with',
+          'drill', 'suggestion', 'please'}
+
+
+def _plain(text):
+    """Caretaker text as Ask's model may see it: no links, no email addresses, no IP addresses."""
+    return IP.sub('[address]', EMAIL.sub('[address]', LINK.sub('[link]', str(text or ''))))
+
+
+def _end(text):
+    text = str(text or '').strip()
+    return text if not text or text[-1] in '.!?' else text + '.'
+
+
+def brief(now=None):
+    """One or two plain lines that go with every request to Ask's model while the caretaker is set up: House
+    health's headline, a pause, and up to three things that need the owner. [] when it isn't set up."""
+    now = now or _now()
+    if not set_up():
+        return []
+    found = status() or {}
+    watching, looked = alive(now)
+    open_needs = _open_needs(now, found)
+    first = 'House health: ' + _says(watching, looked, needs(now), [n for n in open_needs if n['held']])
+    until = _until(found, now)
+    if until:
+        first += f' The caretaker is paused {until}: it keeps watching but fixes nothing.'
+    out = [first]
+    if open_needs:
+        shown = sorted(open_needs, key=lambda n: (n['held'] or not n['today'], n['id']))
+        more = len(shown) - 3
+        out.append('Needs the owner: ' + '; '.join(
+            n['title'] + (' (restarting Home Assistant may clear it)' if n['ask'] == 'ha.restart' else '') for n in shown[:3])
+            + (f'; and {number(more)} more' if more > 0 else '') + '.')
+    return [_plain(line) for line in out]
+
+
+def lines(now=None):
+    """House health as plain lines for Ask's model: what needs the owner, the night, the systems with trouble, the
+    advice to make the house sturdier with its evidence, a pause or watching only, and when it last looked."""
+    now = now or _now()
+    if not set_up():
+        return ['The caretaker isn’t set up on this Mac yet, so there is no House health to read.']
+    found = status() or {}
+    watching, looked = alive(now)
+    waiting = needs(now)
+    open_needs = _open_needs(now, found)
+    out = ['House health: ' + _says(watching, looked, waiting, [n for n in open_needs if n['held']]),
+           looked if watching else 'The caretaker may have stopped; the Mac’s screen or Termius will say why.']
+    until, mode = _until(found, now), found.get('mode')
+    if until:
+        out.append(f'The caretaker is paused {until}: it keeps watching and telling, but fixes nothing.')
+    elif mode == 'watch':
+        out.append('The caretaker is only watching: it says what it would fix and leaves it to the owner.')
+    elif mode == 'fix':
+        out.append('The caretaker fixes what it safely can and tells the owner the rest.')
+    for n in open_needs:
+        out.append(f'Needs the owner, since {n["since"]}: {n["title"]}. {_end(n["words"])}'
+                   + (' The caretaker can restart Home Assistant for it at the owner’s tap.' if n['ask'] == 'ha.restart' else '')
+                   + (' It goes on Today in the morning.' if n['held'] else ''))
+    night = _night_of(now, len(waiting))
+    out.append(f'{night["title"]}: {night["headline"]}')
+    out += [f'- {line["text"]}' for line in night['lines']]
+    systems = [s for s in found.get('systems', []) if isinstance(s, dict)]
+    trouble = [s for s in systems if s.get('state') not in ('ok', 'off')]
+    out += [f'Trouble now, {s.get("name")}: {_end(s.get("line"))}' for s in trouble]
+    if systems and not trouble:
+        out.append(f'All {number(len(systems))} systems it watches are fine now.')
+    for item in (s for s in found.get('sturdier', []) if isinstance(s, dict)):
+        state = item.get('verdict') or ('The owner made this change; the caretaker is checking whether it helped.' if item.get('done_at') else '')
+        out.append(f'To make the house sturdier: {item.get("title")}. {_end(item.get("words"))} {_end(state)}'.strip())
+    batteries = [b for b in found.get('batteries', []) if isinstance(b, dict)]
+    if batteries:
+        out.append('Low batteries: ' + '; '.join(f'{b.get("name")} {b.get("level")}%' + ('' if b.get('reachable', True) else ', not responding')
+                                                 for b in batteries) + '.')
+    out.append(week_words(_history(now)[2]))
+    playing = found.get('drill') or {}
+    if playing and not playing.get('done'):
+        out.append(f'A drill is playing now on a made-up house: {_end(playing.get("words"))}')
+    drills = [d for d in found.get('drills', []) if isinstance(d, dict) and d.get('name')]
+    if drills:
+        out.append('Drills it can play on a made-up house: ' + ' '.join(f'“{d["name"]}”: {_end(d.get("words"))}' for d in drills))
+    ignoring = [i.get('name') for i in found.get('ignoring', []) if isinstance(i, dict)]
+    if ignoring:
+        out.append('Not watched, as the owner asked: ' + ', '.join(ignoring) + '.')
+    return [_plain(line) for line in out]
+
+
+def asked_about(text):
+    """Whether the owner's words are plainly about the house's health (while the caretaker is set up), so Ask gives
+    its model House health with the request and ends the answer with Open House health."""
+    return bool(ABOUT.search(str(text or ''))) and set_up()
+
+
+def span(minutes):
+    """30 → 'half an hour', 60 → 'an hour', 90 → 'an hour and a half', 120 → 'two hours', 1440 → 'a day'."""
+    if minutes == 30:
+        return 'half an hour'
+    if minutes == 90:
+        return 'an hour and a half'
+    if minutes % 1440 == 0:
+        return 'a day' if minutes == 1440 else f'{number(minutes // 1440)} days'
+    if minutes % 60 == 0:
+        return 'an hour' if minutes == 60 else f'{number(minutes // 60)} hours'
+    return 'a minute' if minutes == 1 else f'{number(minutes)} minutes'
+
+
+def _stem(word):
+    return word[:-1] if len(word) > 3 and word.endswith('s') else word
+
+
+def _words(text):
+    return {_stem(w) for w in re.findall(r'[a-z0-9]+', str(text or '').lower()) if len(w) > 1} - FILLER
+
+
+def _either(names):
+    names = [f'“{n}”' for n in names]
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' or ' + names[-1]
+
+
+def _choose(items, about, words, name, kind):
+    """The one item `about` names, by its words: all of them, else the most of them. Raises Unclear."""
+    if not items:
+        raise Unclear(f'There is no open {kind} in House health.')
+    asked = _words(about)
+    if not asked:
+        if len(items) == 1:
+            return items[0]
+        raise Unclear(f'Which {kind}? {_either([name(i) for i in items])}.')
+    whole = [i for i in items if asked <= words(i)]
+    if len(whole) == 1:
+        return whole[0]
+    if not whole:
+        scored = sorted(((len(asked & words(i)), -n) for n, i in enumerate(items)), reverse=True)
+        if scored[0][0] and (len(scored) == 1 or scored[0][0] > scored[1][0]):
+            return items[-scored[0][1]]
+        raise Unclear(f'Nothing open in House health is called that. Open: {_either([name(i) for i in items])}.')
+    raise Unclear(f'Which {kind}? {_either([name(i) for i in whole])}.')
+
+
+def plan(do, about=None, minutes=None, now=None):
+    """What Ask's caretaker tool asks for: {'do', 'target', 'said'} for a note to leave now, or {'card'} for one that
+    waits for the owner's tap (restarting Home Assistant, leaving a problem alone). Raises Unclear when `about`
+    names nothing open or more than one thing, and Refused when the caretaker can't be asked that now."""
+    now = now or _now()
+    if do not in ASKS:
+        raise Refused('The caretaker doesn’t do that.')
+    if not set_up():
+        raise Refused('The caretaker isn’t set up on this Mac yet.')
+    found = status() or {}
+    if do == 'pause':
+        if minutes is None:
+            return {'do': 'pause', 'target': 'forever',
+                    'said': 'Asked the caretaker to pause until you resume it. It keeps watching but fixes nothing.'}
+        if not 1 <= int(minutes) <= PAUSE_MOST:
+            raise Unclear('Pause for one minute up to seven days, or leave minutes out to pause until resumed.')
+        return {'do': 'pause', 'target': str(int(minutes)),
+                'said': f'Asked the caretaker to pause for {span(int(minutes))}. It keeps watching but fixes nothing until then.'}
+    if do == 'resume':
+        if not found.get('paused'):
+            raise Refused('The caretaker isn’t paused.')
+        return {'do': 'resume', 'target': '', 'said': 'Asked the caretaker to start fixing again.'}
+    if do == 'drill':
+        playing = found.get('drill') or {}
+        if playing and not playing.get('done'):
+            raise Refused('A drill is playing already; House health shows it.')
+        drills = [d for d in found.get('drills', []) if isinstance(d, dict) and d.get('name')]
+        chosen = _choose(drills, about, lambda d: _words(d['name'].replace('-', ' ') + ' ' + str(d.get('words', ''))),
+                         lambda d: d['name'], 'drill')
+        words = _end(chosen.get('words'))
+        return {'do': 'drill', 'target': chosen['name'],
+                'said': f'Starting the drill: {words[:1].lower()}{words[1:]} It plays on a made-up house; nothing real is touched.'}
+    if do in ('sturdier_done', 'sturdier_ignore'):
+        open_items = [s for s in found.get('sturdier', []) if isinstance(s, dict) and s.get('key') and not s.get('done_at')]
+        chosen = _choose(open_items, about, lambda s: _words(f'{s["key"].replace("-", " ")} {s.get("title", "")} {s.get("words", "")}'),
+                         lambda s: s.get('title', s['key']), 'suggestion')
+        if do == 'sturdier_done':
+            return {'do': 'done', 'target': f'sturdier:{chosen["key"]}',
+                    'said': f'Noted: “{chosen.get("title")}”. The caretaker will watch whether it helped and say so in House health.'}
+        return {'do': 'ignore', 'target': f'sturdier:{chosen["key"]}',
+                'said': f'Set aside: “{chosen.get("title")}”. It won’t be suggested again.'}
+    problems = _open_needs(now, found)
+    if do == 'restart_home_assistant':
+        problems = [p for p in problems if p['ask'] == 'ha.restart']
+        if not problems:
+            raise Unclear('Nothing House health shows asks for a restart. To restart Home Assistant anyway, use device with '
+                          'homeassistant.restart; it waits for the owner’s tap too.')
+    chosen = _choose(problems, about, lambda p: _words(f'{p["title"]} {p["words"]} {p["cause"]}'), lambda p: p['title'], 'problem')
+    target = f'care-{chosen["id"]}'
+    if do == 'restart_home_assistant' or (do == 'try_again' and chosen['ask'] == 'ha.restart'):
+        return {'card': {'kind': 'care', 'do': 'fix', 'target': target, 'title': 'Restart Home Assistant?', 'lines': [chosen['title']],
+                         'why': 'Home Assistant is away for a minute or two. The caretaker then looks again.', 'button': 'Restart'}}
+    if do == 'ignore':
+        return {'card': {'kind': 'care', 'do': 'ignore', 'target': target, 'title': 'Leave this alone from now on?',
+                         'lines': [chosen['title']], 'why': 'The caretaker stops watching for it and won’t bring it up again.',
+                         'button': 'Leave it alone'}}
+    if do == 'try_again':
+        if not chosen['fixable']:
+            raise Refused(f'The caretaker can’t fix “{chosen["title"]}”; it needs you. House health says what to do.')
+        return {'do': 'fix', 'target': target, 'said': f'Asked the caretaker to try again: “{chosen["title"]}”.'}
+    return {'do': 'done', 'target': target, 'said': f'Marked “{chosen["title"]}” as sorted.'}
