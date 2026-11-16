@@ -12,12 +12,16 @@ a made-up list on its way into a practice cart (tests/kitchen_world.py): product
 one thing that needs a pick, and a cart plan waiting for a tap. Filing, approving and ordering only change the
 made-up day.
 
+Errands shows a made-up week (tests/errands_world.py): an invitation, a bill, a booking, a calendar invitation and
+two class to-dos, read once by Hub's real reading and drafting on a stand-in for its model. Opening a step only
+notes it here; nothing is sent anywhere, and "Add to the list" puts things on the made-up Kitchen list.
+
 Ask works here too, on a stand-in for its model (tests/ask_script.py) that picks a tool from a few plain words:
 "dim the kitchen", "everything off", "some jazz in the bedroom, softly", "play it in the dining room too",
 "pause", "movie night", "remember to start music softly", "what should we cook this week?", "what needs me today?",
 "add sponges and milk to the list", "what's on the list?", "order the groceries for tomorrow morning",
 "move the reading lamp to the bedroom", "remove the dining room", "unlock the front door",
-"every evening at 6:45 turn on the hallway light".
+"every evening at 6:45 turn on the hallway light", "what errands are ready?".
 The stand-in is only a script; how well Ask understands is the real model's job and can't be judged here.
 """
 import json
@@ -50,7 +54,7 @@ from hub.app.ask import private, route, turns  # noqa: E402
 from hub.main import app  # noqa: E402
 from hub.tools.house import admin, control, read  # noqa: E402
 from hub.tools.gmail import filing, inbox, missions, triage  # noqa: E402
-from tests import app_world, ask_script, day_world, kitchen_world  # noqa: E402
+from tests import app_world, ask_script, day_world, errands_world, kitchen_world  # noqa: E402
 
 # A made-up checked version waiting for Deploy. No deployer listens here, so a tap leaves it "updating".
 _ready = Path(scratch) / 'releases'
@@ -125,6 +129,15 @@ patch.setattr(private, 'answer', lambda text, topics=None: (
 # after it is asked to, a cart plan waiting, and an assistant that takes a few seconds to answer.
 shop = kitchen_world.install(patch, takes=4.0)
 
+# Errands: the made-up week's mail and the class guide's two to-dos (added to the made-up guide), read once as the
+# morning job would, on a stand-in for Luna. Free times for a booking come from the made-up calendar.
+def todos():
+    return [row for row in errands_world.school(EVENING) if row['kind'] == 'action']
+
+
+day.school += todos()
+week = errands_world.demo(patch, EVENING)
+
 # Mail, on the made-up day's inbox: reading can be filed with a tap, and filing only empties it here.
 patch.setattr(missions, 'is_paused', lambda: False)
 patch.setattr(filing, 'trusted', lambda kind: 'undo' if kind == 'reading' else 'suggest')
@@ -171,6 +184,8 @@ def stage(what: str):
         day.sorted, day.asked = fresh.sorted, fresh.asked
         shop.reset()
         shop.down = shop.old = False
+        day.school += todos()
+        errands_world.again(week)
         with admin._db() as conn:           # the record of setup changes, and the cards that wait
             conn.execute('delete from house_setup')
             conn.execute('delete from house_setup_waiting')
@@ -186,6 +201,9 @@ def stage(what: str):
         day.events, day.school, day.mail, day.filed, day.cart = [], [], [], 0, False
         shop.reset(cart_waiting=False)
         shop.items = [i for i in shop.items if i['state'] != 'pick']
+        errands_world.quiet()
+    elif what == 'errands-replied':         # the owner sent the party reply from their mail app
+        week.replied(errands_world.HOST)
     elif what in ('kitchen-away', 'kitchen-old', 'kitchen-back'):       # the kitchen service stopped, or from before it kept the list
         shop.down, shop.old = what == 'kitchen-away', what == 'kitchen-old'
     elif what == 'kitchen-empty':

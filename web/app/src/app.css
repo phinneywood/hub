@@ -565,6 +565,58 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
 .klist .kthread { margin: 4px 0 16px; }
 .klist .quiet { margin: 0 0 14px; }
 
+/* ---------- errands: what Hub got ready for a tap ----------
+   A card each, raised like a thing that needs a pick; the first way to finish it is lamplight. A card that was
+   started is edged in sea-glass while Hub watches for the proof. */
+.er-list { margin-top: 12px; display: grid; gap: 10px; }
+.errand { padding: 14px 16px 2px; border-radius: 16px; background: var(--raised); }
+[data-theme="day"] .errand { background: var(--room); }
+.ask .errand, .sheet .errand { background: var(--ground); }
+.errand.started { box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--sound) 50%, transparent); }
+.errand.settled { padding-bottom: 6px; }
+.errand.settled .er-t { color: var(--ink-2); }
+.er-kick { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: var(--t-xs); color: var(--ink-3); }
+.er-kick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.er-kick b { flex: none; font-weight: 500; color: var(--ink-2); }
+.er-kick b.warn, .er-kick b.bad { color: var(--alarm); }
+.er-t { display: block; width: 100%; margin: -6px 0 -10px; padding: 10px 0; text-align: left; font-size: var(--t-l); line-height: 1.2; font-weight: 500; letter-spacing: -.005em; text-wrap: balance; }
+.er-why { margin-top: 5px; font-size: var(--t-s); color: var(--ink-2); text-wrap: pretty; }
+.er-why.big { margin-top: 16px; font-size: var(--t-m); }
+.er-quote { margin: 10px 0 0; padding: 1px 0 1px 12px; border-left: 2px solid var(--line-2); font-size: var(--t-s); color: var(--ink-2); text-wrap: pretty; }
+.er-quote::before { content: "“"; } .er-quote::after { content: "”"; }
+.er-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.er-facts span { font-size: var(--t-xs); font-weight: 500; padding: 4px 9px; border-radius: 8px; background: var(--line); color: var(--ink-2); }
+.er-open { display: flex; gap: 8px; margin-top: 12px; font-size: var(--t-s); color: var(--ink-2); text-wrap: pretty; }
+.er-open .ic { flex: none; width: 18px; height: 18px; stroke-width: 2.2; color: var(--sound); margin-top: 1px; }
+.errand .kacts { margin-top: 12px; }
+.errand .btn, .er-go .btn { height: 46px; padding: 0 18px; display: inline-flex; align-items: center; gap: 6px; }
+.errand .btn .ic, .er-go .btn .ic { width: 17px; height: 17px; stroke-width: 2; }
+.btn.taken { color: var(--ink-2); }
+.er-quiet { display: flex; gap: 20px; margin-top: 2px; }
+.er-quiet button, .er-quiet span { min-height: 44px; min-width: 44px; font-size: var(--t-s); color: var(--ink-3); display: flex; align-items: center; }
+.er-quiet button:last-child { margin-left: auto; justify-content: flex-end; color: var(--ink-2); }
+/* one errand opened: each way with its steps, the drafted reply as it will be sent */
+.er-way { margin-top: 20px; }
+.sheet .er-way h2 { margin: 0 0 8px; }
+.er-steps { list-style: none; padding: 0; border-top: 1px solid var(--line); }
+.er-steps li { display: grid; grid-template-columns: 40px 1fr; gap: 6px; padding: 12px 0 14px; border-bottom: 1px solid var(--line); }
+.er-ic { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--line); color: var(--ink-2); }
+.er-ic .ic { width: 17px; height: 17px; }
+.er-steps li.taken .er-ic { background: var(--sound); color: var(--ground); }
+.er-step { min-width: 0; padding-top: 4px; }
+.er-step b { display: block; font-weight: 500; overflow-wrap: anywhere; }
+.er-step > span { display: block; font-size: var(--t-s); color: var(--ink-2); margin-top: 2px; }
+.er-draft { margin-top: 8px; padding: 12px 14px; border-radius: 12px; background: var(--ground); font-size: var(--t-s); line-height: 1.45; white-space: pre-line; text-wrap: pretty; }
+[data-theme="day"] .er-draft { background: var(--raised); }
+.er-go { margin-top: 10px; }
+.er-way .wait-why { margin-top: 8px; }
+.er-other { margin-top: 6px; }
+.er-end { margin-top: 24px; }
+.choices.two { grid-template-columns: 1fr 1fr; }
+.errands .klist .er-list { margin: 0 0 16px; }
+.er-list.in-ask { margin-top: 10px; }
+.er-list.in-ask .row-act { justify-self: start; }
+
 /* four places and Ask fit a phone's width: the dot that marks where you are sits under the word */
 @media (max-width: 1039px) {
   .tabs { gap: 0; padding: 0 10px 0 4px; }

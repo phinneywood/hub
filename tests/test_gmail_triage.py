@@ -421,7 +421,7 @@ def test_when_gmail_cannot_be_read_the_sort_fails_by_name_and_the_morning_carrie
     with pytest.raises(bridge.BridgeError):
         triage.sort()
     assert state.last_run(home.today().isoformat(), triage.KIND)['status'] == 'error'
-    assert sorting.run() == []
+    assert sorting.run() == ['errands']                  # the rest of the morning carries on
     assert ('engine_sort_failed', 'gmail') in [(a['action'], a['detail']) for a in store.recent_activity()]
     assert triage.picture()['synced_at'] is None and client.get('/gmail').status_code == 200
 

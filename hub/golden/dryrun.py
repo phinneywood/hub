@@ -33,8 +33,9 @@ COVERED = {'home_control': 'home', 'play_music': 'home', 'edit_playlist': 'music
            'propose_recipe': 'proposal', 'run_recipe': 'home', 'kitchen': 'kitchen'}
 # Ask in the app: each tool, and the door its changes leave by ('read' for one that changes nothing).
 COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'remember': 'note', 'groceries': 'kitchen', 'kitchen': 'kitchen',
-               'look_up': 'read', 'find': 'read', 'details': 'read', 'arrange': 'setup', 'rooms': 'setup', 'scene_setup': 'setup',
-               'routine': 'setup', 'device': 'setup', 'setting': 'setup', 'integration': 'setup', 'dashboard': 'setup'}
+               'look_up': 'read', 'errands': 'read', 'find': 'read', 'details': 'read', 'arrange': 'setup', 'rooms': 'setup',
+               'scene_setup': 'setup', 'routine': 'setup', 'device': 'setup', 'setting': 'setup', 'integration': 'setup',
+               'dashboard': 'setup'}
 DRY_ID = -1                     # the message number a held-back Kitchen hand-off is given
 
 

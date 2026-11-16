@@ -18,6 +18,7 @@ mail, model spend against its limits, and the home network. Behind them are the 
 | Network | Live home network status, traffic history and clients, from Home Assistant |
 | Trip | Plans, decisions and travel reference for one trip |
 | Kitchen | Shared grocery list, recipes and a grocery cart, through a separate kitchen assistant |
+| Errands | What the mail and the class guide want of the household, drafted so one tap finishes each: replies, invitations, bills, bookings, renewals, forms, things to get. Hub never sends, pays or books |
 | Ask Hub | A read-only chat that answers from Hub's own lookups and cites the Hub page each answer came from |
 
 ## How it protects privacy

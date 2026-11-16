@@ -22,6 +22,10 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
 - Today says the right sentence, lists what needs you with the longest wait first, shows the evening,
   tomorrow, the week at school and the trip, marks two things at once, takes a tick and puts it back, and
   says so when nothing needs you;
+- Errands shows what Hub got ready, the most pressing first, with what finished by itself; puts the class guide's
+  pumpkin on the shopping list and back with Undo; opens one errand's ways, steps and drafted reply; notes a reply
+  opened in the mail app, and closes that errand by itself once the reply is in sent mail; Today shows the three
+  most pressing and counts them in its sentence, and Ask draws them under its answer;
 - System opens Versions, which lists the releases and leads back;
 - Mail leads with the emails that need you and the unanswered question, takes a tick and puts it back, and
   files a kind; Kitchen shows the list with each thing's product and where it stands, what needs a pick, a cart
@@ -47,8 +51,9 @@ Run it after changing the app or updating its packages.
    Ask there runs on a stand-in for its model (`tests/ask_script.py`): a script that knows the made-up rooms
    and a few verbs, such as “dim the kitchen”, “everything off”, “some jazz in the bedroom, softly”,
    “play it in the dining room too”, “pause”, “movie night”, “remember to start music softly”,
-   “what should we cook this week?” and “what needs me today?”. It shows how Ask looks and feels, not how
-   well the real model understands.
+   “what should we cook this week?”, “what needs me today?” and “what errands are ready?”. It shows how Ask
+   looks and feels, not how well the real model understands. Errands there show a made-up week of mail and two
+   class to-dos (`tests/errands_world.py`), read by Hub's real reading and drafting on a stand-in for its model.
 
 2. In another shell, with Playwright available to Node:
 

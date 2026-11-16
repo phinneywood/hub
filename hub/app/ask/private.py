@@ -1,4 +1,4 @@
-"""Mail, the calendar, school and today's list: what Ask may read about them, and when it reads it.
+"""Mail, the calendar, school, today's list and the errands Hub got ready: what Ask may read about them, and when.
 
 Owner decision (2026-11-15, reversing 2026-11-14): Ask's model (Claude Sonnet on the owner's own key, `route.py`)
 may be given these. A question plainly about one of them is recognised by its words (`about`) and its bounded
@@ -77,6 +77,10 @@ def data(text, topics):
             data['school'] = dict(catalog.UNAVAILABLE)
     if 'today' in topics:
         data['needs_the_owner_today'] = catalog.today_lookup()
+        try:
+            data['errands_ready_for_a_tap'] = catalog.errands_lookup()
+        except Exception:  # noqa: BLE001 - the rest of the day still answers
+            pass
     return data
 
 

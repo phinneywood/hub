@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, talk } from "./asking";
 import type { Card, Turn } from "./asking";
+import { ErrandsCard } from "./errands";
 import { GroceriesCard, Said } from "./kitchen";
 import { RoomCell, spans } from "./screens";
 import { dragVolume, go, loadPicks, picks, playPick, runScene, say, seen, setVolume, sheet, switchRoom, undo, undone } from "./state";
@@ -202,6 +203,7 @@ function CardView({ card, now }: { card: Card; now: House }) {
   }
   if (card.kind === "kitchen" && card.after !== undefined) return <KitchenReply after={card.after} />;
   if (card.kind === "groceries") return <GroceriesCard ids={card.items} all={card.all} cart={card.cart} since={card.since} />;
+  if (card.kind === "errands" && card.ids) return <ErrandsCard ids={card.ids} />;
   if (card.kind === "memory" && card.id !== undefined) {
     const id = card.id;
     const kept = !able.value || able.value.remembers.some((note) => note.id === id);

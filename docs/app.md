@@ -53,6 +53,9 @@ sets this in the private settings file (`household.json`):
 | `GET /app/api/engine`, `POST /app/api/engine/{do}` | The Engine screen, and its taps: `tell`, `forget`, `request-done`, `improvement-done`, `note-save`, `note-skip`, `recipe-save`, `recipe-skip`, `recipe-remove`, `trust`, `run` (see “Engine”) |
 | `GET /app/api/mail-settings`, `POST /app/api/mail-settings/{do}` | Mail settings, and its taps: `level`, `charge`, `sender`, `apply`, `remove`, `undo`, `rule-stop`, `rule-resume`, `rules-check`, `backlog` (see “Mail settings”) |
 | `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
+| `GET /app/api/errands` | The errands Hub got ready, set aside and finished lately, and how the last read went (see “Errands”) |
+| `POST /app/api/errands/{id}/{do}` | A tap on an errand: `go` (a step was opened, `{"choice", "step"}`), `list` (`{"choice"}`), `done`, `later`, `not`, `back` |
+| `POST /app/api/errands/read`, `POST /app/api/errands/settings` | Look again; where a drafted reply opens, `{"compose": "mail"}` or `"gmail"` |
 | `GET /app/api/mail` | Mail as data: what needs the owner, questions nobody answered, records worth a look, each kind Hub sorted |
 | `POST /app/api/mail/{do}` | A tap on Mail, `{"key": ...}`: `done`, `back`, `answered`, `fine`, `sort`, `file` (a kind) or `undo` (a filing) |
 | `/kitchen/...` | The older page's relay to the kitchen service (`hub/tools/kitchen/pages.py`): what its assistant said, approving a cart plan, placing an order, reading new orders |
@@ -140,7 +143,8 @@ couldn't place, something it read with `look_up`) does the model get its answer 
 restores each lamp's last brightness), `scene` (by its name, or by the words that single it out), `music` (play,
 pause, resume, next, previous, volume, a room joining or leaving), `remember`, `groceries` (the shopping list and
 the cart; see “Kitchen”), `kitchen` (passes the owner's words to the kitchen assistant, whose answer appears
-under the request), `look_up` (reads mail, the calendar, the class guide or today's list; read-only), and the
+under the request), `look_up` (reads mail, the calendar, the class guide or today's list; read-only), `errands`
+(the errands Hub got ready, drawn as cards under the answer; read-only), and the
 tools that change how the house is set up and work every other device (next section). Lights, scenes and music go
 through `hub/tools/house/control.py` like a tap: the same allowlist, the same record and Undo, counted against
 Ask's 30 changes a minute. Ask changes nothing for a program without a login, or while the owner has that kind
@@ -275,16 +279,19 @@ calendar week, the reviewed class guide, the trip, and whether Kitchen has a car
 nothing is changed by reading it, and every part fails soft. The app asks for it when the screen is looked at
 and once a minute while it is, and keeps none of it on the device.
 
-- **The sentence** is written in the app from the data: the next thing today, then how much needs you
-  ("Dinner at home is at seven. Three things need you."). Under it, the temperature outside, and how tomorrow
-  starts once today is done.
+- **The sentence** is written in the app from the data: the next thing today, then how much needs you, the
+  errands ready for a tap included ("Dinner at home is at seven. Nine things need you."). Under it, the
+  temperature outside, and how tomorrow starts once today is done.
 - **Needs you**, at most five, the most pressing first. Three things differ from the older page, all from the
   owner's "mail is only what needs me":
   - each email that needs the owner is its own line (who it is from, the next step), three at most, the
     longest wait first;
   - Hub's own housekeeping offers (filing sorted mail, archive rules, planned changes) are not asked: they
     are one quiet line under the day, still a tap from their page;
-  - what has its own place on the screen isn't listed twice: class dates, two events at once, the trip.
+  - what has its own place on the screen isn't listed twice: class dates, two events at once, the trip, and an
+    email or a class to-do whose errand is on the screen.
+- **Ready for your tap**: the three most pressing errands as cards, finished from there, and the way to the rest
+  (see “Errands”).
 - **The circle** beside a need marks an email as handled in Hub's own sorting (nothing changes in Gmail) and
   hides anything else until tomorrow, or for a week where the older page did. It shows at once, and Undo
   puts it back. It needs a signed-in device.
@@ -295,6 +302,60 @@ and once a minute while it is, and keeps none of it on the device.
 
 Tests: `tests/test_app_today.py`, on a made-up day (`tests/day_world.py`) that replaces Hub's readers, so no
 real calendar, mailbox or service is read. The demo server shows the same made-up day.
+
+## Errands
+
+What the mail and the class guide want of the household, got ready so that one tap finishes each (owner's request,
+2026-11-16: a household chief of staff). Code: `hub/app/errands/`. In the app: `web/app/src/errands.tsx`, the Errands
+screen (from Today's "All errands"), the cards on Today and under an answer in Ask.
+
+**Hub never sends, pays, books or orders anything.** A tap opens the exact place where the owner finishes it, filled
+in: a reply in the phone's mail app (`mailto:`) or in Gmail on the web, the event on Google Calendar's own "new event"
+page, the sender's own page to pay or renew on, a call. Hub notes the tap and watches for proof that it was done. The
+one thing it does itself is put an errand's things on the household's shopping list, as if the owner had typed them,
+with Undo; with "Put an errand’s things on the shopping list" at "Suggest only" on the Engine page, the errand links
+to Kitchen instead.
+
+**The read** (`read.py`) runs with the morning job, right after mail is sorted, and on "Look again":
+- the emails that need the owner, the bills and renewals sorted as records and the calendar invitations from the
+  last 14 days, and the class guide's to-dos for the next 14 (already reviewed for the family);
+- each item once. An email's text comes through the read-only bridge for that run only and is never kept, and
+  senders with AI switched off are never read;
+- Luna, on its zero-retention route, at most 2 calls a run and 6 a day, within the monthly limit every kind of run
+  shares. It sees the sender's name (never the address), the subject, the day it came, the text with links and
+  addresses taken out, each link's words and site, and a few free times from the calendar for proposing a booking.
+
+**What is kept is checked in code** (`draft.py`, `links.py`): an amount, a due date, an event's day and times, the
+quoted sentence and a number to call only when the email itself has them; a link only when it is the email's own,
+https, and on the sender's own site, never a mailing service's; a drafted reply only without links, addresses or long
+numbers, and only where someone reads replies (not a no-reply or notifications address). A bill or renewal whose
+email had no such link is finished on the sender's home page. Saying yes to an invitation also puts it on the
+calendar, unless the calendar sent the invitation itself. A bill paid automatically is only told.
+
+**A card**: what to do, one line of why, when it is due, the facts the email gave, the sentence it rests on, and
+one to three ways to finish it. A way with one step is that step's button; one with more (a reply, then the
+calendar) opens a sheet with each step and the reply as it will be sent. Then Done, Tomorrow (back at 7 the next
+morning) and Not this, each with Undo; Done also marks the email handled on the Mail screen. "Replies open in"
+picks the mail app or Gmail. Every tap needs a signed-in device.
+
+**Closing by itself** (`watch.py`): Hub looks for proof, as little as it takes: something the owner sent to that
+address since the email came (sent mail through the bridge, dates only), an event that day on the calendar at the
+same time or with a word of the title in common, an email from the same site whose subject says it went through
+("Payment received"), or the email marked handled on the Mail screen. It looks when the screen is opened (at most
+every 90 seconds), on "Look again" and each morning, at most 10 reads a run; an errand nobody tapped is looked at
+every six hours, so a reply sent straight from the mail app closes it too. A call can't be seen, so it waits for
+Done. An errand whose event or class day has passed, or that waited 21 days, is let go as missed; a bill keeps
+waiting.
+
+**Elsewhere**: Hub's "Needs you" list (the older Today page, the morning brief) has one line with the count. Ask's
+model is given each errand's title, why, due date and button words when asked (`catalog.errands_lookup`), never
+addresses, links or the email's text, and nothing from a sender with AI switched off.
+
+**Keeping** (`store.py`): one row an errand in Hub's own database, never in Gmail. Its words are blanked 14 days
+after it ends and the row is deleted after 60, as sorted mail is.
+
+Tests: `tests/test_app_errands.py`, on a made-up week (`tests/errands_world.py`) with a stand-in for Luna and the
+made-up Kitchen. The demo server shows the same week, counted from the day it runs.
 
 ## Mail
 

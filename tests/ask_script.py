@@ -6,7 +6,8 @@ It knows the made-up rooms, floors and scenes, a handful of verbs, and one band 
 finds nothing. For the house's setup it knows a few plain sentences ("move the reading lamp to the bedroom",
 "remove the dining room", "unlock the front door", "every evening at 6:45 turn on the hall light"), and for the
 list a few more ("add sponges and milk to the list", "what's on the list", "order the groceries for tomorrow
-morning"). Anything else gets one sentence saying what Hub can do.
+morning"). Anything with "errands" in it shows the errands Hub got ready. Anything else gets one sentence saying what
+Hub can do.
 """
 import json
 import re
@@ -57,6 +58,7 @@ LIST = [
     (r'^(?:what.?s|what is|show me|show) in (?:the |our |my )?cart$', lambda m: call('groceries', do='cart')),
     (r'^(?:order the groceries|check out|place the order)(?: for (.+))?$', lambda m: call('groceries', do='order', **({'when': m[1]} if m[1] else {}))),
 ]
+ERRANDS = re.compile(r'\berrands?\b')
 EVERY = re.compile(rf'^every (evening|morning|day) at (\d{{1,2}}):(\d{{2}}),? turn (on|off) {THE}(.+)$', re.I)
 SOUND = re.compile(r'\b(play|music|songs?|jazz|piano|playlist|pause|resume|skip|next|previous|quieter|louder|volume|too|as well)\b')
 LIGHTS = re.compile(r'\b(dim|turn|switch|lights?|lamps?|on|off)\b')
@@ -173,6 +175,10 @@ async def scripted(messages, info):
     elif back and back[0].tool_name == 'details' and 'not_done' not in back[0].content:
         seen = back[0].content
         yield (seen.get('config') or {}).get('description') or f'{seen.get("name", "It")} is {seen.get("state", "there")}.'
+    elif back and back[0].tool_name == 'errands' and 'not_done' not in back[0].content:
+        count = back[0].content.get('count', 0)
+        yield (f'{count} errand{"s are" if count != 1 else " is"} ready for your tap. First: {back[0].content["errands"][0]["what"]}.'
+               if count else 'Nothing is waiting for you.')
     elif back:                  # a tool said "not done": for music try a band once, as a model would; else explain
         tries = len([m for m in messages if m.kind == 'response'])
         if back[0].tool_name == 'music' and tries < 2 and 'Nothing matched' in str(back[0].content):
@@ -183,6 +189,8 @@ async def scripted(messages, info):
             yield told if asks else 'Hub couldn’t do that. ' + told
     elif setup:
         yield setup
+    elif ERRANDS.search(words):
+        yield call('errands', show='ready')
     elif COOKING.search(words):
         yield call('kitchen')
     elif words.startswith('remember'):

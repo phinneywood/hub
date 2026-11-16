@@ -116,6 +116,16 @@ and tell me” the morning job does it.
   it is never filed a second time. Each message is re-checked at the moment it is sent, so one the
   owner moved meanwhile stays in the inbox.
 
+## Errands
+
+The `errands` source (`hub/app/errands/`, see “Errands” in `docs/app.md`) reads with the morning job, right after
+mail is sorted: the emails that need the owner, bills, renewals, invitations and the class guide's to-dos. Luna,
+on its zero-retention route, drafts what would finish each one, at most 2 calls a run and 6 a day within the
+shared monthly limit, and code checks every amount, date, link, number and quote against the email before any of
+it is kept. Its runs are in the engine's record as `errands`. Two actions: `errands.ready` (getting them ready;
+suggest only, since nothing is ever sent, paid or booked) and `errands.list` (an errand's things onto the shopping
+list, one tap with Undo). Its line in “Needs you” counts errands only; Ask reads them with `errands_lookup`.
+
 ## Owner decisions (2026-11-09)
 
 - Personal data reaches a model only over a zero-data-retention route, with a pinned provider and no

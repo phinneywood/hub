@@ -15,6 +15,7 @@ import { Activity } from "./activity";
 import { Changes } from "./changes";
 import { ItemSheet, Kitchen, shop, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
+import { ErrandSheet, Errands, watchErrands } from "./errands";
 import { HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
@@ -39,6 +40,7 @@ function Sheets() {
     const item = list?.ok ? list.items.find((i) => i.id === open.id) : undefined;
     return item ? <ItemSheet item={item} /> : null;
   }
+  if (open?.kind === "errand") return <ErrandSheet id={open.id} way={open.way} />;
   if (!open || !now) return null;
   if (open.kind === "room") {
     const room = now.rooms[open.id];
@@ -55,7 +57,7 @@ function Sheets() {
 
 function Screen() {
   const where = view.value;
-  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "today" ? <Today /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
+  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "today" ? <Today /> : where === "errands" ? <Errands /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
 }
 
 function App() {
@@ -101,6 +103,7 @@ if (root) {
   void loadAble();
   watchDay();
   watchMail();
+  watchErrands();
   watchKitchen();
   if (view.value === "today") void loadDay();
   void keepOnDevice().catch(() => undefined);     // without it the app still works; it just needs Hub to open

@@ -86,9 +86,9 @@ function timed(slot: Slot): boolean {
   return slot.time.includes(":");
 }
 
-/** The headline: the next thing today, then how much needs you. */
+/** The headline: the next thing today, then how much needs you: the list, and the errands ready for a tap. */
 export function daySays(day: Day): string {
-  const count = day.needs.length + day.more;
+  const count = day.needs.length + day.more + (day.ready ? day.ready.cards.length + day.ready.more : 0);
   const needs = count === 0 ? "Nothing needs you." : count === 1 ? "One thing needs you." : `${NUMBERS[count] ?? count} things need you.`;
   const next = day.today.find((slot) => slot.next);
   if (!next) return needs;

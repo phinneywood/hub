@@ -1,5 +1,5 @@
 """What Ask can do: lights, scenes, music, how the house is set up, any other device, remembering, passing a
-message to Kitchen, and reading mail, the calendar and school.
+message to Kitchen, reading mail, the calendar and school, and showing the errands Hub got ready.
 
 Few tools, each doing a whole job. Lights, scenes and music go through hub/tools/house/control.py, like a tap in
 the app: the same allowlist, record and Undo, counted against Ask's own per-minute limit. Everything else in
@@ -481,6 +481,23 @@ def look_up(ctx: RunContext[Turn], topics: list[Literal['mail', 'calendar', 'sch
         return {'not_done': 'Hub couldn’t read that just now.'}
 
 
+def errands(ctx: RunContext[Turn], show: Literal['ready', 'done'] = 'ready') -> dict:
+    """What Hub got ready for the owner from their mail and the class guide: replies drafted, invitations to answer,
+    bills with the page to pay them on, bookings, renewals, forms to sign, things to get and dates for the calendar.
+    They appear under your answer as cards the owner finishes with one tap each. show: ready (waiting for a tap, most
+    pressing first) or done (finished this week, and how). Hub itself never sends, pays, books or orders anything."""
+    from ...engine import catalog
+    turn = ctx.deps
+    turn.again = turn.strangers = True
+    try:
+        found = catalog.errands_lookup(show)
+    except Exception:  # noqa: BLE001 - a reader that failed is an answer the model can pass on
+        return {'not_done': 'Hub couldn’t read its errands just now.'}
+    if show == 'ready' and found.get('errands'):
+        turn.cards.append({'kind': 'errands', 'ids': [e['ref'] for e in found['errands']]})
+    return found
+
+
 # ---- how the house is set up, and every other device (hub/tools/house/admin.py) ----
 
 SECURITY = ('lock', 'alarm_control_panel')
@@ -695,5 +712,5 @@ def setting(ctx: RunContext[Turn], do: Literal['add', 'change', 'remove'],
     return _setup(ctx.deps, 'helper', {'do': do, 'kind': kind, 'name': name or '', 'fields': fields, 'new_name': new_name})
 
 
-ALL = (lights, scene, music, remember, groceries, kitchen, look_up, find, details, arrange, rooms, scene_setup, routine, device, setting,
-       integration, dashboard)
+ALL = (lights, scene, music, remember, groceries, kitchen, look_up, errands, find, details, arrange, rooms, scene_setup, routine, device,
+       setting, integration, dashboard)

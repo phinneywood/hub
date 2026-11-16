@@ -174,6 +174,18 @@ def network_evidence():
     return found
 
 
+def errands_morning():
+    """With the morning job, after mail is sorted: close the errands that are done, then read what is new."""
+    from ..app.errands import read
+    read.morning()
+
+
+def errand_items():
+    """One line for the errands waiting for the owner's tap; its title counts only, as mail's does."""
+    from ..app.errands import picture
+    return picture.items()
+
+
 # ---- Lookups: what Ask Hub may read on request. Each returns a small dict; none changes anything. ----
 
 LOOKUP_MAIL = 10           # emails of one kind shown to the chat's model
@@ -222,6 +234,15 @@ def mail_lookup(kind: str | None = None) -> dict:
                             'subject': luna.clip(judge.scrub(r['subject'] or ''), 120), 'days_old': r['days'],
                             **({'next_step': r['step']} if kind == 'needs' and r['step'] else {})} for r in rows]
     return found
+
+
+def errands_lookup(show: Literal['ready', 'done'] = 'ready') -> dict:
+    """Errands Hub got ready for the owner from their mail and the class guide: replies drafted, invitations, bills
+    with the page to pay them on, bookings, renewals, forms, things to get and dates. show: ready (waiting for a tap,
+    most pressing first) or done (finished in the last week, and how). Hub never sends, pays or books anything
+    itself; each errand is finished by the owner's tap on its card."""
+    from ..app.errands import picture
+    return picture.lookup(show)
 
 
 def calendar_lookup() -> dict:
@@ -910,6 +931,19 @@ SOURCES = [
     Source('preschool', 'Preschool', 'The reviewed class guide Hub already keeps.',
            'Dates, titles, times and places for the next two weeks. No names.',
            items=(today.preschool,), evidence=preschool_evidence),
+    Source('errands', 'Errands', 'Each morning after mail is sorted, and when you tap Look again: the emails that need '
+           'you, bills, renewals and invitations from the last 2 weeks, and the class guide’s to-dos for the next 2. Each '
+           'email’s text through the helper, for that run only. Then your sent mail, calendar and sorted mail, for proof '
+           'that a finished errand happened: dates, titles and subject lines only.',
+           'To Luna, on its zero-retention route, up to 12 items a run and 6 calls a day: the sender’s name, the subject, '
+           'the day it came and the text without links or email addresses, each link’s words and site, and a few free '
+           'times from your calendar. Senders you switched AI off for are never read. To Ask Hub when you ask: each '
+           'errand’s title, why, due date and the words on its buttons.',
+           items=(errand_items,), sort=errands_morning,
+           lookups=(Lookup('errands', 'Errands', 'What Hub got ready for your tap from your mail and the class guide.',
+                           'Each errand’s title, one line of why, its due date and the words on its buttons. Never '
+                           'addresses, links or message text, and nothing from senders you switched AI off for.',
+                           '/app/#errands', 'Open errands', errands_lookup),)),
     Source('trip', 'Trip', 'The trip plan saved in Hub.', 'Trip dates and whether flights are chosen.',
            items=(today.trip,), evidence=trip_evidence,
            lookups=(Lookup('trip_status', 'Trip', 'The trip plan saved in Hub.', 'Trip dates and whether flights are chosen.',
@@ -998,6 +1032,15 @@ ACTIONS = [
            'songs to your own Apple Music playlists. Deleting a playlist always waits for your tap.',
            'Undo on the Playlists page, for a day. Songs added to Apple Music playlists are removed in the Music app.',
            page='/house/playlists', default='undo', ceiling='undo'),
+    Action('errands.ready', 'Get errands ready for your tap',
+           'Each morning: drafts the reply, fills in the calendar event, finds the page to pay or renew on and the '
+           'number to call, from your mail and the class guide. Nothing is sent, paid, booked or ordered: your tap opens '
+           'each one filled in, in your mail app, Google Calendar or the sender’s own site, and you finish it there.',
+           'Not this, on the errand; Undo puts it back.', page='/app/#errands'),
+    Action('errands.list', 'Put an errand’s things on the shopping list',
+           'When you tap Add to the shopping list on an errand (“bring a pumpkin”), the things go on the household’s '
+           'list in Kitchen, as if you had typed them.', 'Undo on the errand takes them off again.', page='/app/#errands',
+           post='/app/api/errands/{id}/list', default='undo', ceiling='undo'),       # one errand's own route
     Action('hub.notes', 'Keep a note from Ask Hub',
            'When you ask Ask Hub to remember something, it shows a short note on the Notes page. Only your tap saves it.',
            'Remove it on the Engine page.', page='/engine/notes'),

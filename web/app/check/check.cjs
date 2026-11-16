@@ -5,9 +5,10 @@ const out = process.argv[2];
 const base = process.argv[3] || "http://127.0.0.1:8912";
 if (!out) { console.error("usage: node check.cjs <output-folder> [base-url]"); process.exit(2); }
 
-const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
+const ZONE = "America/Los_Angeles";      // Hub's own time zone: the made-up day is seen from its evening
+const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, timezoneId: ZONE };
 const SIZES = [["phone-dusk", { ...PHONE, colorScheme: "dark" }], ["phone-day", { ...PHONE, colorScheme: "light" }],
-               ["laptop-dusk", { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, colorScheme: "dark" }]];
+               ["laptop-dusk", { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, colorScheme: "dark", timezoneId: ZONE }]];
 const FINGER = 44;      // the smallest side of anything meant to be tapped, in px
 
 (async () => {
@@ -220,6 +221,11 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.waitForTimeout(300); await shot("6c-ask-kitchen");
     await askFor("what needs me today?");
     expect(await answered("From what Hub can see, two emails need you."), "a question about the day was not answered from what Hub read: " + await lastAnswer());
+    await askFor("what errands are ready?");
+    expect(await until(() => [...document.querySelectorAll(".turn .answer")].pop()?.textContent.startsWith("6 errands are ready for your tap.")),
+      "Ask did not say how many errands are ready: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelectorAll(".er-list.in-ask .errand").length === 4),
+      "the errands were not drawn under the answer");
     await askFor("remember to start music softly");
     expect(await answered("Hub will remember that."), "Ask did not remember: " + await lastAnswer());
     await page.waitForTimeout(300); await shot("6d-ask-talk");
@@ -307,10 +313,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     // ---- Today: what needs you, then the day ----
     await stage("reset");
     await tap(phone ? '.tabs .tab:text-is("Today")' : '.rail .tab:text-is("Today")');
-    expect(await saysSoon("Dinner at home is at seven. Three things need you."), "Today’s sentence: " + await says());
+    expect(await saysSoon("Dinner at home is at seven. Nine things need you."), "Today’s sentence: " + await says());
     expect((await page.locator(".row.need .row-main b").allInnerTexts()).join("|") === "Email from Sam Rivera|Approve the grocery cart|Email from Maple Street Dental",
       "what needs you, the longest wait first");
-    expect((await page.locator(".block h2").allInnerTexts()).join("|") === "Needs you|This evening|Tomorrow|This week at school|Lisbon", "Today’s sections, in order");
+    expect((await page.locator(".block h2").allInnerTexts()).join("|") === "Needs you|Ready for your tap|This evening|Tomorrow|This week at school|Lisbon", "Today’s sections, in order");
+    expect(await page.locator(".block .errand").count() === 3, "Today did not show the three most pressing errands");
+    expect(await page.locator('.block .quiet-line:has-text("3 more errands.") a:text-is("All errands")').count() === 1, "Today did not lead to the other errands");
+    expect(!(await page.locator(".row-main b").allInnerTexts()).includes("Bring a small pumpkin"), "a class to-do with an errand on Today was listed twice");
     expect(await page.locator(".row.warn .row-main span").innerText() === "Overlaps Dentist at 4:00 pm", "two things at once were not marked on the day");
     expect(await page.locator(".row.struck").count() === 1, "a cancelled class date was not struck through");
     expect((await page.locator(".quiet-line").last().innerText()).startsWith("Hub filed 12 emails."), "housekeeping was not told quietly");
@@ -318,14 +327,59 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.waitForTimeout(300); await shot("10-today");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Today: " + (await small()).join(", "));
     await page.locator(".tickbtn").first().click();
-    expect(await saysSoon("Dinner at home is at seven. Two things need you.", 3000), "a tick did not take the email off the list: " + await says());
+    expect(await saysSoon("Dinner at home is at seven. Eight things need you.", 3000), "a tick did not take the email off the list: " + await says());
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Marked as handled"), "a tick did not say what it did");
     await page.locator(".toast button").click();
-    expect(await saysSoon("Dinner at home is at seven. Three things need you.", 3000), "Undo did not put the email back: " + await says());
+    expect(await saysSoon("Dinner at home is at seven. Nine things need you.", 3000), "Undo did not put the email back: " + await says());
     await stage("quiet-day");
     await page.reload(); await page.waitForSelector(".say");
     expect(await saysSoon("Nothing needs you.", 4000), "a quiet day: " + await says());
     await page.waitForTimeout(1900); await shot("11-today-quiet");
+    await stage("reset");
+
+    // ---- Errands: what Hub got ready from the mail and the class guide, each finished with a tap ----
+    await page.reload(); await page.waitForSelector(".say");
+    expect(await saysSoon("Dinner at home is at seven. Nine things need you."), "Today, after a quiet day: " + await says());
+    await tap('.block a:text-is("All errands")');
+    expect(await saysSoon("Six things are ready for your tap."), "Errands’ sentence: " + await says());
+    expect((await sub()).endsWith("Nothing is sent, paid or booked until you do it."), "Errands’ second line: " + await sub());
+    expect(await page.locator(".errands .errand").count() === 6, "Errands did not show the six errands");
+    expect((await page.locator(".errands .block h2").allInnerTexts()).join("|") === "Done lately|Replies open in", "Errands’ sections, in order");
+    expect((await page.locator(".errands .block .row-main b").allInnerTexts()).join("|") === "Water bill pays itself", "a bill that pays itself was not under Done lately");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Errands scrolls sideways");
+    await page.waitForTimeout(300); await shot("14-errands");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on Errands: " + (await small()).join(", "));
+    const errand = (words) => page.locator(".errands .errand").filter({ hasText: words });
+    // the one thing Hub does itself: the class guide's pumpkin goes on the shopping list, with Undo
+    await errand("small pumpkin").locator(".btn.go").click();
+    expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Small pumpkin is on the list"), "Add to the list did not say what it did");
+    expect(await saysSoon("Five things are ready for your tap.", 3000), "an errand stayed after its only step: " + await says());
+    await page.locator(".toast button").click();
+    expect(await saysSoon("Six things are ready for your tap.", 3000), "Undo did not put the errand back: " + await says());
+    // everything about one errand: its ways, their steps and the words drafted
+    await errand("Jordan’s birthday party").locator(".er-t").click();
+    expect(await until(() => document.querySelector(".sheet.in .er-way h2")?.textContent === "Yes, we’ll come"), "the errand did not open");
+    expect((await page.locator(".sheet .er-way h2").allInnerTexts()).join("|") === "Yes, we’ll come|Can’t make it", "the errand did not offer both ways");
+    expect((await page.locator(".sheet .er-step b").allInnerTexts()).join("|") === "Reply to Jamie Chen|Add to calendar|Reply to Jamie Chen", "the steps of each way");
+    expect((await page.locator(".sheet .er-draft").first().innerText()).includes("We’d love to come to Jordan’s party."), "the drafted reply was not shown");
+    await page.waitForTimeout(400); await shot("14b-errand");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on an errand: " + (await small()).join(", "));
+    await page.keyboard.press("Escape");
+    expect(await until(() => !document.querySelector(".sheet")), "the errand did not close");
+    // a reply opened in the mail app is noted, and Hub closes the errand once the reply is in sent mail
+    await page.evaluate(() => document.addEventListener("click", (e) => {
+      if (e.target.closest?.("a[href^='mailto:'], a[target='_blank']")) e.preventDefault();       // no mail app and no other site here
+    }, true));
+    await errand("Jordan’s birthday party").locator('.btn:text-is("Can’t make it")').click();
+    expect(await until(() => document.querySelector(".errand.started .er-open")?.textContent.includes("Hub closes this when it sees your reply.")),
+      "opening the reply was not noted on its errand");
+    await page.waitForTimeout(300); await shot("14c-errand-opened");
+    await stage("errands-replied");
+    await tap('.btn:text-is("Look again")');
+    expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "You replied: RSVP to Jordan’s birthday party", null, 10000),
+      "the reply in sent mail did not close the errand");
+    expect(await saysSoon("Five things are ready for your tap.", 3000), "the errand that was replied to stayed: " + await says());
+    expect((await page.locator(".errands .block .row-main b").allInnerTexts()).includes("RSVP to Jordan’s birthday party"), "the errand replied to was not under Done lately");
     await stage("reset");
 
     // ---- Mail: what needs you, who never answered, what Hub sorted ----

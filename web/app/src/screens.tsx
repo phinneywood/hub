@@ -178,7 +178,8 @@ function Tabs() {
   return (
     <>
       {TABS.map(([where, name]) => (
-        <button type="button" key={where} class={"tab" + (view.value === where || (where === "mail" && view.value === "mailsettings") ? " on" : "")} onClick={() => go(where)}>{name}</button>
+        <button type="button" key={where} class={"tab" + (view.value === where || (where === "mail" && view.value === "mailsettings")
+          || (where === "today" && view.value === "errands") ? " on" : "")} onClick={() => go(where)}>{name}</button>
       ))}
     </>
   );

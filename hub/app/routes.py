@@ -559,3 +559,10 @@ def mail_tap(do: str, request: Request, body: dict = Body(default={})):
         return _refuse('Change mail from your phone or laptop.', 403)
     ok, said = mail.tap(do, body.get('key'))
     return {'ok': True, 'said': said} if ok else _refuse(said)
+
+
+# ---- Errands (hub/app/errands/): what Hub got ready for the owner's tap ----
+
+from .errands.routes import router as errands_router  # noqa: E402
+
+router.include_router(errands_router)

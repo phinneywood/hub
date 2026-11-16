@@ -87,7 +87,22 @@ export interface SchoolDay { day: string; title: string; note: string; struck: b
 export interface Trip { title: string; when: string; note: string; open: Open }
 export interface Day {
   ok: true; at: string; needs: Need[]; more: number; today: Slot[]; tomorrow: Slot[]; school: SchoolDay[];
-  trip: Trip | null; quiet: { text: string; open: Open }[];
+  trip: Trip | null; quiet: { text: string; open: Open }[]; ready?: { cards: Errand[]; more: number };
+}
+
+// Errands, as Hub sends them (hub/app/errands/picture.py). Titles, drafts and names come from mail: data to show.
+export type StepKind = "mail" | "open" | "call" | "calendar" | "list";
+export interface Step { kind: StepKind; label: string; go: string; href: string | null; detail: string; app: string; taken: boolean }
+export interface Way { n: number; label: string; steps: Step[]; chosen: boolean }
+export interface Errand {
+  id: number; key: string; kind: string; name: string; title: string; why: string; quote: string; from: string;
+  state: "ready" | "opened" | "later" | "done" | "dismissed" | "missed"; due: { text: string; tone: string } | null;
+  facts: string[]; ways: Way[]; opened: { label: string; watch: string; way: number; left: number } | null;
+  email: Open | null; family: boolean; ended: { text: string; when: string; seen: boolean } | null; until: string | null;
+}
+export interface Errands {
+  ok: true; ready: Errand[]; later: Errand[]; done: Errand[]; reading: boolean; checking: boolean;
+  looked: { text: string; failed: boolean } | null; set_up: boolean; compose: "mail" | "gmail";
 }
 export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string; card?: Card }
 

@@ -16,6 +16,11 @@ const PATHS = {
   plus: <path d="M12 5.5v13M5.5 12h13" />,
   up: <path d="M12 19V5.5M6 11l6-6 6 6" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  out: <path d="M8 16 16 8M9.5 8H16v6.5" />,
+  mail: <><rect x="3.5" y="6" width="17" height="12" rx="2.2" /><path d="M4.5 7.5l7.5 5.5 7.5-5.5" /></>,
+  call: <path d="M7.2 4.5h2.6l1.4 3.6-1.8 1.2a10.5 10.5 0 0 0 5.3 5.3l1.2-1.8 3.6 1.4v2.6a1.7 1.7 0 0 1-1.8 1.7A14.6 14.6 0 0 1 5.5 6.3a1.7 1.7 0 0 1 1.7-1.8z" />,
+  calendar: <><rect x="4" y="5.5" width="16" height="14" rx="2.2" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /></>,
+  bag: <><path d="M5.5 8.5h13l-1 11h-11z" /><path d="M9 8.5V7a3 3 0 0 1 6 0v1.5" /></>,
 };
 const SOLID = new Set(["more", "play", "pause", "next", "previous"]);
 

@@ -5,7 +5,8 @@ import { say } from "./state";
 
 // What the app draws under an answer. `setup`: changes to how the house is set up; `confirm`: one that waits for a tap.
 export interface Card { kind: string; rooms?: string[]; speakers?: string[]; batch?: string; after?: number; id?: number; note?: string;
-  lines?: string[]; missed?: string[]; title?: string; why?: string; do?: string; items?: number[]; all?: boolean; cart?: boolean; since?: number }
+  lines?: string[]; missed?: string[]; title?: string; why?: string; do?: string; items?: number[]; all?: boolean; cart?: boolean; since?: number;
+  ids?: number[] }
 export interface Turn { n: number; asked: string; answer: string; cards: Card[]; busy: boolean; doing: string; ms: number; status: string }
 interface Kept { id: number; asked: string; answer: string; cards: Card[]; ms: number; status: string }
 interface Able { ready: boolean; why: string | null; recent: Kept[]; usual: string[]; remembers: { id: number; note: string }[] }
@@ -14,7 +15,7 @@ type Event = { t: "say"; text: string } | { t: "doing"; what: string } | { t: "c
 
 const SAY = "hub.say";      // the chat page reads this once and sends it (web/ask): only Hub's own pages can set it
 const DOING: Record<string, string> = { lights: "Switching the lights", scene: "Setting the scene", music: "Finding the music",
-  kitchen: "Asking Kitchen", groceries: "Working the list", look_up: "Looking", remember: "Noting that", find: "Looking around the house", details: "Reading it",
+  kitchen: "Asking Kitchen", groceries: "Working the list", look_up: "Looking", errands: "Looking at your errands", remember: "Noting that", find: "Looking around the house", details: "Reading it",
   arrange: "Moving things", rooms: "Changing the rooms", scene_setup: "Changing the scene", routine: "Writing it into Home Assistant",
   device: "Working on it", setting: "Changing the settings", integration: "Reloading it", dashboard: "Making the dashboard" };
 

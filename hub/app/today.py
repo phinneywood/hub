@@ -5,6 +5,9 @@ Built from what Hub already keeps and nothing else: the same "Needs you" list as
 called and nothing is changed by reading it. Every part fails soft: a source that can't be read is left out,
 and when that is a fault the owner should know about, the list itself says so.
 
+Errands Hub got ready (hub/app/errands/) are drawn as their own cards, finished with a tap, rather than as a line
+in the list; an email or a class to-do with an errand on the screen is not listed again.
+
 Three things differ from the older page, all the owner's call (mail is "only what needs me"):
 - Each email that needs the owner is its own line, with who it is from and the next step, instead of a count.
 - Hub's own housekeeping offers (filing sorted mail, archive rules, planned changes) are not things that need
@@ -22,7 +25,7 @@ SCHOOL_DAYS = 7
 # Hub's offers about its own mail filing: told, not asked.
 HOUSEKEEPING = ('gmail-rules', 'gmail-plan', today.GMAIL_NEXT, today.GMAIL_FILED)
 # Shown where they belong on the screen, not in the list as well.
-ELSEWHERE = ('preschool-', 'calendar-clash-', 'trip-', 'tile-kitchen')
+ELSEWHERE = ('preschool-', 'calendar-clash-', 'trip-', 'tile-kitchen', 'errands')
 MAIL = 'mail:'                  # a need that is one email: "mail:<message id>"
 CART = 'kitchen-cart'
 
@@ -40,9 +43,13 @@ def _need(item):
 def _emails():
     """Each email that needs the owner, whoever has waited longest first: who it is from, and the next step."""
     from ..tools.gmail import triage
+    from .errands import store as errands
     seen = triage.picture()
+    drafted = {e['message_id'] for e in errands.rows("state in ('ready', 'opened', 'later') and message_id is not null")}
     rows = []
     for row in seen['needs']:
+        if row['id'] in drafted:                # an errand for it is on the screen already, ready to finish
+            continue
         waited = f'Waiting {row["days"]} days. ' if row['days'] >= triage.WAITING_DAYS else ''
         step = (row.get('step') or row.get('subject') or '').strip()
         rows.append({'key': MAIL + row['id'], 'title': f'Email from {row["who"]}', 'why': (waited + step).strip(),
@@ -141,15 +148,23 @@ def _calendar(now):
 
 
 def _school(day):
-    """The reviewed class guide's dates for the next week."""
+    """The reviewed class guide's dates for the next week. A to-do whose errand is on the screen, ready for a tap, is
+    left to its card until it is done."""
     from preschool import publication
+    from .errands import read as errands_read, store as errands
     current = publication.latest()
     if not current:
         return []
     last = (day + timedelta(days=SCHOOL_DAYS - 1)).isoformat()
+    try:
+        carded = {e['key'] for e in errands.rows("state in ('ready', 'opened') and source='school'")}
+    except Exception:  # noqa: BLE001 - the class dates are worth more than the tidiness
+        carded = set()
     rows = []
     for row in sorted(current['payload'].get('events', []), key=lambda r: (r.get('date', ''), r.get('start_time') or '')):
         if not day.isoformat() <= row.get('date', '') <= last:
+            continue
+        if carded and errands_read.school_key(row) in carded:
             continue
         on = date.fromisoformat(row['date'])
         hour = home.clock_label(row.get('start_time')).replace(' AM', ' am').replace(' PM', ' pm')
@@ -184,13 +199,20 @@ def _soft(part, otherwise):
         return otherwise
 
 
+def _ready():
+    """The errands Hub got ready, the most pressing few as cards to finish with a tap (hub/app/errands/)."""
+    from .errands import picture as errands
+    return errands.today_part()
+
+
 def picture(now=None):
     """The whole Today screen. Never raises."""
     now = now or clock()
     needs, more, quiet = _soft(_list, ([], 0, []))
     left, tomorrow = _soft(lambda: _calendar(now), ([], []))
     return {'ok': True, 'at': now.isoformat(timespec='seconds'), 'needs': needs, 'more': more, 'today': left, 'tomorrow': tomorrow,
-            'school': _soft(lambda: _school(now.date()), []), 'trip': _soft(lambda: _trip(now.date()), None), 'quiet': quiet}
+            'school': _soft(lambda: _school(now.date()), []), 'trip': _soft(lambda: _trip(now.date()), None), 'quiet': quiet,
+            'ready': _soft(_ready, {'cards': [], 'more': 0})}
 
 
 def tick(key):
