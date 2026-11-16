@@ -20,6 +20,7 @@ from .text import MOST, chunks, clean, words
 
 SAID = ('user', 'assistant')
 CONTENT = ('text', 'multimodal_text')
+READER = 1                  # raised when reading improves, so every conversation is read again once
 READ = {'.pdf': 'pdf', '.docx': 'docx', '.doc': 'doc', '.txt': 'text', '.md': 'text', '.markdown': 'text'}
 
 
@@ -230,7 +231,7 @@ def index(conn, mac=macos, now=None, say=print):
         raise RuntimeError('the export answered with no conversations')
     for kind, raw in every:
         ident = ('c:' + str(raw.get('conversation_id') or raw.get('id') or '')) if kind == 'c' else 'g:' + str(raw.get('id') or '')
-        sig = _signature(raw.get('update_time') or raw.get('updated_at'), len(raw.get('mapping') or raw.get('messages') or ()),
+        sig = _signature(READER, raw.get('update_time') or raw.get('updated_at'), len(raw.get('mapping') or raw.get('messages') or ()),
                          raw.get('current_node'), raw.get('title') or raw.get('name'), library)
         if had.get(ident) == sig:
             keep.add(ident)

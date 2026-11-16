@@ -6,6 +6,7 @@ the source and found them gone.
 """
 import fcntl
 import json
+import os
 import time
 
 from . import chats, documents, photos, store
@@ -16,7 +17,7 @@ PASSES = {'photos': photos.index, 'documents': documents.index, 'chats': chats.i
 def run(sources=None, say=print):
     """Index the sources named (all of them by default). Returns {source: counts}."""
     store.owner_folder(store.home())
-    lock = open(store.home() / 'index.lock', 'w')
+    lock = os.fdopen(os.open(store.home() / 'index.lock', os.O_CREAT | os.O_WRONLY, 0o600), 'w')
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:

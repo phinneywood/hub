@@ -22,6 +22,9 @@ NOT_HERE = re.compile(r'\b(lock|unlock|alarm|garage|thermostat)\b')
 SOUND = re.compile(r'\b(play|music|songs?|jazz|piano|playlist|pause|resume|skip|next|previous|quieter|louder|volume|too|as well)\b')
 LIGHTS = re.compile(r'\b(dim|turn|switch|lights?|lamps?|on|off)\b')
 FILLER = re.compile(r'\b(please|play|put on|some|a bit of|softly|quietly|music|in|on|the|speakers?)\b')
+ARCHIVE = re.compile(r'\b(photos?|pictures?|videos?|when did we|last time|invoice|receipt|warranty|show me|find)\b')
+ARCHIVE_FILLER = set('show me find the a an of at in on when did we last time what did say photos photo pictures videos our'.split())
+SYNONYMS = {'furnace': ['furnace service', 'HVAC maintenance', 'heating tune-up']}
 LIBRARY = ['Evening Jazz', 'Kitchen Dance Party', 'Sunday Morning', 'Quiet Piano', 'Rainy Day', 'Songs for the Car']
 BAND = {'name': 'The Example Band', 'uri': 'apple_music://artist/77'}
 
@@ -100,6 +103,38 @@ def _lights(words, places):
     return call('lights', where=where, change='off' if re.search(r'\boff\b', words) else 'on')
 
 
+def _archive(words):
+    """A search of the family archive, as a model would ask for it: several phrasings, and dates when given."""
+    args = {}
+    if re.search(r'\b(photos?|pictures?|videos?)\b', words):
+        args['sources'] = ['photos']
+    if re.search(r'\bkids\b', words):
+        args['people'] = ['kids']
+    year = re.search(r'\b(20\d\d)\b', words)
+    if year:
+        args.update(after=f'{year.group(1)}-01-01', before=f'{int(year.group(1)) + 1}-01-01')
+    if re.search(r'\b(last|latest)\b', words):
+        args['newest_first'] = True
+    terms = ' '.join(w for w in re.findall(r"[a-z0-9-]+", words.split(' and turn')[0])
+                     if w not in ARCHIVE_FILLER and not re.fullmatch(r'20\d\d', w) and w != 'kids')
+    searches = next((v for k, v in SYNONYMS.items() if k in terms), [terms or 'photos'])
+    return call('search', searches=searches, **args)
+
+
+def _from_archive(found):
+    """An answer from what search returned, saying where it came from."""
+    if isinstance(found.get('mail'), list) and found['mail']:
+        first = found['mail'][0]
+        return f'The last one was an email from {first["from"]} on {first["date"]}: “{first["subject"]}”.'
+    for source in ('documents', 'chats', 'calendar'):
+        if isinstance(found.get(source), list) and found[source]:
+            first = found[source][0]
+            return f'It’s {first["title"]}, from {first["date"]}.'
+    if any(isinstance(v, str) and 'card' in v for k, v in found.items() if k != 'photos'):
+        return 'There are matches on the card for you to open.'
+    return 'Nothing in the archive matched.'
+
+
 async def scripted(messages, info):
     SEEN.append(messages)
     spoken = said(messages)
@@ -107,7 +142,18 @@ async def scripted(messages, info):
     back = [p for p in messages[-1].parts if p.part_kind == 'tool-return'] if messages[-1].kind == 'request' else []
     places = _places(words)
     given = [p.content for m in messages for p in m.parts if p.part_kind == 'user-prompt'][-1]
-    if back and back[0].tool_name == 'look_up' or not back and '<data>' in given:
+    if back and back[0].tool_name == 'search':
+        tries = len([m for m in messages if m.kind == 'response'])
+        if re.search(r'\b(lights?|lamps?)\b', words) and tries < 2:
+            yield _lights(words.split(' and ', 1)[-1], places)              # what a model might do next: Hub says no
+        elif 'read' in words and tries < 2 and isinstance(back[0].content.get('mail'), list) and back[0].content['mail']:
+            yield call('read', ref=back[0].content['mail'][0]['ref'])
+        else:
+            yield _from_archive(back[0].content)
+    elif back and back[0].tool_name == 'read':
+        got = back[0].content
+        yield 'It says: ' + str(got.get('text') or got.get('not_done'))[:200]
+    elif back and back[0].tool_name == 'look_up' or not back and '<data>' in given:
         yield 'From what Hub can see, ' + ('the dentist is Tuesday at three.' if back else 'two emails need you.')
     elif back:                  # a tool said "not done": for music try a band once, as a model would; else explain
         tries = len([m for m in messages if m.kind == 'response'])
@@ -120,6 +166,8 @@ async def scripted(messages, info):
     elif words.startswith('remember'):
         note = re.sub(r'^remember( to| that)?\s*', '', spoken.strip(), flags=re.I)
         yield call('remember', note=note[:1].upper() + note[1:], **({'together': places} if len(places) > 1 else {}))
+    elif ARCHIVE.search(words):
+        yield _archive(words)
     elif NOT_HERE.search(words):
         yield 'Locks, the alarm, the garage and the thermostat can’t be changed from here.'
     elif words.startswith('when is'):

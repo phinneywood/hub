@@ -9,8 +9,9 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 
+from .. import bridge
 from ..tools.house import control, nowplaying, read, zones
 from . import levels, model
 from . import scenes as kept_scenes
@@ -544,3 +545,108 @@ def photos_tap(do: str, request: Request, body: dict = Body(default={})):
         return {'ok': True, 'said': photos.mark(body.get('key'), do, login)}
     except photos.Refused as error:
         return _refuse(error)
+
+
+# ---- Archive (hub/app/archive.py): photos, documents, ChatGPT history, mail and calendar history, in one search ----
+
+def _archive(request, work):
+    """Run one archive read for a signed-in device: the archive is private, like Photos."""
+    from . import archive
+    login = _login(request)
+    if login is None:
+        return _refuse('Open the archive on your phone or laptop.', 403)
+    try:
+        return work(archive, login)
+    except archive.Away as away:
+        return _refuse(away, 503)
+    except archive.Refused as error:
+        return _refuse(error)
+    except bridge.BridgeError:
+        return _refuse('Mail isn’t answering right now.', 503)
+
+
+def _bytes(found, name=None):
+    """A picture or a file from the archive, kept off the device by Hub's no-store rule."""
+    if found is None:
+        return _refuse('Not in the archive.', 404)
+    data, kind, disposition = found
+    headers = {'Content-Disposition': disposition} if disposition and name == 'file' else {}
+    if name == 'file':
+        headers['X-Content-Type-Options'] = 'nosniff'
+    return Response(data, media_type=kind if name == 'file' else ('image/png' if data[:4] == b'\x89PNG' else 'image/jpeg'),
+                    headers=headers)
+
+
+@router.get('/api/archive')
+def archive_landing(request: Request):
+    """The Archive screen before a search: what it holds, on this day, the people, and what Ask may read."""
+    return _archive(request, lambda archive, login: archive.landing(login))
+
+
+@router.get('/api/archive/search')
+def archive_search(request: Request, q: str = '', source: str = '', offset: int = 0):
+    """What matched, source by source, read without a model. Mail comes from /api/archive/mail."""
+    return _archive(request, lambda archive, login: archive.search(q[:300], login, source or None, max(0, min(offset, 20000))))
+
+
+@router.get('/api/archive/mail')
+def archive_mail(request: Request, q: str = ''):
+    """Mail that matches, newest first, ten at most, searched live in Gmail through the bridge."""
+    return _archive(request, lambda archive, login: {'mail': archive.mail_search(q[:300], login)})
+
+
+@router.get('/api/archive/item/{ident}')
+def archive_item(ident: str, request: Request):
+    """One result in full: a photo's facts, a document's text, a conversation, an event or an email."""
+    def work(archive, login):
+        found = archive.item(ident, login)
+        return found if found is not None else _refuse('Not in the archive.', 404)
+    return _archive(request, work)
+
+
+@router.get('/api/archive/attachment/{ident}/{part}')
+def archive_attachment(ident: str, part: str, request: Request):
+    """The text of a PDF or text file attached to an email, read by the bridge's isolated parser."""
+    def work(archive, login):
+        found = archive.mail_attachment(ident, part)
+        return found if found is not None else _refuse('Not in the archive.', 404)
+    return _archive(request, work)
+
+
+@router.get('/api/archive/thumb/{ident}')
+def archive_thumb(ident: str, request: Request):
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/thumb/{ident}') if archive.ITEM.fullmatch(ident)
+                                                           and ident[0] in 'pd' else None))
+
+
+@router.get('/api/archive/photo/{ident}')
+def archive_photo(ident: str, request: Request, size: int = 1600):
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/photo/{ident}', [('size', str(max(200, min(size, 2400))))])
+                                                           if archive.ITEM.fullmatch(ident) and ident[0] == 'p' else None))
+
+
+@router.get('/api/archive/page/{ident}/{number}')
+def archive_page(ident: str, number: int, request: Request, size: int = 1600):
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/page/{ident}/{max(1, min(number, 10000))}',
+                                                                           [('size', str(max(200, min(size, 2400))))])
+                                                           if archive.ITEM.fullmatch(ident) and ident[0] == 'd' else None))
+
+
+@router.get('/api/archive/file/{ident}')
+def archive_file(ident: str, request: Request):
+    """A document's own bytes, to keep: documents only, never a photo's original."""
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/file/{ident}') if archive.ITEM.fullmatch(ident)
+                                                           and ident[0] == 'd' else None, 'file'))
+
+
+@router.post('/api/archive/kid')
+def archive_kid(request: Request, body: dict = Body(default={})):
+    """{"name": ..., "kid": true or false}: whether someone is one of the kids, for "the kids" in a search."""
+    return _archive(request, lambda archive, login: {'ok': True, 'said': archive.set_kid(body.get('name'), bool(body.get('kid')), login)})
+
+
+@router.post('/api/archive/switch')
+def archive_switch(request: Request, body: dict = Body(default={})):
+    """{"name": "documents" or "chats", "on": true or false}: what Ask's model may read. The owner's login only."""
+    return _archive(request, lambda archive, login: {'ok': True, 'said': archive.switch(body.get('name'), bool(body.get('on')), login),
+                                                      'switches': archive.switches()})

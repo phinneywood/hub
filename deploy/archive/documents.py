@@ -49,6 +49,7 @@ TEXT_READ = 4 * 1024 * 1024        # bytes read of a plain text file
 FOUND_TEXT = re.compile(r'\w{3,}')
 SF_DATALESS = 0x40000000           # the file's contents are only in iCloud
 THUMB = 400
+READER = 2                         # raised when reading improves, so every document is read again once
 
 
 def roots():
@@ -222,7 +223,7 @@ def base(info, path):
 
 
 def signature(info, path):
-    return f'{base(info, path)}:{int(only_in_icloud(info))}'
+    return f'{base(info, path)}:r{READER}:{int(only_in_icloud(info))}'
 
 
 def _wanted(info, kind):
@@ -238,7 +239,7 @@ def index(conn, mac=macos, now=None, wait=WAIT_SECONDS, say=print):
     """Bring the documents in the index up to date. Returns (counts, errors)."""
     stamp = now or time.time()
     had = store.known(conn, 'documents')
-    looked = {i: s.rsplit(':', 1)[0] for i, s in conn.execute('select id, sig from looked').fetchall()}
+    looked = dict(conn.execute('select id, sig from looked').fetchall())    # pictures read before that held no text
     counts = {'new': 0, 'changed': 0, 'in_icloud': 0, 'asked_icloud': 0, 'asked_bytes': 0, 'came_down': 0,
               'came_down_bytes': 0, 'pictures_without_text': 0, 'ocr_pages': 0, 'unread': 0}
     errors, keep, fetch = {}, set(), []
@@ -249,7 +250,7 @@ def index(conn, mac=macos, now=None, wait=WAIT_SECONDS, say=print):
         if had.get(ident) == sig:
             keep.add(ident)
             return
-        if looked.get(ident) == base(info, path):
+        if looked.get(ident) == f'{base(info, path)}:r{READER}':
             return
         try:
             described = describe(path, info, label, relative, mac)
@@ -261,9 +262,10 @@ def index(conn, mac=macos, now=None, wait=WAIT_SECONDS, say=print):
             described = describe(path, info, label, relative, mac, read=False)
             described[0]['meta']['unread'] = True
             counts['unread'] += 1
+            sig += ':unread'                            # read again next run
         if described is None:
             counts['pictures_without_text'] += 1
-            conn.execute('insert or replace into looked(id, sig) values (?, ?)', (ident, sig))
+            conn.execute('insert or replace into looked(id, sig) values (?, ?)', (ident, f'{base(info, path)}:r{READER}'))
             return
         item, parts = described
         item['sig'], item['seen'] = sig, stamp
@@ -284,10 +286,10 @@ def index(conn, mac=macos, now=None, wait=WAIT_SECONDS, say=print):
             if only_in_icloud(info):
                 counts['in_icloud'] += 1
                 ident = item_id(path)
-                if had.get(ident) == base(info, path) + ':0':
+                if had.get(ident) == f'{base(info, path)}:r{READER}:0':
                     keep.add(ident)                     # read while it was here, and since left to iCloud: keep it
                     continue
-                if looked.get(ident) == base(info, path):
+                if looked.get(ident) == f'{base(info, path)}:r{READER}':
                     continue
                 if _wanted(info, kind):
                     fetch.append((kind == 'image', -info.st_mtime, path, info, lab, relative))

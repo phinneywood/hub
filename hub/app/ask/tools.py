@@ -1,15 +1,16 @@
-"""What Ask can do: lights, scenes, music, remembering, passing a message to Kitchen, and reading mail, the calendar
-and school.
+"""What Ask can do: lights, scenes, music, remembering, passing a message to Kitchen, reading mail, the calendar
+and school, and searching the family archive.
 
 Few tools, each doing a whole job. Every change goes through hub/tools/house/control.py, like a tap in the app:
 the same allowlist, record and Undo, counted against Ask's own per-minute limit. A tool says what it did in a
 plain sentence (`turn.said`), so a request that was simply carried out needs no second trip to the model; a tool
 that needs the model again (nothing matched, a name it couldn't place) sets `turn.again`.
 """
+import re
 from dataclasses import dataclass, field
 from typing import Literal
 
-from pydantic_ai import RunContext
+from pydantic_ai import RunContext, Tool
 
 from ...tools.house import broker, control, music as library, nowplaying, read, zones
 from .. import levels, model
@@ -33,6 +34,13 @@ class Turn:
     said: list = field(default_factory=list)     # what Hub tells the owner was done, a sentence per tool
     cards: list = field(default_factory=list)    # what the app draws under the answer
     again: bool = False                          # a tool needs the model to look at its answer and go on
+    strangers: bool = False                      # words written by others (mail, the calendar, the archive) are in view
+    found: dict = field(default_factory=dict)    # what search found, by the short names the model reads them by
+    withheld: dict = field(default_factory=dict)  # what is kept of a sentence the model must never see (photos)
+
+    def kept(self):
+        """What Hub said, as it is kept for later requests: a sentence about photos only says photos were shown."""
+        return [self.withheld.get(n, told) for n, told in enumerate(self.said)]
 
 
 def _say(turn, told, card=None):
@@ -59,6 +67,8 @@ def _may_change(turn):
     from ...engine import catalog, state
     if turn.login is None:
         raise NotNow('Change the house from your phone or laptop.')
+    if turn.strangers:      # what strangers wrote must never be what moved the house
+        raise NotNow('Hub doesn’t change the house in a request that read mail, the calendar or the archive. Ask for it on its own.')
     if state.trust(catalog.action('house.control')) == 'suggest':
         raise NotNow('Home control is set to “Suggest only” on the Engine page, so Hub changed nothing.')
 
@@ -371,11 +381,176 @@ def look_up(ctx: RunContext[Turn], topics: list[Literal['mail', 'calendar', 'sch
     """Read the owner's mail, their calendar, their child's school (the class guide) or what needs them today, to
     answer a question about them. Read-only: Hub can't send, file, delete or book anything from here."""
     turn = ctx.deps
-    turn.again = True
+    turn.again = turn.strangers = True
     try:
         return {'data': private.data(turn.text, set(topics) or {'today'})}
     except Exception:  # noqa: BLE001 - a reader that failed is an answer the model can pass on
         return {'not_done': 'Hub couldn’t read that just now.'}
 
 
-ALL = (lights, scene, music, remember, kitchen, look_up)
+# ---- the family archive (hub/app/archive.py) ----
+
+PHOTOS_TOLD = ('Any photos are shown to the owner on a card Hub draws and describes itself. You are told nothing about '
+               'photos: never say what they show, how many there are, or whether there are any.')
+LOCKED = {'documents': 'Matches are on the card for the owner to open. You can’t read documents.',
+          'chats': 'Matches are on the card for the owner to open. You can’t read ChatGPT history.'}
+CARD_MOST = 6
+PHOTOS_SHOWN = 12
+NUMBER = re.compile(r'(?<![\w/])(?:\d[ -]?){5,}\d(?![\w/])')
+DATE = re.compile(r'\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}')
+
+
+def mask(text):
+    """Card, account and other ID-like numbers hidden, all but their last four digits (two for a short one)."""
+    def hide(found):
+        digits = re.sub(r'\D', '', found.group())
+        if DATE.fullmatch(found.group().strip()):
+            return found.group()
+        keep = 4 if len(digits) >= 10 else 2
+        return '•' * (len(digits) - keep) + digits[-keep:]
+    return NUMBER.sub(hide, str(text or ''))
+
+
+def _date(value):
+    return value if isinstance(value, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', value) else None
+
+
+def _plain(snippet):
+    return ' '.join(str(snippet or '').replace('\x02', '').replace('\x03', '').split())
+
+
+def search(ctx: RunContext[Turn], searches: list[str], sources: list[Literal['photos', 'documents', 'mail', 'calendar', 'chats']] | None = None,
+           people: list[str] | None = None, place: str | None = None, after: str | None = None, before: str | None = None,
+           newest_first: bool = False) -> dict:
+    """Search the family archive: photos and videos, documents (PDFs, scans, notes), mail, calendar history and the
+    owner's ChatGPT history. `searches`: two to four ways of saying what to look for, a few words each, best first
+    ("furnace service", "HVAC maintenance", "heating tune-up"); several phrasings and synonyms find more. `sources`:
+    where to look; leave it out to look everywhere. `people`: names of people, or "kids", for photos. `place`: a place
+    name, for photos. `after`, `before`: dates as YYYY-MM-DD. `newest_first`: for "when did we last ...". Returns
+    what you may read: mail and calendar results with a ref each; documents and ChatGPT history only when the owner
+    allows Ask to read them. Read one result in full with read."""
+    from .. import archive
+    turn = ctx.deps
+    allowed = archive.sources_for(turn.login)
+    wanted = [s for s in (sources or allowed) if s in allowed]
+    phrases = [' '.join(str(s).split())[:120] for s in (searches or []) if str(s).strip()][:4]
+    named = [str(p)[:80] for p in (people or [])][:6]
+    kids = any(n.lower() in archive.KIDS or n.lower() in ('the kids', 'our kids') for n in named)
+    meaning = {'terms': ' '.join(phrases[:1]), 'sources': wanted, 'kind': [], 'people': [n for n in named if n.lower() not in
+               archive.KIDS and n.lower() not in ('the kids', 'our kids')], 'kids': kids, 'after': _date(after),
+               'before': _date(before), 'months': [], 'sort': 'newest' if newest_first else None,
+               'place': str(place or '')[:80] or None}
+    told, cards, lines = {}, [], []
+    shown = {'count': 0, 'days': 0, 'items': []}
+    switches = archive.switches()
+    try:
+        known = archive.people(turn.login) if (meaning['people'] or kids) else []
+        names = {p['name'].lower(): p['name'] for p in known}
+        meaning['people'] = [names.get(n.lower(), n) for n in meaning['people']]
+        kid_names = [p['name'] for p in known if p['kid']]
+        if 'photos' in wanted:
+            shown = archive.local(meaning, ['photos'], turn.login, limit=PHOTOS_SHOWN, sort='best', searches=phrases,
+                                  kids=kid_names).get('photos') or shown
+            told['photos'] = PHOTOS_TOLD
+        rest = [s for s in wanted if s in ('documents', 'chats')]
+        found = archive.local(meaning, rest, turn.login, limit=8, searches=phrases, kids=kid_names) if rest and phrases else {}
+    except archive.Away as away:
+        found, told['archive'] = {}, str(away)
+    for source in ('documents', 'chats'):
+        if source not in wanted:
+            continue
+        items = (found.get(source) or {}).get('items', [])
+        for n, item in enumerate(items, 1):
+            ref = f'{source[0]}{n}'
+            turn.found[ref] = item['id']
+            lines.append({'id': item['id'], 'source': source, 'title': item['title'], 'day': item.get('day'),
+                          'sub': item.get('folder') or ('ChatGPT' if source == 'chats' else ''), 'page': item.get('page')})
+        if not switches.get(source):
+            told[source] = LOCKED[source] if items else 'Nothing matched.'
+        else:
+            told[source] = [{'ref': ref, 'title': mask(i['title']), 'date': i.get('day'), 'where': i.get('folder') or None,
+                             'snippet': mask(_plain(i.get('snippet')))} for ref, i in zip([f'{source[0]}{n}' for n in range(1, len(items) + 1)], items)]
+            turn.strangers = turn.strangers or bool(items)
+    if 'mail' in wanted and (phrases or meaning['people']):
+        try:
+            mails = archive.mail(meaning, phrases or None)
+        except Exception:  # noqa: BLE001 - mail that can't be searched is an answer the model can pass on
+            mails, told['mail'] = [], 'Mail couldn’t be searched just now.'
+        from ... import store
+        readable = []
+        for n, m in enumerate(mails, 1):
+            ref = f'm{n}'
+            turn.found[ref] = m['id']
+            lines.append({'id': m['id'], 'source': 'mail', 'title': m['subject'] or '(No subject)', 'day': m['day'], 'sub': m['from']})
+            if not store.ai_blocked(m['address']):          # a sender with AI switched off is on the card, never sent
+                readable.append({'ref': ref, 'from': m['from'], 'subject': m['subject'], 'date': m['day'], 'snippet': m['snippet']})
+        told.setdefault('mail', readable or 'Nothing the model may read matched.' if mails else 'Nothing matched.')
+        turn.strangers = turn.strangers or bool(readable)
+    if 'calendar' in wanted and (phrases or meaning['after']):
+        events = archive.calendar(meaning, phrases or None)
+        for n, e in enumerate(events, 1):
+            turn.found[f'e{n}'] = e['id']
+            lines.append({'id': e['id'], 'source': 'calendar', 'title': e['title'], 'day': e['day'], 'sub': e['location']})
+        told['calendar'] = [{'ref': f'e{n}', 'title': e['title'], 'date': e['day'], 'where': e['location'] or None}
+                            for n, e in enumerate(events, 1)] or 'Nothing matched.'
+        turn.strangers = turn.strangers or bool(events)
+    asked = 'photos' in archive.understand(turn.text)['sources'] or wanted == ['photos']
+    if shown['count'] or asked:
+        # Hub speaks for photos when they are what was asked for, or all that was found; else they wait on the card
+        lead = asked or not lines
+        about = (archive.understand(turn.text)['about'] if len(turn.text) <= 80 else '') or (phrases[0] if phrases else 'Photos')
+        sentence = archive.photo_sentence(about if lead else 'Photos', shown)
+        if lead:
+            turn.withheld[len(turn.said)] = 'Hub showed photos.'
+            turn.said.append(sentence)
+        turn.cards.append({'kind': 'photos', 'title': sentence, 'count': shown['count'],
+                           'items': [{'id': p['id'], 'kind': p['kind'], 'day': p['day']} for p in shown['items']],
+                           'search': turn.text[:300]})
+    if lines:
+        cards.append({'kind': 'found', 'items': sorted(lines, key=lambda l: l['day'] or '', reverse=True)[:CARD_MOST],
+                      'count': len(lines), 'search': turn.text[:300]})
+    turn.cards.extend(cards)
+    turn.again = bool(lines) or not shown['count'] or 'archive' in told   # the model answers what it can read, or says nothing matched
+    return told
+
+
+def read_found(ctx: RunContext[Turn], ref: str) -> dict:
+    """Read one result search found, in full, by its ref ("m1", "e2", "d1"). Mail and calendar always; documents and
+    ChatGPT history only when the owner allows it. Read-only."""
+    from ... import store
+    from .. import archive
+    turn = ctx.deps
+    turn.again = True
+    ident = turn.found.get(str(ref).strip())
+    if not ident:
+        return {'not_done': 'There is no such result. Use a ref that search gave.'}
+    try:
+        if ident.startswith('m:'):
+            message = archive.mail_message(ident)
+            if message is None or store.ai_blocked(message['address']):
+                return {'not_done': 'That email is from a sender Ask may not read.'}
+            turn.strangers = True
+            return {'from': message['from'], 'subject': message['subject'], 'date': message['day'],
+                    'text': mask(message['text'][:8000]), 'attachments': [a['name'] for a in message['attachments']]}
+        if ident.startswith('e:'):
+            event = archive.calendar_event(ident)
+            turn.strangers = True
+            return event or {'not_done': 'That event is gone.'}
+        source = 'documents' if ident.startswith('d:') else 'chats'
+        if not archive.switches().get(source):
+            return {'not_done': LOCKED[source]}
+        found = archive.item(ident, turn.login)
+        if found is None:
+            return {'not_done': 'That one is gone.'}
+        turn.strangers = True
+        pieces = found.get('pages_text') or found.get('messages') or []
+        text = '\n\n'.join((f'[page {p["page"]}] ' if p.get('page') and source == 'documents' else
+                              f'[{p.get("role")}] ' if source == 'chats' else '') + p['text'] for p in pieces)
+        return {'title': mask(found['title']), 'date': found.get('day'), 'text': mask(text[:12000]), 'cut': len(text) > 12000}
+    except archive.Away as away:
+        return {'not_done': str(away)}
+    except Exception:  # noqa: BLE001 - a reader that failed is an answer the model can pass on
+        return {'not_done': 'Hub couldn’t read that just now.'}
+
+
+ALL = (lights, scene, music, remember, kitchen, look_up, search, Tool(read_found, name='read'))      # `read` is the house's reader here

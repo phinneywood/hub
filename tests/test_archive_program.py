@@ -43,7 +43,7 @@ def test_the_folder_and_everything_in_it_is_owner_only(built):
     assert (home / 'archive.db').stat().st_mode & 0o777 == 0o600
     previews = [p for p in (home / 'thumbs').rglob('*') if p.is_file()]
     assert previews and all(p.stat().st_mode & 0o777 == 0o600 for p in previews)
-    assert all(p.stat().st_mode & 0o777 == 0o700 for p in (home / 'thumbs').rglob('*') if p.is_dir())
+    assert all(p.stat().st_mode & 0o777 == 0o700 for p in [home / 'thumbs', *(home / 'thumbs').rglob('*')] if p.is_dir())
 
 
 def test_hidden_deleted_and_burst_extras_are_left_out(built):
@@ -268,7 +268,7 @@ def test_the_query_quotes_every_word():
     assert search.expression(['furnace filter'], loose=True) == '("furnace" OR "filter")'
 
 
-def test_real_pdfkit_reads_the_made_up_invoice(tmp_path):
+def test_real_pdfkit_and_vision_read_the_made_up_invoice(tmp_path):
     macos = world.program('macos')
     pytest.importorskip('Quartz')
     path = tmp_path / 'invoice.pdf'
@@ -277,4 +277,5 @@ def test_real_pdfkit_reads_the_made_up_invoice(tmp_path):
     assert len(pages) == 2 and 'Furnace service' in pages[0] and 'Page two' in pages[1]
     data, w, h = macos.pdf_page(path, 1, 400)
     assert data[:2] == b'\xff\xd8' and max(w, h) == 400
+    assert 'Furnace' in macos.ocr_pdf_page(path, 1)                 # Vision reads a page's picture
     assert os.path.getsize(path) > 0

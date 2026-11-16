@@ -91,12 +91,14 @@ def _request(method, path, params=None, body=None, timeout=TIMEOUT):
         raise BridgeError("The Gmail bridge gave an answer Hub couldn't read") from None
 
 
-def get(path, ttl=CACHE_SECONDS, timeout=TIMEOUT, **params):
+def get(path, ttl=CACHE_SECONDS, timeout=TIMEOUT, keep=True, **params):
+    """A read on one of the bridge's fixed paths, from the cache when it is fresh. `keep=False` reads without
+    keeping the answer, for reads made once, such as the calendar history going back month by month."""
     if path not in READ_PATHS:
         raise BridgeError("Path not allowed")
     params = {k: v for k, v in params.items() if v not in (None, "")}
     # Full message bodies must never be retained in the bridge response cache.
-    if path in {"/gmail/message", "/gmail/thread", "/gmail/attachment", "/gmail/calendar-attachment", "/gmail/document-attachment",
+    if not keep or path in {"/gmail/message", "/gmail/thread", "/gmail/attachment", "/gmail/calendar-attachment", "/gmail/document-attachment",
                 "/gmail/shared/message", "/gmail/shared/calendar-attachment", "/gmail/shared/document-attachment"}:
         return _request("GET", path, params=params, timeout=timeout)
     key = (path, tuple(sorted(params.items())))

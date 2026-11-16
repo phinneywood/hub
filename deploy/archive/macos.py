@@ -123,7 +123,7 @@ def _read_text(image):
     request = Vision.VNRecognizeTextRequest.alloc().init()
     request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelAccurate)
     request.setUsesLanguageCorrection_(True)
-    handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(image, {})
+    handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(image, None)    # not {}: PyObjC refuses it
     handler.performRequests_error_([request], None)
     found = []
     for seen in request.results() or []:

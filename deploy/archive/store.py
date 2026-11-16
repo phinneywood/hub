@@ -71,9 +71,16 @@ def socket_path():
 
 
 def owner_folder(path):
-    """Make a folder only the owner can open, and return it."""
+    """Make a folder only the owner can open, and any folders above it that are missing, and return it."""
     path = Path(path)
-    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    missing = []
+    for above in (path, *path.parents):
+        if above.exists():
+            break
+        missing.append(above)
+    for folder in reversed(missing):        # one at a time: mkdir(parents=True) would leave the upper ones 0755
+        folder.mkdir(mode=0o700, exist_ok=True)
+        folder.chmod(0o700)
     if path.stat().st_mode & 0o077:
         path.chmod(0o700)
     return path

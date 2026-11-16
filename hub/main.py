@@ -58,6 +58,8 @@ def startup():
     delayed.start()
     from .app import activity
     activity.start()    # reads Home Assistant's logbook and Apple Home's events every five minutes
+    from .app import archive
+    archive.start()     # keeps the calendar history for the Archive: once back as far as it goes, then hourly
 
 
 @app.get("/readyz")
