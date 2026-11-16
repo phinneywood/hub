@@ -109,6 +109,11 @@ closed with a test on the made-up house (`tests/test_house_setup.py`, `tests/tes
       card showed.
 - [x] Undo: putting back what would unlock, open or disarm, or bring back a routine or scene that does, brings
       up the card instead (Ask, Activity and Changes).
+- [x] An independent read of these fixes found that Home Assistant's own search only knows entities under
+      entity_id, not one read in a template or a time trigger's "at": every automation is now read, in one
+      request, Home Assistant's own files too, and the made-up house's search answers as the real one does. Also
+      from that read: a scene that switches an automation on or off is read like switching it; switching off what
+      watches a way in waits inside a routine too; and homeassistant.* on "all" is more than Hub can read.
 - [x] Smaller: a cover that doesn't say it is a blind waits like the garage; a thing made from a template waits;
       a new name for a scene or routine that opens waits; switching off what tells the owner a way in is open
       waits; a routine's card names what opens first; a notice is its title and its message; a model reading a
