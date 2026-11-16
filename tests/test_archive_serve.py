@@ -111,11 +111,49 @@ def test_it_only_answers_questions(service):
     assert service[0].post('/search', json={}).status_code == 405
 
 
+def test_until_the_owner_has_said_yes_at_the_mac_photos_is_never_asked(service, monkeypatch):
+    client, uuids, _, mac = service
+    sharp = world.program('sharp')
+    monkeypatch.setattr(sharp, 'macos', mac)
+    sharp._refused['at'] = float('-inf')
+    (store.home() / 'photos-access.json').unlink(missing_ok=True)
+    mac.exported = []
+    got = client.get(f'/photo/p:{uuids["6"]}', params={'sharp': '1'})
+    assert got.status_code == 200 and got.headers['x-sharp'] == '0' and mac.exported == []     # the Mac's own picture, at once
+    assert client.get('/status').json()['sharp'] == 'waiting'
+
+
+def test_photos_access_keeps_the_owners_answer(service, monkeypatch, capsys):
+    main = world.program('__main__')
+    sharp = world.program('sharp')
+    mac = service[3]
+    monkeypatch.setattr(world.program('macos'), 'hello_photos', mac.hello_photos)
+    sharp._refused['at'] = float('-inf')
+    (store.home() / 'photos-access.json').unlink(missing_ok=True)
+
+    def no():
+        raise RuntimeError('Not authorized to send Apple events to Photos. (-1743)')
+
+    def nobody():
+        raise TimeoutError('AppleEvent timed out')
+    monkeypatch.setattr(world.program('macos'), 'hello_photos', nobody)
+    assert main.main(['photos-access']) == 1 and store.photos_answer() is None and sharp.state() == 'waiting'   # nobody answered
+    monkeypatch.setattr(world.program('macos'), 'hello_photos', no)
+    assert main.main(['photos-access']) == 1 and store.photos_answer() == 'no' and sharp.state() == 'not allowed'
+    monkeypatch.setattr(world.program('macos'), 'hello_photos', mac.hello_photos)
+    assert main.main(['photos-access']) == 0 and store.photos_answer() == 'yes' and sharp.state() == 'allowed'
+    monkeypatch.setattr(world.program('macos'), 'hello_photos', nobody)
+    assert main.main(['photos-access']) == 1 and store.photos_answer() == 'yes'                # a yes is not taken back by silence
+    assert (store.home() / 'photos-access.json').stat().st_mode & 0o777 == 0o600
+    assert 'RuntimeError' not in capsys.readouterr().out.splitlines()[1]                       # a no is said as a no
+
+
 def test_a_sharp_photo_comes_from_photos_once_and_is_kept(service, monkeypatch):
     client, uuids, _, mac = service
     sharp = world.program('sharp')
     monkeypatch.setattr(sharp, 'macos', mac)
     sharp._refused['at'] = float('-inf')
+    store.set_photos_answer('yes')
     photo = 'p:' + uuids['1']
     mac.exported = []
     first = client.get(f'/photo/{photo}', params={'sharp': '1'})
@@ -130,6 +168,7 @@ def test_when_photos_says_no_the_viewer_keeps_the_macs_own_picture(service, monk
     sharp = world.program('sharp')
     monkeypatch.setattr(sharp, 'macos', mac)
     sharp._refused['at'] = float('-inf')
+    store.set_photos_answer('yes')
     monkeypatch.setattr(mac, 'refuse', True, raising=False)
     mac.exported = []
     photo = 'p:' + uuids['2']
@@ -137,7 +176,11 @@ def test_when_photos_says_no_the_viewer_keeps_the_macs_own_picture(service, monk
     assert got.status_code == 200 and got.headers['x-sharp'] == '0'
     client.get(f'/photo/p:{uuids["3"]}', params={'sharp': '1'})
     assert mac.exported == [uuids['2']]                                               # and Photos isn't asked again for a while
-    assert client.get('/status').json()['sharp'] == 'not allowed'
+    assert client.get('/status').json()['sharp'] == 'not allowed' and store.photos_answer() == 'no'
+    sharp._refused['at'] = float('-inf')                                              # later: the owner has switched it back on
+    monkeypatch.setattr(mac, 'refuse', False, raising=False)
+    assert client.get(f'/photo/p:{uuids["3"]}', params={'sharp': '1'}).headers['x-sharp'] == '1'
+    assert client.get('/status').json()['sharp'] == 'allowed' and store.photos_answer() == 'yes'
 
 
 def test_a_photo_photos_cant_export_is_left_alone_and_the_others_carry_on(service, monkeypatch):
@@ -145,6 +188,7 @@ def test_a_photo_photos_cant_export_is_left_alone_and_the_others_carry_on(servic
     sharp = world.program('sharp')
     monkeypatch.setattr(sharp, 'macos', mac)
     sharp._refused['at'] = float('-inf')
+    store.set_photos_answer('yes')
     monkeypatch.setattr(mac, 'refuse', False, raising=False)
     monkeypatch.setattr(mac, 'cant', {uuids['4']}, raising=False)
     mac.exported = []
@@ -160,6 +204,7 @@ def test_only_the_newest_exports_wait_and_one_viewer_waits(tmp_path, monkeypatch
     store_ = world.program('store')
     monkeypatch.setenv('HUB_ARCHIVE_DIR', str(tmp_path))
     sharp._refused['at'] = float('-inf')
+    store_.set_photos_answer('yes')
     gate, order = threading.Event(), []
 
     class Slow:

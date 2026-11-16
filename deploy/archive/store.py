@@ -129,6 +129,18 @@ def read_json(path, default):
     return value if isinstance(value, type(default)) else default
 
 
+def photos_answer():
+    """What Photos last said when the archive asked to work it: 'yes', 'no', or None while nobody has answered. Kept
+    in the archive's folder by `photos-access`, which is run with the owner at the Mac; until it says yes, nothing
+    here asks Photos for anything, so macOS never puts its question on a screen nobody is at."""
+    return read_json(home() / 'photos-access.json', {}).get('photos')
+
+
+def set_photos_answer(answer):
+    import time
+    write_json(home() / 'photos-access.json', {'photos': answer, 'at': int(time.time())})
+
+
 def thumb_path(item):
     """Where an item's preview is kept: spread over 256 folders so none holds tens of thousands of files."""
     spread = hashlib.sha1(item.encode()).hexdigest()[:2]

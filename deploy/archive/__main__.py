@@ -39,14 +39,20 @@ def main(argv=None):
 def photos_access():
     """Once, with the owner at the Mac: one harmless question to Photos, so macOS asks now, on the Mac's screen,
     whether the archive may work Photos (sharp pictures in the viewer, and the curator's albums), rather than on a
-    night nobody is there to answer."""
-    from . import macos
+    night nobody is there to answer. The answer is kept (store.photos_answer): until it is yes, neither the viewer
+    nor the curator asks Photos for anything."""
+    from . import macos, sharp, store
     try:
-        print(json.dumps({'photos': 'yes', 'version': macos.hello_photos()}))
-        return 0
-    except Exception as error:  # noqa: BLE001 - said; the viewer and the curator ask again later
-        print(json.dumps({'photos': type(error).__name__}))
+        version = macos.hello_photos()
+    except Exception as error:  # noqa: BLE001 - said; run it again at the Mac
+        refused = any(word in str(error).lower() for word in sharp.NOT_ALLOWED)
+        if refused or store.photos_answer() != 'yes':       # an unanswered question never takes back an earlier yes
+            store.set_photos_answer('no' if refused else None)
+        print(json.dumps({'photos': 'no' if refused else type(error).__name__}))
         return 1
+    store.set_photos_answer('yes')
+    print(json.dumps({'photos': 'yes', 'version': version}))
+    return 0
 
 
 if __name__ == '__main__':

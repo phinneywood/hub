@@ -111,3 +111,15 @@ def test_apply_adds_to_its_own_album_saves_prints_and_remembers(tmp_path, monkey
                             ('export', B, 'October 2026')]
     again = FakePhotos()
     assert curator.apply(again) == {'album': 0, 'print': 0} and again.asked == []
+
+
+def test_marks_wait_until_the_owner_has_said_yes_to_photos_at_the_mac(tmp_path, monkeypatch, capsys):
+    store = program('store')
+    monkeypatch.setenv('HUB_ARCHIVE_DIR', str(tmp_path))
+    monkeypatch.setenv('PHOTO_CURATOR_DIR', str(tmp_path / 'curator'))
+    asked = []
+    monkeypatch.setattr(curator, 'apply', lambda: asked.append('photos') or {'album': 0, 'print': 0})
+    assert curator.main(['apply']) == 0 and asked == []                 # Photos is not asked on a screen nobody is at
+    assert json.loads(capsys.readouterr().out) == {'waiting': 'photos-access'}
+    store.set_photos_answer('yes')
+    assert curator.main(['apply']) == 0 and asked == ['photos']

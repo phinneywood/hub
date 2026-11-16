@@ -258,6 +258,10 @@ def main(argv=None):
     parser.add_argument('--since')
     args = parser.parse_args(argv)
     if args.do == 'apply':
+        from . import store
+        if store.photos_answer() != 'yes':      # the marks wait: Photos is first asked with the owner at the Mac (photos-access)
+            print(json.dumps({'waiting': 'photos-access'}))
+            return 0
         print(json.dumps(apply()))
         return 0
     if args.month and not MONTH.fullmatch(args.month):

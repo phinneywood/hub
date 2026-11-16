@@ -6,8 +6,9 @@ opened going first, so a photo opened again shows at once. Exporting changes not
 Photos exports one at a time, so the newest request goes first, at most three wait their turn (older ones are let
 go: nobody is looking at them any more), and only one viewer waits for its picture; the others are shown the Mac's own
 at once and get the sharp one the next time. It needs the owner's one-time yes to the archive working Photos (asked
-by `python -m archive photos-access` at the Mac). Photos saying the archive may not do that pauses sharp photos for
-ten minutes; a photo Photos can't export is left alone for a day while the others carry on.
+by `python -m archive photos-access` at the Mac, which keeps the answer: store.photos_answer). Until that yes, Photos
+is never asked, and every viewer is shown the Mac's own picture. Photos saying the archive may not do that pauses sharp
+photos for ten minutes; a photo Photos can't export is left alone for a day while the others carry on.
 """
 import os
 import threading
@@ -74,10 +75,17 @@ def trim():
 
 
 def state():
-    """'not allowed' while Photos' no stands, else 'allowed' once a picture was made, else 'unknown'."""
-    if time.monotonic() - _refused['at'] < BACK_OFF:
+    """'waiting' until the owner has answered at the Mac, 'not allowed' while Photos' no stands, else 'allowed'."""
+    answer = store.photos_answer()
+    if answer == 'no' or time.monotonic() - _refused['at'] < BACK_OFF:
         return 'not allowed'
-    return 'allowed' if next(folder().glob('*/*.jpg'), None) else 'unknown'
+    return 'allowed' if answer == 'yes' else 'waiting'
+
+
+def _may_ask():
+    """Whether Photos may be asked now: the owner said yes at the Mac; or Photos said no, which macOS repeats at
+    once without asking anyone, and enough time has passed to hear whether the owner has changed it since."""
+    return store.photos_answer() in ('yes', 'no') and time.monotonic() - _refused['at'] >= BACK_OFF
 
 
 def _export(item, uuid, mac):
@@ -86,9 +94,12 @@ def _export(item, uuid, mac):
     except Exception as error:  # noqa: BLE001 - not allowed pauses every photo; anything else, this photo only
         if any(word in str(error).lower() for word in NOT_ALLOWED):
             _refused['at'] = time.monotonic()
+            store.set_photos_answer('no')
         else:
             _failed[item] = time.time()
         return
+    if store.photos_answer() != 'yes':
+        store.set_photos_answer('yes')          # Photos answered: the owner has switched it back on
     if made:
         store.write_bytes(path(item), made[0])
         trim()
@@ -103,7 +114,7 @@ def _work():
                 _ready.wait()
             item, uuid = _queue.pop()                    # the newest request first
             mac = _worker['mac']
-        if cached(item) is None and time.monotonic() - _refused['at'] >= BACK_OFF:
+        if cached(item) is None and _may_ask():
             _export(item, uuid, mac)
         with _ready:
             event = _done.pop(item, None)
@@ -135,7 +146,7 @@ def get(item, uuid, wait=WAIT, mac=None):
     """A sharp picture of one photo, from the cache or from Photos, or None to show the Mac's own instead."""
     mac = mac or macos
     kept = cached(item)
-    if kept is not None or time.monotonic() - _refused['at'] < BACK_OFF or time.time() - _failed.get(item, 0) < FAILED_FOR:
+    if kept is not None or not _may_ask() or time.time() - _failed.get(item, 0) < FAILED_FOR:
         return kept
     event = _ask(item, uuid, mac)
     if not _waiting.acquire(blocking=False):
