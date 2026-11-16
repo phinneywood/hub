@@ -191,7 +191,12 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until((sel) => document.querySelector(sel)?.getAttribute("aria-checked") === "false", room("living-room")), "the switch in the list did not switch the room");
 
     // ---- Ask: say it, and Hub does it and says so ----
-    const askFor = async (words) => { await page.fill("#askq", words); await page.keyboard.press("Enter"); };
+    // The field sends only once the request before it has finished, so wait for that as a person would.
+    const askFor = async (words) => {
+      await page.fill("#askq", words);
+      await until(() => document.querySelector("#askq")?.parentElement?.querySelector(".send.on") !== null);
+      await page.keyboard.press("Enter");
+    };
     const level = (id) => page.evaluate((i) => fetch("/app/api/home").then((r) => r.json()).then((h) => h.rooms[i].level), id);
     const asking = Date.now();
     await askFor("Dim the kitchen and living room for dinner");
