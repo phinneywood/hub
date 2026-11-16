@@ -1,15 +1,23 @@
 [
  {
   "sha": null,
-  "from": "a3ea27a7f28ce067124d16003a0fd2b1d7d93dd4",
+  "from": "436cf142152f7a4ac6bee6479691d1efd0604c1f",
   "live": null,
-  "title": "The family archive, and Ask sets up the house with Kitchen as part of it",
+  "title": "The family's archive",
   "changes": [
    "Archive, a new place in the app, searches the family's photos and videos, documents, mail, calendar history and ChatGPT history at once: “the kids at the beach in 2024”, “when did we last service the furnace?”.",
-   "It reads years, months, seasons, “last summer”, the people Photos knows and “the kids” by itself, with no model. Photos open full screen and swipe; documents show their pages and can be saved; emails and conversations open at what matched.",
+   "It reads years, months, seasons, “last summer”, the people Photos knows and “the kids” by itself, with no model. Photos open full screen, sharp, and swipe; documents show their pages and can be saved; emails and conversations open at what matched.",
    "Before a search it shows photos from this day in earlier years, each month's best photos to keep, print or skip, and what the archive holds. Photos under System is part of it now.",
-   "Ask can search it too. Hub shows photos itself and tells Ask's model nothing about them; mail and calendar results reach the model, documents and ChatGPT history only if you switch them on, with card and account numbers hidden. A request that read any of it changes nothing in the house.",
-   "Everything is read and kept on the Mac by a program of its own, and nothing leaves the house. It needs its own install and a one-time permission on the Mac.",
+   "Ask can search it too. Hub shows photos itself and tells Ask's model nothing about them. Mail and calendar results reach the model, and so do the passages of documents and ChatGPT history that match what you asked, with card and account numbers hidden; a switch on the Archive screen turns either off. A request that read any of it changes nothing in the house.",
+   "The photos, documents and ChatGPT history are read and kept on the Mac by a program of its own, which needs its own install and your yes at the Mac once."
+  ]
+ },
+ {
+  "sha": "436cf142152f7a4ac6bee6479691d1efd0604c1f",
+  "from": "a3ea27a7f28ce067124d16003a0fd2b1d7d93dd4",
+  "live": "2026-11-16T14:57:48Z",
+  "title": "Ask sets up the house, and Kitchen is part of Ask",
+  "changes": [
    "Ask can change how Home Assistant is set up: move a light to another room, rename it, hide or disable it, add or remove a room, change a scene, make an automation or switch one off, set the thermostat, lock a door, make a dashboard, reload an integration that stopped answering.",
    "It does these at once and says so in a sentence, with Undo under the answer, on Activity and on Changes, for a day.",
    "Anything that removes or disables something, unlocking or opening a door, and settings for the whole house wait on a card for your tap. So does a scene or an automation that would unlock or open, however you ask for it. Typing yes does nothing.",
