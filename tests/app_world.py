@@ -152,6 +152,7 @@ class World:
         self.areas = [{'area_id': a, 'name': n, 'floor_id': f, 'labels': [], 'aliases': [], 'icon': None} for a, n, f in AREAS]
         self.floors, self.labels, self.devices = copy.deepcopy(FLOORS), [], copy.deepcopy(DEVICES)
         self.configs = {'scene': _scene_configs(), 'automation': copy.deepcopy(AUTOMATIONS), 'script': copy.deepcopy(SCRIPTS)}
+        self.by_hand = {}        # automations written in Home Assistant's own files, by entity: read, never written, from Hub
         self.helpers, self.core = {kind: [] for kind in broker.HELPERS}, copy.deepcopy(CORE)
         # Home Assistant's dashboards: its own map, which it draws by itself, and one a person made.
         self.boards = [{'id': 'map', 'url_path': 'map', 'title': 'Map', 'mode': 'storage', 'icon': 'mdi:map', 'show_in_sidebar': True, 'require_admin': False},
@@ -245,12 +246,40 @@ class World:
         return next((e for e, s in self.states.items() if e.startswith(kind + '.') and s['attributes'].get('id') == key), None)
 
     def _related(self, item):
-        """Which automations and scripts name this thing anywhere in what they keep."""
+        """Which automations and scripts refer to this thing, as Home Assistant's own search indexes them: the
+        entities under entity_id in state, numeric_state and event triggers, in conditions, and in what an action
+        aims at. Never one read in a template, nor a time trigger's "at"."""
+        def named(value, out):
+            if isinstance(value, dict):
+                for key, inner in value.items():
+                    if key in ('entity_id', 'scene'):
+                        out.update(e for e in ([inner] if isinstance(inner, str) else inner if isinstance(inner, list) else [])
+                                   if isinstance(e, str) and '{' not in e)
+                    else:
+                        named(inner, out)
+            elif isinstance(value, list):
+                for inner in value:
+                    named(inner, out)
+            return out
+
+        def indexed(kind, config):
+            if kind == 'script':
+                return named(config.get('sequence'), set())
+            out = set()
+            for trigger in config.get('triggers', config.get('trigger')) or []:
+                if isinstance(trigger, dict) and trigger.get('trigger', trigger.get('platform')) in ('state', 'numeric_state'):
+                    named({'entity_id': trigger.get('entity_id')}, out)
+                elif isinstance(trigger, dict) and trigger.get('trigger', trigger.get('platform')) == 'event':
+                    named({'entity_id': (trigger.get('event_data') or {}).get('entity_id')}, out)
+            return named([config.get('conditions', config.get('condition')), config.get('actions', config.get('action'))], out)
+
         found = {}
         for kind in ('automation', 'script'):
-            ids = [self._entity_of(kind, key) for key, config in self.configs[kind].items() if f"'{item}'" in repr(config)]
-            if [e for e in ids if e and e != item]:
-                found[kind] = [e for e in ids if e and e != item]
+            kept = [*((self._entity_of(kind, key), config) for key, config in self.configs[kind].items()),
+                    *(self.by_hand.items() if kind == 'automation' else ())]
+            ids = [e for e, config in kept if e and e != item and item in indexed(kind, config)]
+            if ids:
+                found[kind] = ids
         return found
 
     def _config(self, method, kind, key, body):
@@ -378,6 +407,10 @@ class World:
         if kind in ('automation/config', 'script/config'):
             entity = command['entity_id']
             key = entity.partition('.')[2] if kind == 'script/config' else self.states.get(entity, {}).get('attributes', {}).get('id')
+            if kind == 'automation/config' and key is None:         # one written in Home Assistant's own files
+                if entity not in self.by_hand:
+                    raise broker.Rejected('not_found')
+                return {'config': copy.deepcopy(self.by_hand[entity])}
             return {'config': copy.deepcopy(self.configs[kind.partition('/')[0]].get(key, {}))}
         if kind == 'validate_config':
             return {part: ({'valid': False, 'error': "extra keys not allowed @ data[0]['nonsense']"} if 'nonsense' in repr(value)

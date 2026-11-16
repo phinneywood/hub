@@ -1066,32 +1066,91 @@ def test_a_helper_is_looked_into_wherever_an_automation_reads_it(house):
                       conditions=[{'condition': 'state', 'entity_id': 'input_boolean.guests', 'state': 'on'}])
     admin.forget()
     assert guests() == 'security'
-    # Read in a template.
+    # Read in a template, which Home Assistant's own search doesn't index: so every automation is read.
     automation.update(triggers=[{'trigger': 'template', 'value_template': "{{ is_state('input_boolean.guests', 'on') }}"}], conditions=[])
     admin.forget()
+    assert 'automation.let_guests_in' not in house._related('input_boolean.guests').get('automation', [])
     assert guests() == 'security'
-    # Made from a blueprint: what sets it going is Home Assistant's to know.
+    # Made from a blueprint whose inputs name it: what the blueprint does with it is Home Assistant's to know.
     house.configs['automation']['a-guests'] = {'id': 'a-guests', 'alias': 'Let guests in', 'use_blueprint': {
         'path': 'made_up/unlock_on_switch.yaml', 'input': {'switch': 'input_boolean.guests', 'lock': 'lock.front_door'}}}
     admin.forget()
     assert guests() == 'unread'
-    # Kept in Home Assistant's own files: Hub can't read it at all.
+    house.configs['automation']['a-guests']['use_blueprint']['input']['switch'] = 'input_boolean.movie'
+    admin.forget()
+    assert guests() is None                     # one whose inputs don't name it isn't set off by it
+    # Written in Home Assistant's own files: read all the same.
     del house.configs['automation']['a-guests']
     house.states['automation.let_guests_in']['attributes'].pop('id')
-    related = house._related
-    house._related = lambda item: {'automation': ['automation.let_guests_in']} if item == 'input_boolean.guests' else related(item)
+    house.by_hand['automation.let_guests_in'] = {'alias': 'Let guests in', 'triggers': [
+        {'trigger': 'state', 'entity_id': 'input_boolean.guests', 'to': 'on'}], 'conditions': [], 'actions': UNLOCK}
+    admin.forget()
+    assert guests() == 'security'
+    # One that can't be read at all, or Home Assistant not answering, is not a yes.
+    del house.by_hand['automation.let_guests_in']
     admin.forget()
     assert guests() == 'unread'
-    house._related = related
-    # Home Assistant not answering the question is not a yes.
     asked = broker.setup_read
-    house.states['automation.let_guests_in']['attributes']['id'] = 'a-guests'
     try:
         broker.setup_read = lambda *commands, timeout=None: (_ for _ in ()).throw(broker.HomeDown('away'))
-        admin.forget()
-        assert plans._sets_off(admin.world(fresh=True)['things']['input_boolean.guests'], admin.world(fresh=True)) == 'unread'
+        w = admin.world(fresh=True)
+        assert plans._sets_off(w['things']['input_boolean.guests'], w) == 'unread'
     finally:
         broker.setup_read = asked
+
+
+def test_what_home_assistants_own_search_misses_is_read_all_the_same(house):
+    """Its search knows the entities under entity_id. These three read a thing elsewhere, and each would open the
+    house when Ask works that thing."""
+    _guards(house)
+    _thing(house, 'input_datetime.wake', 'Wake time', state='07:00:00', has_date=False, has_time=True)
+    house.configs['automation']['a-guests']['triggers'] = [{'trigger': 'template', 'value_template': "{{ is_state('input_boolean.guests', 'on') }}"}]
+    _automation(house, 'a-night', 'At three', [{'trigger': 'time', 'at': '03:00:00'}], UNLOCK,
+                conditions=[{'condition': 'template', 'value_template': "{{ is_state('input_boolean.movie', 'on') }}"}])
+    _automation(house, 'a-wake', 'Up and about', [{'trigger': 'time', 'at': 'input_datetime.wake'}],
+                [{'action': 'alarm_control_panel.alarm_disarm', 'target': {'entity_id': 'alarm_control_panel.house'}}])
+    for opening, item in (('let_guests_in', 'input_boolean.guests'), ('at_three', 'input_boolean.movie'), ('up_and_about', 'input_datetime.wake')):
+        assert 'automation.' + opening not in house._related(item).get('automation', [])
+    assert admin.asks(plan('act', action='input_boolean.turn_on', things=['guests are coming'])) == 'security'
+    assert admin.asks(plan('act', action='input_boolean.turn_on', things=['movie mode'])) == 'security'
+    assert admin.asks(plan('act', action='input_datetime.set_datetime', things=['wake time'], data={'time': '06:30:00'})) == 'security'
+    assert house.sent == []
+
+
+def test_a_scene_that_switches_an_automation_is_read_like_switching_it(house):
+    _guards(house)
+    house.states['automation.let_guests_in']['state'] = 'off'
+    _automation(house, 'a-watch', 'Garage left open', [{'trigger': 'state', 'entity_id': 'cover.garage_door', 'to': 'open', 'for': '00:10:00'}],
+                [{'action': 'notify.persistent_notification', 'data': {'message': 'The garage is open'}}])
+    _automation(house, 'a-hall', 'Hall light at the door', [{'trigger': 'state', 'entity_id': 'binary_sensor.front_door', 'to': 'on'}],
+                [{'action': 'light.turn_on', 'target': {'entity_id': 'light.hall_ceiling'}}])
+    applied = lambda name, entities: admin.asks(plan('routine', kind='script', do='save', name=name, config={      # noqa: E731
+        'alias': name, 'sequence': [{'action': 'scene.apply', 'data': {'entities': entities}}]}))
+    assert applied('Welcome', {'automation.let_guests_in': 'on'}) == 'security'                 # on: what it does is set going
+    assert applied('Hush', {'automation.garage_left_open': 'off'}) == 'security'                # off: nobody is told
+    assert applied('Calm', {'automation.hall_light_at_the_door': 'on'}) is None
+    # An owner's scene that holds one.
+    house.configs['scene']['welcome'] = {'id': 'welcome', 'name': 'Welcome', 'entities': {
+        'automation.let_guests_in': {'state': 'on'}, 'light.entry_ceiling': {'state': 'on'}}}
+    house.states['scene.welcome'] = {'entity_id': 'scene.welcome', 'state': 'unknown', 'attributes': {
+        'friendly_name': 'Welcome', 'id': 'welcome', 'entity_id': ['automation.let_guests_in', 'light.entry_ceiling']}}
+    admin.forget()
+    assert admin.asks(plan('act', action='scene.turn_on', things=['welcome'])) == 'security'
+
+
+def test_switching_off_what_watches_a_way_in_waits_inside_a_routine_too(house):
+    _automation(house, 'a-watch', 'Garage left open', [{'trigger': 'state', 'entity_id': 'cover.garage_door', 'to': 'open', 'for': '00:10:00'}],
+                [{'action': 'notify.persistent_notification', 'data': {'message': 'The garage is open'}}])
+    for call in ('automation.turn_off', 'homeassistant.turn_off'):
+        body = {'alias': 'Hush', 'sequence': [{'action': call, 'target': {'entity_id': 'automation.garage_left_open'}}]}
+        assert admin.asks(plan('routine', kind='script', do='save', name='Hush', config=body)) == 'security', call
+
+
+def test_everything_of_every_kind_at_once_is_more_than_hub_can_read(house):
+    every = {'alias': 'All out', 'sequence': [{'action': 'homeassistant.turn_off', 'target': {'entity_id': 'all'}}]}
+    assert admin.asks(plan('routine', kind='script', do='save', name='All out', config=every)) == 'unread'
+    lights = {'alias': 'All dark', 'sequence': [{'action': 'light.turn_off', 'target': {'entity_id': 'all'}}]}
+    assert admin.asks(plan('routine', kind='script', do='save', name='All dark', config=lights)) is None
 
 
 def test_an_automation_that_only_works_a_lock_is_not_set_off_by_it(house):

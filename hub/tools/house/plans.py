@@ -594,7 +594,9 @@ def _reached(step, w):
         for key in ('entity_id', 'area_id', 'floor_id', 'label_id', 'device_id'):
             got = part.get(key)
             for one in [got] if isinstance(got, str) else got if isinstance(got, list) else []:
-                if key == 'entity_id' and one == 'all':
+                if key == 'entity_id' and one == 'all' and domain == 'homeassistant':
+                    unknown = True              # everything of every kind: more than Hub can read
+                elif key == 'entity_id' and one == 'all':
                     named += [t['id'] for t in w['things'].values() if t['domain'] == domain]
                 elif key == 'entity_id' and isinstance(one, str) and broker.ANY_ENTITY.fullmatch(one):
                     named.append(one)
@@ -669,7 +671,7 @@ def scene_opens(entity, w):
     members = [m for m in members if isinstance(m, str)] if isinstance(members, list) else None
     if members is None and thing['platform'] in LIGHT_SCENES:
         return False                # an integration's own scene, which only ever sets its own lights
-    if members is not None and not any(m.partition('.')[0] in OPENS or m.partition('.')[0] in SET_OFF for m in members):
+    if members is not None and not any(m.partition('.')[0] in (*OPENS, *SET_OFF, 'automation') for m in members):
         return any(_sets_off(w['things'][m], w) for m in members if m in w['things'])
     kept = broker.setup_config('scene', thing['config']) if thing['config'] else None
     return True if kept is None else _kept_opens(kept.get('entities'), w)
@@ -683,6 +685,10 @@ def _kept_opens(entities, w):
         state = wanted.get('state') if isinstance(wanted, dict) else wanted
         if state in WIDE_OPEN.get(domain, ()) and (domain != 'cover' or _door(member, w)):
             return True
+        if domain == 'automation':      # a scene can switch an automation on or off
+            if _switched(member, state, w):
+                return True
+            continue
         if member not in w['things'] or w['things'][member]['guards'] or _sets_off(w['things'][member], w):
             return True
     return False
@@ -762,24 +768,69 @@ def _sets_off(thing, w, seen=frozenset(), depth=0):
 
 
 def _chain(thing, w, seen, depth):
-    try:
-        (found,) = broker.setup_read({'type': 'search/related', 'item_type': 'entity', 'item_id': thing['id']})
-    except (broker.HomeDown, broker.Rejected, ValueError):
-        return 'unread'
+    """Every automation that is on is read, not only those Home Assistant's search lists: its search knows the
+    entities under entity_id, but not one read in a template or a time trigger's "at"."""
     why = []
-    for entity in (found or {}).get('automation') or ():
-        other = w['things'].get(entity) if isinstance(entity, str) else None
-        if other is None:
-            why.append('unread')
+    for entity, kept in _automations(w).items():
+        if entity in seen or w['things'][entity]['state'] == 'off':
             continue
-        if entity in seen or other['state'] == 'off':
-            continue
-        kind, kept = _kept(entity, w)
-        if kept is None or 'use_blueprint' in kept:
-            why.append('unread')        # kept in Home Assistant's files, or made from a blueprint: what sets it going is unknown
-        elif _named_by(_heard(kept), thing):
+        if kept is None:
+            why.append('unread')        # it couldn't be read, so what sets it going is unknown
+        elif 'use_blueprint' in kept:   # made from a blueprint: what it does is the blueprint's, its inputs are what it reads
+            if _named_by(json.dumps(kept['use_blueprint']), thing):
+                why.append('unread')
+        elif _named_by(_heard_once(entity, kept, w), thing):
             why.append(opens('automation', kept, w, seen | {entity}, depth + 1))
     return _worst(why)
+
+
+BATCH = 50                  # automations read in one request to Home Assistant
+
+
+def _automations(w):
+    """{automation: the config Home Assistant keeps for it, or None when it can't be read}: every automation in the
+    house, its own files' too, read once for this reading of the house, a batch of them to one request."""
+    if 'automations' not in w:
+        names = sorted(e for e, t in w['things'].items() if t['domain'] == 'automation' and not t['disabled'])
+        kept = dict.fromkeys(names)
+        for batch in (names[n:n + BATCH] for n in range(0, len(names), BATCH)):
+            try:
+                answers = broker.setup_read(*({'type': 'automation/config', 'entity_id': e} for e in batch))
+            except broker.Rejected:                 # one of them couldn't be read: each by itself, to know which
+                answers = [_one_config(e) for e in batch]
+            except (broker.HomeDown, ValueError):
+                answers = [None] * len(batch)
+            for entity, answer in zip(batch, answers):
+                config = answer.get('config') if isinstance(answer, dict) else None
+                kept[entity] = config if isinstance(config, dict) and config else None
+        w['automations'] = kept
+    return w['automations']
+
+
+def _one_config(entity):
+    try:
+        (answer,) = broker.setup_read({'type': 'automation/config', 'entity_id': entity})
+        return answer
+    except (broker.Rejected, broker.HomeDown, ValueError):
+        return None
+
+
+def _heard_once(entity, kept, w):
+    heard = w.setdefault('heard', {})
+    if entity not in heard:
+        heard[entity] = _heard(kept)
+    return heard[entity]
+
+
+def _switched(entity, state, w, seen=frozenset(), depth=0):
+    """Why a scene setting an automation on or off waits, as switching it would: on sets going what it does, off
+    stops it guarding or telling. One that can't be read, or a state Hub can't read, is 'unread'."""
+    _, kept = _kept(entity, w)
+    if kept is None or state not in ('on', 'off'):
+        return 'unread'
+    if state == 'on':
+        return opens('automation', kept, w, seen | {entity}, depth + 1)
+    return 'security' if touches('automation', kept, w) or watches('automation', kept, w) else None
 
 
 ALERTS = ('notify', 'persistent_notification', 'tts', 'siren')
@@ -823,6 +874,8 @@ def touches(kind, body, w):
 def _kept(entity, w):
     """(kind, the config Home Assistant keeps for an automation or a script) or (kind, None) when it can't be read."""
     kind, thing = entity.partition('.')[0], w['things'].get(entity)
+    if kind == 'automation' and entity in _automations(w):
+        return kind, _automations(w)[entity]
     key = entity.partition('.')[2] if kind == 'script' else thing['config'] if thing else None
     return kind, (broker.setup_config(kind, key) if thing and key else None)
 
@@ -890,7 +943,9 @@ def _step_opens(step, w, seen, depth):
             members = [str(e) for e in [*sets, *keeps]]
             if any(e.partition('.')[0] in OPENS or e not in w['things'] or w['things'][e]['guards'] for e in members):
                 return 'security'
-            return _worst(_sets_off(w['things'][e], w, seen, depth) for e in members)
+            state = lambda e: sets[e].get('state') if isinstance(sets.get(e), dict) else sets.get(e)       # noqa: E731
+            return _worst(_switched(e, state(e), w, seen, depth) if e.startswith('automation.') else _sets_off(w['things'][e], w, seen, depth)
+                          for e in members)
         return None
     whole = domain == 'homeassistant' and service in ('turn_on', 'turn_off', 'toggle')
     if whole and service != 'turn_off' and (loose or any(e.partition('.')[0] in OPENS and (e.partition('.')[0] != 'cover' or _door(e, w)) for e in named)):
@@ -909,7 +964,7 @@ def _step_opens(step, w, seen, depth):
             found.append('unread' if kept is None else None)
             if kept is not None and service != 'turn_off':
                 found.append(opens(kind, kept, w, seen | {t['id']}, depth + 1))
-            if kept is not None and service != 'turn_on' and touches(kind, kept, w):
+            if kept is not None and service != 'turn_on' and (touches(kind, kept, w) or watches(kind, kept, w)):
                 found.append('security')
     # Whatever it works, a helper, a button, a switch or a light: what does working it set off?
     if service not in ('reload', 'update_entity'):
