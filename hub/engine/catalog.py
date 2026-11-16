@@ -820,6 +820,16 @@ def live_items():
                       f'{names}. Since {since}.', href='/checks', cta='See checks')]
 
 
+def caretaker_items():
+    """What the house's caretaker hands the owner (hub/caretaker.py): one item each, opening House health."""
+    from .. import caretaker
+    return [today.rec(f'care-{n["id"]}', 'warn', n['title'], n['words'], href=HEALTH, cta='Open')
+            for n in caretaker.needs()]
+
+
+HEALTH = '/app/#health'      # the app's House health screen
+
+
 def improvement_items():
     """Improvement requests the owner filed in the last day, so they see it was kept."""
     from . import improve
@@ -940,6 +950,10 @@ SOURCES = [
                     Lookup('music_library', 'Music library', 'Playlists, recent plays and search in Music Assistant.',
                            'Playlist names and where each lives, song, album and artist names, and what played recently.',
                            '/house/playlists', 'Playlists', library_lookup))),
+    Source('caretaker', 'House caretaker', 'What the house’s caretaker on this Mac found and could not fix itself: '
+           'its journal, read-only.',
+           'Nothing to the overnight review or to Ask. Today shows each thing that needs you, in the caretaker’s words.',
+           items=(caretaker_items,)),
     Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
            'What is already on your list and what you said “Not today” to this week. To Ask Hub when you ask: what its '
            'runs cost against each limit and how many finished.', items=(hub_faults, hub_release, live_items, improvement_items, friction_items),

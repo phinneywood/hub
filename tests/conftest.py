@@ -6,6 +6,7 @@ from hub import bridge, config, worker
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config, "CARETAKER_DIR", tmp_path / "caretaker")    # never the Mac's real caretaker
     monkeypatch.setattr(config, "ALLOWED_LOGINS", {"me@example.com"})
     bridge.clear_cache()
     from hub.tools.house import music, read as house

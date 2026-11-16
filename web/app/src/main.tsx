@@ -12,6 +12,7 @@ import { Versions } from "./versions";
 import { Engine } from "./engine";
 import { MailSettings } from "./mailrules";
 import { Activity } from "./activity";
+import { Health } from "./health";
 import { Changes } from "./changes";
 import { ItemSheet, Kitchen, shop, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
@@ -55,7 +56,7 @@ function Sheets() {
 
 function Screen() {
   const where = view.value;
-  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "today" ? <Today /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
+  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "health" ? <Health /> : where === "today" ? <Today /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
 }
 
 function App() {

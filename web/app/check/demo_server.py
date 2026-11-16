@@ -7,6 +7,8 @@ model, looks in no key store and reaches no other machine and no service on this
 Every room, name and song here is invented.
 
 Today shows a made-up day (tests/day_world.py): a calendar, a class guide, two emails, a waiting cart and a trip.
+House health shows a made-up night from a stand-in caretaker (tests/caretaker_world.py): Hub restarted, a lamp that
+came back by itself, an integration that waits for Restart Home Assistant, a week of history and drills that play.
 Mail shows the same two emails, a question nobody answered and what the last sort left in the inbox; Kitchen shows
 a made-up list on its way into a practice cart (tests/kitchen_world.py): products picked from a made-up history,
 one thing that needs a pick, and a cart plan waiting for a tap. Filing, approving and ordering only change the
@@ -31,7 +33,8 @@ scratch = tempfile.mkdtemp(prefix='hub-app-check-')
 os.environ.update(HUB_DATA_DIR=scratch, HUB_BACKGROUND_JOBS='disabled', HUB_BRIDGE_URL='http://127.0.0.1:9',
                   HUB_BRIDGE_TOKEN_FILE=str(Path(scratch) / 'absent'), HUB_KITCHEN_SOCKET=str(Path(scratch) / 'absent.sock'),
                   HUB_HA_BROKER_SOCKET=str(Path(scratch) / 'absent-broker.sock'), HUB_ALLOWED_LOGINS='me@example.com',
-                  PYDANTIC_AI_NO_BANNER='1', HUB_RELEASES_DIR=str(Path(scratch) / 'releases'))
+                  PYDANTIC_AI_NO_BANNER='1', HUB_RELEASES_DIR=str(Path(scratch) / 'releases'),
+                  HUB_CARETAKER_DIR=str(Path(scratch) / 'caretaker'))
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -88,6 +91,11 @@ def _claw_events(since):
 
 patch.setattr(activity.apple, 'setup', lambda: {'logging': True, 'home': 'demo'})
 patch.setattr(activity.apple, 'events', _claw_events)
+
+# House health: a made-up caretaker folder with a night in it (tests/caretaker_world.py), and a stand-in caretaker
+# that answers the screen's taps and plays a drill through when one is asked for.
+from tests import caretaker_world  # noqa: E402
+care = caretaker_world.Caretaker(caretaker_world.night(Path(scratch) / 'caretaker')).start()
 
 # The Engine screen: a made-up instruction, something to build and a note waiting for a tap.
 from hub.engine import notes as engine_notes, state as engine_state  # noqa: E402
@@ -180,6 +188,7 @@ def stage(what: str):
         with turns._db() as conn:
             conn.execute('delete from app_ask')
         a_habit()
+        care.reset()
     elif what in ('down', 'up'):
         world.down = what == 'down'
     elif what == 'quiet-day':

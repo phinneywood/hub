@@ -1,8 +1,21 @@
 [
  {
   "sha": null,
-  "from": "a3ea27a7f28ce067124d16003a0fd2b1d7d93dd4",
+  "from": "436cf142152f7a4ac6bee6479691d1efd0604c1f",
   "live": null,
+  "title": "House health: what the caretaker watches, fixed and leaves to you",
+  "changes": [
+   "House health, first in System, shows what the house’s caretaker watches: Home Assistant, the devices, Hue, Apple Home, the internet, Hub and its helpers, routines, backups and the Mac, each with a line and seven days of history.",
+   "Last night says what it fixed and what came back by itself, in plain words. What needs you comes with the caretaker’s words and Done or Ignore, and Restart Home Assistant where it asks for that.",
+   "What needs you is also on Today, and the top button turns amber until it’s sorted. Something that breaks at night waits for the morning, unless Hub, the house connection, Kitchen or Home Assistant stays down after a fix didn’t work.",
+   "Make it sturdier lists one-time advice, and the caretaker checks afterwards whether a change helped. Pause stops it fixing while it keeps watching. A drill plays a real kind of failure on a made-up house, so you can watch what it does.",
+   "When the caretaker stops looking, the screen and System say since when, and the live check “caretaker.alive” fails."
+  ]
+ },
+ {
+  "sha": "436cf142152f7a4ac6bee6479691d1efd0604c1f",
+  "from": "a3ea27a7f28ce067124d16003a0fd2b1d7d93dd4",
+  "live": "2026-11-16T14:57:48Z",
   "title": "Ask sets up the house, and Kitchen is part of Ask",
   "changes": [
    "Ask can change how Home Assistant is set up: move a light to another room, rename it, hide or disable it, add or remove a room, change a scene, make an automation or switch one off, set the thermostat, lock a door, make a dashboard, reload an integration that stopped answering.",

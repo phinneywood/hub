@@ -29,7 +29,33 @@ export interface House {
 export interface Down { ok: false; why: string }
 export interface Me {
   signed_in: boolean; initial: string; versions: { js: string; css: string };
-  links: { ha: string | null; music: string | null }; update?: boolean;
+  links: { ha: string | null; music: string | null }; update?: boolean; care?: Care;
+}
+// The house's caretaker, as Hub reads its folder (hub/caretaker.py).
+export interface Care { set_up: boolean; alive: boolean; looked: string; needs: number }
+export type CareState = "needs_you" | "fixing" | "watching" | "unknown" | "ok" | "off";
+export interface CareNeed {
+  id: number; title: string; words: string; cause: string; ask: string | null; fixable: boolean;
+  today: boolean; held: boolean; urgent: boolean; since: string;
+}
+export interface CareLine { tone: "fixed" | "by_itself" | "info"; text: string }
+export interface CareDay { day: string; watched: boolean; fixed: number; by_itself: number; needs_you: number }
+export interface CareHistory { id: number; title: string; from: string; to: string | null; outcome: string }
+export interface CareSystem {
+  id: string; name: string; state: CareState; line: string; days: { day: string; state: CareState }[]; history: CareHistory[];
+}
+export interface CareSturdier { key: string; title: string; words: string; since: string; done_at: string | null; verdict: string | null }
+export interface CareDrill {
+  scenario: string; words: string; minute: number; of: number; done: boolean; title: string | null; outcome: string | null;
+  steps: { at: string; status: string; words: string }[];
+}
+export interface Health {
+  set_up: boolean; alive: boolean; headline: string; sub: string; mode?: string | null; paused?: boolean;
+  needs?: CareNeed[]; today?: number; night?: { from: string; headline: string | null; lines: CareLine[] };
+  systems?: CareSystem[]; week?: CareDay[]; sturdier?: CareSturdier[];
+  batteries?: { name: string; room: string; level: number; reachable: boolean }[];
+  ignoring?: { name: string; why: string }[]; drills?: { name: string; words: string }[]; drill?: CareDrill | null;
+  answers?: { id: string; do: string; status: string; words: string }[];
 }
 // Versions, as Hub sends them (hub/app/versions.py).
 export interface Release {

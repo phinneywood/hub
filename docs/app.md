@@ -408,6 +408,52 @@ follows what it is sent (`tests/app_world.py`). It reaches no other machine and 
 and a practice cart, `tests/kitchen_world.py`) and private desk, so the conversation, a setup change and the list
 filling a cart can be tried and photographed without a key, a house or a shop. See `web/app/check/README.md`.
 
+## House health
+
+System's first row, "House health", opens what the house's caretaker sees (`hub/caretaker.py`,
+`web/app/src/health.tsx`). The caretaker is a program of its own on the Mac (home-ops `caretaker/`, its design in
+that repository's `docs/CARETAKER.md`). It watches Home Assistant, the devices, Hue, Apple Home, the network, Hub, its
+deployer and helpers, routines, backups and the Mac; fixes a fenced few things by itself (an integration reload,
+two apps, the four services, opening HomeClaw); and keeps a folder, `HUB_CARETAKER_DIR`
+(`~/Library/Application Support/HomeOps/caretaker` by default):
+
+| | What Hub does with it |
+| --- | --- |
+| `status.json`, rewritten every minute | Reads it: each system's state and line, what needs you, the advice, batteries, what isn't watched, the drills |
+| `caretaker.db`, its journal | Reads it, read-only (`mode=ro`): what needs you, the night's lines, seven days of history, a drill's steps, the answers to your requests |
+| `queue/` | The only thing Hub writes: one request note per tap |
+
+**The screen.** A headline (what needs you, all quiet, or the caretaker hasn't looked since when), then:
+- Needs you, with Restart Home Assistant where the caretaker asks for it, Try again where a step can help, Done
+  and Ignore;
+- Last night, from 9 PM: what it fixed, what came back by itself, and other lines worth a glance;
+- Watching: a row per system with its state, each opening seven days as dots and what happened;
+- The last seven days, day by day;
+- Make it sturdier, with I did this and Not for us;
+- Batteries;
+- Pause: it keeps watching and telling but fixes nothing;
+- Run a drill: a real kind of failure on a made-up house, followed live on the screen.
+
+**Taps.** Each needs a signed-in device. Hub checks the request first (`caretaker.ask`): the kind of tap, that the
+item is open and not a drill's, that a Try again has a step to try, that a drill is one the caretaker lists, a
+pause's length. Then it leaves `queue/hub-<id>.json` (`{id, do, target, by, at}`), written aside and moved in. The
+caretaker checks it again, does it or refuses, answers it in its journal within a pass, and deletes it. Restart Home
+Assistant runs only from such a tap.
+
+**Today and the morning.** Each needs-you item the caretaker marks for Today is a Today item keyed `care-<id>`, with
+the caretaker's words and Open to House health. Battery items stay on this screen. Items raised at night wait for
+the morning, except Hub, the broker, the kitchen service or Home Assistant still down half an hour after a failed
+fix. `caretaker.note()` gives the night in a headline and lines, 9 PM to now until noon, for the morning brief
+(`{"at", "headline", "lines": [{"tone", "text"}], "needs"}` or None), and `GET /app/api/health/note` serves it. The
+top button and System's tab turn amber while something needs you or the caretaker has stopped looking.
+
+**When it stops.** A heartbeat older than five minutes is said plainly on the screen and in System ("The caretaker
+hasn't looked since 3:12 AM"), and the live check `caretaker.alive` fails.
+
+Nothing here reaches the house; Hub never runs the caretaker or a fix. Tests: `tests/test_app_health.py`, on a
+made-up caretaker folder (`tests/caretaker_world.py`), which the demo also uses with a stand-in caretaker that
+answers taps and plays drills.
+
 ## Activity
 
 System's "Activity" opens what happened in the house (`hub/app/activity.py`, `web/app/src/activity.tsx`), newest

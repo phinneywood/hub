@@ -19,7 +19,7 @@ export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind:
   | { kind: "item"; id: number } | { kind: "card"; card: Card } | null;
 export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
-export type View = "home" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity";
+export type View = "home" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity" | "health";
 
 function kept(): House | null {
   try {
@@ -45,7 +45,7 @@ export const trouble = signal<Trouble>("");   // "hub": can't reach Hub; "house"
 export const why = signal("");
 export const me = signal<Me>({ signed_in: true, initial: "", versions: { js: "", css: "" }, links: { ha: null, music: null } });
 export const sheet = signal<Sheet>(null);
-const VIEWS: View[] = ["today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity"];
+const VIEWS: View[] = ["today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "health"];
 const here = (): View => VIEWS.find((v) => location.hash === "#" + v) ?? "home";
 export const view = signal<View>(here());
 export const toast = signal<Toast | null>(null);
@@ -418,16 +418,28 @@ function connect() {
 async function look_now() {
   try {
     const first = await api.home();
-    me.value = { signed_in: first.signed_in, initial: first.initial, versions: first.versions, links: first.links, update: first.update };
+    me.value = { signed_in: first.signed_in, initial: first.initial, versions: first.versions, links: first.links, update: first.update,
+      care: first.care };
     accept(first);
   } catch {
     trouble.value = "hub";
   }
 }
 
+/** The caretaker's count for the top button and System, read again now and then (the house's own feed doesn't carry it). */
+export async function lookAtCare() {
+  try {
+    const care = await api.careTop();
+    me.value = { ...me.value, care };
+  } catch {
+    /* Hub away: the banner says so */
+  }
+}
+
 export function start() {
   connect();
   void look_now();
+  window.setInterval(() => { if (document.visibilityState === "visible") void lookAtCare(); }, 60000);
   window.setInterval(() => {
     // A phone that leaves the home network is told nothing: the line just goes silent. So listen for silence.
     if (document.visibilityState !== "visible") return;

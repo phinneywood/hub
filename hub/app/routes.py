@@ -116,8 +116,10 @@ def worker():
 def home(request: Request):
     login = _login(request)
     links = read.opens()
+    from .. import caretaker
     return {**model.now(), 'signed_in': login is not None, 'initial': (login or 'H')[:1].upper(), 'versions': versions(),
-            'links': {'ha': links.get('ha_url'), 'music': links.get('music_url')}, 'update': _update_ready()}
+            'links': {'ha': links.get('ha_url'), 'music': links.get('music_url')}, 'update': _update_ready(),
+            'care': caretaker.top()}
 
 
 def _update_ready():
@@ -461,6 +463,46 @@ def setup_tap(number: int, choice: str, request: Request):
         return _signed_out()
     admin.settle(number, 'dismissed')
     return {'ok': True, 'said': 'Left as it was'}
+
+
+# ---- House health (hub/caretaker.py): what the caretaker watches, fixed and hands to you ----
+
+@router.get('/api/health')
+def health_picture():
+    """The House health screen as data, from the caretaker's folder. Reads only."""
+    from .. import caretaker
+    return caretaker.picture()
+
+
+@router.get('/api/health/top')
+def health_top():
+    """Is the caretaker watching, and how many things need the owner: for the top button and System."""
+    from .. import caretaker
+    return caretaker.top()
+
+
+@router.get('/api/health/note')
+def health_note():
+    """The night in a headline and lines, 9 PM until now, until noon; null otherwise."""
+    from .. import caretaker
+    return caretaker.note()
+
+
+@router.post('/api/health/{do}')
+def health_ask(do: str, request: Request, body: dict = Body(default={})):
+    """A tap on House health, {"target": ...}: fix, done, ignore, pause, resume or drill. Hub checks it and leaves
+    it in the caretaker's queue; the caretaker checks it again and answers in its journal within a minute."""
+    from .. import caretaker
+    login = _login(request)
+    if login is None:
+        return _refuse('Ask the caretaker from your phone or laptop.', 403)
+    try:
+        said, rid = caretaker.ask(do[:12], body.get('target', ''), login)
+    except caretaker.Refused as error:
+        return _refuse(error)
+    except (ValueError, TypeError, OSError):
+        return _refuse('Hub couldn’t pass that on.', 400)
+    return {'ok': True, 'said': said, 'request': rid}
 
 
 # ---- Activity (hub/app/activity.py): what happened in the house, from Home Assistant, Apple Home and Hub ----

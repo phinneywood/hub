@@ -23,6 +23,9 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   tomorrow, the week at school and the trip, marks two things at once, takes a tick and puts it back, and
   says so when nothing needs you;
 - System opens Versions, which lists the releases and leads back;
+- the top button turns amber while the caretaker hands you something; House health shows what needs you with
+  Restart Home Assistant where it is asked for, every system with seven days of history, the last seven days, a
+  drill that plays through on the made-up house, and the top button going back once the last thing is sorted;
 - Mail leads with the emails that need you and the unanswered question, takes a tick and puts it back, and
   files a kind; Kitchen shows the list with each thing's product and where it stands, what needs a pick, a cart
   plan and ideas, opens a thing and sets how many, adds what is typed, takes a pick, fills the cart, reads it,

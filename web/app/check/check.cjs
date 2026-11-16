@@ -474,6 +474,32 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await saysSoon("What happened in the house"), "Back from Changes: " + await says());
     await tap(".uplink");
     expect(await saysSoon("The house is answering."), "Back from Activity: " + await says());
+    // ---- House health: the caretaker's night, what it watches, a drill, and the one thing that needs a tap ----
+    expect(await page.locator(phone ? ".who.care" : ".rail .foot .tab.care").count() === 1, "the top button didn't turn amber for what needs you");
+    await tap('.row:has-text("House health")');
+    expect(await until(() => document.querySelector(".say")?.textContent.includes("One thing needs you") ||
+      document.querySelector(".say")?.textContent.includes("waits for the morning")), "House health: " + await says());
+    expect(await until(() => document.body.textContent.includes("Sonos keeps failing")), "House health didn't list what needs you");
+    expect(await page.locator('.care-need .btn.go:has-text("Restart Home Assistant")').count() === 1, "no Restart Home Assistant on the item that asks for it");
+    expect(await page.locator(".care-row").count() === 14, "House health didn't list every system");
+    await tap('.care-row:has-text("Hue lights")');
+    expect(await until(() => document.querySelectorAll(".care-history .care-days .care-dot").length === 7), "a system's history didn't show seven days");
+    expect(await until(() => document.querySelectorAll(".block .ctl.one").length >= 7), "House health didn't show the last seven days");
+    await page.waitForTimeout(300); await shot("7e-health");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on House health: " + (await small()).join(", "));
+    await tap('.scene:has-text("Hub stops")');
+    await tap('.care-acts .btn.go:has-text("Run the drill")');
+    expect(await until(() => document.querySelector(".care-drill b")?.textContent.startsWith("Drill finished"), null, 25000),
+      "the drill didn't play through");
+    expect(await until(() => [...document.querySelectorAll(".care-drill p")].some((p) => p.textContent.includes("start Hub again"))),
+      "the drill didn't show its steps");
+    await page.waitForTimeout(300); await shot("7f-health-drill");
+    await tap('.care-need .btn.go:has-text("Restart Home Assistant")');
+    expect(await until(() => !document.body.textContent.includes("Sonos keeps failing"), null, 12000), "Restart Home Assistant didn't clear the item");
+    expect(await until(() => document.querySelectorAll(".who.care, .rail .foot .tab.care").length === 0, null, 12000),
+      "the top button stayed amber after the last thing was sorted");
+    await tap(".uplink");
+    expect(await saysSoon("The house is answering."), "Back from House health: " + await says());
     await tap('.row:has-text("Engine")');
     expect(await saysSoon("Engine"), "Engine: " + await says());
     expect(await until(() => document.body.textContent.includes("Always tell me about school mail")), "Engine didn't list what Hub follows");
