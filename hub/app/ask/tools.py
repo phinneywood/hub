@@ -390,6 +390,7 @@ def look_up(ctx: RunContext[Turn], topics: list[Literal['mail', 'calendar', 'sch
 
 # ---- the family archive (hub/app/archive.py) ----
 
+ARCHIVE_KEPT = 'Hub answered from the archive itself.'
 PHOTOS_TOLD = ('Any photos are shown to the owner on a card Hub draws and describes itself. You are told nothing about '
                'photos: never say what they show, how many there are, or whether there are any.')
 LOCKED = {'documents': 'Matches are on the card for the owner to open. You can’t read documents.',
@@ -495,22 +496,26 @@ def search(ctx: RunContext[Turn], searches: list[str], sources: list[Literal['ph
                             for n, e in enumerate(events, 1)] or 'Nothing matched.'
         turn.strangers = turn.strangers or bool(events)
     asked = 'photos' in archive.understand(turn.text)['sources'] or wanted == ['photos']
-    if shown['count'] or asked:
-        # Hub speaks for photos when they are what was asked for, or all that was found; else they wait on the card
-        lead = asked or not lines
+    sentence = None
+    if 'archive' in told and not lines:
+        sentence = told['archive']
+    elif asked or (not lines and shown['count']):      # photos lead, or are all there is: Hub's sentence is the answer
         about = (archive.understand(turn.text)['about'] if len(turn.text) <= 80 else '') or (phrases[0] if phrases else 'Photos')
-        sentence = archive.photo_sentence(about if lead else 'Photos', shown)
-        if lead:
-            turn.withheld[len(turn.said)] = 'Hub showed photos.'
-            turn.said.append(sentence)
-        turn.cards.append({'kind': 'photos', 'title': sentence, 'count': shown['count'],
-                           'items': [{'id': p['id'], 'kind': p['kind'], 'day': p['day']} for p in shown['items']],
+        sentence = archive.photo_sentence(about, shown)
+    elif not lines:         # nothing at all: Hub says so itself
+        sentence = 'Nothing in the archive matched that.'
+    if sentence:
+        turn.withheld[len(turn.said)] = ARCHIVE_KEPT      # later requests never learn from it whether photos were found
+        turn.said.append(sentence)
+    if shown['count']:
+        turn.cards.append({'kind': 'photos', 'title': sentence if sentence and asked else archive.photo_sentence(None, shown),
+                           'count': shown['count'], 'items': [{'id': p['id'], 'kind': p['kind'], 'day': p['day']} for p in shown['items']],
                            'search': turn.text[:300]})
     if lines:
         cards.append({'kind': 'found', 'items': sorted(lines, key=lambda l: l['day'] or '', reverse=True)[:CARD_MOST],
                       'count': len(lines), 'search': turn.text[:300]})
     turn.cards.extend(cards)
-    turn.again = bool(lines) or not shown['count'] or 'archive' in told   # the model answers what it can read, or says nothing matched
+    turn.again = bool(lines)        # only what the model may hear about decides a second trip; photos never do
     return told
 
 

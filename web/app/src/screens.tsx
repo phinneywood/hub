@@ -1,7 +1,7 @@
 // The screens: the house as a plan, the bar at the bottom, and System.
 import type { JSX } from "preact";
 import { useRef, useState } from "preact/hooks";
-import { go, house, look, me, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
+import { go, house, look, me, openArchive, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
 import type { Look } from "./state";
 import { able, forgetNote } from "./asking";
 import type { Floor, House, Room } from "./types";
@@ -81,7 +81,10 @@ export function Top() {
   return (
     <div class="top">
       <span class="when">{when()}</span>
-      <button type="button" class={"who" + (trouble.value ? " bad" : "")} aria-label="System" onClick={() => go("system")}>{me.value.initial}</button>
+      <span class="top-acts">
+        {view.value !== "archive" && <button type="button" class="seekbtn" aria-label="Search the archive" onClick={() => openArchive()}><Icon name="search" /></button>}
+        <button type="button" class={"who" + (trouble.value ? " bad" : "")} aria-label="System" onClick={() => go("system")}>{me.value.initial}</button>
+      </span>
     </div>
   );
 }
@@ -202,6 +205,7 @@ export function Rail() {
     <nav class="rail" aria-label="Hub">
       <div class="mark"><i />Hub</div>
       <Tabs />
+      <button type="button" class={"tab" + (view.value === "archive" ? " on" : "")} onClick={() => go("archive")}>Archive</button>
       <div class="foot">
         <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" || view.value === "changes" || view.value === "activity" ? " on" : "")} onClick={() => go("system")}>System</button>
         <p class="ok">{fine ? "The house is answering." : trouble.value === "hub" ? "Can’t reach Hub." : "The house isn’t answering."}</p>
@@ -230,7 +234,7 @@ export function System() {
         <h2>Under the hood</h2>
         <div class="rows">
           {me.value.update && <button type="button" class="row free lit" onClick={() => go("versions")}><div class="row-main"><b>A new version is ready</b><span>Open it to deploy</span></div></button>}
-          <button type="button" class="row free" onClick={() => go("photos")}><div class="row-main"><b>Photos</b><span>Each month’s best, chosen on this Mac</span></div></button>
+          <button type="button" class="row free" onClick={() => go("archive")}><div class="row-main"><b>Archive</b><span>Photos, documents, mail and chats, and each month’s best photos</span></div></button>
           <button type="button" class="row free" onClick={() => go("activity")}><div class="row-main"><b>Activity</b><span>What happened in the house, from Home Assistant, Apple Home and Hub</span></div></button>
           {links.ha && <a class="row free" href={links.ha}><div class="row-main"><b>Home Assistant</b><span>Devices, rooms and automations</span></div></a>}
           {links.music && <a class="row free" href={links.music}><div class="row-main"><b>Music Assistant</b><span>The library, the queue and playlists</span></div></a>}

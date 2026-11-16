@@ -128,3 +128,37 @@ export interface Order { id: number; status: string; decided_by?: string | null;
   placed?: { status: string; order_number?: string; total?: number | null; why?: string } | null }
 export interface KitchenMessage { id: number; role: "member" | "assistant" | "notice"; text: string; author?: string | null; at: number;
   recipes?: Recipe[] | null; plan?: Plan | null; result?: CartResult | null; order?: Order | null }
+
+// ---- the Archive: photos, documents and ChatGPT history from the archive program, mail and calendar from Hub ----
+export type ArchiveSource = "photos" | "documents" | "mail" | "calendar" | "chats";
+export interface ArchiveItem {
+  id: string; source: "photos" | "documents" | "chats"; kind: string; title: string; at: number | null; day: string | null;
+  until?: number | null; place?: string; folder?: string; pages?: number | null; size?: number | null; duration?: number | null;
+  w?: number | null; h?: number | null; favorite?: boolean; shared?: boolean; local?: boolean; thumb?: boolean; people?: string[];
+  snippet?: string; page?: number | null; role?: string | null;
+}
+export interface ArchiveSection { count: number; items: ArchiveItem[]; days?: number; first?: string | null; last?: string | null }
+export interface MailItem { id: string; from: string; address?: string; subject: string; at: number | null; day: string | null; snippet: string }
+export interface EventItem { id: string; title: string; day: string; start: string | null; end: string | null; all_day: boolean; location: string }
+export interface Understood { people: string[]; kids: boolean; after: string | null; before: string | null; months: number[];
+  sources: ArchiveSource[]; terms: string; sort: string | null }
+export interface ArchiveFound {
+  q: string; understood: Understood; about: string; sources: ArchiveSource[]; ready: boolean; away?: string; loose: boolean;
+  said?: string; mail: boolean; photos?: ArchiveSection; documents?: ArchiveSection; chats?: ArchiveSection; calendar?: EventItem[];
+}
+export interface ArchivePerson { name: string; photos: number; kid: boolean; auto: boolean }
+export interface ArchiveCount { items: number; kinds: Record<string, number>; previews: number; first: string | null; last: string | null; in_icloud?: number }
+export interface ArchiveLanding {
+  ready: boolean; away?: string; owner: boolean; switches: { documents: boolean; chats: boolean }; sources: ArchiveSource[];
+  calendar: { events: number; first: string | null; last: string | null; complete: boolean; read_at: number | null };
+  counts: Partial<Record<"photos" | "documents" | "chats", ArchiveCount>>; indexed_at?: number | null;
+  onthisday: { year: number; count: number; items: ArchiveItem[] }[]; people: ArchivePerson[];
+}
+export interface PageText { page: number | null; role: string | null; at: number | null; text: string }
+export interface Opened extends Partial<Omit<ArchiveItem, "source">> {
+  id: string; source: ArchiveSource; title?: string; ext?: string; pages_text?: PageText[]; cut?: boolean;
+  messages?: { n: number; role: string; at: number | null; text: string }[]; attachments?: unknown[]; albums?: string[];
+  labels?: string[]; keywords?: string[]; description?: string;
+  from?: string; subject?: string; text?: string; start?: string | null; end?: string | null; all_day?: boolean; location?: string;
+}
+export interface MailAttachment { part: string; name: string; type: string; bytes: number | null; readable: boolean }

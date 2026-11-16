@@ -1,5 +1,6 @@
 // Every request the app makes to Hub. Same origin only; Hub refuses a change from anywhere else.
-import type { Activity, Changes, Down, Engine, House, MailSettings, Me, Photos, Pick, Releases, Said } from "./types";
+import type { Activity, ArchiveFound, ArchiveLanding, Changes, Down, Engine, House, MailItem, MailSettings, Me, Opened, Photos, Pick, Releases,
+  Said } from "./types";
 
 export async function get<T>(path: string): Promise<T> {
   const answer = await fetch("/app/api/" + path, { headers: { accept: "application/json" } });
@@ -29,3 +30,10 @@ export const activity = (kinds: string[], sources: string[], before?: number) =>
   get<Activity>(`activity?kinds=${kinds.join(",")}&sources=${sources.join(",")}${before ? "&before=" + before : ""}`);
 export const mailSettings = () => get<MailSettings>("mail-settings");
 export const photos = (month = "") => get<Photos>("photos" + (month ? "?month=" + encodeURIComponent(month) : ""));
+export const archive = () => get<ArchiveLanding>("archive");
+export const archiveSearch = (q: string, source = "", offset = 0) =>
+  get<ArchiveFound>(`archive/search?q=${encodeURIComponent(q)}${source ? "&source=" + source : ""}${offset ? "&offset=" + offset : ""}`);
+export const archiveMail = (q: string) => get<{ mail: MailItem[] }>(`archive/mail?q=${encodeURIComponent(q)}`);
+export const archiveItem = (id: string) => get<Opened>(`archive/item/${encodeURIComponent(id)}`);
+export const archiveAttachment = (id: string, part: string) =>
+  get<{ name: string; text: string; cut: boolean }>(`archive/attachment/${encodeURIComponent(id)}/${encodeURIComponent(part)}`);

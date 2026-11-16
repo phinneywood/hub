@@ -3,7 +3,8 @@
 import { signal } from "@preact/signals";
 import { say } from "./state";
 
-export interface Card { kind: string; rooms?: string[]; speakers?: string[]; batch?: string; after?: number; id?: number; note?: string }
+export interface Card { kind: string; rooms?: string[]; speakers?: string[]; batch?: string; after?: number; id?: number; note?: string;
+  title?: string; count?: number; search?: string; items?: unknown[] }
 export interface Turn { n: number; asked: string; answer: string; cards: Card[]; busy: boolean; doing: string; ms: number; status: string }
 interface Kept { id: number; asked: string; answer: string; cards: Card[]; ms: number; status: string }
 interface Able { ready: boolean; why: string | null; recent: Kept[]; usual: string[]; remembers: { id: number; note: string }[] }
@@ -12,7 +13,7 @@ type Event = { t: "say"; text: string } | { t: "doing"; what: string } | { t: "c
 
 const SAY = "hub.say";      // the chat page reads this once and sends it (web/ask): only Hub's own pages can set it
 const DOING: Record<string, string> = { lights: "Switching the lights", scene: "Setting the scene", music: "Finding the music",
-  kitchen: "Asking Kitchen", look_up: "Looking", remember: "Noting that" };
+  kitchen: "Asking Kitchen", look_up: "Looking", remember: "Noting that", search: "Searching the archive", read: "Reading it" };
 
 export const asked = signal("");                 // what is in the field
 export const talk = signal<Turn[]>([]);          // this sitting's requests and answers

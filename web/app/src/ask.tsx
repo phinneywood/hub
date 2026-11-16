@@ -2,9 +2,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { able, ask, asked, forgetNote, loadAble, talk } from "./asking";
 import type { Card, Turn } from "./asking";
+import { FoundCard, PhotoCard } from "./archive";
+import type { FoundLine } from "./archive";
 import { RoomCell, spans } from "./screens";
 import { dragVolume, loadPicks, picks, playPick, runScene, seen, setVolume, sheet, switchRoom, undo, undone } from "./state";
-import type { House, Room } from "./types";
+import type { ArchiveItem, House, Room } from "./types";
 import { Icon, SheetFrame, Slider, Switch } from "./ui";
 import { spoken } from "./words";
 
@@ -137,6 +139,8 @@ function CardView({ card, now }: { card: Card; now: House }) {
     ) : null;
   }
   if (card.kind === "kitchen" && card.after !== undefined) return <KitchenReply after={card.after} />;
+  if (card.kind === "photos") return <PhotoCard title={card.title} items={(card.items ?? []) as ArchiveItem[]} search={card.search} />;
+  if (card.kind === "found") return <FoundCard items={(card.items ?? []) as FoundLine[]} count={card.count} search={card.search} />;
   if (card.kind === "memory" && card.id !== undefined) {
     const id = card.id;
     const kept = !able.value || able.value.remembers.some((note) => note.id === id);

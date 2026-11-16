@@ -186,13 +186,22 @@ def test_pictures_pages_and_files_by_id_only(served):
     assert client.get(f'/app/api/archive/page/{invoice}/1', headers=OWNER).status_code == 200
     got = client.get(f'/app/api/archive/file/{invoice}', headers=OWNER)
     assert got.content.startswith(b'%PDF') and 'attachment' in got.headers['content-disposition']
-    assert got.headers['x-content-type-options'] == 'nosniff'
+    assert got.headers['x-content-type-options'] == 'nosniff' and got.headers['content-security-policy'] == 'sandbox'
+    assert got.headers['content-type'] == 'application/pdf'
     assert client.get(f'/app/api/archive/file/{photo}', headers=OWNER).status_code == 404     # never a photo's original
     assert client.get(f'/app/api/archive/photo/{invoice}', headers=OWNER).status_code == 404
     for odd in ('..%2F..%2Fetc', 'p:short', 'c:c0ffee00-0000-4000-8000-000000000001'):
         assert client.get(f'/app/api/archive/thumb/{odd}', headers=OWNER).status_code == 404
     assert all(path.split('/')[1] in ('thumb', 'photo', 'page', 'file', 'people', 'search', 'item', 'status', 'onthisday')
                for path, _ in served.asked)
+
+
+@pytest.mark.parametrize('kind, name', [('text/html', 'page.html'), ('image/svg+xml', 'logo.svg'), ('application/xml', 'feed.xml'),
+                                        ('text/javascript', 'tool.js'), ('application/octet-stream', 'notes.HTM')])
+def test_a_document_a_browser_would_run_is_sent_to_be_saved(monkeypatch, kind, name):
+    from hub.app import routes
+    answer = routes._bytes((b'<script>1</script>', kind, f"attachment; filename*=UTF-8''{name}"), 'file')
+    assert answer.media_type == 'application/octet-stream' and answer.headers['content-security-policy'] == 'sandbox'
 
 
 def test_the_kids_can_be_changed_here(served):

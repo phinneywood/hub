@@ -49,7 +49,16 @@ def test_photos_are_shown_by_hub_and_nothing_about_them_reaches_the_model(archiv
         assert secret not in model_saw
     ask('and the park?')
     later = sent()
-    assert 'Hub showed photos.' in later and '9 photos' not in later
+    assert 'Hub answered from the archive itself.' in later and '9 photos' not in later
+
+
+def test_a_photo_search_that_finds_nothing_still_makes_exactly_one_trip(archived):
+    answer, cards, _ = ask('photos of snow in 2019')
+    assert answer == 'Snow in 2019: no photos.' and len(SEEN) == 1
+    assert not [c for c in cards if c['kind'] == 'photos']
+    SEEN.clear()
+    answer, _, _ = ask('photos of the beach')
+    assert answer.startswith('Beach: 9 photos') and len(SEEN) == 1     # found or not, the model is asked once
 
 
 def test_the_model_answers_from_mail_and_says_where_it_came_from(archived):

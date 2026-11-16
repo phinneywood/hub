@@ -13,7 +13,7 @@ import { Engine } from "./engine";
 import { MailSettings } from "./mailrules";
 import { Activity } from "./activity";
 import { Changes } from "./changes";
-import { Photos } from "./photos";
+import { Archive, FoundSheet, Viewer } from "./archive";
 import { Kitchen, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
 import { HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
@@ -34,6 +34,8 @@ function ask() {
 
 function Sheets() {
   const open = sheet.value, now = seen.value;
+  if (open?.kind === "found") return <FoundSheet key={open.id} id={open.id} source={open.source} page={open.page} title={open.title} />;
+  if (open?.kind === "viewer") return <Viewer photos={open.photos} at={open.at} />;
   if (!open || !now) return null;
   if (open.kind === "room") {
     const room = now.rooms[open.id];
@@ -50,7 +52,7 @@ function Sheets() {
 
 function Screen() {
   const where = view.value;
-  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "photos" ? <Photos /> : where === "today" ? <Today /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
+  return where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "archive" ? <Archive /> : where === "today" ? <Today /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
 }
 
 function App() {

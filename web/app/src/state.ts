@@ -2,7 +2,7 @@
 // just made laid over it until the house itself agrees: a tap shows at once and is put right if it didn't take.
 import { computed, effect, signal } from "@preact/signals";
 import * as api from "./api";
-import type { Down, House, Me, Pick, Room, Said, Scene, Speaker } from "./types";
+import type { ArchiveItem, ArchiveSource, Down, House, Me, Pick, Room, Said, Scene, Speaker } from "./types";
 import { spoken } from "./words";
 
 const KEEP = "hub.house";         // the last picture, so the app opens on something at once
@@ -15,10 +15,12 @@ const SILENCE = 12000;            // Hub sends a beat every 5 s; this long witho
 
 export type Look = "auto" | "dusk" | "day";
 export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "ask" } | { kind: "keep" }
+  | { kind: "found"; id: string; source: ArchiveSource; page?: number | null; title?: string }
+  | { kind: "viewer"; photos: ArchiveItem[]; at: number }
   | null;
 export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
-export type View = "home" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity" | "photos";
+export type View = "home" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity" | "archive";
 
 function kept(): House | null {
   try {
@@ -44,9 +46,12 @@ export const trouble = signal<Trouble>("");   // "hub": can't reach Hub; "house"
 export const why = signal("");
 export const me = signal<Me>({ signed_in: true, initial: "", versions: { js: "", css: "" }, links: { ha: null, music: null } });
 export const sheet = signal<Sheet>(null);
-const VIEWS: View[] = ["today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "photos"];
-const here = (): View => VIEWS.find((v) => location.hash === "#" + v) ?? "home";
+const VIEWS: View[] = ["today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "archive"];
+const hashed = () => (location.hash === "#photos" ? "#archive" : location.hash.split("?")[0]);     // Photos is part of the Archive now
+const here = (): View => VIEWS.find((v) => hashed() === "#" + v) ?? "home";
+const searched = () => (location.hash.startsWith("#archive?") ? new URLSearchParams(location.hash.slice(9)).get("q") ?? "" : "");
 export const view = signal<View>(here());
+export const archiveQuery = signal(searched());     // what the Archive is searching for; in the address, so it can be opened again
 export const toast = signal<Toast | null>(null);
 export const look = signal<Look>(keptLook());
 export const picks = signal<Pick[] | null>(null);
@@ -77,10 +82,20 @@ effect(() => {
 export function go(where: View) {
   view.value = where;
   sheet.value = null;
+  if (where === "archive") archiveQuery.value = "";
   history.replaceState(null, "", where === "home" ? location.pathname : "#" + where);
   window.scrollTo(0, 0);
 }
-window.addEventListener("hashchange", () => (view.value = here()));
+
+/** The Archive, searching for `q`: from Ask's cards ("See all"), the phone's search button, or a search typed there. */
+export function openArchive(q = "") {
+  view.value = "archive";
+  sheet.value = null;
+  archiveQuery.value = q.trim();
+  history.replaceState(null, "", "#archive" + (q.trim() ? "?" + new URLSearchParams({ q: q.trim() }).toString() : ""));
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", () => { view.value = here(); archiveQuery.value = searched(); });
 
 // ---- what a person just changed, laid over the picture ----
 

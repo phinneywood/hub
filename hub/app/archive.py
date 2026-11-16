@@ -139,15 +139,24 @@ def owner(login):
     return bool(_owner['login']) and _owner['login'].lower() == login.lower()
 
 
+TAILSCALE = ('/Applications/Tailscale.app/Contents/MacOS/tailscale', '/usr/local/bin/tailscale', '/opt/homebrew/bin/tailscale')
+
+
 def _tailscale_login():
-    command = shutil.which('tailscale') or '/Applications/Tailscale.app/Contents/MacOS/Tailscale'
-    try:
-        done = subprocess.run([command, 'status', '--json'], capture_output=True, timeout=5)
-        status = json.loads(done.stdout)
-        me = str((status.get('Self') or {}).get('UserID'))
-        return ((status.get('User') or {}).get(me) or {}).get('LoginName')
-    except (OSError, ValueError, subprocess.SubprocessError, AttributeError):
-        return None
+    """The login this Mac's Tailscale is signed in with. The Mac app's own binary answers as a command only when it
+    sees a terminal, so it is told it has one (TERM); without it, from Hub's LaunchAgent, it tries to open its window."""
+    for command in [shutil.which('tailscale'), *TAILSCALE]:
+        if not command or not os.path.exists(command):
+            continue
+        try:
+            done = subprocess.run([command, 'status', '--json'], capture_output=True, timeout=5,
+                                  env={**os.environ, 'TERM': os.environ.get('TERM') or 'dumb'})
+            status = json.loads(done.stdout)
+            me = str((status.get('Self') or {}).get('UserID'))
+            return ((status.get('User') or {}).get(me) or {}).get('LoginName')
+        except (OSError, ValueError, subprocess.SubprocessError, AttributeError):
+            continue
+    return None
 
 
 def sources_for(login):
@@ -198,8 +207,9 @@ def understand(text, people=(), kids=(), today=None):
     the sentence ("Kids at the beach in 2024")."""
     today = today or home.today()
     said = ' '.join(str(text or '').split())[:300]
-    rest = LEAD.sub('', said.rstrip('?!. '))
-    about = re.sub(r'^(the |all (the )?|any |some )', '', re.sub(r'^(photos?|pictures?|pics?|videos?) (of|from|with) ', '', rest,
+    rest = re.sub(r'^(and|or|so|but|also)\s+', '', LEAD.sub('', said.rstrip('?!. ')), flags=re.I)
+    about = re.sub(r'^((we|i|you|they)\s+)?((last|ever|first|recently)\s+)?', '', rest, flags=re.I)    # "we last serviced..."
+    about = re.sub(r'^(the |all (the )?|any |some )', '', re.sub(r'^(photos?|pictures?|pics?|videos?) (of|from|with) ', '', about,
                                                               flags=re.I), flags=re.I)
     out = {'terms': '', 'sources': [], 'kind': [], 'people': [], 'kids': False, 'after': None, 'before': None,
            'months': [], 'sort': None, 'about': about[:1].upper() + about[1:]}
@@ -282,14 +292,15 @@ def counted(n, one, many=None):
 
 
 def photo_sentence(about, found):
-    """“Kids at the beach in 2024: 48 photos from 6 days.” Written by Hub from what it found."""
-    about = about or 'Photos'
+    """“Kids at the beach in 2024: 48 photos from 6 days.” Written by Hub from what it found; without `about`, just
+    “48 photos from 6 days.”"""
     count, days = found.get('count', 0), found.get('days', 0)
     if not count:
-        return f'{about}: no photos.'
+        return f'{about}: no photos.' if about else 'No photos.'
     videos = sum(1 for p in found.get('items', ()) if p.get('kind') == 'video')
     what = counted(count, 'video') if videos and videos == len(found.get('items', ())) == count else counted(count, 'photo')
-    return f'{about}: {what} from {counted(days, "day")}.' if days > 1 else f'{about}: {what} from one day.'
+    span = f'{what} from {counted(days, "day")}.' if days > 1 else f'{what} from one day.'
+    return f'{about}: {span}' if about else span[:1].upper() + span[1:]
 
 
 # ---- one search across everything ----

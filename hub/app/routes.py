@@ -5,6 +5,7 @@ to Ask. A change needs a signed-in device; a program on this Mac has no Tailscal
 """
 import asyncio
 import json
+import re
 import time
 from pathlib import Path
 
@@ -565,16 +566,26 @@ def _archive(request, work):
         return _refuse('Mail isn’t answering right now.', 503)
 
 
+ACTIVE = re.compile(r'html|xhtml|svg|xml|javascript|ecmascript', re.I)
+ACTIVE_NAMES = re.compile(r'\.(html?|xhtml|svg|xml|m?js)(["\';]|$)', re.I)
+
+
 def _bytes(found, name=None):
-    """A picture or a file from the archive, kept off the device by Hub's no-store rule."""
+    """A picture or a file from the archive, kept off the device by Hub's no-store rule. Nothing from the archive
+    can run as a page of Hub's: every answer is sandboxed, and a document that a browser would run (a web page, an
+    SVG, XML, a script) is sent as plain bytes, to be saved."""
     if found is None:
         return _refuse('Not in the archive.', 404)
     data, kind, disposition = found
-    headers = {'Content-Disposition': disposition} if disposition and name == 'file' else {}
+    headers = {'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': 'sandbox'}
     if name == 'file':
-        headers['X-Content-Type-Options'] = 'nosniff'
-    return Response(data, media_type=kind if name == 'file' else ('image/png' if data[:4] == b'\x89PNG' else 'image/jpeg'),
-                    headers=headers)
+        if disposition:
+            headers['Content-Disposition'] = disposition
+        if ACTIVE.search(kind or '') or ACTIVE_NAMES.search(disposition or ''):
+            kind = 'application/octet-stream'
+    else:
+        kind = 'image/png' if data[:4] == b'\x89PNG' else 'image/jpeg'
+    return Response(data, media_type=kind, headers=headers)
 
 
 @router.get('/api/archive')
