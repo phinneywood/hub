@@ -7,7 +7,8 @@ Owner decision (2026-11-15): Ask may change anything in Home Assistant. This fil
   the exact requests that make it and the requests that put it back, read from Home Assistant first.
 - **Some plans wait for a tap.** The rule is fixed here, never left to a model: anything that removes something,
   one request that changes more than MANY things, unlocking, opening a door or the garage, disarming, a routine
-  that touches a lock, the garage or the alarm, and the whole house's own settings. A plan that waits is kept by
+  or a scene that does any of those (itself, or through another it runs), one Hub can't read, and the whole
+  house's own settings. A plan that waits is kept by
   what was asked, and planned again from the house as it is when the tap comes; if it would no longer do what the
   card said, it is not done.
 - **Every change is recorded** (`house_setup`) with who asked and from where, and can be put back for a day. A
@@ -45,6 +46,7 @@ WHY = {'delete': 'This removes it. Undo can put it back for a day.',
        'many': 'One request, many changes. Undo puts them all back.',
        'unlock': 'A door is only unlocked or opened by your tap.',
        'security': 'It touches a lock, the garage or the alarm, so it waits for your tap.',
+       'unread': 'Hub can’t read what this one does, so it waits for your tap.',
        'house': 'This changes the whole house’s settings.',
        'restart': 'Home Assistant will be away for about a minute. Lights and switches keep working by hand.'}
 SCHEMA = """
@@ -121,14 +123,20 @@ def _world(areas, devices, entities, labels, floors, states):
         if area not in rooms:       # as the rest of Hub reads it: light.kitchen_strip is in the kitchen. A routine is in no room.
             area = None if entity.partition('.')[0] in ROUTINES else \
                 max((a for a in rooms if entity.partition('.')[2].startswith(a + '_')), key=len, default=None)
+        # Whether it is named after its device ("Floor lamp", or "Floor lamp Signal" for one of its features). Older
+        # Home Assistants say so; newer ones don't, and it shows in the name itself.
+        follows = entry.get('has_entity_name')
+        if follows is None and device:
+            follows = not entry.get('name') and (not entry.get('original_name')
+                                                 or attrs.get('friendly_name') == f'{devs[device]["name"]} {entry["original_name"]}')
         things[entity] = {
             'id': entity, 'domain': entity.partition('.')[0], 'area': area, 'own_area': entry.get('area_id'), 'device': device,
             'name': _clip(entry.get('name') or attrs.get('friendly_name') or entry.get('original_name')
                           or entity.partition('.')[2].replace('_', ' ')),
             'own_name': entry.get('name'), 'state': str(item.get('state') or 'unknown')[:60], 'attrs': attrs,
             # The device's own main feature takes the device's name: renaming it means renaming the device.
-            'is_device': bool(device and entry.get('has_entity_name') and not entry.get('name') and not entry.get('original_name')),
-            'named_alone': not entry.get('has_entity_name'),
+            'is_device': bool(device and follows and not entry.get('name') and not entry.get('original_name')),
+            'named_alone': not follows,
             'hidden': bool(entry.get('hidden_by')), 'disabled': bool(entry.get('disabled_by')) or entity not in now,
             'by': entry.get('hidden_by') or entry.get('disabled_by'), 'minor': bool(entry.get('entity_category')),
             'labels': list(entry.get('labels') or ()), 'class': attrs.get('device_class') or entry.get('original_device_class'),
@@ -180,10 +188,27 @@ def _answers_to(thing, w):
     return names
 
 
+def _kind_said(thing):
+    """A thing's kind as a person says it: a light, a fan, a speaker."""
+    said = {'media_player': 'speaker', 'climate': 'thermostat', 'alarm_control_panel': 'alarm', 'binary_sensor': 'sensor'}
+    return said.get(thing['domain'], thing['domain'].replace('input_', '').replace('_', ' '))
+
+
 def which(things, w):
-    """The refusal when a name fits several things: their names with their rooms, for the model to ask with."""
+    """The refusal when a name fits several things: their names with their rooms, for the model to ask with. Two
+    that would read the same (a fan and its own light, both "Bedroom fan") are told apart by what they are."""
     listed = [f'{t["name"]} ({room_name(t["area"], w)})' if t['area'] else t['name'] for t in things[:8]]
+    listed = [f'{name}, the {_kind_said(t)}' if listed.count(name) > 1 else name for name, t in zip(listed, things)]
     return Refused('Which one? ' + ', '.join(listed) + ('…' if len(things) > 8 else ''))
+
+
+def _one_device(found, asked):
+    """Several things that are one device under one name (a fan and its light): the one the words mean, else its
+    main one. None when they are different devices."""
+    if len({t['device'] for t in found}) != 1 or not found[0]['device'] or not all(t['is_device'] for t in found):
+        return None
+    said = [t for t in found if asked & SAID_AS.get(t['domain'], set())] or found
+    return min(said, key=lambda t: MAIN.index(t['domain']) if t['domain'] in MAIN else len(MAIN))
 
 
 def match(said, w, kinds=None):
@@ -200,9 +225,9 @@ def match(said, w, kinds=None):
     for group in ([t for t in pool if not (t['minor'] or t['hidden'] or t['disabled'])], pool):
         exact = [t for t in group if text in _answers_to(t, w)]
         if exact:
-            if len(exact) > 1:
+            if len(exact) > 1 and not _one_device(exact, asked):
                 raise which(exact, w)
-            return exact
+            return [_one_device(exact, asked)] if len(exact) > 1 else exact
         fits = []
         for t in group:
             own, room = words_of(t['name']), words_of(room_name(t['area'], w)) - FILLER
@@ -211,9 +236,9 @@ def match(said, w, kinds=None):
         if fits:
             least = min(extra for extra, _ in fits)
             best = [t for extra, t in fits if extra == least]
-            if len(best) > 1:
+            if len(best) > 1 and not _one_device(best, asked):
                 raise which(best, w)
-            return best
+            return [_one_device(best, asked)] if len(best) > 1 else best
         # No name in it: a room and a kind ("kitchen lights"), or with `kinds` given just the room.
         together = [t for t in group if t['area'] and asked & (words_of(room_name(t['area'], w)) - FILLER)
                     and asked <= (words_of(room_name(t['area'], w)) - FILLER) | SAID_AS.get(t['domain'], set())
@@ -480,7 +505,12 @@ def confirm(number, *, login):
         raise Refused('The house has changed since that card was made, so nothing was done. Ask again.')
     if not settle(number, 'working'):
         raise Refused('That card isn’t waiting any more. Ask again.')
-    result = carry_out(changes, login=login, via='app')
+    try:
+        result = carry_out(changes, login=login, via='app')
+    except Refused:                 # nothing was sent (too many changes this minute): the card goes on waiting
+        with _db() as conn:
+            conn.execute("update house_setup_waiting set status = 'waiting' where id = ? and status = 'working'", (int(number),))
+        raise
     with _db() as conn:
         conn.execute("update house_setup_waiting set status = 'done', batch = ? where id = ?", (result['batch'], int(number)))
     return result

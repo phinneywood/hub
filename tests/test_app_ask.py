@@ -87,7 +87,7 @@ def test_the_model_is_given_the_house_as_it_is_and_the_owners_words(house):
     assert prompt.endswith('<said>Dim the kitchen and living room for dinner</said>')
     for line in ('Downstairs. Kitchen: on at 80% (lights: Ceiling, Island pendants, Under the cabinets; also: Coffee maker (plug, off))',
                  'Porch: on (lights: Porch light); outdoors', 'Kitchen (playing, volume 28%)', 'Playing: “Paper Lanterns” by The Harbor Trio.',
-                 'Scenes: Bedtime, Dinner, Movie night, All off.', 'Thermostat: Thermostat (Hallway): heating, now 67° · set to 68°.',
+                 'Scenes: Bedtime, Dinner, Movie night, All off.', 'Heating and cooling: Thermostat (Hallway): heating, now 67° · set to 68°.',
                  'Locks, doors and the alarm: Alarm is disarmed; Front door lock is locked; Garage door is closed.',
                  'Automations: Living room button; Porch at sunset.', 'Scripts: Goodnight.'):
         assert line in prompt, line

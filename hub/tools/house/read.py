@@ -173,6 +173,8 @@ def _device(entity_id, item, registry, players_only):
             'level': _percent(attrs.get('brightness'), 255) if domain == 'light' and state == 'on' else None,
             'volume': attrs.get('volume_level') if isinstance(attrs.get('volume_level'), (int, float)) else None,
             'members': [m for m in attrs.get('group_members') or () if isinstance(m, str) and m != entity_id],
+            # The kinds of thing a scene sets, so Ask can tell one that only sets lights from one that holds a lock.
+            'sets': sorted({m.partition('.')[0] for m in attrs.get('entity_id') or () if isinstance(m, str)}) if domain == 'scene' else None,
             'colours': _colours(attrs) if domain == 'light' else None,
             'dims': _dims(attrs) if domain == 'light' else False,
             'colour': _colour_now(attrs) if domain == 'light' and state == 'on' else None,

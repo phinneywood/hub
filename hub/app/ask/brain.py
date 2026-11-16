@@ -105,12 +105,13 @@ def _room_line(room):
 
 
 def _beyond(found):
-    """The thermostat, the locks and doors, and the names of the automations and scripts, as lines for the model."""
+    """What heats and cools (a thermostat, or a fan that keeps a temperature), the locks and doors, and the names of
+    the automations and scripts, as lines for the model."""
     lines = []
     heat = [d['name'] + (f' ({d["room"]})' if d['room'] != read.OTHER_ROOM else '') + f': {d["label"].lower()}'
             + (f', {d["detail"].lower()}' if d['detail'] else '') for d in found['climate'] if not d['offline']]
     if heat:
-        lines.append('Thermostat: ' + '; '.join(heat) + '.')
+        lines.append('Heating and cooling: ' + '; '.join(heat) + '.')
     doors = [f'{d["name"]} is {d["label"].lower()}' for d in found['security'] if not d['offline']]
     if doors:
         lines.append('Locks, doors and the alarm: ' + '; '.join(doors) + '.')

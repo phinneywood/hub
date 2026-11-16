@@ -252,3 +252,28 @@ def test_home_assistants_own_line_for_what_hub_did_is_left_out_of_activity(house
                                      'room': 'Entry', 'kind': 'security', 'what': 'locked', 'cause': 'Alex'}], time.time())
     events = client.get('/app/api/activity').json()['events']
     assert [(e['source'], e['what']) for e in events] == [('hub', 'Front door lock locked')]
+
+
+def test_a_scene_that_holds_the_lock_goes_on_a_card_and_one_of_lights_runs_at_once(house):
+    """Home Assistant's scenes can hold a lock or the alarm as well as lights. Asking for one that would unlock
+    the door is asking to unlock the door."""
+    house.configs['scene']['arriving'] = {'id': 'arriving', 'name': 'Arriving', 'entities': {
+        'light.entry_ceiling': {'state': 'on'}, 'lock.front_door': {'state': 'unlocked'}}}
+    house.states['scene.arriving'] = {'entity_id': 'scene.arriving', 'state': 'unknown', 'attributes': {
+        'friendly_name': 'Arriving', 'id': 'arriving', 'entity_id': ['light.entry_ceiling', 'lock.front_door']}}
+    house.configs['scene']['leaving'] = {'id': 'leaving', 'name': 'Leaving', 'entities': {
+        'light.entry_ceiling': {'state': 'off'}, 'lock.front_door': {'state': 'locked'}}}
+    house.states['scene.leaving'] = {'entity_id': 'scene.leaving', 'state': 'unknown', 'attributes': {
+        'friendly_name': 'Leaving', 'id': 'leaving', 'entity_id': ['light.entry_ceiling', 'lock.front_door']}}
+    read.clear_cache()
+    said, turn = tool(tools.scene, name='arriving')
+    assert said == {'done': 'That one waits for your tap.'} and house.sent == []
+    assert (turn.cards[0]['kind'], turn.cards[0]['title'], turn.cards[0]['lines']) == ('confirm', 'Set Arriving?', ['Arriving is on'])
+    assert turn.cards[0]['why'] == 'It touches a lock, the garage or the alarm, so it waits for your tap.'
+    done = client.post(f'/app/api/setup/{turn.cards[0]["id"]}/confirm', headers=SIGNED_IN).json()
+    assert done['ok'] and house.sent[-1] == ('scene/turn_on', {'entity_id': 'scene.arriving'})
+    # One that locks is set at once, and so is one that only sets lights.
+    assert tool(tools.scene, name='leaving')[0] == {'done': 'Leaving is on.'}
+    assert tool(tools.scene, name='dinner')[0] == {'done': 'Dinner is on.'}
+    # Mail in view: no scene that touches the lock is set at all, whichever way it would go.
+    assert 'request of its own' in tool(tools.scene, strangers=True, name='arriving')[0]['done']

@@ -391,6 +391,123 @@ def test_a_routine_that_unlocks_or_opens_waits_for_a_tap(house):
     assert admin.asks(plan('routine', kind='automation', do='save', name='Hall light when unlocked', config=watches)) is None
 
 
+def _owner_made(house):
+    """Things the owner made in Home Assistant that open the house: a script that unlocks, a scene that holds the
+    lock unlocked, and a script kept in Home Assistant's own files, which Hub can't read."""
+    house.configs['script']['let_them_in'] = {'alias': 'Let them in', 'sequence': [{'action': 'lock.unlock', 'target': {'entity_id': 'lock.front_door'}}]}
+    house.states['script.let_them_in'] = {'entity_id': 'script.let_them_in', 'state': 'off', 'attributes': {'friendly_name': 'Let them in'}}
+    house.configs['scene']['arriving'] = {'id': 'arriving', 'name': 'Arriving', 'entities': {
+        'light.entry_ceiling': {'state': 'on'}, 'lock.front_door': {'state': 'unlocked'}}}
+    house.states['scene.arriving'] = {'entity_id': 'scene.arriving', 'state': 'unknown', 'attributes': {
+        'friendly_name': 'Arriving', 'id': 'arriving', 'entity_id': ['light.entry_ceiling', 'lock.front_door']}}
+    house.states['script.by_hand'] = {'entity_id': 'script.by_hand', 'state': 'off', 'attributes': {'friendly_name': 'By hand'}}
+
+
+def test_a_routine_that_opens_the_house_through_something_else_waits_too(house):
+    _owner_made(house)
+    asks = lambda actions: admin.asks(plan('routine', kind='automation', do='save', name='At three', config={**EVENING, 'alias': 'At three', 'actions': actions}))  # noqa: E731
+    lock = {'entity_id': 'lock.front_door'}
+    for opening in ([{'action': 'script.turn_on', 'target': {'entity_id': 'script.let_them_in'}}],      # another routine that unlocks
+                    [{'action': 'script.let_them_in'}],                                                   # the same, called by its name
+                    [{'action': 'scene.turn_on', 'target': {'entity_id': 'scene.arriving'}}],            # a scene that holds the lock unlocked
+                    [{'scene': 'scene.arriving'}],
+                    [{'action': 'script.turn_on', 'target': {'entity_id': 'script.by_hand'}}],            # one Hub can't read
+                    [{'device_id': 'dev-front-door', 'domain': 'lock', 'type': 'unlock', **lock}],        # a device's own action, no service named
+                    [{'action': 'scene.apply', 'data': {'entities': {'lock.front_door': 'unlocked'}}}],   # a scene made on the spot
+                    [{'action': 'cover.open_cover', 'target': {'area_id': 'office'}}],                   # a whole room: Hub can't list what opens
+                    [{'action': 'homeassistant.turn_on', 'target': {'entity_id': 'script.let_them_in'}}],
+                    [{'if': [{'condition': 'state', 'entity_id': 'light.entry_ceiling', 'state': 'on'}],     # deep inside a choice
+                      'then': [{'repeat': {'count': 2, 'sequence': [{'action': 'lock.unlock', 'target': lock}]}}]}]):
+        assert asks(opening) == 'security', opening
+    for plain in ([{'action': 'scene.turn_on', 'target': {'entity_id': 'scene.dinner'}}], [{'scene': 'scene.dinner'}],
+                  [{'action': 'script.turn_on', 'target': {'entity_id': 'script.goodnight'}}],            # it locks, which is fine
+                  [{'device_id': 'dev-front-door', 'domain': 'lock', 'type': 'lock', **lock}],
+                  [{'action': 'scene.apply', 'data': {'entities': {'light.entry_ceiling': 'on'}}}],
+                  [{'if': [{'condition': 'device', 'device_id': 'dev-front-door', 'domain': 'lock', 'type': 'is_unlocked', **lock}],
+                    'then': [{'action': 'lock.lock', 'target': lock}]}]):
+        assert asks(plain) is None, plain
+    blueprint = {'alias': 'From a blueprint', 'use_blueprint': {'path': 'x/y.yaml', 'input': {'door': 'lock.front_door'}}}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='From a blueprint', config=blueprint)) == 'security'
+    with pytest.raises(admin.Refused, match='works a camera device'):
+        plan('routine', kind='automation', do='save', name='Snap', config={**EVENING, 'actions': [
+            {'device_id': 'dev-cam', 'domain': 'camera', 'type': 'snapshot'}]})
+
+
+def test_running_something_that_opens_the_house_waits_however_it_is_asked(house):
+    _owner_made(house)
+    assert admin.asks(plan('routine', kind='script', do='run', name='let them in')) == 'security'
+    assert admin.asks(plan('routine', kind='script', do='run', name='by hand')) == 'unread'
+    assert admin.asks(plan('routine', kind='script', do='run', name='goodnight')) is None
+    assert admin.asks(plan('act', action='script.turn_on', things=['let them in'])) == 'security'
+    assert admin.asks(plan('act', action='script.let_them_in')) == 'security'
+    assert admin.asks(plan('act', action='homeassistant.turn_on', things=['script.let_them_in'])) == 'security'
+    assert admin.asks(plan('act', action='script.turn_on', things=['by hand'])) == 'unread'
+    assert admin.asks(plan('act', action='scene.turn_on', things=['arriving'])) == 'security'
+    assert admin.asks(plan('act', action='scene.turn_on', things=['dinner'])) is None
+    assert admin.asks(plan('act', action='automation.trigger', things=['porch at sunset'])) is None
+    wrapper = {**EVENING, 'alias': 'Open up at dawn', 'actions': [{'action': 'script.let_them_in'}]}
+    saved = plan('routine', kind='automation', do='save', name='Open up at dawn', config=wrapper)
+    admin.carry_out(saved, login=ME, via='app')                     # the owner tapped the card
+    assert admin.asks(plan('routine', kind='automation', do='run', name='open up at dawn')) == 'security'
+    assert admin.asks(plan('act', action='automation.trigger', things=['open up at dawn'])) == 'security'
+    for made_on_the_spot in ('scene.apply', 'scene.create'):
+        with pytest.raises(admin.Refused, match='scene_setup'):
+            plan('act', action=made_on_the_spot, data={'entities': {'lock.front_door': 'unlocked'}})
+    assert house.sent == [] and house.states['lock.front_door']['state'] == 'locked'
+
+
+def test_a_device_action_with_nothing_named_means_the_only_one_of_its_kind(house):
+    assert do('act', action='climate.set_temperature', data={'temperature': 70})['done'] == ['Thermostat set to 70°']
+    with pytest.raises(admin.Refused, match='Which one\\? Ceiling fan \\(Bedroom\\), Ceiling fan \\(Office\\)'):
+        plan('act', action='fan.turn_on')
+    with pytest.raises(admin.Refused, match='There is no vacuum'):
+        plan('act', action='vacuum.start')
+
+
+def test_a_newer_home_assistant_that_no_longer_says_how_a_thing_is_named(house):
+    """Since 2026 the registry's list has no has_entity_name: a thing named after its device shows in its name."""
+    areas = [{'area_id': 'guest', 'name': 'Guest room', 'floor_id': None, 'labels': [], 'aliases': []}]
+    devices = [{'id': 'dev-fan', 'name': 'Guest fan', 'name_by_user': None, 'area_id': 'guest', 'labels': []}]
+    entry = lambda e, original=None: {'entity_id': e, 'device_id': 'dev-fan', 'area_id': None, 'name': None, 'original_name': original,   # noqa: E731
+                                      'hidden_by': None, 'disabled_by': None, 'entity_category': None, 'labels': []}
+    entities = [entry('fan.guest_fan'), entry('light.guest_fan'), entry('switch.guest_fan_whoosh', 'Whoosh'), entry('switch.guest_fan_old', 'Old style')]
+    state = lambda e, name: {'entity_id': e, 'state': 'off', 'attributes': {'friendly_name': name}}      # noqa: E731
+    states = [state('fan.guest_fan', 'Guest fan'), state('light.guest_fan', 'Guest fan'), state('switch.guest_fan_whoosh', 'Guest fan Whoosh'),
+              state('switch.guest_fan_old', 'Old style')]
+    w = admin._world(areas, devices, entities, [], [], states)
+    assert [(t['id'], t['is_device'], t['named_alone']) for t in w['things'].values()] == [
+        ('fan.guest_fan', True, False), ('light.guest_fan', True, False), ('switch.guest_fan_old', False, True),
+        ('switch.guest_fan_whoosh', False, False)]
+    # The fan and its light are one device under one name: "the guest fan" is the fan, and moving it moves the device.
+    assert [t['id'] for t in admin.match('guest fan', w)] == ['fan.guest_fan']
+    assert [t['id'] for t in admin.match('guest fan light', w)] == ['light.guest_fan']
+    areas.append({'area_id': 'office', 'name': 'Office', 'floor_id': None, 'labels': [], 'aliases': []})
+    w = admin._world(areas, devices, entities, [], [], states)
+    (moved,) = plans.arrange(w, ['guest fan'], room='office')
+    assert moved['steps'] == [{'ws': {'type': 'config/device_registry/update', 'device_id': 'dev-fan', 'area_id': 'office'}}]
+    (renamed,) = plans.arrange(w, ['guest fan'], name='Quiet fan')
+    assert renamed['steps'] == [{'ws': {'type': 'config/device_registry/update', 'device_id': 'dev-fan', 'name_by_user': 'Quiet fan'}}]
+    (feature,) = plans.arrange(w, ['guest fan whoosh'], name='Breeze')
+    assert feature['steps'] == [{'ws': {'type': 'config/entity_registry/update', 'entity_id': 'switch.guest_fan_whoosh', 'name': 'Breeze'}}]
+    # Two different devices with one name are still asked about, and told apart by what they are.
+    devices.append({'id': 'dev-lamp', 'name': 'Guest fan', 'name_by_user': None, 'area_id': 'guest', 'labels': []})
+    entities.append({**entry('light.other'), 'device_id': 'dev-lamp'})
+    states.append(state('light.other', 'Guest fan'))
+    with pytest.raises(admin.Refused, match='Which one\\? Guest fan \\(Guest room\\), the fan, Guest fan \\(Guest room\\), the light, Guest fan'):
+        admin.match('guest fan', admin._world(areas, devices, entities, [], [], states))
+
+
+def test_a_card_that_could_not_be_carried_out_goes_on_waiting(house):
+    card = admin.wait('Remove Dining?', plan('place', kind='room', do='remove', name='dining'), 'place',
+                      {'kind': 'room', 'do': 'remove', 'name': 'dining'}, login=ME)
+    control._taps.extend([time.monotonic()] * control.TAPS_PER_MINUTE)       # a minute with too many taps already
+    with pytest.raises(admin.Refused, match='changes in the last minute'):
+        admin.confirm(card['id'], login=ME)
+    assert admin.waiting(card['id'])['status'] == 'waiting'
+    control._taps.clear()
+    assert admin.confirm(card['id'], login=ME)['done'] == ['Room “Dining” removed; its 2 things are in no room']
+
+
 def test_an_automation_is_switched_off_and_on_run_and_removed(house):
     off = do('routine', kind='automation', do='off', name='porch at sunset')
     assert off['done'] == ['Automation “Porch at sunset” switched off'] and house.states['automation.porch_at_sunset']['state'] == 'off'

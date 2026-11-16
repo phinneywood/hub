@@ -21,6 +21,11 @@ DOORS = ('garage', 'door', 'gate')
 NO_ROOM = ('none', 'no room', 'nowhere', '')
 OPENS = {'lock': ('unlock', 'open'), 'alarm_control_panel': ('alarm_disarm', 'alarm_trigger'),
          'cover': ('open_cover', 'toggle', 'set_cover_position'), 'valve': ('open_valve', 'toggle', 'set_valve_position')}
+# The states a scene can hold these in that count as opening, and the device actions that never do.
+WIDE_OPEN = {'lock': ('unlocked', 'open', 'opening'), 'alarm_control_panel': ('disarmed', 'triggered'), 'cover': ('open', 'opening'),
+             'valve': ('open', 'opening')}
+SHUTS = ('lock', 'close', 'close_tilt', 'stop', 'arm_home', 'arm_away', 'arm_night', 'arm_vacation', 'arm_custom_bypass')
+DEEP = 4                    # a routine that runs a routine that runs a routine: this far Hub follows, then it asks
 
 
 def _ws(kind, keep=None, **fields):
@@ -114,7 +119,7 @@ def _hide(thing, hidden):
         raise Already(f'{thing["name"]} is already {"hidden" if hidden else "shown"}.')
     return [change('name', thing['id'], thing['name'], f'{thing["name"]} {"hidden" if hidden else "shown again"}',
                    [_ws('config/entity_registry/update', entity_id=thing['id'], hidden_by='user' if hidden else None)],
-                   [_ws('config/entity_registry/update', entity_id=thing['id'], hidden_by=thing['by'] if thing['hidden'] else None)])]
+                   [_ws('config/entity_registry/update', entity_id=thing['id'], hidden_by='user' if thing['hidden'] else None)])]
 
 
 def arrange(w, things, room=None, name=None, hidden=None):
@@ -437,6 +442,25 @@ def _parts(kind, body):
     return out
 
 
+def _steps(value):
+    """Every action anywhere in a routine's actions, however deeply it is nested (choose, if, repeat, parallel):
+    each dict that calls a service, sets a scene, or is a device's own action."""
+    if isinstance(value, list):
+        for inner in value:
+            yield from _steps(inner)
+    elif isinstance(value, dict):
+        if isinstance(value.get('action', value.get('service')), str) or 'scene' in value \
+                or ('device_id' in value and 'type' in value and not {'condition', 'trigger', 'platform'} & set(value)):
+            yield value
+        for key, inner in value.items():
+            if key not in ('data', 'target', 'event_data', 'variables'):
+                yield from _steps(inner)
+
+
+def _actions(kind, body):
+    return (_parts(kind, body).get('actions') or []) if isinstance(body, dict) else []
+
+
 def _calls(body):
     """Every service a routine names anywhere in it. Raises Refused for one worked out at run time."""
     found = set()
@@ -447,17 +471,112 @@ def _calls(body):
     return found
 
 
-def _opens(body, w):
-    """Whether a routine unlocks, opens a door or the garage, or disarms: then it waits for a tap."""
-    text = json.dumps(_parts('automation', body).get('actions') or body.get('sequence') or [])
-    doors = [t for t in w['things'].values() if t['domain'] == 'cover' and t['class'] in DOORS]
-    for name in _calls(body):
-        domain, _, service = name.partition('.')
-        if service not in OPENS.get(domain, ()):
+def _device_actions(kind, body):
+    """The (domain, type) of each device action in a routine: Home Assistant's other way to write an action, with
+    no service named ("device_id", "domain": "lock", "type": "unlock")."""
+    return {(str(s.get('domain')), str(s.get('type'))) for s in _steps(_actions(kind, body))
+            if 'device_id' in s and 'type' in s and not isinstance(s.get('action', s.get('service')), str)}
+
+
+def _aimed(step):
+    """(the entities one action names, whether it also reaches things Hub can't list: a whole room, a device,
+    a label, a template, "all")."""
+    named, loose = [], False
+    for part in (step, step.get('target'), step.get('data')):
+        if not isinstance(part, dict):
             continue
-        if domain != 'cover' or not re.search(r'"cover\.[a-z0-9_]+"', text) or any(f'"{d["id"]}"' in text for d in doors):
+        loose = loose or any(part.get(key) for key in ('area_id', 'device_id', 'label_id', 'floor_id') if part is not step or key != 'device_id')
+        got = part.get('entity_id')
+        for entity in [got] if isinstance(got, str) else got if isinstance(got, list) else []:
+            if isinstance(entity, str) and broker.ANY_ENTITY.fullmatch(entity):
+                named.append(entity)
+            else:
+                loose = True
+    return named, loose
+
+
+def _door(entity, w):
+    """Whether a cover is a way into the house: a garage door, a door or a gate. One Hub doesn't know counts."""
+    thing = w['things'].get(entity)
+    return thing is None or thing['class'] in DOORS
+
+
+def scene_opens(entity, w):
+    """Whether a scene, when it is set, unlocks, opens a door or the garage, or disarms: Home Assistant's scenes
+    can hold a lock or an alarm as well as lights. One Hub can't read counts as one that does."""
+    thing = w['things'].get(entity)
+    if thing is None:
+        return True
+    members = thing['attrs'].get('entity_id')
+    members = [m for m in members if isinstance(m, str)] if isinstance(members, list) else None
+    if members is not None and not any(m.partition('.')[0] in OPENS for m in members):
+        return False
+    kept = broker.setup_config('scene', thing['config']) if thing['config'] else None
+    if kept is None:
+        return True
+    for member, wanted in (kept.get('entities') or {}).items():
+        domain = str(member).partition('.')[0]
+        state = wanted.get('state') if isinstance(wanted, dict) else wanted
+        if state in WIDE_OPEN.get(domain, ()) and (domain != 'cover' or _door(member, w)):
             return True
     return False
+
+
+def _kept(entity, w):
+    """(kind, the config Home Assistant keeps for an automation or a script) or (kind, None) when it can't be read."""
+    kind, thing = entity.partition('.')[0], w['things'].get(entity)
+    key = entity.partition('.')[2] if kind == 'script' else thing['config'] if thing else None
+    return kind, (broker.setup_config(kind, key) if thing and key else None)
+
+
+def _step_opens(step, w, seen, depth):
+    called = step.get('action', step.get('service'))
+    if not isinstance(called, str):
+        if 'device_id' in step and 'type' in step:             # a device's own action
+            return str(step.get('domain')) in OPENS and str(step.get('type')) not in SHUTS
+        return 'scene' in step and (not isinstance(step['scene'], str) or scene_opens(step['scene'], w))
+    domain, _, service = called.partition('.')
+    named, loose = _aimed(step)
+    data = step.get('data') if isinstance(step.get('data'), dict) else {}
+    if service in OPENS.get(domain, ()):
+        return domain != 'cover' or loose or not named or any(_door(e, w) for e in named)
+    if domain == 'scene':
+        if service == 'turn_on':
+            return loose or any(scene_opens(e, w) for e in named)
+        if service in ('apply', 'create'):                      # a scene made on the spot: what it sets, or keeps to set again later
+            sets = data.get('entities') if isinstance(data.get('entities'), dict) else {}
+            keeps = data.get('snapshot_entities')
+            keeps = [keeps] if isinstance(keeps, str) else keeps if isinstance(keeps, list) else []
+            return any(str(e).partition('.')[0] in OPENS for e in [*sets, *keeps])
+        return False
+    runs = named if (domain, service) in (('script', 'turn_on'), ('script', 'toggle'), ('automation', 'trigger')) else \
+        [called] if domain == 'script' and service not in ('turn_off', 'reload') else None
+    if domain == 'homeassistant' and service in ('turn_on', 'toggle'):
+        if loose or any(e.partition('.')[0] in OPENS and (e.partition('.')[0] != 'cover' or _door(e, w)) for e in named):
+            return True
+        if any(scene_opens(e, w) for e in named if e.startswith('scene.')):
+            return True
+        runs = [e for e in named if e.startswith('script.')]
+    if runs is None:
+        return False
+    if loose or depth >= DEEP:
+        return True
+    for entity in runs:
+        if entity in seen:
+            continue
+        kind, kept = _kept(entity, w)
+        if kept is None or opens(kind, kept, w, seen | {entity}, depth + 1):
+            return True
+    return False
+
+
+def opens(kind, body, w, seen=frozenset(), depth=0):
+    """Whether a routine, when it runs, could unlock, open a door or the garage, or disarm: itself, through a scene
+    it sets or another routine it runs, or in a way Hub can't read (a blueprint, a routine kept in Home Assistant's
+    own files). Then it waits for a tap."""
+    if not isinstance(body, dict) or 'use_blueprint' in body:
+        return True
+    return any(_step_opens(step, w, seen, depth) for step in _steps(_actions(kind, body)))
 
 
 def _named_in(value, found):
@@ -529,6 +648,11 @@ def _checked(kind, body, before, w):
     shut = sorted(name for name in _calls(body) - (_calls(before) if before else set()) if not broker.service_open(*name.split('.', 1)))
     if shut:
         raise Refused(f'Hub can’t save a routine that calls {shut[0]}. That one is made in Home Assistant. Nothing was saved.')
+    odd = sorted(domain for domain, _ in _device_actions(kind, body) - (_device_actions(kind, before) if before else set())
+                 if domain not in broker.SERVICE_DOMAINS)
+    if odd:
+        raise Refused(f'Hub can’t save a routine that works a {odd[0].replace("_", " ")} device. That one is made in Home Assistant. '
+                      'Nothing was saved.')
 
 
 def _clock(at):
@@ -623,7 +747,7 @@ def routine(w, kind, do, name, config=None, new_name=None):
         call = {'call': 'automation.trigger', 'data': {'entity_id': here['id'], 'skip_condition': True}} if kind == 'automation' \
             else {'call': 'script.turn_on', 'data': {'entity_id': here['id']}}
         return [change(kind, here['id'], here['name'], f'{what} “{here["name"]}” run', [call],
-                       asks='security' if kept and _opens(kept, w) else None)]
+                       asks='unread' if kept is None else 'security' if opens(kind, kept, w, frozenset({here['id']})) else None)]
     if do == 'remove':
         key, before = _config(here, kind)
         used = admin.uses(here)
@@ -663,7 +787,7 @@ def routine(w, kind, do, name, config=None, new_name=None):
     line = says(kind, body, w)
     words = f'{what} “{title}” {"changed" if before else "made"}' + (f': {line}' if line else '')
     return [change(kind, here['id'] if here else 'new', title, words, [{'config': kind, 'id': key, 'body': body}],
-                   [{'config': kind, 'id': key, 'body': before}], asks='security' if _opens(body, w) else None,
+                   [{'config': kind, 'id': key, 'body': before}], asks='security' if opens(kind, body, w) else None,
                    after={'config': kind, 'id': key, 'body': body})]
 
 
@@ -763,13 +887,18 @@ def _back(domain, service, thing, data):
     return None
 
 
-def _asks(domain, service, thing):
+def _asks(domain, service, thing, w, data=None):
     """Why one service call waits for a tap, or None."""
     if (domain, service) == ('homeassistant', 'restart'):
         return 'restart'
-    if service not in OPENS.get(domain, ()):
-        return None
-    return 'unlock' if domain != 'cover' or (thing and thing['class'] in DOORS) else None
+    if service in OPENS.get(domain, ()):
+        return 'unlock' if domain != 'cover' or (thing and thing['class'] in DOORS) else None
+    if thing and thing['domain'] in ('script', 'automation') and service in ('turn_on', 'toggle', 'trigger') \
+            and not (thing['domain'] == 'automation' and service != 'trigger'):
+        kind, kept = _kept(thing['id'], w)
+        return 'unread' if kept is None else 'security' if opens(kind, kept, w, frozenset({thing['id']})) else None
+    step = {'action': f'{domain}.{service}', 'target': {'entity_id': thing['id']} if thing else {}, 'data': data or {}}
+    return 'security' if _step_opens(step, w, frozenset(), 0) else None
 
 
 def _is_already(service, thing):
@@ -800,7 +929,16 @@ def act(w, action, things=None, data=None):
         return [change('media_player', s['id'], s['name'], _did('tts', service, admin.called(s, w), data),
                        [{'call': 'tts.speak', 'data': {'entity_id': voice, 'media_player_entity_id': s['id'], 'message': admin._clip(data['message'], 400)}}])
                 for s in speakers]
-    found = _things(things, w, kinds=None if domain == 'homeassistant' else (domain,))
+    if domain == 'scene' and service != 'turn_on':
+        raise Refused('Scenes are made and changed with scene_setup, and run with scene.')
+    if domain == 'script' and service not in ('turn_on', 'turn_off', 'toggle'):      # a script called by its own name
+        return routine(w, 'script', 'run', f'script.{service}')
+    if things or domain == 'homeassistant':
+        found = _things(things, w, kinds=None if domain == 'homeassistant' else (domain,))
+    else:                           # nothing named: the house's only one of that kind is meant, when there is only one
+        found = [t for t in w['things'].values() if t['domain'] == domain and not (t['minor'] or t['hidden'] or t['disabled'])]
+        if len(found) != 1:
+            raise admin.which(found, w) if found else Refused(f'There is no {domain.replace("_", " ")} in Home Assistant.')
     if domain == 'homeassistant' and any(t['domain'] in OPENS for t in found):
         raise Refused('Use that device’s own action, such as lock.lock or cover.close_cover.')
     changes, already = [], []
@@ -808,9 +946,10 @@ def act(w, action, things=None, data=None):
         if not data and _is_already(service, thing):
             already.append(f'{admin.called(thing, w)} is already {SAYS.get(service, thing["state"])}.')
             continue
-        changes.append(change(thing['domain'], thing['id'], thing['name'], _did(domain, service, admin.called(thing, w), data),
+        words = f'{thing["name"]} is on' if (domain, service) == ('scene', 'turn_on') else _did(domain, service, admin.called(thing, w), data)
+        changes.append(change(thing['domain'], thing['id'], thing['name'], words,
                               [{'call': f'{domain}.{service}', 'data': {**data, 'entity_id': thing['id']}}],
-                              _back(domain, service, thing, data), asks=_asks(domain, service, thing)))
+                              _back(domain, service, thing, data), asks=_asks(domain, service, thing, w, data)))
     if not changes:
         raise Already(' '.join(already))
     return changes

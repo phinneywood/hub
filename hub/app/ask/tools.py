@@ -205,6 +205,10 @@ def scene(ctx: RunContext[Turn], name: str) -> dict:
         if mine:
             return _outcome(turn, kept_scenes.run(mine['id'], login=turn.login, via=VIA), f'{mine["name"]} is on.', {'kind': 'scene'})
         theirs = next((s for s in found['scenes'] if s['name'].lower() == said), None) or _scene_like(said, found['scenes'])
+        if theirs and (theirs.get('sets') is None or set(theirs['sets']) & set(plans.OPENS)):
+            # A scene that holds a lock, a door or the alarm (or doesn't say what it holds) goes the careful way:
+            # planned, and on a card for the owner's tap if setting it would unlock, open or disarm.
+            return _setup(turn, 'act', {'action': 'scene.turn_on', 'things': [theirs['id']]}, 'house.security')
         if theirs:
             return _outcome(turn, control.change([theirs['id']], 'activate', login=turn.login, via=VIA), f'{theirs["name"]} is on.')
     except NotNow as error:
@@ -502,8 +506,11 @@ def _question(plan, args, changes, why):
     if why == 'unlock':
         verb = OPENING.get(str(args.get('action', '')).partition('.')[2], 'Open')
         return f'{verb} {name}?' if len(changes) == 1 else f'{verb} these {len(changes)}?'
-    if why == 'security':
-        return f'Run {name}?' if args.get('do') == 'run' else f'Save {name}?'
+    if why in ('security', 'unread'):
+        domain = str(args.get('action', '')).partition('.')[0]
+        runs = args.get('do') == 'run' or domain in ('script', 'automation', 'scene', 'homeassistant')
+        verb = 'Set' if domain == 'scene' else 'Run' if runs else 'Save'
+        return f'{verb} {name}?' if len(changes) == 1 else f'{verb} these {len(changes)}?'
     return 'Restart Home Assistant?' if why == 'restart' else 'Change the house’s settings?'
 
 
