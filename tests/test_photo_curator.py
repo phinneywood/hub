@@ -1,18 +1,14 @@
-"""The photo curator (deploy/photo_curator.py): choosing a month and acting on marks. Fictional photos only;
+"""The photo curator (deploy/archive/curator.py): choosing a month and acting on marks. Fictional photos only;
 the Photos library and Photos itself are never reached (osxphotos and photoscript are stood in for)."""
 import datetime as dt
-import importlib.util
 import json
 from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).parents[1] / 'deploy' / 'photo_curator.py'
-if not SCRIPT.exists():  # the installed-package check carries tests but not deployment scripts
-    pytest.skip('deploy/photo_curator.py is not part of the installed package', allow_module_level=True)
-spec = importlib.util.spec_from_file_location('photo_curator', SCRIPT)
-curator = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(curator)
+from tests.archive_world import program
+
+curator = program('curator')
 TZ = dt.timezone(dt.timedelta(hours=-8))
 
 
@@ -40,11 +36,11 @@ def test_a_busy_day_gives_way_to_other_days_but_fills_a_quiet_month():
 
 
 def test_months_and_bounds_and_names():
-    assert curator.months_between(dt.date(2025, 11, 8), dt.date(2026, 2, 1)) == ['2025-11', '2025-12', '2026-01', '2026-02']
+    assert curator.months_between(dt.date(2025, 10, 20), dt.date(2026, 1, 1)) == ['2025-10', '2025-11', '2025-12', '2026-01']
     assert curator.last_month(dt.date(2026, 1, 15)) == '2025-12'
-    start, end = curator.bounds('2025-01', since=dt.date(2025, 1, 8))
-    assert start.date() == dt.date(2025, 1, 8) and end.date() == dt.date(2025, 2, 1)
-    assert curator.bounds('2025-02', since=dt.date(2025, 1, 8))[0].date() == dt.date(2025, 2, 1)
+    start, end = curator.bounds('2025-03', since=dt.date(2025, 3, 12))
+    assert start.date() == dt.date(2025, 3, 12) and end.date() == dt.date(2025, 4, 1)
+    assert curator.bounds('2025-04', since=dt.date(2025, 3, 12))[0].date() == dt.date(2025, 4, 1)
     assert curator.album_name('2026-10') == 'October 2026'
 
 

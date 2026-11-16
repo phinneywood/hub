@@ -1,17 +1,17 @@
-"""Choose each month's best photos from the Photos library on this Mac, for Hub's Photos screen.
+"""Choose each month's best photos from the Photos library on this Mac, for the Archive screen's "Best of the month".
 
-Run by a LaunchAgent on the Mac mini, in its own Python environment with osxphotos (deploy/install-photo-curator).
-It is the only program given access to the Photos library; Hub never opens it. No photo, preview or detail about
-one leaves this Mac and no model sees them: the scores are the ones Photos already computed on the Mac.
+Part of the archive program (python -m archive curate | apply), run by its LaunchAgents in the archive's own Python,
+the only program given access to the Photos library; Hub never opens it. No photo, preview or detail about one
+leaves this Mac and no model sees them: the scores are the ones Photos already computed on the Mac.
 
-  scan            last month (the LaunchAgent runs this on the 1st)
-  scan --month YYYY-MM
-  scan --since YYYY-MM-DD   every month from that day to last month, for a first catch-up
-                  (a plain scan does this instead when the file catch-up holds that date; it is removed after)
+  curate          last month (the LaunchAgent runs this on the 1st)
+  curate --month YYYY-MM
+  curate --since YYYY-MM-DD  every month from that day to last month, for a first catch-up
+                  (a plain run does this instead when the file catch-up holds that date; it is removed after)
   apply           act on the marks made in Hub: add Keep and Print picks to the month's album in Photos,
                   and save a full-size copy of each Print pick to the prints folder
 
-What it writes, all owner-only, in PHOTO_CURATOR_DIR (default ~/Library/Application Support/PhotoCurator):
+What it writes, all owner-only, in the archive's folder under curator/ (PHOTO_CURATOR_DIR names another):
   months/YYYY-MM.json   the month's picks and the runners-up
   thumbs/<id>.jpg       a preview of each, at most 1024 pixels, made from the preview Photos keeps on the Mac
   marks.json            written by Hub: Keep, Skip or Print for each photo
@@ -42,7 +42,8 @@ MONTH = re.compile(r'\d{4}-\d{2}')
 
 
 def home():
-    return Path(os.environ.get('PHOTO_CURATOR_DIR') or Path.home() / 'Library/Application Support/PhotoCurator')
+    from . import store
+    return Path(os.environ.get('PHOTO_CURATOR_DIR') or store.home() / 'curator')
 
 
 def prints_home():
@@ -146,9 +147,8 @@ def _read(path, default):
 # ---- reading the library (osxphotos), only in the curator's own environment ----
 
 def _library():
-    import osxphotos
-    path = os.environ.get('PHOTO_CURATOR_LIBRARY') or str(Path.home() / 'Pictures/Photos Library.photoslibrary')
-    return osxphotos.PhotosDB(dbfile=path)
+    from . import photos
+    return photos.library()
 
 
 def _shot(photo):
@@ -252,7 +252,7 @@ def apply(library=None):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(prog='archive', description=__doc__.splitlines()[0])
     parser.add_argument('do', choices=('scan', 'apply'))
     parser.add_argument('--month')
     parser.add_argument('--since')

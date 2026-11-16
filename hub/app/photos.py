@@ -1,12 +1,12 @@
 """The Photos screen: each month's best photos, chosen on this Mac by the photo curator, and the marks on them.
 
-The curator (deploy/photo_curator.py) is a separate program with its own access to the Photos library; Hub never
-opens the library. Hub reads what the curator wrote in its folder (the month files and their previews) and writes
+The curator (deploy/archive/curator.py) is part of the archive program, which has its own access to the Photos
+library; Hub never opens the library. Hub reads what the curator wrote in its folder (the month files and their previews) and writes
 one file back, the marks: Keep, Skip or Print for each photo. The curator acts on those marks by itself, adding
 Keep and Print picks to the month's album in Photos and saving a full-size copy of each Print pick.
 
 No photo, preview or detail about one goes to a model or leaves this Mac; Ask is not given any of it.
-The folder is the curator's default unless the private settings file names another:
+The folder is the curator's own in the archive's folder unless the private settings file names another:
     "photos": {"dir": "/path/to/the/curator/folder"}
 """
 import datetime
@@ -32,7 +32,7 @@ class Refused(Exception):
 
 def folder():
     named = household.section('photos').get('dir')
-    return Path(named) if named else Path.home() / 'Library' / 'Application Support' / 'PhotoCurator'
+    return Path(named) if named else Path.home() / 'Library' / 'Application Support' / 'HubArchive' / 'curator'
 
 
 def _read(path, default):

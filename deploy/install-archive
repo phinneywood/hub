@@ -1,0 +1,65 @@
+#!/bin/sh
+# Owner-run: install the archive (deploy/archive) and schedule it. Usage:
+#   PYTHON=/path/to/python3.12 deploy/install-archive [--catch-up YYYY-MM-DD]
+# PYTHON is any Python 3.10 or newer, such as the one Hub's releases are built on.
+# The archive gets its own copy of Python, signed under its own name, so the Full Disk Access it needs to read the
+# Photos library, the documents and the ChatGPT export is given to it alone, never to Hub. It installs osxphotos
+# (pinned) from PyPI. Everything it keeps is in one owner-only folder, ~/Library/Application Support/HubArchive.
+# Four services, labelled with the private prefix as in install-morning-brief:
+#   <prefix>.hub-archive          answers Hub on its socket in that folder, always
+#   <prefix>.hub-archive-index    brings the index up to date at 3:30 every night
+#   <prefix>.hub-archive-curate   chooses last month's best photos on the 1st at 5 am
+#   <prefix>.hub-archive-apply    acts on marks made in Hub, when Hub writes them
+# --catch-up chooses every month from that day to last month, once, through the scheduled service (so it runs
+# with the service's own access, even when this script is run over SSH).
+# Run it again to update the program; the index and the curator's files are kept.
+# Remove with: launchctl bootout gui/$(id -u)/<prefix>.hub-archive (and -index, -curate, -apply)
+set -eu
+OSXPHOTOS=0.78.1
+here=$(cd "$(dirname "$0")" && pwd)
+[ -n "${PYTHON:-}" ] || { echo "set PYTHON to a Python 3.10 or newer" >&2; exit 2; }
+prefix=${HUB_LABEL_PREFIX:-$(cat "$HOME/Library/Application Support/Hub/label-prefix" 2>/dev/null || echo local)}
+dir="$HOME/Library/Application Support/HubArchive"
+umask 077
+mkdir -p "$dir/logs" "$dir/app" "$dir/curator"
+chmod 700 "$dir" "$dir/logs" "$dir/app" "$dir/curator"
+rm -rf "$dir/app/archive.new"
+cp -R "$here/archive" "$dir/app/archive.new"
+rm -rf "$dir/app/archive.new/__pycache__" "$dir/app/archive"
+mv "$dir/app/archive.new" "$dir/app/archive"
+if [ ! -x "$dir/venv/bin/python3" ]; then
+  "$PYTHON" -m venv --copies "$dir/venv"
+fi
+for py in "$dir"/venv/bin/python3*; do
+  [ -L "$py" ] || codesign -s - -f -i "$prefix.hub-archive" "$py"
+done
+"$dir/venv/bin/python3" -m pip install -q "osxphotos==$OSXPHOTOS"
+/usr/bin/python3 - "$dir" "$prefix" <<'PY'
+import os, plistlib, sys
+d, prefix = sys.argv[1:]
+run = [d + '/venv/bin/python3', '-B', '-m', 'archive']
+for name, do, when in (('hub-archive', 'serve', {'KeepAlive': True, 'RunAtLoad': True}),
+                       ('hub-archive-index', 'index', {'StartCalendarInterval': {'Hour': 3, 'Minute': 30}, 'Nice': 10}),
+                       ('hub-archive-curate', 'curate', {'StartCalendarInterval': {'Day': 1, 'Hour': 5, 'Minute': 0}}),
+                       ('hub-archive-apply', 'apply', {'WatchPaths': [d + '/curator/marks.json'], 'ThrottleInterval': 30})):
+    label = prefix + '.' + name
+    plist = os.path.expanduser('~/Library/LaunchAgents/' + label + '.plist')
+    plistlib.dump({'Label': label, 'ProgramArguments': run + [do], 'EnvironmentVariables': {'PYTHONPATH': d + '/app'},
+                   **when, 'ProcessType': 'Background', 'LimitLoadToSessionType': 'Aqua',
+                   'StandardOutPath': d + '/logs/' + do + '.log', 'StandardErrorPath': d + '/logs/' + do + '.err'},
+                  open(plist, 'wb'))
+    os.chmod(plist, 0o600)
+PY
+for name in hub-archive hub-archive-index hub-archive-curate hub-archive-apply; do
+  launchctl bootout "gui/$(id -u)/$prefix.$name" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/$prefix.$name.plist"
+done
+echo "Installed. Give Full Disk Access to: $dir/venv/bin/python3"
+echo "Then start it with access and index for the first time (a while; see $dir/logs/index.log):"
+echo "  launchctl kickstart -k gui/$(id -u)/$prefix.hub-archive"
+echo "  launchctl kickstart gui/$(id -u)/$prefix.hub-archive-index"
+if [ "${1:-}" = "--catch-up" ]; then
+  echo "${2:?--catch-up needs a date, YYYY-MM-DD}" > "$dir/curator/catch-up"
+  echo "The best photos of every month since $2 are chosen once Full Disk Access is given:"
+  echo "  launchctl kickstart gui/$(id -u)/$prefix.hub-archive-curate"
+fi

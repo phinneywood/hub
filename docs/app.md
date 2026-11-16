@@ -243,7 +243,7 @@ words are drawn as text, never as HTML. Turning on notifications stays on the ol
 ## Photos
 
 System opens Photos (`hub/app/photos.py`, `web/app/src/photos.tsx`): each month's best photos, to mark Keep, Print
-or Skip. They are chosen by the photo curator (`deploy/photo_curator.py`), a separate program on the Mac with its own
+or Skip. They are chosen by the photo curator (`deploy/archive/curator.py`), part of the archive program on the Mac with its own
 copy of Python and its own Full Disk Access, the only thing that opens the Photos library; Hub never does. On the
 1st it looks at last month (the owner's library and the shared library), drops screenshots, hidden photos and
 burst extras, keeps the best of each moment by the scores Photos already computed on the Mac, raised for favorites
@@ -252,7 +252,7 @@ to its own owner-only folder; Hub reads them from there and writes back one file
 that file: Keep and Print add the photo to the month's album in a "Photo picks" folder in Photos, and Print also
 saves a full-size copy (fetched from iCloud if needed) to a prints folder. It never edits, hides, deletes or
 un-albums a photo. No photo, preview or detail about one goes to a model; Ask is not given any of it. Photos is
-for signed-in devices only, previews included. Install and schedule with `deploy/install-photo-curator`; the
+for signed-in devices only, previews included. Install and schedule with `deploy/install-archive`; the
 folder is the curator's default unless the private settings file names another: `"photos": {"dir": "..."}`.
 Tests: `tests/test_app_photos.py`, `tests/test_photo_curator.py`, on fictional photos.
 
