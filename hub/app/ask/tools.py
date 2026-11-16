@@ -473,7 +473,7 @@ def find(ctx: RunContext[Turn], words: str | None = None, kind: str | None = Non
     """Look in Home Assistant for things by name, when <house> doesn't already name what you need: devices,
     rooms, scenes, automations, scripts, helpers. `words`: part of a name or a room. `kind`: a domain such as
     "climate", "lock", "cover", "fan", "switch", "automation", "script", "scene", "input_boolean", or "room",
-    "floor", "group". Returns names and ids for the other tools. Read-only."""
+    "floor", "group", or "integration". Returns names and ids for the other tools. Read-only."""
     turn = ctx.deps
     turn.again = True
     try:
@@ -503,6 +503,8 @@ def _question(plan, args, changes, why):
         return f'Make these {len(changes)} changes?'
     if why == 'delete':
         return f'Remove {name}?' if len(changes) == 1 else f'Remove these {len(changes)}?'
+    if why == 'disable':
+        return f'Disable {name}?' if len(changes) == 1 else f'Disable these {len(changes)}?'
     if why == 'unlock':
         verb = OPENING.get(str(args.get('action', '')).partition('.')[2], 'Open')
         return f'{verb} {name}?' if len(changes) == 1 else f'{verb} these {len(changes)}?'
@@ -555,12 +557,13 @@ def _setup(turn, plan, args, action='house.setup'):
 
 
 def arrange(ctx: RunContext[Turn], things: list[str], room: str | None = None, name: str | None = None,
-            hidden: bool | None = None) -> dict:
-    """Change where things are or what they are called in Home Assistant, now. `things`: names as in <house>
-    ("living room floor lamp", "kitchen lights") or ids. `room`: move them there ("none" takes them out of every
-    room). `name`: a new name, for one thing. `hidden`: hide a thing from Hub and Home Assistant's own screens, or
-    show it again."""
-    return _setup(ctx.deps, 'arrange', {'things': things, 'room': room, 'name': name, 'hidden': hidden})
+            hidden: bool | None = None, enabled: bool | None = None, icon: str | None = None) -> dict:
+    """Change where things are, what they are called or how they show in Home Assistant, now. `things`: names as
+    in <house> ("living room floor lamp", "kitchen lights") or ids. `room`: move them there ("none" takes them out
+    of every room). `name`: a new name, for one thing. `hidden`: hide a thing from Hub and Home Assistant's own
+    screens, or show it again. `enabled`: false disables a thing in Home Assistant altogether (it waits for the
+    owner's tap), true enables it again. `icon`: one of Home Assistant's, such as "mdi:floor-lamp"."""
+    return _setup(ctx.deps, 'arrange', {'things': things, 'room': room, 'name': name, 'hidden': hidden, 'enabled': enabled, 'icon': icon})
 
 
 def rooms(ctx: RunContext[Turn], kind: Literal['room', 'floor', 'group'], do: Literal['add', 'rename', 'set', 'remove'], name: str,
@@ -620,6 +623,13 @@ def device(ctx: RunContext[Turn], action: str, things: list[str] | None = None, 
                   'house.security' if domain in SECURITY or doors else 'house.control')
 
 
+def integration(ctx: RunContext[Turn], name: str) -> dict:
+    """Reload one of Home Assistant's integrations (Hue, Sonos, a thermostat's own) when its devices have stopped
+    answering: it reconnects, and nothing about how it is set up changes. `name`: its title, or what it is ("hue").
+    Look with find and kind "integration" to see which there are and which are not working."""
+    return _setup(ctx.deps, 'integration', {'name': name})
+
+
 def setting(ctx: RunContext[Turn], do: Literal['add', 'change', 'remove'],
             kind: Literal['input_boolean', 'input_number', 'input_select', 'input_text', 'input_datetime', 'input_button', 'timer',
                           'counter', 'house'],
@@ -634,4 +644,5 @@ def setting(ctx: RunContext[Turn], do: Literal['add', 'change', 'remove'],
     return _setup(ctx.deps, 'helper', {'do': do, 'kind': kind, 'name': name or '', 'fields': fields, 'new_name': new_name})
 
 
-ALL = (lights, scene, music, remember, groceries, kitchen, look_up, find, details, arrange, rooms, scene_setup, routine, device, setting)
+ALL = (lights, scene, music, remember, groceries, kitchen, look_up, find, details, arrange, rooms, scene_setup, routine, device, setting,
+       integration)

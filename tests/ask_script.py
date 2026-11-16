@@ -21,7 +21,7 @@ PLACES = sorted([name for _, name, _ in app_world.AREAS] + [f['name'] for f in a
 SCENES = [name for name, _ in app_world.SCENES.values()] + ['All off']
 EVERYWHERE = re.compile(r'\b(everything|everywhere|all the lights|every light|whole house)\b')
 COOKING = re.compile(r'\b(cook|recipes?|grocer(y|ies)|shopping list|meal|cart)\b')
-NOT_HERE = re.compile(r'\b(uninstall|integration|backup|add-on|pair)\b')
+NOT_HERE = re.compile(r'\b(uninstall|backup|add-on|pair)\b')
 THE = r'(?:the |my )?'
 # The house's setup, as a few plain sentences: (what was said, the tool, how its arguments are made from the words).
 SETUP = [
@@ -29,6 +29,8 @@ SETUP = [
     (rf'^move {THE}(.+?) (?:to|into) {THE}(.+)$', lambda m: call('arrange', things=[m[1]], room=m[2])),
     (rf'^rename {THE}(.+?) to (.+)$', lambda m: call('arrange', things=[m[1]], name=m[2])),
     (rf'^hide {THE}(.+)$', lambda m: call('arrange', things=[m[1]], hidden=True)),
+    (rf'^(disable|enable) {THE}(.+)$', lambda m: call('arrange', things=[m[2]], enabled=m[1].lower() == 'enable')),
+    (rf'^reload {THE}(.+?)(?: integration)?$', lambda m: call('integration', name=m[1])),
     (r'^add a room called (.+?)(?: (upstairs|downstairs))?$', lambda m: call('rooms', kind='room', do='add', name=m[1], **({'floor': m[2]} if m[2] else {}))),
     (rf'^(?:remove|delete) {THE}(.+?) room$', lambda m: call('rooms', kind='room', do='remove', name=m[1])),
     (rf'^(?:set|turn) {THE}thermostat to (\d+)', lambda m: call('device', action='climate.set_temperature', things=['thermostat'], data={'temperature': int(m[1])})),

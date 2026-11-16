@@ -8,9 +8,10 @@ are two doors, and nothing else leaves Hub:
   tap in the app or a plain request to Ask needs.
 - **The setup door** (owner decision, 2026-11-15: Ask may change anything in Home Assistant): the named commands in
   SETUP_READS and SETUP_WRITES, the scene, automation and script configs in CONFIGS, and services in
-  SERVICE_DOMAINS. Used only by admin.py, which records every change with the way back and asks for a tap first
-  where its rules say so. Still shut: tokens and users, backups, add-ons and the system itself, removing
-  integrations or devices, and services that run code or reach other machines.
+  SERVICE_DOMAINS, and reloading an integration. Used only by admin.py, which records every change with the way
+  back and asks for a tap first where its rules say so. Still shut: tokens and users, backups, add-ons and the
+  system itself, adding, removing or disabling integrations, removing devices, and services that run code or
+  reach other machines.
 
 Every request's data is checked before it is sent.
 """
@@ -248,7 +249,7 @@ HELPERS = {
 SETUP_READS = {
     'config/entity_registry/get': {'entity_id'}, 'search/related': {'item_type', 'item_id'},
     'automation/config': {'entity_id'}, 'script/config': {'entity_id'},
-    'validate_config': {'triggers', 'conditions', 'actions'}, 'get_config': set(),
+    'validate_config': {'triggers', 'conditions', 'actions'}, 'get_config': set(), 'config_entries/get': set(),
     **{f'{helper}/list': set() for helper in HELPERS},
 }
 _REGISTRY = {'name', 'icon', 'labels', 'aliases'}
@@ -397,6 +398,18 @@ def setup_save(kind, config_id, body, timeout=TIMEOUT):
     if not isinstance(body, dict) or not body or not _plain(body, CONFIG_BYTES):
         raise ValueError('Hub may not do that in Home Assistant.')
     return _exchange({'op': 'request', 'method': 'POST', 'path': path, 'body': body}, timeout)
+
+
+ENTRY = re.compile(r'^[A-Za-z0-9]{8,64}$')                     # an integration's entry id
+
+
+def setup_reload(entry_id, timeout=30):
+    """Reload one integration, as its own Reload button does: it reconnects to its devices and nothing about how
+    it is set up changes. Removing, disabling and adding integrations stay in Home Assistant. Raises as
+    setup_write does."""
+    if not _is(ENTRY, entry_id):
+        raise ValueError('Hub may not do that in Home Assistant.')
+    return _exchange({'op': 'request', 'method': 'POST', 'path': f'/api/config/config_entries/entry/{entry_id}/reload'}, timeout)
 
 
 def service_open(domain, service):

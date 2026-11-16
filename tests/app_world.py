@@ -79,6 +79,14 @@ AUTOMATIONS = {
 }
 SCRIPTS = {'goodnight': {'alias': 'Goodnight', 'mode': 'single', 'sequence': [
     {'action': 'scene.turn_on', 'target': {'entity_id': 'scene.bedtime'}}, {'action': 'lock.lock', 'target': {'entity_id': 'lock.front_door'}}]}}
+# The integrations the made-up Home Assistant has set up. One is not connecting; one is titled with an account.
+ENTRIES = [
+    {'entry_id': 'entry0001bridge', 'domain': 'hue', 'title': 'Kitchen bridge', 'state': 'loaded', 'disabled_by': None, 'supports_unload': True},
+    {'entry_id': 'entry0002bridge', 'domain': 'hue', 'title': 'Upstairs bridge', 'state': 'setup_retry', 'disabled_by': None, 'supports_unload': True},
+    {'entry_id': 'entry0003calendar', 'domain': 'google', 'title': 'alex@example.com', 'state': 'loaded', 'disabled_by': None, 'supports_unload': True},
+    {'entry_id': 'entry0004speakers', 'domain': 'music_assistant', 'title': 'Music Assistant', 'state': 'loaded', 'disabled_by': None, 'supports_unload': True},
+    {'entry_id': 'entry0005sun', 'domain': 'sun', 'title': 'Sun', 'state': 'loaded', 'disabled_by': None, 'supports_unload': False},
+]
 CORE = {'location_name': 'Home', 'time_zone': 'America/Los_Angeles', 'currency': 'USD', 'country': 'US', 'language': 'en',
         'unit_system': {'temperature': '°F', 'length': 'mi'}, 'latitude': 0.0, 'longitude': 0.0}
 
@@ -335,6 +343,8 @@ class World:
                            else {'valid': True, 'error': None}) for part, value in command.items() if part != 'type'}
         if kind == 'get_config':
             return copy.deepcopy(self.core)
+        if kind == 'config_entries/get':
+            return copy.deepcopy(ENTRIES)
         if kind.endswith('/list') and kind.partition('/')[0] in self.helpers:
             return copy.deepcopy(self.helpers[kind.partition('/')[0]])
         answers = {**self._registry(), 'get_states': copy.deepcopy(list(self.states.values())), 'logbook/get_events': copy.deepcopy(self.logbook)}
@@ -345,6 +355,12 @@ class World:
             raise broker.HomeDown('The Home Assistant broker on this Mac isn’t answering.')
         if message['op'] == 'request':
             path = message['path']
+            if path.startswith('/api/config/config_entries/entry/'):
+                entry = path.removeprefix('/api/config/config_entries/entry/').removesuffix('/reload')
+                self.setup.append(('reload', entry))
+                if self.refuse == 'reload' or entry not in [e['entry_id'] for e in ENTRIES]:
+                    raise broker.Rejected('HTTP 404')
+                return {'require_restart': False}
             if path.startswith('/api/config/'):
                 kind, _, key = path.removeprefix('/api/config/').partition('/config/')
                 return self._config(message['method'], kind, key, message.get('body'))

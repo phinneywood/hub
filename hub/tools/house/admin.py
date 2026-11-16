@@ -47,6 +47,7 @@ WHY = {'delete': 'This removes it. Undo can put it back for a day.',
        'unlock': 'A door is only unlocked or opened by your tap.',
        'security': 'It touches a lock, the garage or the alarm, so it waits for your tap.',
        'unread': 'Hub can’t read what this one does, so it waits for your tap.',
+       'disable': 'It stops working everywhere in Home Assistant until it is enabled again. Undo can do that for a day.',
        'house': 'This changes the whole house’s settings.',
        'restart': 'Home Assistant will be away for about a minute. Lights and switches keep working by hand.'}
 SCHEMA = """
@@ -111,7 +112,8 @@ def _world(areas, devices, entities, labels, floors, states):
     groups = {g['label_id']: {'id': g['label_id'], 'name': _clip(g.get('name')), 'icon': g.get('icon'), 'color': g.get('color'),
                               'description': g.get('description')} for g in _rows(labels, 'label_id')}
     devs = {d['id']: {'id': d['id'], 'name': _clip(d.get('name_by_user') or d.get('name')), 'own_name': d.get('name_by_user'),
-                      'area': d.get('area_id'), 'labels': list(d.get('labels') or ()), 'things': []} for d in _rows(devices, 'id')}
+                      'area': d.get('area_id'), 'labels': list(d.get('labels') or ()), 'things': [], 'off': d.get('disabled_by')}
+            for d in _rows(devices, 'id')}
     entries = {e['entity_id']: e for e in _rows(entities, 'entity_id')}
     now = {s['entity_id']: s for s in _rows(states, 'entity_id')}
     things = {}
@@ -139,6 +141,7 @@ def _world(areas, devices, entities, labels, floors, states):
             'named_alone': not follows,
             'hidden': bool(entry.get('hidden_by')), 'disabled': bool(entry.get('disabled_by')) or entity not in now,
             'by': entry.get('hidden_by') or entry.get('disabled_by'), 'minor': bool(entry.get('entity_category')),
+            'off': entry.get('disabled_by'), 'icon': entry.get('icon'),
             'labels': list(entry.get('labels') or ()), 'class': attrs.get('device_class') or entry.get('original_device_class'),
             'config': attrs.get('id') if isinstance(attrs.get('id'), str) else None}
         if device:
@@ -303,6 +306,9 @@ def find(said=None, kind=None):
     `kind`: a Home Assistant domain ("light", "automation", "climate"), or "room", "floor" or "group"."""
     w = world()
     asked = words_of(said) - FILLER if said else set()
+    if kind == 'integration':
+        hits = [r for r in integrations() if asked <= words_of(r['name']) | words_of(r['kind'])]
+        return {'found': [{'name': r['name'], 'kind': 'integration', 'of': r['kind'], 'state': r['state']} for r in hits[:60]]}
     if kind in ('room', 'floor', 'group'):
         rows = {'room': w['rooms'], 'floor': w['floors'], 'group': w['groups']}[kind].values()
         hits = [r for r in rows if asked <= words_of(r['name'])]
@@ -319,6 +325,25 @@ def find(said=None, kind=None):
     hits.sort(key=lambda h: h[:4])
     return {'found': [_brief(h[4], w) for h in hits[:60 if kind and not asked else FOUND]],
             **({'more': len(hits) - FOUND} if len(hits) > FOUND and (asked or not kind) else {})}
+
+
+MAIL = re.compile(r'\S+@\S+')
+
+
+def integrations():
+    """The integrations Home Assistant has set up, for finding one to reload: [{'id', 'name', 'kind', 'state'}]. A
+    title that holds an account's address is shown without it. Raises broker.HomeDown."""
+    (rows,) = broker.setup_read({'type': 'config_entries/get'})
+    out = []
+    for r in rows or ():
+        if not isinstance(r, dict) or not isinstance(r.get('entry_id'), str) or not isinstance(r.get('domain'), str):
+            continue
+        kind = r['domain'].replace('_', ' ')
+        title = _clip(MAIL.sub('', str(r.get('title') or '')).strip(' ()-:')) or kind
+        state = 'off' if r.get('disabled_by') else {'loaded': 'working', 'setup_error': 'not working', 'setup_retry': 'trying to connect',
+                                                      'not_loaded': 'not started', 'failed_unload': 'stuck'}.get(str(r.get('state')), 'unknown')
+        out.append({'id': r['entry_id'], 'name': title, 'kind': kind, 'state': state, 'reloads': bool(r.get('supports_unload', True))})
+    return sorted(out, key=lambda r: (r['kind'], r['name'].lower()))
 
 
 def uses(thing):
@@ -370,6 +395,7 @@ def change(kind, target, name, words, steps, undo=None, asks=None, after=None):
       {'ws': {...command...}, 'keep': ['room', 'area_id']}    keep: remember a field of the answer as $room
       {'config': 'scene', 'id': '...', 'body': {...} or None} None removes it
       {'call': 'climate.set_temperature', 'data': {...}}
+      {'reload': '<an integration's entry id>'}
     `asks`: why it must wait for a tap (a key of WHY), or None. `after`: {'config', 'id', 'body'} as written, so
     Undo can tell whether it is still as Hub left it."""
     return {'kind': kind, 'target': str(target)[:200], 'name': _clip(name), 'words': _clip(words, 300), 'steps': steps,
@@ -396,6 +422,8 @@ def _send(step, kept):
     sent = _filled({k: v for k, v in step.items() if k != 'keep'}, kept)
     if 'ws' in sent:
         answer = broker.setup_write(sent['ws'])
+    elif 'reload' in sent:
+        answer = broker.setup_reload(sent['reload'])
     elif 'config' in sent:
         answer = broker.setup_save(sent['config'], sent['id'], sent.get('body'))
     else:
@@ -468,7 +496,7 @@ def wait(title, changes, plan, args, *, login):
         number = conn.execute('insert into house_setup_waiting(ts, login, title, lines, why, plan, args) values (?,?,?,?,?,?,?)',
                               (time.time(), login, _clip(title, 160), json.dumps(lines), why, plan, json.dumps(args))).lastrowid
     return {'kind': 'confirm', 'id': number, 'title': _clip(title, 160), 'lines': lines, 'why': WHY[why],
-            'do': {'delete': 'Remove', 'unlock': 'Do it', 'restart': 'Restart'}.get(why, 'Do it')}
+            'do': {'delete': 'Remove', 'disable': 'Disable', 'restart': 'Restart'}.get(why, 'Do it')}
 
 
 def waiting(number):

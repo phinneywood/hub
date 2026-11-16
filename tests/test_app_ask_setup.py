@@ -277,3 +277,17 @@ def test_a_scene_that_holds_the_lock_goes_on_a_card_and_one_of_lights_runs_at_on
     assert tool(tools.scene, name='dinner')[0] == {'done': 'Dinner is on.'}
     # Mail in view: no scene that touches the lock is set at all, whichever way it would go.
     assert 'request of its own' in tool(tools.scene, strangers=True, name='arriving')[0]['done']
+
+
+def test_disabling_waits_on_a_card_and_reloading_an_integration_happens_at_once(house):
+    answer, cards, _ = ask('Disable the coffee maker')
+    assert answer == 'That one waits for your tap.' and house.entries['switch.coffee_maker']['disabled_by'] is None
+    assert (cards[0]['title'], cards[0]['do'], cards[0]['lines']) == ('Disable Coffee maker?', 'Disable', ['Coffee maker disabled'])
+    assert cards[0]['why'].startswith('It stops working everywhere in Home Assistant until it is enabled again.')
+    assert client.post(f'/app/api/setup/{cards[0]["id"]}/confirm', headers=SIGNED_IN).json()['ok']
+    assert house.entries['switch.coffee_maker']['disabled_by'] == 'user'
+    assert ask('enable the coffee maker')[0] == 'Coffee maker enabled again; it appears within a minute.'
+    answer, cards, _ = ask('Reload the hue integration')
+    assert answer == '2 changes made.' and cards[0]['lines'] == ['Kitchen bridge reloaded (hue)', 'Upstairs bridge reloaded (hue)']
+    assert 'batch' not in cards[0]                                          # nothing to undo about a reload
+    assert ask('reload the upstairs bridge')[0] == 'Upstairs bridge reloaded (hue).'

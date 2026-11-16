@@ -539,6 +539,58 @@ def test_a_script_is_made_run_and_renamed(house):
         plan('routine', kind='script', do='off', name='goodnight')
 
 
+def test_a_thing_is_disabled_on_a_card_and_enabled_at_once(house):
+    off = plan('arrange', things=['coffee maker'], enabled=False)
+    assert admin.asks(off) == 'disable' and [c['words'] for c in off] == ['Coffee maker disabled']
+    done = admin.carry_out(off, login=ME, via='app')
+    assert house.entries['switch.coffee_maker']['disabled_by'] == 'user'
+    with pytest.raises(admin.Already):
+        plan('arrange', things=['coffee maker'], enabled=False)
+    on = do('arrange', things=['coffee maker'], enabled=True)             # enabling needs no card
+    assert on['done'] == ['Coffee maker enabled again; it appears within a minute'] and house.entries['switch.coffee_maker']['disabled_by'] is None
+    admin.undo(on['batch'], login=ME, via='app')
+    assert house.entries['switch.coffee_maker']['disabled_by'] == 'user'
+    admin.undo(done['batch'], login=ME, via='app')
+    assert house.entries['switch.coffee_maker']['disabled_by'] is None
+    # A lamp that is its own device is disabled as a device; what uses a thing is said on the card.
+    (lamp,) = plan('arrange', things=['floor lamp'], enabled=False)
+    assert lamp['steps'] == [{'ws': {'type': 'config/device_registry/update', 'device_id': 'dev-floor-lamp', 'disabled_by': 'user'}}]
+    (porch,) = plan('arrange', things=['porch light'], enabled=False)
+    assert porch['words'] == 'Porch light disabled; Porch at sunset use it'
+
+
+def test_a_thing_is_given_an_icon(house):
+    done = do('arrange', things=['reading lamp'], icon='mdi:floor-lamp')
+    assert done['done'] == ['Reading lamp given the icon floor lamp'] and house.entries['light.living_reading']['icon'] == 'mdi:floor-lamp'
+    assert do('arrange', things=['reading lamp'], icon='Desk Lamp')['done'] == ['Reading lamp given the icon desk lamp']
+    admin.undo(done['batch'], login=ME, via='app')
+    assert house.entries['light.living_reading']['icon'] is None
+    for odd in ('https://example.com/x.png', 'mdi:<script>', ''):
+        with pytest.raises(admin.Refused, match='An icon is one of'):
+            plan('arrange', things=['reading lamp'], icon=odd)
+
+
+def test_an_integration_is_reloaded_and_nothing_else_about_it_is_touched(house):
+    found = admin.find(kind='integration')['found']
+    assert {'name': 'Upstairs bridge', 'kind': 'integration', 'of': 'hue', 'state': 'trying to connect'} in found
+    assert not any('@' in json.dumps(row) for row in found)                 # an account's address is never shown to a model
+    assert do('integration', name='upstairs bridge')['done'] == ['Upstairs bridge reloaded (hue)']
+    assert house.setup[-1] == ('reload', 'entry0002bridge')
+    both = do('integration', name='hue')                                    # by what it is: every one of that kind
+    assert both['done'] == ['Kitchen bridge reloaded (hue)', 'Upstairs bridge reloaded (hue)'] and not both['undo']
+    assert do('integration', name='reload the Music Assistant integration')['done'] == ['Music Assistant reloaded']
+    with pytest.raises(admin.Refused, match='There is no integration called “zigbee”. There are: google, hue, music assistant, sun'):
+        plan('integration', name='zigbee')
+    with pytest.raises(admin.Refused, match='only be reloaded by restarting'):
+        plan('integration', name='sun')
+    for entry in ('../../core/restart', 'entry0001bridge/../x', '', 'x' * 80):
+        with pytest.raises(ValueError):
+            broker.setup_reload(entry)
+    house.refuse = 'reload'
+    said = admin.carry_out(plan('integration', name='kitchen bridge'), login=ME, via='ask')
+    assert said['done'] == [] and said['not_sent'] == ['Kitchen bridge reloaded (hue)'] and said['why'] == 'HTTP 404'
+
+
 # ---- devices beyond lights and speakers ----
 
 def test_the_thermostat_is_set_and_put_back(house):

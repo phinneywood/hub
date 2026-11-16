@@ -122,19 +122,52 @@ def _hide(thing, hidden):
                    [_ws('config/entity_registry/update', entity_id=thing['id'], hidden_by='user' if thing['hidden'] else None)])]
 
 
-def arrange(w, things, room=None, name=None, hidden=None):
-    """Move things to a room, rename one, or hide and show them."""
+def _enable(thing, enabled, w, done):
+    """Switch a thing off or back on in Home Assistant itself. A thing that is all its device is for takes the
+    device with it. Switching off waits for a tap: until it is enabled again nothing can use it."""
+    device = w['devices'].get(thing['device']) if _sole(thing, w) else None
+    was = (device['off'] if device else None) or thing['off']
+    if bool(was) != bool(enabled):
+        raise Already(f'{thing["name"]} is already {"enabled" if enabled else "disabled"}.')
+    if device and device['id'] in done:
+        return []
+    key = ('config/device_registry/update', 'device_id', device['id']) if device else ('config/entity_registry/update', 'entity_id', thing['id'])
+    done.add(device['id'] if device else thing['id'])
+    step = lambda by: [_ws(key[0], **{key[1]: key[2]}, disabled_by=by)]      # noqa: E731
+    if enabled:
+        return [change('name', thing['id'], thing['name'], f'{thing["name"]} enabled again; it appears within a minute', step(None), step('user'))]
+    used = admin.uses(thing)
+    return [change('name', thing['id'], thing['name'], f'{thing["name"]} disabled' + (f'; {_listed(used)} use it' if used else ''),
+                   step('user'), step(None), asks='disable')]
+
+
+def _icon(thing, icon):
+    new = str(icon or '').strip().lower()
+    new = new if new.startswith('mdi:') else 'mdi:' + new.replace(' ', '-')
+    if not broker.ICON.fullmatch(new):
+        raise Refused('An icon is one of Home Assistant’s, such as mdi:floor-lamp or mdi:ceiling-fan.')
+    if thing['icon'] == new:
+        raise Already(f'{thing["name"]} already has that icon.')
+    return [change('name', thing['id'], thing['name'], f'{thing["name"]} given the icon {new.removeprefix("mdi:").replace("-", " ")}',
+                   [_ws('config/entity_registry/update', entity_id=thing['id'], icon=new)],
+                   [_ws('config/entity_registry/update', entity_id=thing['id'], icon=thing['icon'])])]
+
+
+def arrange(w, things, room=None, name=None, hidden=None, enabled=None, icon=None):
+    """Move things to a room, rename one, hide and show them, disable and enable them, or give them an icon."""
     found = _things(things, w)
     if name is not None and len(found) != 1:
         raise Refused('A name is for one thing. Say which.')
-    if room is None and name is None and hidden is None:
-        raise Refused('Say what to change: its room, its name, or whether it is hidden.')
+    if room is None and name is None and hidden is None and enabled is None and icon is None:
+        raise Refused('Say what to change: its room, its name, its icon, or whether it is hidden or disabled.')
     target = None if room is None or admin._plainly(room) in NO_ROOM else admin.room(room, w)
-    changes, already, moved = [], [], set()
+    changes, already, moved, switched = [], [], set(), set()
     for thing in found:
         for plan in ((lambda: _move(thing, target, w, moved)) if room is not None else None,
                      (lambda: _retitle(thing, name, w)) if name is not None else None,
-                     (lambda: _hide(thing, hidden)) if hidden is not None else None):
+                     (lambda: _hide(thing, hidden)) if hidden is not None else None,
+                     (lambda: _enable(thing, enabled, w, switched)) if enabled is not None else None,
+                     (lambda: _icon(thing, icon)) if icon is not None else None):
             try:
                 changes += plan() if plan else []
             except Already as note:
@@ -1017,4 +1050,25 @@ def house(w, fields):
                    [_ws('config/core/update', **new)], [_ws('config/core/update', **undo)] if len(undo) == len(new) else None, asks='house')]
 
 
-PLANS = {'arrange': arrange, 'place': place, 'scene': scene, 'routine': routine, 'act': act, 'helper': helper, 'house': house}
+def integration(w, name):
+    """Reload an integration: it reconnects to its devices, and nothing about how it is set up changes. Named by its
+    own title ("Kitchen bridge"), or by what it is ("hue"), which means every one of that kind."""
+    asked = admin.words_of(name) - admin.FILLER - {'integration', 'reload'}
+    rows = admin.integrations()
+    if not asked:
+        raise Refused('Say which integration.')
+    found = [r for r in rows if admin.words_of(r['name']) == asked] or [r for r in rows if admin.words_of(r['kind']) == asked] \
+        or [r for r in rows if asked <= admin.words_of(r['name']) | admin.words_of(r['kind'])]
+    kinds = {r['kind'] for r in found}
+    if not found or len(kinds) > 1:
+        names = ', '.join(sorted({r['kind'] for r in (found or rows)}))[:300]
+        raise Refused((f'Which one? {names}' if found else f'There is no integration called “{admin._clip(name, 60)}”. There are: {names}.'))
+    stuck = [r['name'] for r in found if not r['reloads']]
+    if stuck:
+        raise Refused(f'{stuck[0]} can only be reloaded by restarting Home Assistant.')
+    return [change('integration', r['id'], r['name'], f'{r["name"]} reloaded' + ('' if r['name'].lower() == r['kind'] else f' ({r["kind"]})'),
+                   [{'reload': r['id']}]) for r in found]
+
+
+PLANS = {'arrange': arrange, 'place': place, 'scene': scene, 'routine': routine, 'act': act, 'helper': helper, 'house': house,
+         'integration': integration}
