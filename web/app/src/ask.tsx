@@ -280,6 +280,11 @@ export function Ask({ focus }: { focus?: boolean }) {
   );
 }
 
+/** A card that came from elsewhere than Ask (an Undo that waits for a tap), as a sheet of its own. */
+export function CardSheet({ card }: { card: Card }) {
+  return <SheetFrame title="Waiting for your tap"><ConfirmCard card={card} /></SheetFrame>;
+}
+
 export function AskSheet() {
   return <SheetFrame tall><Ask focus /></SheetFrame>;
 }

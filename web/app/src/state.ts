@@ -2,6 +2,7 @@
 // just made laid over it until the house itself agrees: a tap shows at once and is put right if it didn't take.
 import { computed, effect, signal } from "@preact/signals";
 import * as api from "./api";
+import type { Card } from "./asking";
 import type { Down, House, Me, Pick, Room, Said, Scene, Speaker } from "./types";
 import { spoken } from "./words";
 
@@ -15,7 +16,7 @@ const SILENCE = 12000;            // Hub sends a beat every 5 s; this long witho
 
 export type Look = "auto" | "dusk" | "day";
 export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "ask" } | { kind: "keep" }
-  | { kind: "item"; id: number } | null;
+  | { kind: "item"; id: number } | { kind: "card"; card: Card } | null;
 export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
 export type View = "home" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity";
@@ -351,10 +352,17 @@ export async function loadPicks() {
 
 export const undone = signal<string[]>([]);      // the changes put back this sitting, so their Undo isn't offered twice
 
+/** What a tap answered: the card it brought up (an Undo that would unlock, open or disarm waits for its own tap),
+ * or what happened, in a word. */
+export function told(answer: Said, done: string) {
+  if (answer.card) sheet.value = { kind: "card", card: answer.card };
+  else say(answer.error ?? answer.said ?? done);
+}
+
 export async function undo(batch: string) {
   toast.value = null;
   const answer = await api.post(`undo/${encodeURIComponent(batch)}`);
-  if (answer.error) say(answer.error);
+  if (answer.card || answer.error) told(answer, "");
   else {
     undone.value = [...undone.value, batch];
     say("Put back");

@@ -4,7 +4,7 @@ import { useEffect } from "preact/hooks";
 import { signal } from "@preact/signals";
 import "./app.css";
 import { Dock, Home, Rail, System } from "./screens";
-import { Ask, AskSheet } from "./ask";
+import { Ask, AskSheet, CardSheet } from "./ask";
 import { loadAble } from "./asking";
 import { loadDay, watchDay } from "./day";
 import { Today } from "./today";
@@ -33,6 +33,7 @@ function ask() {
 
 function Sheets() {
   const open = sheet.value, now = seen.value;
+  if (open?.kind === "card") return <CardSheet card={open.card} />;
   if (open?.kind === "item") {        // one thing on the shopping list: it needs Kitchen's picture, not the house's
     const list = shop.value;
     const item = list?.ok ? list.items.find((i) => i.id === open.id) : undefined;

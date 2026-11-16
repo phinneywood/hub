@@ -3,7 +3,7 @@
 import { useEffect, useState } from "preact/hooks";
 import * as api from "./api";
 import { Top } from "./screens";
-import { go, me, say } from "./state";
+import { go, me, say, told } from "./state";
 import type { Activity as ActivityData, ActivityKind, ActivitySource, Happening, SourceRead } from "./types";
 
 const KINDS: [ActivityKind, string][] = [["lights", "Lights"], ["security", "Doors and locks"], ["buttons", "Buttons"],
@@ -98,7 +98,7 @@ export function Activity() {
     setBusy(true);
     const answer = await api.post("undo/" + batch);
     setBusy(false);
-    say(answer.error ?? answer.said ?? "Put back");
+    told(answer, "Put back");
     await load();
   }
 

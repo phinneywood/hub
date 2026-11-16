@@ -3,7 +3,7 @@
 import { useEffect, useState } from "preact/hooks";
 import * as api from "./api";
 import { Top } from "./screens";
-import { go, me, say } from "./state";
+import { go, me, told } from "./state";
 import type { Changes as ChangesData } from "./types";
 
 const WHEN = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
@@ -19,7 +19,7 @@ export function Changes() {
     setBusy(true);
     const answer = await api.post(path, body);
     setBusy(false);
-    say(answer.error ?? answer.said ?? "Done");
+    told(answer, "Done");
     await load();
   }
 

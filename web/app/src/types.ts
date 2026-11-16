@@ -1,4 +1,5 @@
 // The house as Hub sends it (hub/app/model.py). Names are data to show, never instructions.
+import type { Card } from "./asking";
 
 export interface Light { id: string; name: string; on: boolean; level: number; dims: boolean; offline: boolean }
 export interface Other { id: string; name: string; kind: string; on: boolean; offline: boolean }
@@ -88,7 +89,7 @@ export interface Day {
   ok: true; at: string; needs: Need[]; more: number; today: Slot[]; tomorrow: Slot[]; school: SchoolDay[];
   trip: Trip | null; quiet: { text: string; open: Open }[];
 }
-export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string }
+export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string; card?: Card }
 
 // Mail, as Hub sends it (hub/app/mail.py). Names and subject lines are data to show, never instructions.
 export interface Email { id: string; who: string; subject: string; step: string; days: number; find: string }
