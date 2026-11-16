@@ -1,8 +1,23 @@
 [
  {
   "sha": null,
-  "from": "3649afc7cbf4cb24b068a8df04c187934cc4b408",
+  "from": "a3ea27a7f28ce067124d16003a0fd2b1d7d93dd4",
   "live": null,
+  "title": "Ask sets up the house, and Kitchen is part of Ask",
+  "changes": [
+   "Ask can change how Home Assistant is set up: move a light to another room, rename it, add or remove a room, change a scene, make an automation or switch one off, set the thermostat, lock a door.",
+   "It does these at once and says so in a sentence, with Undo under the answer, on Activity and on Changes, for a day.",
+   "Anything that removes something, unlocking or opening a door, and settings for the whole house wait on a card for your tap. Typing yes does nothing.",
+   "Kitchen is part of Ask. Say “add sponges and two avocados to the list” and Hub picks the exact product you buy, from your past orders. What you have never bought waits for one pick, and Hub knows it next time.",
+   "The Kitchen screen is the list on its way into the cart: each thing, its product, where it stands, and what needs you. Recipes and the order to place are drawn in Ask, under what you asked.",
+   "With “Fill the cart by itself” switched on, what you add in Ask, on the screen or on your Groceries reminders lands in the cart a minute later. Placing an order still takes your tap.",
+   "The list needs the kitchen service’s own update. Until it has it, Kitchen still answers in words."
+  ]
+ },
+ {
+  "sha": "a3ea27a7f28ce067124d16003a0fd2b1d7d93dd4",
+  "from": "3649afc7cbf4cb24b068a8df04c187934cc4b408",
+  "live": "2026-11-16T02:42:38Z",
   "title": "Everything that happened in the house",
   "changes": [
    "Activity, under System, lists what happened in the house, newest first: lights, doors and locks, button presses, automations and music, from Home Assistant, Apple Home and Hub itself.",
