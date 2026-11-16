@@ -8,6 +8,9 @@ login a request carries:
 - Everything read from an account carries that account's name, never a login. `people.sees(login, account)` is
   the one check, and `people.accounts(login)` filters a list. `"default"` is the bridge's main Google account (its
   `/gmail` and `/calendar` reads); the shared mailbox (`/gmail/shared`) is kept apart and is no one's account.
+- A source in the engine's catalog says whose account it reads in `account` (`hub/engine/registry.py`): Gmail and
+  Calendar read `"default"`. A source without one (the class guide, the trip, the network, the house, Hub itself)
+  is the household's.
 - `household.json` in the private data folder says who is who:
   `"people": [{"name": "…", "logins": ["…"], "accounts": ["default"]}]`.
 - Without `"people"`, the one allowed login (`HUB_ALLOWED_LOGINS`) owns `"default"`. With more than one allowed
