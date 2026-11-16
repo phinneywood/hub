@@ -814,3 +814,178 @@ def test_setup_changes_count_against_the_same_limit_as_other_changes(house):
     with pytest.raises(admin.Refused, match='changes in the last minute'):
         admin.carry_out(plan('arrange', things=['reading lamp'], room='bedroom'), login=ME, via='ask')
     assert house.setup == []
+
+
+# ---- the third pass: what guards the house, what a helper sets off, and routines that keep it shut ----
+
+def _guards(house):
+    """Things a real house has beside its locks and alarm: a switch on the alarm's own integration, a relay
+    called Gate, a button on the garage opener's device, a helper that an automation of the owner's unlocks on."""
+    def thing(entity, name, platform=None, device=None, state='off', **attrs):
+        house.states[entity] = {'entity_id': entity, 'state': state, 'attributes': {'friendly_name': name, **attrs}}
+        house.entries[entity] = {'entity_id': entity, 'area_id': None, 'device_id': device, 'name': None, 'icon': None, 'labels': [],
+                                 'hidden_by': None, 'disabled_by': None, 'platform': platform, 'original_name': name if device else None}
+    house.entries['alarm_control_panel.house'] = {'entity_id': 'alarm_control_panel.house', 'area_id': None, 'device_id': None, 'name': None,
+                                                  'labels': [], 'hidden_by': None, 'disabled_by': None, 'platform': 'acme_alarm'}
+    house.devices.append({'id': 'dev-garage', 'name': 'Garage opener', 'name_by_user': None, 'area_id': None, 'labels': []})
+    house.entries['cover.garage_door'] = dict(house.entries['cover.garage_door'], device_id='dev-garage')
+    thing('switch.arriving_home', 'Arriving home', platform='acme_alarm')
+    thing('switch.gate_relay', 'Gate', platform='shelly')
+    thing('button.opener_toggle', 'Toggle', device='dev-garage', state='unknown')
+    thing('switch.garage_light', 'Garage light', platform='shelly')
+    thing('input_boolean.guests', 'Guests are coming')
+    thing('input_boolean.movie', 'Movie mode')
+    house.configs['automation']['a-guests'] = {'id': 'a-guests', 'alias': 'Let guests in', 'triggers': [
+        {'trigger': 'state', 'entity_id': 'input_boolean.guests', 'to': 'on'}], 'conditions': [],
+        'actions': [{'action': 'lock.unlock', 'target': {'entity_id': 'lock.front_door'}}]}
+    house.configs['automation']['a-movie'] = {'id': 'a-movie', 'alias': 'Movie lights', 'triggers': [
+        {'trigger': 'state', 'entity_id': 'input_boolean.movie', 'to': 'on'}], 'conditions': [],
+        'actions': [{'action': 'scene.turn_on', 'target': {'entity_id': 'scene.movie_night'}}]}
+    house.configs['automation']['a-lockup'] = {'id': 'a-lockup', 'alias': 'Lock up at ten', 'triggers': [{'trigger': 'time', 'at': '22:00:00'}],
+                                               'conditions': [], 'actions': [{'action': 'lock.lock', 'target': {'entity_id': 'lock.front_door'}},
+                                                                             {'action': 'alarm_control_panel.alarm_arm_home', 'target': {'entity_id': 'alarm_control_panel.house'}}]}
+    for key, name in (('a-guests', 'Let guests in'), ('a-movie', 'Movie lights'), ('a-lockup', 'Lock up at ten')):
+        entity = 'automation.' + app_world.slug(name)
+        house.states[entity] = {'entity_id': entity, 'state': 'on', 'attributes': {'friendly_name': name, 'id': key}}
+    admin.forget()
+
+
+def test_what_belongs_to_a_lock_or_the_alarm_waits_for_a_tap_like_them(house):
+    _guards(house)
+    w = admin.world(fresh=True)
+    assert {t['id'] for t in w['things'].values() if t['guards']} == {'switch.arriving_home', 'switch.gate_relay', 'button.opener_toggle'}
+    assert admin.asks(plan('act', action='switch.turn_on', things=['arriving home'])) == 'security'       # on the alarm's own integration
+    house.states['switch.arriving_home']['state'] = 'on'
+    assert admin.asks(plan('act', action='switch.turn_off', things=['arriving home'])) == 'security'      # either way: it is the alarm's
+    house.states['switch.arriving_home']['state'] = 'off'
+    assert admin.asks(plan('act', action='switch.turn_on', things=['gate'])) == 'security'               # a relay named for what it opens
+    assert admin.asks(plan('act', action='button.press', things=['button.opener_toggle'])) == 'security'  # on the garage opener's own device
+    assert admin.asks(plan('act', action='homeassistant.turn_on', things=['switch.arriving_home'])) == 'security'
+    assert admin.asks(plan('act', action='switch.turn_on', things=['garage light'])) is None            # a light in the garage is a light
+    assert admin.asks(plan('act', action='switch.turn_on', things=['coffee maker'])) is None
+    routine = {**EVENING, 'alias': 'Home early', 'actions': [{'action': 'switch.turn_on', 'target': {'entity_id': 'switch.arriving_home'}}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='Home early', config=routine)) == 'security'
+    with pytest.raises(admin.Refused, match='belongs to the locks or the alarm'):
+        plan('scene', do='save', name='Arrive', set=[{'thing': 'arriving home', 'on': True}])
+    assert house.sent == []
+
+
+def test_a_helper_is_not_a_way_round_the_tap(house):
+    _guards(house)
+    assert admin.asks(plan('act', action='input_boolean.turn_on', things=['guests are coming'])) == 'security'    # the owner's automation unlocks on it
+    assert admin.asks(plan('act', action='homeassistant.turn_on', things=['input_boolean.guests'])) == 'security'
+    assert admin.asks(plan('act', action='input_boolean.turn_on', things=['movie mode'])) is None                # this one only sets lights
+    wrapper = {**EVENING, 'alias': 'Sneaky', 'actions': [{'action': 'input_boolean.turn_on', 'target': {'entity_id': 'input_boolean.guests'}}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='Sneaky', config=wrapper)) == 'security'
+    house.states['automation.let_guests_in']['state'] = 'off'               # switched off, it sets nothing off
+    assert admin.asks(plan('act', action='input_boolean.turn_on', things=['guests are coming'])) is None
+    # An automation that sets its own helper never sends Hub round in circles.
+    house.states['automation.let_guests_in']['state'] = 'on'
+    house.configs['automation']['a-guests']['actions'].append({'action': 'input_boolean.turn_off', 'target': {'entity_id': 'input_boolean.guests'}})
+    assert admin.asks(plan('act', action='input_boolean.turn_on', things=['guests are coming'])) == 'security'
+
+
+def test_switching_off_or_writing_over_what_locks_up_waits_for_a_tap(house):
+    _guards(house)
+    assert admin.asks(plan('routine', kind='automation', do='off', name='lock up at ten')) == 'security'
+    assert admin.asks(plan('act', action='automation.turn_off', things=['lock up at ten'])) == 'security'
+    assert admin.asks(plan('act', action='homeassistant.turn_off', things=['automation.lock_up_at_ten'])) == 'security'
+    assert admin.asks(plan('act', action='automation.toggle', things=['lock up at ten'])) == 'security'
+    assert admin.asks(plan('routine', kind='automation', do='off', name='porch at sunset')) is None
+    lights_only = {'alias': 'Lock up at ten', 'triggers': [{'trigger': 'time', 'at': '22:00:00'}], 'conditions': [],
+                   'actions': [{'action': 'light.turn_off', 'target': {'entity_id': 'light.entry_ceiling'}}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='lock up at ten', config=lights_only)) == 'security'
+    stops_it = {**EVENING, 'alias': 'Stay open', 'actions': [{'action': 'automation.turn_off', 'target': {'entity_id': 'automation.lock_up_at_ten'}}]}
+    assert admin.asks(plan('routine', kind='automation', do='save', name='Stay open', config=stops_it)) == 'security'
+    # Switching on one that only locks is fine; switching on one that unlocks sets an unlocking going.
+    for name in ('lock_up_at_ten', 'let_guests_in'):
+        house.states[f'automation.{name}']['state'] = 'off'
+    assert admin.asks(plan('routine', kind='automation', do='on', name='lock up at ten')) is None
+    assert admin.asks(plan('routine', kind='automation', do='on', name='let guests in')) == 'security'
+    assert admin.asks(plan('act', action='automation.turn_on', things=['let guests in'])) == 'security'
+    assert house.sent == []
+
+
+def test_hiding_what_watches_a_way_in_waits_for_a_tap(house):
+    _guards(house)
+    for watched in ('front door', 'front door lock', 'alarm', 'gate'):
+        hidden = plan('arrange', things=[watched], hidden=True)
+        assert admin.asks(hidden) == 'hide', watched
+    assert admin.asks(plan('arrange', things=['reading lamp'], hidden=True)) is None
+    done = admin.carry_out(plan('arrange', things=['front door'], hidden=True), login=ME, via='app')
+    assert admin.asks(plan('arrange', things=['binary_sensor.front_door'], hidden=False)) is None      # showing it again needs no tap
+    admin.undo(done['batch'], login=ME, via='app')
+    assert house.entries['binary_sensor.front_door']['hidden_by'] is None
+
+
+def test_an_opening_is_found_however_deep_a_routine_hides_it(house):
+    """Hundreds of made-up routines: an unlock, a disarm or a garage opening wrapped at random in choices, repeats,
+    branches and sequences is always found, and the same routines without it never wait."""
+    import random
+    _owner_made(house)
+    w = admin.world(fresh=True)
+    rng = random.Random(7)
+    plain = [{'action': 'light.turn_on', 'target': {'entity_id': 'light.entry_ceiling'}}, {'delay': '00:00:05'},
+             {'action': 'scene.turn_on', 'target': {'entity_id': 'scene.dinner'}}, {'action': 'lock.lock', 'target': {'entity_id': 'lock.front_door'}},
+             {'action': 'cover.close_cover', 'target': {'entity_id': 'cover.garage_door'}}, {'action': 'cover.open_cover', 'target': {'entity_id': 'cover.office_blind'}},
+             {'action': 'alarm_control_panel.alarm_arm_home', 'target': {'entity_id': 'alarm_control_panel.house'}},
+             {'variables': {'x': 1}}, {'action': 'notify.persistent_notification', 'data': {'message': 'unlock the door'}}]
+    opening = [{'action': 'lock.unlock', 'target': {'entity_id': 'lock.front_door'}}, {'service': 'lock.open', 'entity_id': 'lock.front_door'},
+               {'action': 'cover.open_cover', 'data': {'entity_id': ['cover.office_blind', 'cover.garage_door']}},
+               {'action': 'alarm_control_panel.alarm_disarm', 'target': {'entity_id': 'alarm_control_panel.house'}, 'data': {'code': '0000'}},
+               {'action': 'cover.toggle', 'target': {'area_id': 'entry'}}, {'scene': 'scene.arriving'}, {'action': 'script.let_them_in'},
+               {'action': 'homeassistant.toggle', 'target': {'entity_id': 'cover.garage_door'}},
+               {'device_id': 'dev-x', 'domain': 'alarm_control_panel', 'type': 'disarm', 'entity_id': 'alarm_control_panel.house'},
+               {'action': 'scene.create', 'data': {'scene_id': 'before', 'snapshot_entities': ['lock.front_door']}}]
+
+    def wrap(steps, depth):
+        if depth == 0:
+            return steps
+        how = rng.choice(('if', 'choose', 'repeat', 'parallel', 'sequence', 'else', 'default'))
+        cond = [{'condition': 'state', 'entity_id': 'light.entry_ceiling', 'state': 'on'}]
+        inner = wrap(steps, depth - 1)
+        return [{'if': cond, 'then': inner} if how == 'if' else {'if': cond, 'then': [rng.choice(plain)], 'else': inner} if how == 'else'
+                else {'choose': [{'conditions': cond, 'sequence': inner}]} if how == 'choose'
+                else {'choose': [{'conditions': cond, 'sequence': [rng.choice(plain)]}], 'default': inner} if how == 'default'
+                else {'repeat': {'count': 2, 'sequence': inner}} if how == 'repeat' else {'parallel': inner} if how == 'parallel' else {'sequence': inner}]
+
+    for n in range(300):
+        before, after = [rng.choice(plain) for _ in range(rng.randint(0, 3))], [rng.choice(plain) for _ in range(rng.randint(0, 3))]
+        kind = rng.choice(('automation', 'script'))
+        body = lambda steps: {'alias': 'x', 'triggers': [{'trigger': 'time', 'at': '03:00:00'}], 'actions': steps} if kind == 'automation' else {'alias': 'x', 'sequence': steps}  # noqa: E731
+        hidden = wrap([rng.choice(opening)], rng.randint(0, 4))
+        assert plans.opens(kind, body(before + hidden + after), w) == 'security', (n, hidden)
+        assert plans.opens(kind, body(before + wrap([rng.choice(plain)], rng.randint(0, 4)) + after), w) is None, n
+
+
+def test_four_more_ways_round_are_shut(house):
+    _guards(house)
+    # A new name for what guards the house: part of how Hub knows a relay is the gate is that it is called Gate.
+    for guard in ('gate', 'front door lock', 'garage door'):
+        assert admin.asks(plan('arrange', things=[guard], name='Hall lamp')) == 'security', guard
+    assert admin.asks(plan('arrange', things=['reading lamp'], name='Corner lamp')) is None
+    # A routine that was disabled in Home Assistant comes back to life when it is enabled.
+    house.entries['automation.let_guests_in'] = {'entity_id': 'automation.let_guests_in', 'area_id': None, 'device_id': None, 'name': None,
+                                                 'labels': [], 'hidden_by': None, 'disabled_by': 'user'}
+    assert admin.asks(plan('arrange', things=['automation.let_guests_in'], enabled=True)) == 'unread'
+    house.entries['automation.let_guests_in']['disabled_by'] = None
+    # A lock's own settings on the lock's device: its codes, its auto-lock.
+    house.devices.append({'id': 'dev-lock', 'name': 'Front door lock', 'name_by_user': None, 'area_id': 'entry', 'labels': []})
+    house.entries['lock.front_door'] = dict(house.entries['lock.front_door'], device_id='dev-lock')
+    for entity, name in (('text.front_door_code_1', 'Code 1'), ('switch.front_door_auto_lock', 'Auto lock')):
+        house.states[entity] = {'entity_id': entity, 'state': 'unknown', 'attributes': {'friendly_name': 'Front door lock ' + name}}
+        house.entries[entity] = {'entity_id': entity, 'area_id': None, 'device_id': 'dev-lock', 'name': None, 'labels': [], 'hidden_by': None,
+                                 'disabled_by': None, 'original_name': name, 'entity_category': 'config'}
+    assert admin.asks(plan('act', action='text.set_value', things=['text.front_door_code_1'], data={'value': '1234'})) == 'security'
+    assert admin.asks(plan('act', action='switch.turn_off', things=['switch.front_door_auto_lock'])) == 'security'
+    # A scene that sets a helper which an automation unlocks on.
+    house.configs['scene']['guest_mode'] = {'id': 'guest_mode', 'name': 'Guest mode', 'entities': {
+        'light.entry_ceiling': {'state': 'on'}, 'input_boolean.guests': {'state': 'on'}}}
+    house.states['scene.guest_mode'] = {'entity_id': 'scene.guest_mode', 'state': 'unknown', 'attributes': {
+        'friendly_name': 'Guest mode', 'id': 'guest_mode', 'entity_id': ['light.entry_ceiling', 'input_boolean.guests']}}
+    house.configs['scene']['coffee'] = {'id': 'coffee', 'name': 'Coffee', 'entities': {'switch.coffee_maker': {'state': 'on'}}}
+    house.states['scene.coffee'] = {'entity_id': 'scene.coffee', 'state': 'unknown', 'attributes': {
+        'friendly_name': 'Coffee', 'id': 'coffee', 'entity_id': ['switch.coffee_maker']}}
+    assert admin.asks(plan('act', action='scene.turn_on', things=['guest mode'])) == 'security'
+    assert admin.asks(plan('act', action='scene.turn_on', things=['coffee'])) is None
+    assert house.sent == []

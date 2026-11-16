@@ -206,9 +206,10 @@ def scene(ctx: RunContext[Turn], name: str) -> dict:
         if mine:
             return _outcome(turn, kept_scenes.run(mine['id'], login=turn.login, via=VIA), f'{mine["name"]} is on.', {'kind': 'scene'})
         theirs = next((s for s in found['scenes'] if s['name'].lower() == said), None) or _scene_like(said, found['scenes'])
-        if theirs and (theirs.get('sets') is None or set(theirs['sets']) & set(plans.OPENS)):
-            # A scene that holds a lock, a door or the alarm (or doesn't say what it holds) goes the careful way:
-            # planned, and on a card for the owner's tap if setting it would unlock, open or disarm.
+        if theirs and (theirs.get('sets') is None or set(theirs['sets']) - {'light', 'fan', 'media_player'}):
+            # A scene that holds more than lights, fans and speakers (a lock, the alarm, a switch or a helper that
+            # may set something off), or doesn't say what it holds, goes the careful way: planned, and on a card
+            # for the owner's tap if setting it would unlock, open or disarm.
             return _setup(turn, 'act', {'action': 'scene.turn_on', 'things': [theirs['id']]}, 'house.security')
         if theirs:
             return _outcome(turn, control.change([theirs['id']], 'activate', login=turn.login, via=VIA), f'{theirs["name"]} is on.')
@@ -523,13 +524,27 @@ def _question(plan, args, changes, why):
         return f'Remove {name}?' if len(changes) == 1 else f'Remove these {len(changes)}?'
     if why == 'disable':
         return f'Disable {name}?' if len(changes) == 1 else f'Disable these {len(changes)}?'
+    if why == 'hide':
+        return f'Hide {name}?' if len(changes) == 1 else f'Hide these {len(changes)}?'
+    if plan == 'arrange':           # a new name for, or the return of, something that guards the house
+        was, renamed, new = changes[0]['words'].partition(' renamed ')
+        return f'Rename {was} to {new}?' if renamed else f'Enable {name}?'
     if why == 'unlock':
         verb = OPENING.get(str(args.get('action', '')).partition('.')[2], 'Open')
         return f'{verb} {name}?' if len(changes) == 1 else f'{verb} these {len(changes)}?'
     if why in ('security', 'unread'):
-        domain = str(args.get('action', '')).partition('.')[0]
-        runs = args.get('do') == 'run' or domain in ('script', 'automation', 'scene', 'homeassistant')
-        verb = 'Set' if domain == 'scene' else 'Run' if runs else 'Save'
+        domain, _, service = str(args.get('action', '')).partition('.')
+        words = changes[0]['words']
+        if args.get('do') in ('on', 'off') or (domain in ('automation', 'homeassistant') and 'switched o' in words):
+            verb = 'Switch on' if words.endswith('switched on') else 'Switch off'
+        elif args.get('do') == 'save':
+            verb = 'Save'
+        elif domain == 'scene':
+            verb = 'Set'
+        elif args.get('do') == 'run' or domain in ('script', 'automation') or (domain == 'homeassistant' and changes[0]['kind'] in ('script', 'scene')):
+            verb = 'Run'
+        else:                       # a switch, a button or a helper that belongs to the locks or the alarm, or sets them off
+            verb = {'turn_on': 'Switch on', 'turn_off': 'Switch off', 'press': 'Press'}.get(service, 'Change')
         return f'{verb} {name}?' if len(changes) == 1 else f'{verb} these {len(changes)}?'
     return 'Restart Home Assistant?' if why == 'restart' else 'Change the house’s settings?'
 
@@ -633,9 +648,17 @@ def device(ctx: RunContext[Turn], action: str, things: list[str] | None = None, 
     Locks: lock.lock, lock.unlock. Garage, doors and blinds: cover.open_cover, cover.close_cover,
     cover.set_cover_position {"position": 40}. Helpers: input_boolean.turn_on, input_number.set_value {"value": 3},
     input_select.select_option {"option": "Away"}. Also vacuum, humidifier, alarm_control_panel, button.press,
-    timer.start, a notice to a household phone (notify.mobile_app_<phone> {"message": "..."}), and
-    homeassistant.restart. Unlocking, opening a door or the garage, disarming and restarting wait for the owner's tap."""
+    timer.start, a notice to a household phone (notify.mobile_app_<phone> {"message": "..."}, in the owner's own
+    words), and homeassistant.restart. Unlocking, opening a door or the garage, disarming and restarting wait for
+    the owner's tap, and so does anything that belongs to a lock or the alarm."""
     domain = str(action or '').partition('.')[0]
+    if domain in ('notify', 'persistent_notification', 'tts'):
+        from ...engine import judge, notes
+        said = ' '.join(str(part) for part in ((data or {}).get('title'), (data or {}).get('message')) if part)
+        if judge.scrub(said) != said:
+            return _again(ctx.deps, 'A notice can’t hold links or email addresses.')
+        if not notes.grounded(str((data or {}).get('message') or ''), ctx.deps.text):
+            return _again(ctx.deps, 'A notice says what the owner asked for, in their own words: use the words of their message.')
     doors = domain == 'cover' and any(word in ' '.join(things or ()).lower() for word in ('garage', 'door', 'gate'))
     return _setup(ctx.deps, 'act', {'action': action, 'things': things, 'data': data},
                   'house.security' if domain in SECURITY or doors else 'house.control')

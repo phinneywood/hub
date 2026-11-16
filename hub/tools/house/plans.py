@@ -17,7 +17,7 @@ from .admin import Already, Refused, change
 
 HAND = 'was written by hand in Home Assistant’s files, so it can be run but not changed from here'
 SCENE_KINDS = ('light', 'switch', 'fan')
-DOORS = ('garage', 'door', 'gate')
+DOORS = admin.DOORS
 NO_ROOM = ('none', 'no room', 'nowhere', '')
 OPENS = {'lock': ('unlock', 'open'), 'alarm_control_panel': ('alarm_disarm', 'alarm_trigger'),
          'cover': ('open_cover', 'toggle', 'set_cover_position'), 'valve': ('open_valve', 'toggle', 'set_valve_position')}
@@ -26,6 +26,9 @@ WIDE_OPEN = {'lock': ('unlocked', 'open', 'opening'), 'alarm_control_panel': ('d
              'valve': ('open', 'opening')}
 SHUTS = ('lock', 'close', 'close_tilt', 'stop', 'arm_home', 'arm_away', 'arm_night', 'arm_vacation', 'arm_custom_bypass')
 DEEP = 4                    # a routine that runs a routine that runs a routine: this far Hub follows, then it asks
+# Things whose whole purpose is to set automations off. Working one is looked into: what does it trigger?
+SET_OFF = ('input_boolean', 'input_button', 'input_select', 'input_number', 'input_text', 'input_datetime', 'button', 'switch', 'select',
+           'number', 'counter', 'timer')
 
 
 def _ws(kind, keep=None, **fields):
@@ -111,7 +114,9 @@ def _rename(thing, name, w):
     if device and (thing['is_device'] or (_sole(thing, w) and thing['named_alone'])):
         steps.append(_ws('config/device_registry/update', device_id=device['id'], name_by_user=new))
         undo.append(_ws('config/device_registry/update', device_id=device['id'], name_by_user=device['own_name']))
-    return [change('name', thing['id'], new, f'{thing["name"]} renamed {new}', steps, undo)]
+    # What guards the house is partly known by its name ("Gate"), so a new name for it waits for a tap.
+    guards = thing['guards'] or thing['domain'] in admin.SECURE or (thing['domain'] == 'cover' and thing['class'] in DOORS)
+    return [change('name', thing['id'], new, f'{thing["name"]} renamed {new}', steps, undo, asks='security' if guards else None)]
 
 
 def _hide(thing, hidden):
@@ -119,7 +124,8 @@ def _hide(thing, hidden):
         raise Already(f'{thing["name"]} is already {"hidden" if hidden else "shown"}.')
     return [change('name', thing['id'], thing['name'], f'{thing["name"]} {"hidden" if hidden else "shown again"}',
                    [_ws('config/entity_registry/update', entity_id=thing['id'], hidden_by='user' if hidden else None)],
-                   [_ws('config/entity_registry/update', entity_id=thing['id'], hidden_by='user' if thing['hidden'] else None)])]
+                   [_ws('config/entity_registry/update', entity_id=thing['id'], hidden_by='user' if thing['hidden'] else None)],
+                   asks='hide' if hidden and thing['watches'] else None)]
 
 
 def _enable(thing, enabled, w, done):
@@ -134,8 +140,9 @@ def _enable(thing, enabled, w, done):
     key = ('config/device_registry/update', 'device_id', device['id']) if device else ('config/entity_registry/update', 'entity_id', thing['id'])
     done.add(device['id'] if device else thing['id'])
     step = lambda by: [_ws(key[0], **{key[1]: key[2]}, disabled_by=by)]      # noqa: E731
-    if enabled:
-        return [change('name', thing['id'], thing['name'], f'{thing["name"]} enabled again; it appears within a minute', step(None), step('user'))]
+    if enabled:                     # a routine that was disabled comes back to life: one Hub can't read now, so it asks
+        return [change('name', thing['id'], thing['name'], f'{thing["name"]} enabled again; it appears within a minute', step(None), step('user'),
+                       asks='unread' if thing['domain'] in ('automation', 'script') else None)]
     used = admin.uses(thing)
     return [change('name', thing['id'], thing['name'], f'{thing["name"]} disabled' + (f'; {_listed(used)} use it' if used else ''),
                    step('user'), step(None), asks='disable')]
@@ -401,7 +408,11 @@ def _for_scene(said, w):
     except Refused as error:
         if str(error).startswith('Which one?'):
             raise
-        return _things([said], w, kinds=SCENE_KINDS)
+        found = _things([said], w, kinds=SCENE_KINDS)
+        guard = next((t for t in found if t['guards']), None)
+        if guard:
+            raise Refused(f'{guard["name"]} belongs to the locks or the alarm, so it is worked by itself and not kept in a scene.') from None
+        return found
 
 
 def scene(w, do, name, set=None, capture=None, leave=None, new_name=None):     # noqa: A002 - "set" is the owner's word
@@ -542,7 +553,7 @@ def scene_opens(entity, w):
         return True
     members = thing['attrs'].get('entity_id')
     members = [m for m in members if isinstance(m, str)] if isinstance(members, list) else None
-    if members is not None and not any(m.partition('.')[0] in OPENS for m in members):
+    if members is not None and not any(m.partition('.')[0] in OPENS or m.partition('.')[0] in SET_OFF for m in members):
         return False
     kept = broker.setup_config('scene', thing['config']) if thing['config'] else None
     if kept is None:
@@ -552,7 +563,48 @@ def scene_opens(entity, w):
         state = wanted.get('state') if isinstance(wanted, dict) else wanted
         if state in WIDE_OPEN.get(domain, ()) and (domain != 'cover' or _door(member, w)):
             return True
+        if member in w['things'] and w['things'][member]['guards']:
+            return True
+        if domain in SET_OFF and member in w['things'] and _sets_off(w['things'][member], w) == 'security':
+            return True
     return False
+
+
+def _sets_off(thing, w, seen=frozenset(), depth=0):
+    """Why working a switch, button or helper waits for a tap, or None: "security" when an automation that it
+    triggers would unlock, open or disarm. So a helper is not a way round the tap."""
+    if depth >= DEEP:
+        return 'unread'
+    try:
+        (found,) = broker.setup_read({'type': 'search/related', 'item_type': 'entity', 'item_id': thing['id']})
+    except (broker.HomeDown, ValueError):
+        return None
+    for entity in (found or {}).get('automation') or ():
+        other = w['things'].get(entity)
+        if not isinstance(entity, str) or entity in seen or other is None or other['state'] == 'off':
+            continue
+        kind, kept = _kept(entity, w)
+        if kept is None:
+            continue
+        if f'"{thing["id"]}"' in json.dumps(_parts('automation', kept).get('triggers') or []) \
+                and opens('automation', kept, w, seen | {entity}, depth + 1) == 'security':
+            return 'security'
+    return None
+
+
+def touches(kind, body, w):
+    """Whether a routine works a lock, a door, the garage, the alarm or anything that guards them, in any way at
+    all: locking and arming too. Switching such a routine off, or writing over it, weakens the house as surely as
+    unlocking does."""
+    for step in _steps(_actions(kind, body)):
+        called = step.get('action', step.get('service'))
+        domain = called.partition('.')[0] if isinstance(called, str) else str(step.get('domain') or '')
+        named, _ = _aimed(step)
+        if domain in admin.SECURE or domain == 'valve' or (domain == 'cover' and (not named or any(_door(e, w) for e in named))):
+            return True
+        if any(e in w['things'] and w['things'][e]['watches'] and w['things'][e]['domain'] != 'binary_sensor' for e in named):
+            return True
+    return bool(opens(kind, body, w))
 
 
 def _kept(entity, w):
@@ -562,40 +614,71 @@ def _kept(entity, w):
     return kind, (broker.setup_config(kind, key) if thing and key else None)
 
 
+def _worst(found):
+    """Of several answers to "why would this wait?", the one that counts: opening the house, then not being able
+    to read it, then nothing."""
+    found = ['security' if why is True else why for why in found]
+    return 'security' if 'security' in found else 'unread' if 'unread' in found else None
+
+
 def _step_opens(step, w, seen, depth):
+    """Why one action of a routine makes the routine wait for a tap: 'security', 'unread' or None."""
     called = step.get('action', step.get('service'))
     if not isinstance(called, str):
         if 'device_id' in step and 'type' in step:             # a device's own action
-            return str(step.get('domain')) in OPENS and str(step.get('type')) not in SHUTS
-        return 'scene' in step and (not isinstance(step['scene'], str) or scene_opens(step['scene'], w))
+            return 'security' if str(step.get('domain')) in OPENS and str(step.get('type')) not in SHUTS else None
+        return 'security' if 'scene' in step and (not isinstance(step['scene'], str) or scene_opens(step['scene'], w)) else None
     domain, _, service = called.partition('.')
     named, loose = _aimed(step)
     data = step.get('data') if isinstance(step.get('data'), dict) else {}
+    things = [w['things'][e] for e in named if e in w['things']]
     if service in OPENS.get(domain, ()):
-        return domain != 'cover' or loose or not named or any(_door(e, w) for e in named)
+        return 'security' if domain != 'cover' or loose or not named or any(_door(e, w) for e in named) else None
+    if any(t['guards'] for t in things):
+        return 'security'           # a switch, button or helper that belongs to a lock or the alarm
     if domain == 'scene':
         if service == 'turn_on':
-            return loose or any(scene_opens(e, w) for e in named)
+            return 'security' if loose or any(scene_opens(e, w) for e in named) else None
         if service in ('apply', 'create'):                      # a scene made on the spot: what it sets, or keeps to set again later
             sets = data.get('entities') if isinstance(data.get('entities'), dict) else {}
             keeps = data.get('snapshot_entities')
             keeps = [keeps] if isinstance(keeps, str) else keeps if isinstance(keeps, list) else []
-            return any(str(e).partition('.')[0] in OPENS for e in [*sets, *keeps])
-        return False
+            members = [str(e) for e in [*sets, *keeps]]
+            return 'security' if any(e.partition('.')[0] in OPENS or (e in w['things'] and w['things'][e]['guards']) for e in members) else None
+        return None
+    whole = domain == 'homeassistant' and service in ('turn_on', 'turn_off', 'toggle')
+    if whole and service != 'turn_off' and (loose or any(e.partition('.')[0] in OPENS and (e.partition('.')[0] != 'cover' or _door(e, w)) for e in named)):
+        return 'security'
+    if whole and service != 'turn_off' and any(scene_opens(e, w) for e in named if e.startswith('scene.')):
+        return 'security'
+    found = []
+    # Switching an automation on sets going what it does; switching one off stops it guarding.
+    if (domain == 'automation' or whole) and service in ('turn_on', 'turn_off', 'toggle'):
+        if loose and domain == 'automation':
+            return 'unread'
+        for t in things:
+            if t['domain'] != 'automation' or t['id'] in seen:
+                continue
+            kind, kept = _kept(t['id'], w)
+            found.append('unread' if kept is None else None)
+            if kept is not None and service != 'turn_off':
+                found.append(opens(kind, kept, w, seen | {t['id']}, depth + 1))
+            if kept is not None and service != 'turn_on' and touches(kind, kept, w):
+                found.append('security')
+    # A helper, a button or a switch: what does working it set off?
+    if (domain in SET_OFF or whole) and service != 'reload':
+        if loose and domain in admin.GUARD_KINDS:
+            found.append('unread')
+        found += [_sets_off(t, w, seen, depth) for t in things if t['domain'] in SET_OFF]
+    # Another routine run from this one.
     runs = named if (domain, service) in (('script', 'turn_on'), ('script', 'toggle'), ('automation', 'trigger')) else \
-        [called] if domain == 'script' and service not in ('turn_off', 'reload') else None
-    if domain == 'homeassistant' and service in ('turn_on', 'toggle'):
-        if loose or any(e.partition('.')[0] in OPENS and (e.partition('.')[0] != 'cover' or _door(e, w)) for e in named):
-            return True
-        if any(scene_opens(e, w) for e in named if e.startswith('scene.')):
-            return True
-        runs = [e for e in named if e.startswith('script.')]
-    if runs is None:
-        return False
-    if loose or depth >= DEEP:
-        return 'unread'
-    found = [opens(*_kept(entity, w), w, seen | {entity}, depth + 1) for entity in runs if entity not in seen]
-    return 'security' if 'security' in found else 'unread' if 'unread' in found else None
+        [called] if domain == 'script' and service not in ('turn_off', 'reload') else \
+        [e for e in named if e.startswith('script.')] if whole and service != 'turn_off' else None
+    if runs is not None:
+        if loose or depth >= DEEP:
+            found.append('unread')
+        found += [opens(*_kept(entity, w), w, seen | {entity}, depth + 1) for entity in runs if entity not in seen]
+    return _worst(found)
 
 
 def opens(kind, body, w, seen=frozenset(), depth=0):
@@ -605,9 +688,7 @@ def opens(kind, body, w, seen=frozenset(), depth=0):
     list)."""
     if not isinstance(body, dict) or 'use_blueprint' in body:
         return 'unread'
-    found = [_step_opens(step, w, seen, depth) for step in _steps(_actions(kind, body))]
-    found = ['security' if why is True else why for why in found]
-    return 'security' if 'security' in found else 'unread' if 'unread' in found else None
+    return _worst(_step_opens(step, w, seen, depth) for step in _steps(_actions(kind, body)))
 
 
 def _named_in(value, found):
@@ -676,6 +757,14 @@ def _checked(kind, body, before, w):
         for part, verdict in (verdicts or {}).items():
             if isinstance(verdict, dict) and verdict.get('valid') is False:
                 raise Refused(f'Home Assistant can’t read its {part}: {admin._clip(verdict.get("error"), 240)}. Nothing was saved.')
+    for step in _steps(_actions(kind, body)):
+        called = step.get('action', step.get('service'))
+        told = step.get('data') if isinstance(step.get('data'), dict) else {}
+        if isinstance(called, str) and called.partition('.')[0] in ('notify', 'persistent_notification', 'tts'):
+            from ...engine import judge
+            words = ' '.join(str(told.get(key) or '') for key in ('title', 'message'))
+            if judge.scrub(words) != words and (before is None or json.dumps(step, sort_keys=True) not in json.dumps(before, sort_keys=True)):
+                raise Refused('A notice can’t hold links or email addresses. Nothing was saved.')
     shut = sorted(name for name in _calls(body) - (_calls(before) if before else set()) if not broker.service_open(*name.split('.', 1)))
     if shut:
         raise Refused(f'Hub can’t save a routine that calls {shut[0]}. That one is made in Home Assistant. Nothing was saved.')
@@ -770,8 +859,11 @@ def routine(w, kind, do, name, config=None, new_name=None):
         if here['state'] == do:
             raise Already(f'{here["name"]} is already {do}.')
         back = [{'call': f'automation.turn_{here["state"]}', 'data': {'entity_id': here['id']}}] if here['state'] in ('on', 'off') else None
+        # Switching on one that opens the house sets that going; switching off one that locks or arms stops it guarding.
+        _, kept = _kept(here['id'], w)
+        why = 'unread' if kept is None else opens(kind, kept, w, frozenset({here['id']})) if do == 'on' else 'security' if touches(kind, kept, w) else None
         return [change(kind, here['id'], here['name'], f'Automation “{here["name"]}” switched {do}',
-                       [{'call': f'automation.turn_{do}', 'data': {'entity_id': here['id']}}], back)]
+                       [{'call': f'automation.turn_{do}', 'data': {'entity_id': here['id']}}], back, asks=why)]
     if do == 'run':
         key = here['id'].partition('.')[2] if kind == 'script' else here['config']
         kept = broker.setup_config(kind, key) if key else None
@@ -816,9 +908,9 @@ def routine(w, kind, do, name, config=None, new_name=None):
         raise Already(f'{title} is already like that.')
     line = says(kind, body, w)
     words = f'{what} “{title}” {"changed" if before else "made"}' + (f': {line}' if line else '')
+    why = opens(kind, body, w) or ('security' if before is not None and touches(kind, before, w) else None)
     return [change(kind, here['id'] if here else 'new', title, words, [{'config': kind, 'id': key, 'body': body}],
-                   [{'config': kind, 'id': key, 'body': before}], asks=opens(kind, body, w),
-                   after={'config': kind, 'id': key, 'body': body})]
+                   [{'config': kind, 'id': key, 'body': before}], asks=why, after={'config': kind, 'id': key, 'body': body})]
 
 
 # ---- devices beyond lights and speakers: any service the setup door lets through ----
@@ -923,12 +1015,13 @@ def _asks(domain, service, thing, w, data=None):
         return 'restart'
     if service in OPENS.get(domain, ()):
         return 'unlock' if domain != 'cover' or (thing and thing['class'] in DOORS) else None
+    if thing and thing['guards']:
+        return 'security'
     if thing and thing['domain'] in ('script', 'automation') and service in ('turn_on', 'toggle', 'trigger') \
             and not (thing['domain'] == 'automation' and service != 'trigger'):
         return opens(*_kept(thing['id'], w), w, frozenset({thing['id']}))
     step = {'action': f'{domain}.{service}', 'target': {'entity_id': thing['id']} if thing else {}, 'data': data or {}}
-    why = _step_opens(step, w, frozenset(), 0)
-    return 'security' if why is True else why or None
+    return _step_opens(step, w, frozenset(), 0)
 
 
 def _is_already(service, thing):
@@ -973,6 +1066,13 @@ def act(w, action, things=None, data=None):
         raise Refused('Use that device’s own action, such as lock.lock or cover.close_cover.')
     changes, already = [], []
     for thing in found:
+        if thing['domain'] == 'automation' and service in ('turn_on', 'turn_off', 'toggle') and domain in ('automation', 'homeassistant'):
+            do = 'on' if service == 'turn_on' or (service == 'toggle' and thing['state'] == 'off') else 'off'
+            try:                    # the same as switching it by name: one that guards the house waits for a tap
+                changes += routine(w, 'automation', do, thing['id'])
+            except Already as note:
+                already.append(str(note))
+            continue
         if not data and _is_already(service, thing):
             already.append(f'{admin.called(thing, w)} is already {SAYS.get(service, thing["state"])}.')
             continue

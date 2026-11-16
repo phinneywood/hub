@@ -37,6 +37,20 @@ FOUND = 30                      # things shown to a model for one search
 ATTRIBUTES = 2400               # characters of one thing's attributes shown to a model
 MAIN = ('light', 'switch', 'fan', 'cover', 'climate', 'lock', 'media_player', 'vacuum', 'humidifier', 'water_heater', 'valve', 'siren')
 ROUTINES = ('automation', 'script', 'scene')
+# What guards the house besides the locks and the alarm themselves: a switch, button or helper that belongs to them.
+# A switch on the alarm's own integration ("Arm at night", "Arriving home"), a button on the garage opener's device,
+# a relay called "Gate". Working one of these is working the lock or the alarm, so it waits for a tap like them.
+SECURE = ('lock', 'alarm_control_panel')
+DOORS = ('garage', 'door', 'gate')
+GUARD_KINDS = ('switch', 'button', 'input_button', 'input_boolean', 'select', 'input_select', 'number', 'input_number', 'siren', 'text',
+               'time', 'date', 'datetime')         # a lock's own settings too: its codes, its auto-lock, its schedule
+GUARD_WORDS = {'garage', 'gate', 'lock', 'unlock', 'alarm', 'disarm', 'arm', 'arming', 'opener', 'security'}
+NOT_A_GUARD = {'light', 'lamp', 'fan', 'heater', 'plug', 'outlet', 'speaker', 'camera', 'clock'}
+# Integrations that hold every kind of device: sharing one with the alarm says nothing about a switch.
+SHARED_BY_ALL = {'mqtt', 'template', 'zwave_js', 'zha', 'matter', 'homekit_controller', 'homekit', 'esphome', 'smartthings', 'tuya', 'group',
+                 'hue', 'deconz', 'tasmota', 'shelly', 'knx', 'modbus', 'demo', 'homeassistant', 'switch_as_x'}
+# Sensors that say a way into the house is open, or that something is wrong: hiding one hides that.
+WATCHES = ('door', 'window', 'garage_door', 'lock', 'opening', 'smoke', 'gas', 'carbon_monoxide', 'moisture', 'tamper', 'safety')
 # People and where they are, pictures, and what other accounts hold: a model gets the name and nothing more.
 NAMES_ONLY = ('person', 'device_tracker', 'zone', 'camera', 'image', 'calendar', 'todo', 'geo_location', 'conversation', 'ai_task')
 PRIVATE = re.compile(r'token|password|secret|credential|latitude|longitude|gps|location|picture|access|url|code|ssid|mac_|_mac|'
@@ -48,6 +62,7 @@ WHY = {'delete': 'This removes it. Undo can put it back for a day.',
        'security': 'It touches a lock, the garage or the alarm, so it waits for your tap.',
        'unread': 'Hub can’t read what this one does, so it waits for your tap.',
        'disable': 'It stops working everywhere in Home Assistant until it is enabled again. Undo can do that for a day.',
+       'hide': 'Hub would stop showing it, and would no longer say when it is open. Undo can show it again for a day.',
        'house': 'This changes the whole house’s settings.',
        'restart': 'Home Assistant will be away for about a minute. Lights and switches keep working by hand.'}
 SCHEMA = """
@@ -141,11 +156,19 @@ def _world(areas, devices, entities, labels, floors, states):
             'named_alone': not follows,
             'hidden': bool(entry.get('hidden_by')), 'disabled': bool(entry.get('disabled_by')) or entity not in now,
             'by': entry.get('hidden_by') or entry.get('disabled_by'), 'minor': bool(entry.get('entity_category')),
-            'off': entry.get('disabled_by'), 'icon': entry.get('icon'),
+            'off': entry.get('disabled_by'), 'icon': entry.get('icon'), 'platform': entry.get('platform'),
             'labels': list(entry.get('labels') or ()), 'class': attrs.get('device_class') or entry.get('original_device_class'),
             'config': attrs.get('id') if isinstance(attrs.get('id'), str) else None}
         if device:
             devs[device]['things'].append(entity)
+    way_in = lambda t: t['domain'] in SECURE or (t['domain'] == 'cover' and t['class'] in DOORS)      # noqa: E731
+    beside = {t['device'] for t in things.values() if t['device'] and way_in(t)}
+    alarms = {t['platform'] for t in things.values() if t['domain'] == 'alarm_control_panel' and t['platform']} - SHARED_BY_ALL
+    for t in things.values():
+        named = words_of(t['name'])
+        t['guards'] = t['domain'] in GUARD_KINDS and bool(t['device'] in beside or t['platform'] in alarms
+                                                         or (named & GUARD_WORDS and not named & NOT_A_GUARD))
+        t['watches'] = way_in(t) or t['guards'] or (t['domain'] == 'binary_sensor' and t['class'] in WATCHES)
     return {'rooms': rooms, 'floors': levels, 'groups': groups, 'devices': devs, 'things': things}
 
 
