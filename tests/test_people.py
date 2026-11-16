@@ -47,3 +47,10 @@ def test_people_that_cant_be_read_count_as_no_one():
 def test_a_person_with_no_account_sees_the_households_things_only():
     write({'people': [{'name': 'Alex', 'logins': ['me@example.com']}]})
     assert people.who('me@example.com')['name'] == 'Alex' and people.accounts('me@example.com') == set()
+
+
+def test_the_catalog_says_which_sources_read_a_persons_account():
+    from hub.engine import catalog
+    account = {source.slug: source.account for source in catalog.SOURCES}
+    assert account['gmail'] == account['calendar'] == people.DEFAULT
+    assert all(account[slug] is None for slug in ('preschool', 'trip', 'network', 'house', 'hub'))

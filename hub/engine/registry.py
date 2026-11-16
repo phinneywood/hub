@@ -64,6 +64,7 @@ class Source:
     prepare: Optional[Callable[[], None]] = None  # once a day with the morning job: gets its pages ready; no model
     sort: Optional[Callable[[], None]] = None     # with the morning job, first: sorts what is new; has its own limits
     lookups: tuple = ()                           # what Ask Hub may look up here; read-only
+    account: Optional[str] = None                 # whose account it reads (hub/people.py); None: the household's own
 
 
 @dataclass(frozen=True)
