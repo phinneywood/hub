@@ -3,7 +3,7 @@ import re
 from datetime import date, timedelta
 from typing import Literal
 
-from .. import ask_trace, home, today
+from .. import ask_trace, home, people, today
 from .waiting import card as chat_card
 from .recipes import Step as RecipeStep
 from .registry import Action, Control, Handoff, Lookup, Source
@@ -914,7 +914,7 @@ SOURCES = [
            'and next step of up to 5 emails that need you. Senders you switched AI off for are left out of all of it. '
            'To Ask Hub when you ask: also how many messages were in the inbox on each recent day.',
            items=(today.gmail_triage, today.gmail_rules, today.gmail_plan, today.gmail_rules_due, today.gmail_next),
-           evidence=gmail_evidence, prepare=gmail_prepare, sort=gmail_sort,
+           evidence=gmail_evidence, prepare=gmail_prepare, sort=gmail_sort, account=people.DEFAULT,
            lookups=(Lookup('sorted_mail', 'Gmail', 'What the last sort found in the inbox.',
                            'Counts, and for one kind at a time up to 10 sender names and subject lines. Never addresses, '
                            'links or message text, and nothing from senders you switched AI off for.',
@@ -924,7 +924,7 @@ SOURCES = [
                            '/insights', 'Open Insights', inbox_lookup))),
     Source('calendar', 'Calendar', 'Your main Google calendar for the next 7 days, through the read-only helper.',
            'Titles, times and places of up to 40 events. Never descriptions or guest lists.',
-           items=(today.calendar,), evidence=calendar_evidence,
+           items=(today.calendar,), evidence=calendar_evidence, account=people.DEFAULT,
            lookups=(Lookup('calendar_week', 'Calendar', 'Your main Google calendar for the next 7 days.',
                            'Titles, times and places of up to 40 events. Never descriptions or guest lists.',
                            '/calendar', 'Open calendar', calendar_lookup),)),
