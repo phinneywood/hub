@@ -132,28 +132,51 @@ def needs(now=None):
              'ask': r['ask'], 'urgent': bool(r['urgent']), 'since': r['first_seen']} for r in rows]
 
 
+NOTE_HOURS = (4, 12)      # the note shows from 4 AM until noon, about the night from 9 PM before
+
+
 def _window(now):
-    """(start, end) of the night the morning note covers: 9 PM until now, until noon. None from noon to 9 PM."""
+    """(9 PM last night, now) from 4 AM until noon; None otherwise, so a brief never says "A quiet night" at 10 PM."""
     local = now.astimezone(home.PACIFIC)
-    if 12 <= local.hour < 21:
+    if not NOTE_HOURS[0] <= local.hour < NOTE_HOURS[1]:
         return None
-    day = local.date() if local.hour >= 21 else local.date() - timedelta(days=1)
+    day = local.date() - timedelta(days=1)
     return datetime(day.year, day.month, day.day, 21, 0, tzinfo=home.PACIFIC), now
 
 
-def _things(n):
-    return f'{n} thing{"s" * (n != 1)}'
+NUMBERS = ('no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine')
+
+
+def number(n, capital=False):
+    """One to nine as words, as Today says them; 10 and up as figures."""
+    text = NUMBERS[n] if 0 <= n <= 9 else str(n)
+    return text[:1].upper() + text[1:] if capital else text
+
+
+def counted(n, word, capital=False):
+    return f'{number(n, capital)} {word}{"s" * (n != 1)}'
+
+
+def _back(n, capital=False):
+    return f'{number(n, capital)} came back by {"itself" if n == 1 else "themselves"}.'
 
 
 def headline(fixed, by_itself, needing):
+    """No subject: "Fixed one thing overnight. One needs you." The caretaker's own note says the same."""
     if fixed:
-        tail = f'; {needing} need{"s" if needing == 1 else ""} you' if needing else ''
-        return f'I fixed {_things(fixed)} overnight{tail}.'
+        parts = [f'Fixed {counted(fixed, "thing")} overnight.']
+        if needing:
+            parts.append(f'{number(needing, True)} need{"s" if needing == 1 else ""} you.')
+        elif by_itself:
+            parts.append(_back(by_itself, True))
+        return ' '.join(parts)
     if needing:
-        tail = f'; {_things(by_itself)} came back by {"itself" if by_itself == 1 else "themselves"}' if by_itself else ''
-        return f'{_things(needing)} need{"s" if needing == 1 else ""} you{tail}.'
+        parts = [f'{counted(needing, "thing", True)} need{"s" if needing == 1 else ""} you.']
+        if by_itself:
+            parts.append(_back(by_itself, True))
+        return ' '.join(parts)
     if by_itself:
-        return f'A quiet night: {_things(by_itself)} came back by {"itself" if by_itself == 1 else "themselves"}.'
+        return f'A quiet night. {counted(by_itself, "thing", True)} came back by {"itself" if by_itself == 1 else "themselves"}.'
     return 'A quiet night.'
 
 
@@ -164,10 +187,11 @@ def _night(start, end):
 
 
 def note(now=None):
-    """The night in a headline and a few lines, for the top of Today until noon (the morning brief shows it).
+    """The night from 9 PM in a headline and a few lines, for the top of Today from 4 AM until noon (the morning
+    brief shows it).
 
-    {"at", "headline", "lines": [{"tone": "fixed|by_itself|info", "text"}], "needs": n}, or None from noon to
-    9 PM, or when the caretaker wasn't watching. Never a needs-you line; `needs` counts what is on Today.
+    {"at", "headline", "lines": [{"tone": "fixed|by_itself|info", "text"}], "needs": n}, or None outside those
+    hours or when the caretaker wasn't watching. Never a needs-you line; `needs` counts what is on Today.
     The caretaker's own caretaker/note.py says the same from the same journal."""
     now = now or _now()
     span = _window(now)
@@ -204,12 +228,14 @@ def _history(now):
     watched = {_day(_parse(r['at'])) for r in _rows('select at from looks where at >= ?', _utc(since))}
     incidents = _rows('select * from incidents where drill is null and (closed_at is null or closed_at >= ?) '
                       'and first_seen <= ? order by first_seen', _utc(since), _utc(now))
-    events = _rows('select at, tone from events where drill is null and at >= ?', _utc(since))
+    events = _rows('select at, tone, text from events where drill is null and at >= ? order by at, id', _utc(since))
     week = []
     for day in days:
-        tones = [e['tone'] for e in events if _day(_parse(e['at'])) == day]
+        mine = [e for e in events if _day(_parse(e['at'])) == day]
+        tones = [e['tone'] for e in mine]
         week.append({'day': day.isoformat(), 'watched': day in watched, 'fixed': tones.count('fixed'),
-                     'by_itself': tones.count('by_itself'), 'needs_you': tones.count('needs_you')})
+                     'by_itself': tones.count('by_itself'), 'needs_you': tones.count('needs_you'),
+                     'lines': [{'at': clock(_parse(e['at'])), 'tone': e['tone'], 'text': e['text']} for e in mine]})
     by_system = {}
     for inc in incidents:
         start = _parse(inc['first_seen'])
@@ -221,17 +247,31 @@ def _history(now):
     return days, watched, week, by_system
 
 
+DAY_ORDER = ('needs_you', 'fixed', 'by_itself', 'ok', 'unknown')
+
+
 def _dots(days, watched, mine):
-    """One dot a day for a system: what was the worst thing that day."""
+    """One dot a day for a system: the most it took that day (it needed you, was fixed, or came back by itself)."""
     out = []
     for day in days:
         worst = 'ok' if day in watched else 'unknown'
         for inc in mine:
             if _day(inc['start']) <= day <= _day(inc['end']):
-                state = 'needs_you' if inc['outcome'] in ('needs_you', 'done', 'ignored') else 'fixing'
-                worst = min(worst, state, key=WORST.index)
+                outcome = inc['outcome']
+                state = 'needs_you' if outcome in ('needs_you', 'done', 'ignored') else 'fixed' if outcome == 'fixed' else 'by_itself'
+                worst = min(worst, state, key=DAY_ORDER.index)
         out.append({'day': day.isoformat(), 'state': worst})
     return out
+
+
+def week_words(week):
+    """'This week: two fixed, three came back by themselves, one needed you.'"""
+    fixed, by_itself, needed = (sum(d[k] for d in week) for k in ('fixed', 'by_itself', 'needs_you'))
+    said = [f'{number(fixed)} fixed' if fixed else '',
+            f'{number(by_itself)} came back by {"itself" if by_itself == 1 else "themselves"}' if by_itself else '',
+            f'{number(needed)} needed you' if needed else '']
+    said = [part for part in said if part]
+    return 'This week: ' + ', '.join(said) + '.' if said else 'A quiet week.'
 
 
 def _drill(found):
@@ -275,10 +315,11 @@ def picture(now=None):
         systems.append({'id': system.get('id'), 'name': system.get('name'), 'state': system.get('state'),
                         'line': system.get('line'), 'days': _dots(days, watched, mine),
                         'history': [{k: v for k, v in inc.items() if k not in ('start', 'end')} for inc in reversed(mine)]})
-    span = _window(now)
-    start = span[0] if span else datetime.combine(now.astimezone(home.PACIFIC).date() - timedelta(days=1),
-                                                  datetime.min.time(), home.PACIFIC).replace(hour=21)
-    end = now if span else start + timedelta(hours=15)
+    local = now.astimezone(home.PACIFIC)
+    tonight = local.hour >= 21
+    day = local.date() if tonight else local.date() - timedelta(days=1)
+    start = datetime(day.year, day.month, day.day, 21, 0, tzinfo=home.PACIFIC)
+    end = now if tonight or local.hour < 12 else start + timedelta(hours=15)
     night = _night(start, end)
     fixed = sum(1 for line in night if line['tone'] == 'fixed')
     by_itself = sum(1 for line in night if line['tone'] == 'by_itself')
@@ -286,9 +327,9 @@ def picture(now=None):
     if not watching:
         says = looked
     elif waiting:
-        says = f'{_things(len(waiting)).capitalize().replace("1 thing", "One thing")} need{"s" if len(waiting) == 1 else ""} you.'
+        says = f'{counted(len(waiting), "thing", True)} need{"s" if len(waiting) == 1 else ""} you.'
     elif held:
-        says = 'All quiet for now; ' + ('one thing waits' if len(held) == 1 else f'{len(held)} things wait') + ' for the morning.'
+        says = f'All quiet for now. {counted(len(held), "thing", True)} wait{"s" if len(held) == 1 else ""} for the morning.'
     else:
         says = 'All quiet.'
     mode = found.get('mode')
@@ -306,9 +347,9 @@ def picture(now=None):
     return {
         'set_up': True, 'alive': watching, 'headline': says, 'sub': ' '.join(sub), 'mode': mode, 'paused': paused,
         'needs': open_needs, 'today': len(waiting),
-        'night': {'from': clock(start), 'headline': headline(fixed, by_itself, len(waiting)) if night or span else None,
-                  'lines': night},
-        'systems': systems, 'week': week,
+        'night': {'title': 'Tonight, from 9:00 PM' if tonight else 'Last night',
+                  'headline': headline(fixed, by_itself, len(waiting)), 'lines': night},
+        'systems': systems, 'week': week, 'week_says': week_words(week),
         'sturdier': [s for s in found.get('sturdier', []) if isinstance(s, dict)],
         'batteries': found.get('batteries', []), 'ignoring': found.get('ignoring', []),
         'drills': found.get('drills', []), 'drill': _drill(found), 'answers': answers,

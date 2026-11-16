@@ -80,6 +80,7 @@ export function go(where: View) {
   sheet.value = null;
   history.replaceState(null, "", where === "home" ? location.pathname : "#" + where);
   window.scrollTo(0, 0);
+  if (where === "system" || where === "today" || where === "health") void lookAtCare();     // the caretaker's count, fresh
 }
 window.addEventListener("hashchange", () => (view.value = here()));
 

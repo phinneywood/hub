@@ -578,9 +578,10 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
 .rail .foot .tab.care::after { content: ""; display: inline-block; width: 8px; height: 8px; margin-left: 8px; border-radius: 50%; background: var(--lamp); vertical-align: middle; }
 .row.lit.care .row-main span { color: var(--ink); }
 .care-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--ink-3); justify-self: center; }
-.care-dot.ok { background: var(--sound); }
-.care-dot.watching, .care-dot.fixing { background: var(--lamp); }
-.care-dot.needs_you { background: var(--alarm); }
+/* Amber means something needs you; teal is fine or fixed; the quiet colour came back by itself or is being looked at. */
+.care-dot.needs_you { background: var(--lamp); }
+.care-dot.ok, .care-dot.fixed { background: var(--sound); }
+.care-dot.watching, .care-dot.fixing, .care-dot.by_itself { background: var(--ink-3); }
 .care-dot.unknown { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
 .care-dot.off { background: var(--line-2); }
 .row.care-row { grid-template-columns: 26px 1fr; text-align: left; }
@@ -600,8 +601,18 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
 .care-line { display: grid; grid-template-columns: 22px 1fr; align-items: start; gap: 6px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: var(--t-s); }
 .care-line i { width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: var(--ink-3); }
 .care-line.fixed i { background: var(--sound); }
-.care-line.by_itself i { background: var(--lamp); }
+.care-line.by_itself i, .care-line.info i { background: var(--ink-3); }
+.care-line.needs_you i { background: var(--lamp); }
 .care-drill { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--raised); font-size: var(--t-s); }
 .care-drill b { display: block; font-weight: 500; margin-bottom: 4px; }
 .care-drill p { margin-top: 4px; color: var(--ink-2); }
 .care-drill p span { display: inline-block; min-width: 72px; color: var(--ink-3); }
+.care-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.care-fine { display: grid; grid-template-columns: 22px 1fr; align-items: center; gap: 4px; min-height: 48px; text-align: left; border-bottom: 1px solid var(--line); font-size: var(--t-s); }
+.care-fine.on span { font-weight: 500; }
+.care-open { padding: 6px 0 4px; }
+.care-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-top: 8px; border-radius: 14px; overflow: hidden; }
+.care-day { display: grid; justify-items: center; align-content: center; gap: 6px; min-height: 76px; background: var(--raised); color: var(--ink-2); font-size: var(--t-xs); }
+.care-day b { font-weight: 500; }
+.care-day small { min-height: 1em; font-size: var(--t-xs); color: var(--ink-2); }
+.care-day.on { box-shadow: inset 0 0 0 1.5px var(--ink-3); color: var(--ink); }

@@ -307,9 +307,10 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     // ---- Today: what needs you, then the day ----
     await stage("reset");
     await tap(phone ? '.tabs .tab:text-is("Today")' : '.rail .tab:text-is("Today")');
-    expect(await saysSoon("Dinner at home is at seven. Three things need you."), "Today’s sentence: " + await says());
-    expect((await page.locator(".row.need .row-main b").allInnerTexts()).join("|") === "Email from Sam Rivera|Approve the grocery cart|Email from Maple Street Dental",
-      "what needs you, the longest wait first");
+    expect(await saysSoon("Dinner at home is at seven. Four things need you."), "Today’s sentence: " + await says());
+    expect((await page.locator(".row.need .row-main b").allInnerTexts()).join("|") === "Sonos keeps failing|Email from Sam Rivera|Approve the grocery cart|Email from Maple Street Dental",
+      "what needs you, the caretaker's item and then the longest wait first");
+    expect(await page.locator('.row.need:has-text("Sonos keeps failing") a[href="#health"]').count() === 1, "the caretaker's item didn't open House health");
     expect((await page.locator(".block h2").allInnerTexts()).join("|") === "Needs you|This evening|Tomorrow|This week at school|Lisbon", "Today’s sections, in order");
     expect(await page.locator(".row.warn .row-main span").innerText() === "Overlaps Dentist at 4:00 pm", "two things at once were not marked on the day");
     expect(await page.locator(".row.struck").count() === 1, "a cancelled class date was not struck through");
@@ -317,11 +318,11 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Today scrolls sideways");
     await page.waitForTimeout(300); await shot("10-today");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Today: " + (await small()).join(", "));
-    await page.locator(".tickbtn").first().click();
-    expect(await saysSoon("Dinner at home is at seven. Two things need you.", 3000), "a tick did not take the email off the list: " + await says());
+    await page.locator('.row.need:has-text("Email from Sam Rivera") .tickbtn').click();
+    expect(await saysSoon("Dinner at home is at seven. Three things need you.", 3000), "a tick did not take the email off the list: " + await says());
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Marked as handled"), "a tick did not say what it did");
     await page.locator(".toast button").click();
-    expect(await saysSoon("Dinner at home is at seven. Three things need you.", 3000), "Undo did not put the email back: " + await says());
+    expect(await saysSoon("Dinner at home is at seven. Four things need you.", 3000), "Undo did not put the email back: " + await says());
     await stage("quiet-day");
     await page.reload(); await page.waitForSelector(".say");
     expect(await saysSoon("Nothing needs you.", 4000), "a quiet day: " + await says());
@@ -475,16 +476,21 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap(".uplink");
     expect(await saysSoon("The house is answering."), "Back from Activity: " + await says());
     // ---- House health: the caretaker's night, what it watches, a drill, and the one thing that needs a tap ----
-    expect(await page.locator(phone ? ".who.care" : ".rail .foot .tab.care").count() === 1, "the top button didn't turn amber for what needs you");
+    expect(await until((sel) => document.querySelectorAll(sel).length === 1, phone ? ".who.care" : ".rail .foot .tab.care"),
+      "the top button didn't turn amber for what needs you");
     await tap('.row:has-text("House health")');
     expect(await until(() => document.querySelector(".say")?.textContent.includes("One thing needs you") ||
       document.querySelector(".say")?.textContent.includes("waits for the morning")), "House health: " + await says());
     expect(await until(() => document.body.textContent.includes("Sonos keeps failing")), "House health didn't list what needs you");
     expect(await page.locator('.care-need .btn.go:has-text("Restart Home Assistant")').count() === 1, "no Restart Home Assistant on the item that asks for it");
-    expect(await page.locator(".care-row").count() === 14, "House health didn't list every system");
-    await tap('.care-row:has-text("Hue lights")');
+    expect(await page.locator(".care-row, .care-fine").count() === 14, "House health didn't list every system");
+    expect(await page.locator('.care-row[data-system="home_assistant"]').count() === 1, "the system with trouble wasn't a full row");
+    await tap('.care-fine[data-system="hue"]');
     expect(await until(() => document.querySelectorAll(".care-history .care-days .care-dot").length === 7), "a system's history didn't show seven days");
-    expect(await until(() => document.querySelectorAll(".block .ctl.one").length >= 7), "House health didn't show the last seven days");
+    expect(await page.locator(".care-week .care-day").count() === 7, "House health didn't show the last seven days as a strip");
+    expect(await until(() => document.querySelector(".care-week + .care-headline")?.textContent.startsWith("This week:")), "no line for the week");
+    await tap('.care-week .care-day:has(small:not(:empty))');
+    expect(await until(() => document.querySelectorAll(".care-open .care-line").length > 0), "a tapped day didn't show its lines");
     await page.waitForTimeout(300); await shot("7e-health");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on House health: " + (await small()).join(", "));
     await tap('.scene:has-text("Hub stops")');

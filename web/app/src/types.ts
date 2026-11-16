@@ -34,15 +34,19 @@ export interface Me {
 // The house's caretaker, as Hub reads its folder (hub/caretaker.py).
 export interface Care { set_up: boolean; alive: boolean; looked: string; needs: number }
 export type CareState = "needs_you" | "fixing" | "watching" | "unknown" | "ok" | "off";
+export type CareDot = "needs_you" | "fixed" | "by_itself" | "ok" | "unknown";
 export interface CareNeed {
   id: number; title: string; words: string; cause: string; ask: string | null; fixable: boolean;
   today: boolean; held: boolean; urgent: boolean; since: string;
 }
 export interface CareLine { tone: "fixed" | "by_itself" | "info"; text: string }
-export interface CareDay { day: string; watched: boolean; fixed: number; by_itself: number; needs_you: number }
+export interface CareDay {
+  day: string; watched: boolean; fixed: number; by_itself: number; needs_you: number;
+  lines: { at: string; tone: "fixed" | "by_itself" | "info" | "needs_you"; text: string }[];
+}
 export interface CareHistory { id: number; title: string; from: string; to: string | null; outcome: string }
 export interface CareSystem {
-  id: string; name: string; state: CareState; line: string; days: { day: string; state: CareState }[]; history: CareHistory[];
+  id: string; name: string; state: CareState; line: string; days: { day: string; state: CareDot }[]; history: CareHistory[];
 }
 export interface CareSturdier { key: string; title: string; words: string; since: string; done_at: string | null; verdict: string | null }
 export interface CareDrill {
@@ -51,8 +55,8 @@ export interface CareDrill {
 }
 export interface Health {
   set_up: boolean; alive: boolean; headline: string; sub: string; mode?: string | null; paused?: boolean;
-  needs?: CareNeed[]; today?: number; night?: { from: string; headline: string | null; lines: CareLine[] };
-  systems?: CareSystem[]; week?: CareDay[]; sturdier?: CareSturdier[];
+  needs?: CareNeed[]; today?: number; night?: { title: string; headline: string; lines: CareLine[] };
+  systems?: CareSystem[]; week?: CareDay[]; week_says?: string; sturdier?: CareSturdier[];
   batteries?: { name: string; room: string; level: number; reachable: boolean }[];
   ignoring?: { name: string; why: string }[]; drills?: { name: string; words: string }[]; drill?: CareDrill | null;
   answers?: { id: string; do: string; status: string; words: string }[];

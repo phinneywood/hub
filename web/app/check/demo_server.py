@@ -95,7 +95,7 @@ patch.setattr(activity.apple, 'events', _claw_events)
 # House health: a made-up caretaker folder with a night in it (tests/caretaker_world.py), and a stand-in caretaker
 # that answers the screen's taps and plays a drill through when one is asked for.
 from tests import caretaker_world  # noqa: E402
-care = caretaker_world.Caretaker(caretaker_world.night(Path(scratch) / 'caretaker')).start()
+care = caretaker_world.Caretaker(caretaker_world.night(Path(scratch) / 'caretaker', released=True)).start()
 
 # The Engine screen: a made-up instruction, something to build and a note waiting for a tap.
 from hub.engine import notes as engine_notes, state as engine_state  # noqa: E402
@@ -122,6 +122,10 @@ from hub import home  # noqa: E402
 
 EVENING = datetime.now(home.PACIFIC).replace(hour=18, minute=10, second=0, microsecond=0)
 day = day_world.install(patch, kitchen_too=False, now=EVENING)
+# The caretaker's Today items next to the made-up day's, so the integration that waits for a tap is on Today too.
+from hub.engine import catalog  # noqa: E402
+from hub.engine.registry import Source  # noqa: E402
+patch.setattr(catalog, 'SOURCES', [*catalog.SOURCES, Source('caretaker', 'House caretaker', '', '', items=(catalog.caretaker_items,))])
 
 # Ask, without a model: the stand-in picks the tool; the private desk and Kitchen answer with made-up words.
 patch.setattr(route, 'build', lambda http_client=None: ask_script.MODEL)
@@ -193,6 +197,7 @@ def stage(what: str):
         world.down = what == 'down'
     elif what == 'quiet-day':
         day.events, day.school, day.mail, day.filed, day.cart = [], [], [], 0, False
+        care.quiet()
         shop.reset(cart_waiting=False)
         shop.items = [i for i in shop.items if i['state'] != 'pick']
     elif what in ('kitchen-away', 'kitchen-old', 'kitchen-back'):       # the kitchen service stopped, or from before it kept the list

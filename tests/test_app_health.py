@@ -67,6 +67,27 @@ def test_the_screen_reads_the_night_the_week_and_what_needs_you(morning):
     assert picture['ignoring'] == [{'name': 'Travel speaker', 'why': 'set aside in settings'}]
 
 
+def test_the_screen_titles_the_night_and_sums_up_the_week(morning):
+    folder, when = morning
+    picture = caretaker.picture(when)
+    assert picture['night']['title'] == 'Last night'
+    assert caretaker.picture(when.replace(hour=22))['night']['title'] == 'Tonight, from 9:00 PM'
+    assert picture['week_says'] == 'This week: two fixed, three came back by themselves, one needed you.'
+    lamp_day = next(d for d in picture['week'] if any('Reading lamp' in line['text'] for line in d['lines']))
+    assert lamp_day['by_itself'] == 1 and any(l['at'] == '5:40 AM' and 'Reading lamp' in l['text'] for l in lamp_day['lines'])
+    assert caretaker.week_words([{'fixed': 0, 'by_itself': 0, 'needs_you': 0}]) == 'A quiet week.'
+    assert caretaker.week_words([{'fixed': 12, 'by_itself': 1, 'needs_you': 1}]) == \
+        'This week: 12 fixed, one came back by itself, one needed you.'
+
+
+def test_headlines_have_no_subject_and_say_numbers_to_nine_in_words():
+    assert caretaker.headline(0, 0, 0) == 'A quiet night.'
+    assert caretaker.headline(1, 0, 1) == 'Fixed one thing overnight. One needs you.'
+    assert caretaker.headline(0, 1, 0) == 'A quiet night. One thing came back by itself.'
+    assert caretaker.headline(0, 0, 1) == 'One thing needs you.'
+    assert caretaker.headline(0, 2, 3) == 'Three things need you. Two came back by themselves.'
+
+
 def test_without_a_caretaker_the_screen_says_so(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'CARETAKER_DIR', tmp_path / 'absent')
     picture = caretaker.picture()
@@ -94,12 +115,14 @@ def test_a_caretaker_that_stopped_looking_is_said_plainly_and_fails_its_check(fo
 def test_the_morning_note_covers_nine_pm_until_noon(morning):
     _folder, when = morning
     found = caretaker.note(when)
-    assert found['headline'] == 'I fixed 1 thing overnight; 1 needs you.'
+    assert found['headline'] == 'Fixed one thing overnight. One needs you.'
     assert [line['tone'] for line in found['lines']] == ['fixed', 'by_itself']
     assert found['needs'] == 1
     assert caretaker.note(when.replace(hour=13)) is None       # 1 PM: no note
-    early = caretaker.note(when.replace(hour=3, minute=0))      # 3 AM: Sonos is held for the morning
-    assert early['needs'] == 0 and early['headline'] == 'I fixed 1 thing overnight.'
+    assert caretaker.note(when.replace(hour=3)) is None        # 3 AM: not yet; the note shows from 4 AM
+    assert caretaker.note(when.replace(hour=22)) is None       # 10 PM: never "A quiet night" in the evening
+    early = caretaker.note(when.replace(hour=4, minute=5))      # 4:05 AM: Sonos is still held for the morning
+    assert early['needs'] == 0 and early['headline'] == 'Fixed one thing overnight.'
 
 
 def test_drills_and_needs_you_lines_never_reach_the_note_or_today(morning):
