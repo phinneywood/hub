@@ -411,7 +411,6 @@ def test_a_routine_that_opens_the_house_through_something_else_waits_too(house):
                     [{'action': 'script.let_them_in'}],                                                   # the same, called by its name
                     [{'action': 'scene.turn_on', 'target': {'entity_id': 'scene.arriving'}}],            # a scene that holds the lock unlocked
                     [{'scene': 'scene.arriving'}],
-                    [{'action': 'script.turn_on', 'target': {'entity_id': 'script.by_hand'}}],            # one Hub can't read
                     [{'device_id': 'dev-front-door', 'domain': 'lock', 'type': 'unlock', **lock}],        # a device's own action, no service named
                     [{'action': 'scene.apply', 'data': {'entities': {'lock.front_door': 'unlocked'}}}],   # a scene made on the spot
                     [{'action': 'cover.open_cover', 'target': {'area_id': 'office'}}],                   # a whole room: Hub can't list what opens
@@ -426,8 +425,13 @@ def test_a_routine_that_opens_the_house_through_something_else_waits_too(house):
                   [{'if': [{'condition': 'device', 'device_id': 'dev-front-door', 'domain': 'lock', 'type': 'is_unlocked', **lock}],
                     'then': [{'action': 'lock.lock', 'target': lock}]}]):
         assert asks(plain) is None, plain
+    # What Hub can't read waits too, and the card says that, not that it touches a lock.
     blueprint = {'alias': 'From a blueprint', 'use_blueprint': {'path': 'x/y.yaml', 'input': {'door': 'lock.front_door'}}}
-    assert admin.asks(plan('routine', kind='automation', do='save', name='From a blueprint', config=blueprint)) == 'security'
+    assert admin.asks(plan('routine', kind='automation', do='save', name='From a blueprint', config=blueprint)) == 'unread'
+    assert asks([{'action': 'script.turn_on', 'target': {'entity_id': 'script.by_hand'}}]) == 'unread'      # kept in Home Assistant's own files
+    assert asks([{'action': 'script.turn_on', 'target': {'area_id': 'entry'}}]) == 'unread'                # every script in a room: Hub can't list them
+    assert asks([{'action': 'script.turn_on', 'target': {'entity_id': 'script.by_hand'}},
+                 {'action': 'lock.unlock', 'target': lock}]) == 'security'                                 # one that plainly opens says so
     with pytest.raises(admin.Refused, match='works a camera device'):
         plan('routine', kind='automation', do='save', name='Snap', config={**EVENING, 'actions': [
             {'device_id': 'dev-cam', 'domain': 'camera', 'type': 'snapshot'}]})

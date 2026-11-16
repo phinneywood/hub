@@ -593,23 +593,21 @@ def _step_opens(step, w, seen, depth):
     if runs is None:
         return False
     if loose or depth >= DEEP:
-        return True
-    for entity in runs:
-        if entity in seen:
-            continue
-        kind, kept = _kept(entity, w)
-        if kept is None or opens(kind, kept, w, seen | {entity}, depth + 1):
-            return True
-    return False
+        return 'unread'
+    found = [opens(*_kept(entity, w), w, seen | {entity}, depth + 1) for entity in runs if entity not in seen]
+    return 'security' if 'security' in found else 'unread' if 'unread' in found else None
 
 
 def opens(kind, body, w, seen=frozenset(), depth=0):
-    """Whether a routine, when it runs, could unlock, open a door or the garage, or disarm: itself, through a scene
-    it sets or another routine it runs, or in a way Hub can't read (a blueprint, a routine kept in Home Assistant's
-    own files). Then it waits for a tap."""
+    """Why a routine waits for a tap, or None: "security" when running it could unlock, open a door or the garage,
+    or disarm (itself, through a scene it sets, or through another routine it runs); "unread" when Hub can't read
+    what it does (a blueprint, a routine kept in Home Assistant's own files, one that aims at more than Hub can
+    list)."""
     if not isinstance(body, dict) or 'use_blueprint' in body:
-        return True
-    return any(_step_opens(step, w, seen, depth) for step in _steps(_actions(kind, body)))
+        return 'unread'
+    found = [_step_opens(step, w, seen, depth) for step in _steps(_actions(kind, body))]
+    found = ['security' if why is True else why for why in found]
+    return 'security' if 'security' in found else 'unread' if 'unread' in found else None
 
 
 def _named_in(value, found):
@@ -779,8 +777,7 @@ def routine(w, kind, do, name, config=None, new_name=None):
         kept = broker.setup_config(kind, key) if key else None
         call = {'call': 'automation.trigger', 'data': {'entity_id': here['id'], 'skip_condition': True}} if kind == 'automation' \
             else {'call': 'script.turn_on', 'data': {'entity_id': here['id']}}
-        return [change(kind, here['id'], here['name'], f'{what} “{here["name"]}” run', [call],
-                       asks='unread' if kept is None else 'security' if opens(kind, kept, w, frozenset({here['id']})) else None)]
+        return [change(kind, here['id'], here['name'], f'{what} “{here["name"]}” run', [call], asks=opens(kind, kept, w, frozenset({here['id']})))]
     if do == 'remove':
         key, before = _config(here, kind)
         used = admin.uses(here)
@@ -820,7 +817,7 @@ def routine(w, kind, do, name, config=None, new_name=None):
     line = says(kind, body, w)
     words = f'{what} “{title}” {"changed" if before else "made"}' + (f': {line}' if line else '')
     return [change(kind, here['id'] if here else 'new', title, words, [{'config': kind, 'id': key, 'body': body}],
-                   [{'config': kind, 'id': key, 'body': before}], asks='security' if opens(kind, body, w) else None,
+                   [{'config': kind, 'id': key, 'body': before}], asks=opens(kind, body, w),
                    after={'config': kind, 'id': key, 'body': body})]
 
 
@@ -928,10 +925,10 @@ def _asks(domain, service, thing, w, data=None):
         return 'unlock' if domain != 'cover' or (thing and thing['class'] in DOORS) else None
     if thing and thing['domain'] in ('script', 'automation') and service in ('turn_on', 'toggle', 'trigger') \
             and not (thing['domain'] == 'automation' and service != 'trigger'):
-        kind, kept = _kept(thing['id'], w)
-        return 'unread' if kept is None else 'security' if opens(kind, kept, w, frozenset({thing['id']})) else None
+        return opens(*_kept(thing['id'], w), w, frozenset({thing['id']}))
     step = {'action': f'{domain}.{service}', 'target': {'entity_id': thing['id']} if thing else {}, 'data': data or {}}
-    return 'security' if _step_opens(step, w, frozenset(), 0) else None
+    why = _step_opens(step, w, frozenset(), 0)
+    return 'security' if why is True else why or None
 
 
 def _is_already(service, thing):

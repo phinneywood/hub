@@ -5,12 +5,14 @@
   "live": null,
   "title": "Ask sets up the house, and Kitchen is part of Ask",
   "changes": [
-   "Ask can change how Home Assistant is set up: move a light to another room, rename it, add or remove a room, change a scene, make an automation or switch one off, set the thermostat, lock a door.",
+   "Ask can change how Home Assistant is set up: move a light to another room, rename it, hide or disable it, add or remove a room, change a scene, make an automation or switch one off, set the thermostat, lock a door, make a dashboard, reload an integration that stopped answering.",
    "It does these at once and says so in a sentence, with Undo under the answer, on Activity and on Changes, for a day.",
-   "Anything that removes something, unlocking or opening a door, and settings for the whole house wait on a card for your tap. Typing yes does nothing.",
-   "Kitchen is part of Ask. Say “add sponges and two avocados to the list” and Hub picks the exact product you buy, from your past orders. What you have never bought waits for one pick, and Hub knows it next time.",
-   "The Kitchen screen is the list on its way into the cart: each thing, its product, where it stands, and what needs you. Recipes and the order to place are drawn in Ask, under what you asked.",
+   "Anything that removes or disables something, unlocking or opening a door, and settings for the whole house wait on a card for your tap. So does a scene or an automation that would unlock or open, however you ask for it. Typing yes does nothing.",
+   "Kitchen is part of Ask. Say “add sponges and two avocados to the list” and Hub picks the exact product you buy, from your past orders: your own line for it, or what you took most of the last five times. What it can’t be sure of waits for one pick, and Hub knows it next time.",
+   "A number counts single things, so “6 eggs” is one carton. Say a thing again with another number and it is changed. One fewer and one more are on each thing’s sheet.",
+   "The Kitchen screen is the list on its way into the cart: each thing, its product, where it stands, and what needs you. Recipes, the cart as its own page shows it and the order to place are drawn in Ask, under what you asked.",
    "With “Fill the cart by itself” switched on, what you add in Ask, on the screen or on your Groceries reminders lands in the cart a minute later. Placing an order still takes your tap.",
+   "Two new checks on the Checks page prove all this on the real house without changing it: one reads what Ask’s setup tools read, the other asks Ask a few things with nothing sent.",
    "The list needs the kitchen service’s own update. Until it has it, Kitchen still answers in words."
   ]
  },

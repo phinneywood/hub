@@ -58,6 +58,23 @@ staged or deployed, and no running service was touched. Tests use the made-up ho
 - [x] The browser check passing at all three sizes (`web/app/check/check.cjs`), the installed-package check
       (`tools/verify_build.py`), screenshots for the owner, both branches pushed
 
+## Second pass (2026-11-16)
+
+A fresh-reader review, read-only checks against the real Home Assistant (through the maintenance tool: its
+version, the registries' shape, `validate_config`, a kept scene and automation), and more of the same work:
+
+- [x] A routine or scene that opens the house through something else waits for a tap too (`plans.opens`): a
+      wrapper automation, a script called by name, a scene that holds a lock, a device's own action, a scene made
+      on the spot, a blueprint or a routine kept in files. The same however it is run: by name, or by its service.
+- [x] Newer Home Assistant has no `has_entity_name` in the registry's list: read from the name itself
+      (`admin._world`). A fan and its own light under one name are one device.
+- [x] Disable and enable, icons, reloading an integration, Home Assistant's own dashboards.
+- [x] Live checks `house.setup` (reads, and a move planned and not sent) and `ask.setup` (the real model behind the
+      dry-run layer, which now stands in front of the setup door): `hub/live/checks.py`, `hub/app/ask/trial.py`.
+- [x] Kitchen service: the picker follows the habit of the last five purchases and never picks from a line that
+      merely holds the words; a number counts single things; messy entries; the cart turn answers by number.
+- [x] Kitchen in the app: how many, a pack that covers a number, things to check, why a thing waits, the cart in Ask.
+
 How to run things here:
 
 - Tests: `<shared checkout>/.venv/bin/python -B -m pytest -q -p no:cacheprovider` from this worktree.
