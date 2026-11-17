@@ -155,8 +155,12 @@ a message field with its send button. From the top:
 - **The field** (“Message Hub”), pinned above the bar. It grows to a few lines, Return sends, and the keyboard's own microphone
   dictates. A request made while another is going waits under it and goes as soon as that one ends (Hub takes
   one at a time per person); while one is going, an empty field offers Stop, which stops waiting for it: what
-  Hub already did stays done, with its Undo. On a phone the screen is sized to what the keyboard leaves
-  (`viewport.ts`, from `visualViewport`), so the field rides on the keyboard and the bar steps aside meanwhile.
+  Hub already did stays done, with its Undo. On a phone, while the keyboard is up, the screen is sized to what it
+  leaves (`viewport.ts`, from `visualViewport`), so the field rides on the keyboard and the bar steps aside meanwhile.
+  Without the keyboard, Ask is pinned between the top of the screen and the top of the bar, the page under it never
+  scrolls, and a page an iPhone left scrolled when the keyboard went is put back. While a finger is on the
+  conversation (and as it coasts after), nothing scrolls it but the finger. The browser check holds Ask to this,
+  including with the visible area reported moved as the iPhone did (owner's report, 2026-11-17).
 - **A few letters** find a room, a scene, a playlist or a page (Today, Mail, Kitchen, House and System's pages)
   at once, without the model.
 

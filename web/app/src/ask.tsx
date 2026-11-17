@@ -323,7 +323,11 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
     if (!box || !said) return undefined;
     // Only a finger scrolling back unpins it. What arrives late (a card under an answer) makes the box taller
     // without moving it, and must not be mistaken for that. The keyboard coming up makes the box shorter.
-    let last = box.scrollTop;
+    let last = box.scrollTop, held = false, settled = 0;
+    // While a finger is on the conversation, and for a moment after it lets go (the scroll still coasting), nothing
+    // moves it but the finger: a card growing then must not pull the view back down against the drag.
+    const down = () => { held = true; };
+    const up = () => { held = false; settled = Date.now() + 800; };
     const moved = () => {
       const gap = box.scrollHeight - box.scrollTop - box.clientHeight;
       if (box.scrollTop < last - 2) pinned.current = gap < 80;
@@ -331,7 +335,7 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
       last = box.scrollTop;
     };
     const follow = () => {
-      if (!pinned.current) return;
+      if (!pinned.current || held || Date.now() < settled) return;
       // What is newest is read from its start: the last request, or Hub's greeting, stays at the top when what
       // follows it is taller than the screen, instead of showing only its last lines.
       const start = [...box.querySelectorAll(".nowtop, .turn:not(.folded) .asked")].pop();
@@ -341,9 +345,18 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
     };
     const grew = new ResizeObserver(follow);
     box.addEventListener("scroll", moved, { passive: true });
+    box.addEventListener("touchstart", down, { passive: true });
+    box.addEventListener("touchend", up, { passive: true });
+    box.addEventListener("touchcancel", up, { passive: true });
     grew.observe(said);
     grew.observe(box);
-    return () => { box.removeEventListener("scroll", moved); grew.disconnect(); };
+    return () => {
+      box.removeEventListener("scroll", moved);
+      box.removeEventListener("touchstart", down);
+      box.removeEventListener("touchend", up);
+      box.removeEventListener("touchcancel", up);
+      grew.disconnect();
+    };
   }, []);
   const hidden = all ? [] : earlier.slice(0, Math.max(0, earlier.length - SHOWN_EARLIER)).map((turn) => turn.n);
   const back = (turn: Turn) => { pinned.current = false; setOpened([...opened, turn.n]); };   // read where it is

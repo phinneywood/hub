@@ -365,9 +365,17 @@ button.row { text-align: left; }
    On a phone it is a column the size of what can be seen (--vvh from viewport.ts), so the keyboard pushes the
    field up instead of covering it, and the conversation scrolls inside it. The bar sits under it, and steps aside
    while the keyboard is up. */
-.askpage { position: fixed; left: 0; right: 0; top: 0; z-index: 2; margin: 0 auto; max-width: 620px; padding: env(safe-area-inset-top, 0px) var(--gut) 10px;
-  height: calc(var(--vvh, 100dvh) - var(--dockh, 130px)); transform: translateY(var(--vvt, 0px)); background: var(--ground); }
-.kb .askpage { height: var(--vvh, 100dvh); padding-bottom: 8px; }
+/* Without the keyboard it is pinned between the top of the screen and the top of the bar, in the same frame as the bar
+   (top and bottom, not a height worked out from the visible area: on an iPhone that area and the frame the bar sits in
+   can disagree by the height of a toolbar, which left the field under the bar). Only while the keyboard is up does it
+   follow the visible area, and the page under it never scrolls, so a drag that reaches the end of the conversation
+   can't move the whole screen. */
+.askpage { position: fixed; left: 0; right: 0; top: 0; bottom: var(--dockh, 130px); z-index: 2; margin: 0 auto; max-width: 620px;
+  padding: env(safe-area-inset-top, 0px) var(--gut) 10px; background: var(--ground); }
+.kb .askpage { bottom: auto; height: var(--vvh, 100dvh); transform: translateY(var(--vvt, 0px)); padding-bottom: 8px; }
+@media (max-width: 1039px) {
+  html:has(.app.asking), html:has(.app.asking) body { overflow: hidden; overscroll-behavior: none; }
+}
 .kb .app.asking .dock { visibility: hidden; }
 .askpage .ask-scroll { padding: 0 0 14px;
   -webkit-mask-image: linear-gradient(#0000, #000 12px, #000 calc(100% - 14px), #0000); mask-image: linear-gradient(#0000, #000 12px, #000 calc(100% - 14px), #0000); }
