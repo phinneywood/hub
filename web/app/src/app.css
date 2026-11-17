@@ -382,7 +382,9 @@ button.row { text-align: left; }
 .banner { margin-top: 18px; padding: 14px 16px; border-radius: 14px; background: color-mix(in oklab, var(--alarm) 16%, var(--ground)); box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--alarm) 55%, transparent); }
 .banner b { display: block; font-weight: 500; }
 .banner span { display: block; font-size: var(--t-s); color: var(--ink-2); margin-top: 2px; }
-.toast { position: fixed; left: 50%; bottom: 150px; transform: translate(-50%, 20px); z-index: 20; background: var(--ink); color: var(--ground); border-radius: 14px; padding: 0 8px 0 16px; height: 50px; display: flex; align-items: center; gap: 14px; white-space: nowrap; opacity: 0; transition: opacity .2s ease, transform .3s var(--ease); font-weight: 500; }
+.toast { position: fixed; left: 50%; bottom: 150px; transform: translate(-50%, 20px); z-index: 20; background: var(--ink); color: var(--ground); border-radius: 14px; padding: 6px 8px 6px 16px; min-height: 50px; width: max-content; max-width: calc(100vw - 2 * var(--gut, 18px) - 4px); display: flex; align-items: center; gap: 14px; opacity: 0; transition: opacity .2s ease, transform .3s var(--ease); font-weight: 500; }
+.toast span { text-wrap: pretty; line-height: 1.3; }       /* a long one wraps rather than running off the screen */
+.toast button { flex: none; }
 .toast.in { opacity: 1; transform: translate(-50%, 0); }
 /* over a sheet the line sits at the top, clear of what the sheet is showing */
 body:has(.sheet.in) .toast { bottom: auto; top: max(14px, env(safe-area-inset-top)); transform: translate(-50%, -20px); }
@@ -584,9 +586,9 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
 .shot-marks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; border-radius: 12px; overflow: hidden; }
 .shot-marks .choice { min-height: 44px; }
 /* ---------- the Archive: one search across photos, documents, mail, the calendar and chats ---------- */
-.top-acts { display: flex; align-items: center; gap: 2px; }
-.seekbtn { width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink-2); }
-.seekbtn .ic { width: 21px; height: 21px; }
+.archive .banner + .banner { margin-top: 10px; }
+.banner.calm { background: var(--raised); box-shadow: inset 0 0 0 1.5px var(--line); }
+[data-theme="day"] .banner.calm { background: var(--room); }
 .seek { position: relative; margin-top: 6px; }
 .seek .field { background: var(--raised); padding-right: 52px; -webkit-appearance: none; appearance: none; }
 .seek .field::-webkit-search-cancel-button { display: none; }
@@ -620,6 +622,13 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
 .tile-mark .ic { width: 12px; height: 12px; }
 .year + .year { margin-top: 18px; }
 .year-name { font-size: var(--t-s); color: var(--ink-3); margin-top: 6px; }
+/* years with a photo or two each sit side by side, scrolling sideways inside the block */
+.years-row { display: flex; gap: 12px; overflow-x: auto; margin: 0 calc(var(--gut) * -1); padding: 0 var(--gut); scrollbar-width: none; }
+.years-row::-webkit-scrollbar { display: none; }
+.years-row .year { flex: none; width: 168px; }
+.years-row .year + .year { margin-top: 0; }
+.years-row .grid.few { grid-template-columns: repeat(2, 1fr); }
+.askrail .best .shots, .ask .best .shots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 /* everything else: a row each, with what matched marked */
 .hits { border-top: 1px solid var(--line); margin-top: 8px; }
 .hit { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: start; width: 100%; padding: 12px 0; border-bottom: 1px solid var(--line); min-height: 60px; }
@@ -679,7 +688,6 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
 .acard .row-act { margin-top: 10px; display: inline-grid; }
 .acard .hits { margin-top: 4px; }
 @media (min-width: 1040px) {
-  .seekbtn { display: none; }
   .grid { grid-template-columns: repeat(5, 1fr); gap: 4px; }
   .best .shots { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
   .grid.few { grid-template-columns: repeat(6, 1fr); }

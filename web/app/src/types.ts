@@ -87,7 +87,7 @@ export interface Photo {
 }
 export interface Photos {
   ok: true; ready: boolean; months: { month: string; name: string }[]; month: string; name?: string;
-  looked_at?: number; made?: string; picks: Photo[]; more: Photo[];
+  looked_at?: number | null; made?: string; picks: Photo[]; more: Photo[];
   counts?: Record<"keep" | "skip" | "print", number>; waiting?: number;
 }
 
@@ -165,9 +165,11 @@ export interface ArchiveFound {
 }
 export interface ArchivePerson { name: string; photos: number; kid: boolean; auto: boolean }
 export interface ArchiveCount { items: number; kinds: Record<string, number>; previews: number; first: string | null; last: string | null; in_icloud?: number }
+export interface Trouble { say: string; how: string; loud: boolean }
 export interface ArchiveLanding {
-  ready: boolean; away?: string; owner: boolean; switches: { documents: boolean; chats: boolean }; sources: ArchiveSource[];
-  calendar: { events: number; first: string | null; last: string | null; complete: boolean; read_at: number | null };
+  ready: boolean; away?: string; owner: boolean; switches: { documents?: boolean; chats?: boolean }; sources: ArchiveSource[];
+  google: boolean; trouble: Trouble[];
+  calendar: { events: number; first: string | null; last: string | null; complete: boolean; read_at: number | null } | null;
   counts: Partial<Record<"photos" | "documents" | "chats", ArchiveCount>>; indexed_at?: number | null;
   onthisday: { year: number; count: number; items: ArchiveItem[] }[]; people: ArchivePerson[];
 }

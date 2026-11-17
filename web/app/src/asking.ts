@@ -7,7 +7,7 @@ import { say } from "./state";
 // `photos` and `found`: what a search of the archive found (`items`: photos, or the lines to open).
 export interface Card { kind: string; rooms?: string[]; speakers?: string[]; batch?: string; after?: number; id?: number; note?: string;
   lines?: string[]; missed?: string[]; title?: string; why?: string; do?: string; items?: unknown[]; all?: boolean; cart?: boolean; since?: number;
-  count?: number; search?: string }
+  count?: number; search?: string; month?: string; years?: unknown[] }
 export interface Turn { n: number; asked: string; answer: string; cards: Card[]; busy: boolean; doing: string; ms: number; status: string }
 interface Kept { id: number; asked: string; answer: string; cards: Card[]; ms: number; status: string }
 interface Able { ready: boolean; why: string | null; recent: Kept[]; usual: string[]; remembers: { id: number; note: string }[] }
@@ -19,7 +19,7 @@ const DOING: Record<string, string> = { lights: "Switching the lights", scene: "
   kitchen: "Asking Kitchen", groceries: "Working the list", look_up: "Looking", remember: "Noting that", find: "Looking around the house", details: "Reading it",
   arrange: "Moving things", rooms: "Changing the rooms", scene_setup: "Changing the scene", routine: "Writing it into Home Assistant",
   device: "Working on it", setting: "Changing the settings", integration: "Reloading it", dashboard: "Making the dashboard",
-  search: "Searching the archive", read: "Reading it" };
+  search: "Searching the archive", read: "Reading it", archive: "Opening the archive" };
 
 export const asked = signal("");                 // what is in the field
 export const talk = signal<Turn[]>([]);          // this sitting's requests and answers

@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, talk } from "./asking";
 import type { Card, Turn } from "./asking";
-import { FoundCard, PhotoCard } from "./archive";
+import { FoundCard, PhotoCard, Years } from "./archive";
+import { BestOfMonth } from "./photos";
 import type { FoundLine } from "./archive";
 import { GroceriesCard, Said } from "./kitchen";
 import { RoomCell, spans } from "./screens";
@@ -173,7 +174,7 @@ function ConfirmCard({ card }: { card: Card }) {
   );
 }
 
-function CardView({ card, now }: { card: Card; now: House }) {
+function CardView({ card, now, said }: { card: Card; now: House; said: string }) {
   if (card.kind === "confirm" && card.id !== undefined) return <ConfirmCard card={card} />;
   if (card.kind === "setup") {      // several changes from one request: each on its own line, under one Undo
     const lines = card.lines ?? [], missed = card.missed ?? [];
@@ -203,8 +204,12 @@ function CardView({ card, now }: { card: Card; now: House }) {
     ) : null;
   }
   if (card.kind === "kitchen" && card.after !== undefined) return <KitchenReply after={card.after} />;
-  if (card.kind === "photos") return <PhotoCard title={card.title} items={(card.items ?? []) as ArchiveItem[]} search={card.search} />;
+  if (card.kind === "photos") {       // Hub's sentence heads the card only where the answer above doesn't already say it
+    return <PhotoCard title={card.title && said.includes(card.title) ? undefined : card.title} items={(card.items ?? []) as ArchiveItem[]} search={card.search} />;
+  }
   if (card.kind === "found") return <FoundCard items={(card.items ?? []) as FoundLine[]} count={card.count} search={card.search} />;
+  if (card.kind === "best") return <BestOfMonth start={card.month} />;
+  if (card.kind === "onthisday") return <div class="acard"><Years years={(card.years ?? []) as { year: number; items: ArchiveItem[] }[]} /></div>;
   if (card.kind === "groceries") return <GroceriesCard ids={card.items as number[]} all={card.all} cart={card.cart} since={card.since} />;
   if (card.kind === "memory" && card.id !== undefined) {
     const id = card.id;
@@ -230,7 +235,7 @@ function TurnView({ turn, now }: { turn: Turn; now: House }) {
       {turn.answer ? <p class={"answer" + (turn.answer.length > 160 ? " long" : "")}>{turn.answer}</p>
         : <span class="dots" role="status" aria-label="Hub is working"><i /><i /><i /></span>}
       {turn.busy && turn.doing && <p class="took">{turn.doing}</p>}
-      {turn.cards.map((card, n) => <CardView card={card} now={now} key={n} />)}
+      {turn.cards.map((card, n) => <CardView card={card} now={now} said={turn.answer} key={n} />)}
       {!turn.busy && batch && (back
         ? <p class="took"><span>Put back as it was</span></p>
         : <p class="took">{took && <span>{took}</span>}<button type="button" onClick={() => void undo(batch)}>Undo</button></p>)}

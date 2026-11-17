@@ -1,7 +1,7 @@
 // The screens: the house as a plan, the bar at the bottom, and System.
 import type { JSX } from "preact";
 import { useRef, useState } from "preact/hooks";
-import { go, house, look, me, openArchive, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
+import { go, house, look, me, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
 import type { Look } from "./state";
 import { able, forgetNote } from "./asking";
 import type { Floor, House, Room } from "./types";
@@ -81,10 +81,7 @@ export function Top() {
   return (
     <div class="top">
       <span class="when">{when()}</span>
-      <span class="top-acts">
-        {view.value !== "archive" && <button type="button" class="seekbtn" aria-label="Search the archive" onClick={() => openArchive()}><Icon name="search" /></button>}
-        <button type="button" class={"who" + (trouble.value ? " bad" : "")} aria-label="System" onClick={() => go("system")}>{me.value.initial}</button>
-      </span>
+      <button type="button" class={"who" + (trouble.value ? " bad" : "")} aria-label="System" onClick={() => go("system")}>{me.value.initial}</button>
     </div>
   );
 }
@@ -205,9 +202,8 @@ export function Rail() {
     <nav class="rail" aria-label="Hub">
       <div class="mark"><i />Hub</div>
       <Tabs />
-      <button type="button" class={"tab" + (view.value === "archive" ? " on" : "")} onClick={() => go("archive")}>Archive</button>
       <div class="foot">
-        <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" || view.value === "changes" || view.value === "activity" ? " on" : "")} onClick={() => go("system")}>System</button>
+        <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" || view.value === "changes" || view.value === "activity" || view.value === "archive" ? " on" : "")} onClick={() => go("system")}>System</button>
         <p class="ok">{fine ? "The house is answering." : trouble.value === "hub" ? "Can’t reach Hub." : "The house isn’t answering."}</p>
       </div>
     </nav>

@@ -80,6 +80,7 @@ def test_another_login_sees_the_shared_librarys_picks_alone(tmp_path, monkeypatc
     other = {'origin': 'http://testserver', 'tailscale-user-login': 'sam@example.com'}
     theirs = client.get('/app/api/photos', headers=other).json()
     assert [p['id'] for p in theirs['picks']] == [C] and theirs['more'] == []
+    assert theirs['looked_at'] is None and client.get('/app/api/photos', headers=OWNER).json()['looked_at'] == 40
     assert client.get(f'/app/api/photos/thumb/{A}', headers=other).status_code == 404
     assert client.post('/app/api/photos/keep', json={'key': A}, headers=other).status_code == 409
     assert client.get(f'/app/api/photos/thumb/{C}', headers=other).status_code == 200

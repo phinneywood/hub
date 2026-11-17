@@ -18,6 +18,7 @@ const MONTH = new Intl.DateTimeFormat(undefined, { month: "long" });
 const KINDS: Record<string, string> = { pdf: "PDF", word: "Document", text: "Text", sheet: "Spreadsheet", slides: "Slides", image: "Scan" };
 const WHO: Record<string, string> = { user: "You", assistant: "ChatGPT", file: "Attached" };
 const LIVE_MS = 450;            // a pause in typing this long searches what is typed so far
+const SETTLE_MS = 600;          // a photo on screen this long is asked for sharp; one swiped past is not
 
 function onDay(day: string | null | undefined, long = false) {
   if (!day) return "";
@@ -68,10 +69,12 @@ export function Grid({ photos, few }: { photos: ArchiveItem[]; few?: boolean }) 
 
 /** One photo at a time, as big as the screen allows: swipe or use the arrow keys for the next, Escape to close. The
  * preview shows at once, the Mac's own best picture over it, and the sharp one from iCloud over that when it comes:
- * all three in the same frame, so nothing moves. */
+ * all three in the same frame, so nothing moves. The sharp one is asked for only once a photo has stayed on screen
+ * a moment, and the next photo's only once this one's has come: swiping through asks Photos for nothing. */
 export function Viewer({ photos, at }: { photos: ArchiveItem[]; at: number }) {
   const [n, setN] = useState(at);
   const [shown, setShown] = useState({ near: false, sharp: false });
+  const [stayed, setStayed] = useState<string | null>(null);      // the photo that has been on screen long enough
   const start = useRef<number | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const p = photos[n];
@@ -88,9 +91,15 @@ export function Viewer({ photos, at }: { photos: ArchiveItem[]; at: number }) {
   }, []);
   useEffect(() => {           // the next and the one before are fetched now, so a swipe shows them at once
     for (const near of [photos[n + 1], photos[n - 1]]) if (near) new Image().src = big(near.id);
+    const id = photos[n]?.id ?? null;
+    const timer = window.setTimeout(() => setStayed(id), SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [n]);
+  const settled = () => {     // this photo's sharp picture is here: the next one's can be made ready
+    setShown((s) => ({ ...s, sharp: true }));
     const next = photos[n + 1];
     if (next && next.kind === "photo") new Image().src = sharp(next.id);
-  }, [n]);
+  };
   if (!p) return null;
   const ratio = p.w && p.h ? `${p.w} / ${p.h}` : "4 / 3";
   return (
@@ -103,10 +112,10 @@ export function Viewer({ photos, at }: { photos: ArchiveItem[]; at: number }) {
       </div>
       <div class="viewer-pic" style={{ aspectRatio: ratio } as JSX.CSSProperties}>
         <img class="lo" src={thumb(p.id)} alt="" />
-        <img class={"hi" + (shown.near ? " in" : "")} src={big(p.id)} alt="" key={"near" + p.id}
-          onLoad={() => setShown((s) => ({ ...s, near: true }))} />
-        {p.kind === "photo" && <img class={"hi" + (shown.sharp ? " in" : "")} src={sharp(p.id)} key={"sharp" + p.id}
-          alt={[onDay(p.day, true), p.place].filter(Boolean).join(", ") || "A photo"} onLoad={() => setShown((s) => ({ ...s, sharp: true }))} />}
+        <img class={"hi" + (shown.near ? " in" : "")} src={big(p.id)} key={"near" + p.id}
+          alt={[onDay(p.day, true), p.place].filter(Boolean).join(", ") || "A photo"} onLoad={() => setShown((s) => ({ ...s, near: true }))} />
+        {p.kind === "photo" && stayed === p.id && <img class={"hi" + (shown.sharp ? " in" : "")} src={sharp(p.id)} key={"sharp" + p.id}
+          alt="" onLoad={settled} />}
       </div>
       <div class="viewer-facts">
         <b>{onDay(p.day, true)}</b>
@@ -288,20 +297,33 @@ function Results({ found, setFound }: { found: ArchiveFound; setFound: (f: Archi
 
 // ---- before a search ----
 
+/** What is wrong, in Hub's words: loud when a source can't be read, quiet for what is still to come. */
+function Troubles({ landing }: { landing: ArchiveLanding }) {
+  if (!landing.trouble?.length) return null;
+  return (
+    <>{landing.trouble.map((t) => (
+      <div class={"banner" + (t.loud ? "" : " calm")} key={t.say} role={t.loud ? "alert" : undefined}><b>{t.say}</b><span>{t.how}</span></div>
+    ))}</>
+  );
+}
+
 function Holds({ landing }: { landing: ArchiveLanding }) {
   const c = landing.counts;
   const years = (x: { first: string | null; last: string | null } | undefined) =>
     x?.first && x.last ? (x.first.slice(0, 4) === x.last.slice(0, 4) ? x.first.slice(0, 4) : `${x.first.slice(0, 4)} to ${x.last.slice(0, 4)}`) : "";
   const rows: [string, string][] = [];
-  if (c.photos) rows.push([counted(c.photos.items, "photo and video", "photos and videos"), years(c.photos) + ", from Photos on this Mac"]);
+  if (c.photos) rows.push([counted(c.photos.items, "photo and video", "photos and videos"),
+    years(c.photos) + (landing.owner ? ", from Photos on this Mac" : ", from the Shared Library")]);
   if (c.documents) {
     const away = c.documents.in_icloud ? `, ${counted(c.documents.in_icloud, "still in iCloud", "still in iCloud")}` : "";
     rows.push([counted(c.documents.items, "document"), "Documents, Desktop, Downloads and iCloud Drive" + away]);
   }
   if (c.chats) rows.push([counted(c.chats.items, "conversation"), "ChatGPT history, " + years(c.chats)]);
-  rows.push([counted(landing.calendar.events, "calendar event"), landing.calendar.first
-    ? `Since ${onDay(landing.calendar.first)}${landing.calendar.complete ? "" : ", still reading further back"}` : "Read in the background"]);
-  rows.push(["Mail", "Searched in Gmail as you ask"]);
+  if (landing.google && landing.calendar) {          // only one's own Google account's
+    rows.push([counted(landing.calendar.events, "calendar event"), landing.calendar.first
+      ? `Since ${onDay(landing.calendar.first)}${landing.calendar.complete ? "" : ", still reading further back"}` : "Read in the background"]);
+    rows.push(["Mail", "Searched in Gmail as you ask"]);
+  }
   return (
     <section class="block">
       <h2>What the archive holds</h2>
@@ -310,18 +332,24 @@ function Holds({ landing }: { landing: ArchiveLanding }) {
   );
 }
 
+export function Years({ years }: { years: { year: number; count?: number; items: ArchiveItem[] }[] }) {
+  const now = new Date().getFullYear();
+  const row = years.every((y) => y.items.length <= 2);      // a photo or two a year: the years side by side
+  const year = (y: { year: number; count?: number; items: ArchiveItem[] }) => (
+    <div class="year" key={y.year}>
+      <p class="year-name">{`${y.year} · ${counted(now - y.year, "year ago", "years ago")}`}{(y.count ?? 0) > y.items.length ? ` · ${counted(y.count!, "photo")}` : ""}</p>
+      <Grid photos={y.items} few />
+    </div>
+  );
+  return row ? <div class="years-row">{years.map(year)}</div> : <>{years.map(year)}</>;
+}
+
 function OnThisDay({ landing }: { landing: ArchiveLanding }) {
   if (!landing.onthisday.length) return null;
-  const now = new Date().getFullYear();
   return (
     <section class="block">
       <h2>On this day</h2>
-      {landing.onthisday.map((y) => (
-        <div class="year" key={y.year}>
-          <p class="year-name">{`${y.year} · ${counted(now - y.year, "year ago", "years ago")}`}{y.count > y.items.length ? ` · ${counted(y.count, "photo")}` : ""}</p>
-          <Grid photos={y.items} few />
-        </div>
-      ))}
+      <Years years={landing.onthisday} />
     </section>
   );
 }
@@ -360,18 +388,17 @@ function MayRead({ landing, reload }: { landing: ArchiveLanding; reload: () => v
   return (
     <section class="block">
       <h2>What Ask may read</h2>
-      <p class="quiet-line">Searching here never uses a model. When you ask Ask, its model is given only what is switched on.</p>
+      <p class="quiet-line">Searching here never uses a model. When you ask Ask, its model is given only what is switched on, and only what is yours.</p>
       <div class="rows spaced">
-        <div class="ctl two"><div class="ctl-name"><b>Mail and the calendar</b><span>Yes, except senders with AI switched off</span></div><span class="ctl-say">On</span></div>
-        <div class="ctl two"><div class="ctl-name"><b>Documents</b><span>{landing.switches.documents ? "The passages that match what you ask, with card and account numbers hidden" : "Off: Ask only says there are matches to open"}</span></div>
-          <Switch on={landing.switches.documents} label="Ask may read documents" off={!owner} onChange={(on) => void flip("documents", on)} /></div>
-        {landing.sources.includes("chats") && (
+        {landing.google && <div class="ctl two"><div class="ctl-name"><b>Your mail and calendar</b><span>Yes, except senders with AI switched off</span></div><span class="ctl-say">On</span></div>}
+        {owner && <div class="ctl two"><div class="ctl-name"><b>Documents</b><span>{landing.switches.documents ? "The passages that match what you ask, with card and account numbers hidden" : "Off: Ask only says there are matches to open"}</span></div>
+          <Switch on={Boolean(landing.switches.documents)} label="Ask may read documents" onChange={(on) => void flip("documents", on)} /></div>}
+        {owner && landing.sources.includes("chats") && (
           <div class="ctl two"><div class="ctl-name"><b>ChatGPT history</b><span>{landing.switches.chats ? "The passages that match what you ask, with numbers hidden" : "Off: Ask only says there are matches to open"}</span></div>
-            <Switch on={landing.switches.chats} label="Ask may read ChatGPT history" off={!owner} onChange={(on) => void flip("chats", on)} /></div>
+            <Switch on={Boolean(landing.switches.chats)} label="Ask may read ChatGPT history" onChange={(on) => void flip("chats", on)} /></div>
         )}
         <div class="ctl two"><div class="ctl-name"><b>Photos</b><span>Never. Hub shows them itself and tells the model nothing about them.</span></div><span class="ctl-say">Never</span></div>
       </div>
-      {!owner && <p class="quiet-line">Only the owner can change these.</p>}
     </section>
   );
 }
@@ -382,7 +409,8 @@ function Landing({ landing, reload }: { landing: ArchiveLanding | null; reload: 
     return (
       <>
         <h1 class="say">{landing.away ?? "The archive isn’t set up on this Mac yet."}</h1>
-        <p class="sub">Mail and the calendar can still be searched. Photos, documents and ChatGPT history come once the archive is installed.</p>
+        <p class="sub">{landing.google ? "Your mail and calendar can still be searched. " : ""}Photos{landing.owner ? ", documents and ChatGPT history come" : " come"} once the archive is installed.</p>
+        <Troubles landing={landing} />
         <MayRead landing={landing} reload={reload} />
       </>
     );
@@ -396,6 +424,7 @@ function Landing({ landing, reload }: { landing: ArchiveLanding | null; reload: 
       <h1 class="say">{said.length ? `${list(said)}, on this Mac.` : "The archive is empty so far."}</h1>
       <p class="sub">{when ? `Brought up to date ${when.toDateString() === new Date().toDateString() ? "today" : "on " + DAY.format(when)} at ${TIME.format(when)}. ` : ""}
         Search for people, places, years or words. Nothing you search for goes to a model.</p>
+      <Troubles landing={landing} />
       <OnThisDay landing={landing} />
       <BestOfMonth />
       <Holds landing={landing} />
@@ -429,7 +458,7 @@ export function Archive() {
     <div class="wrap archive">
       <Top />
       <form class="seek" role="search" onSubmit={(e) => { e.preventDefault(); clearTimeout(typing.current); openArchive(text); }}>
-        <input class="field" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search photos, documents, mail and chats"
+        <input class="field" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search everything"
           aria-label="Search the archive" value={text} onInput={(e) => typed(e.currentTarget.value)} />
         {text && <button type="button" class="seek-clear" aria-label="Clear the search" onClick={() => { setText(""); openArchive(""); }}><Icon name="close" /></button>}
       </form>

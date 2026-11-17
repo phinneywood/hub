@@ -37,10 +37,10 @@ function Tile(props: { photo: Photo; locked: boolean; mark: (photo: Photo, mark:
 
 /** The month the curator chose most recently, or the one moved to with Earlier and Later. Nothing shows until the
  * curator has chosen a month. */
-export function BestOfMonth() {
+export function BestOfMonth({ start = "" }: { start?: string }) {
   const [found, setFound] = useState<PhotosData | null>(null);
   const [busy, setBusy] = useState(false);
-  const [month, setMonth] = useState("");
+  const [month, setMonth] = useState(start);
   const [more, setMore] = useState(false);
   const [all, setAll] = useState(false);
   const load = (which = month) => api.photos(which).then(setFound, () => setFound(null));
@@ -69,7 +69,7 @@ export function BestOfMonth() {
             onClick={() => { setMore(false); setAll(false); setMonth(found.months[at - 1]?.month ?? ""); }}>Later</button>
         </div>
       </div>
-      <p class="quiet-line">{`${found.picks.length} chosen from ${found.looked_at ?? 0} photos on this Mac. Keep puts one in the month’s album in Photos; Print also saves a full-size copy.`}
+      <p class="quiet-line">{`${found.picks.length} chosen${found.looked_at ? ` from ${found.looked_at} photos on this Mac` : ""}. Keep puts one in the month’s album in Photos; Print also saves a full-size copy.`}
         {counts ? ` ${counts.keep} kept · ${counts.print} to print · ${counts.skip} skipped.` : ""}
         {(found.waiting ?? 0) > 0 ? ` ${found.waiting} waiting for the Mac to add or save.` : ""}</p>
       <div class="shots">{(all ? found.picks : found.picks.slice(0, FIRST)).map((p) =>
