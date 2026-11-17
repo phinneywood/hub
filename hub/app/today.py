@@ -199,20 +199,21 @@ def _soft(part, otherwise):
         return otherwise
 
 
-def _ready():
-    """The errands Hub got ready, the most pressing few as cards to finish with a tap (hub/app/errands/)."""
+def _ready(login):
+    """The errands Hub got ready for this person, the most pressing few as cards to finish with a tap
+    (hub/app/errands/): their own and the household's."""
     from .errands import picture as errands
-    return errands.today_part()
+    return errands.today_part(login=login)
 
 
-def picture(now=None):
-    """The whole Today screen. Never raises."""
+def picture(now=None, login=None):
+    """The whole Today screen, for the person whose device asks (`login`, None for this Mac itself). Never raises."""
     now = now or clock()
     needs, more, quiet = _soft(_list, ([], 0, []))
     left, tomorrow = _soft(lambda: _calendar(now), ([], []))
     return {'ok': True, 'at': now.isoformat(timespec='seconds'), 'needs': needs, 'more': more, 'today': left, 'tomorrow': tomorrow,
             'school': _soft(lambda: _school(now.date()), []), 'trip': _soft(lambda: _trip(now.date()), None), 'quiet': quiet,
-            'ready': _soft(_ready, {'cards': [], 'more': 0})}
+            'ready': _soft(lambda: _ready(login), {'cards': [], 'more': 0})}
 
 
 def tick(key):

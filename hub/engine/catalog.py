@@ -181,7 +181,8 @@ def errands_morning():
 
 
 def errand_items():
-    """One line for the errands waiting for the owner's tap; its title counts only, as mail's does."""
+    """One line for the errands waiting for a tap; its title counts only, as mail's does. The list is made for no one
+    in particular, so it counts the household's errands only: each person's own are on their Today and in Ask."""
     from ..app.errands import picture
     return picture.items()
 
@@ -236,13 +237,15 @@ def mail_lookup(kind: str | None = None) -> dict:
     return found
 
 
-def errands_lookup(show: Literal['ready', 'done'] = 'ready') -> dict:
+def errands_lookup(show: Literal['ready', 'done'] = 'ready', login: str | None = None) -> dict:
     """Errands Hub got ready for the owner from their mail and the class guide: replies drafted, invitations, bills
     with the page to pay them on, bookings, renewals, forms, things to get and dates. show: ready (waiting for a tap,
     most pressing first) or done (finished in the last week, and how). Hub never sends, pays or books anything
     itself; each errand is finished by the owner's tap on its card."""
+    # `login` (who asks) is filled in from the request, never by a model (hub/agent/agent.py hides it): their own
+    # errands and the household's. Without one, the household's only.
     from ..app.errands import picture
-    return picture.lookup(show)
+    return picture.lookup(show, login=login)
 
 
 def calendar_lookup() -> dict:

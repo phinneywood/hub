@@ -100,9 +100,10 @@ export interface Errand {
   facts: string[]; ways: Way[]; opened: { label: string; watch: string; way: number; left: number } | null;
   email: Open | null; family: boolean; ended: { text: string; when: string; seen: boolean } | null; until: string | null;
 }
+/** One person's errands: their own and the household's. `own`: Hub reads a Google account of theirs. */
 export interface Errands {
   ok: true; ready: Errand[]; later: Errand[]; done: Errand[]; reading: boolean; checking: boolean;
-  looked: { text: string; failed: boolean } | null; set_up: boolean; compose: "mail" | "gmail";
+  looked: { text: string; failed: boolean } | null; set_up: boolean; compose: "mail" | "gmail"; own: boolean; signed_in: boolean;
 }
 export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string; card?: Card }
 

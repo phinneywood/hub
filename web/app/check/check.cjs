@@ -381,6 +381,23 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await saysSoon("Five things are ready for your tap.", 3000), "the errand that was replied to stayed: " + await says());
     expect((await page.locator(".errands .block .row-main b").allInnerTexts()).includes("RSVP to Jordan’s birthday party"), "the errand replied to was not under Done lately");
     await stage("reset");
+    // the other person at home, whose own mail Hub doesn't read: the class guide's two only, in Errands, Today and Ask
+    const partnerCtx = await browser.newContext({ ...options, extraHTTPHeaders: { "tailscale-user-login": "casey@example.com" } });
+    const partner = await partnerCtx.newPage();
+    partner.on("console", (m) => m.type() === "error" && failures.push(`${name}: partner console: ${m.text()}`));
+    partner.on("pageerror", (e) => failures.push(`${name}: partner page error: ${e}`));
+    partner.on("request", (r) => hosts.add(new URL(r.url()).host));
+    partner.on("response", (r) => r.status() >= 400 && failures.push(`${name}: partner ${r.status()} ${new URL(r.url()).pathname}`));
+    await partner.goto(base + "/app/#errands");
+    expect(await partner.waitForFunction(() => document.querySelector(".say")?.textContent.trim() === "Two things are ready for your tap.", null, { timeout: 6000 }).then(() => true, () => false),
+      "the partner’s Errands sentence: " + await partner.textContent(".say"));
+    expect((await partner.locator(".errands .errand .er-t").allInnerTexts()).every((t) => /pumpkin|photo order form/.test(t)), "the partner saw an errand from the owner’s mail");
+    expect((await partner.textContent(".sub")).trim().endsWith("Only the class guide’s are here: Hub doesn’t read your own mail."), "the partner’s Errands second line");
+    expect(!(await partner.locator(".errands .block h2").allInnerTexts()).includes("Replies open in"), "the partner was offered where replies open");
+    await partner.waitForTimeout(300); await partner.screenshot({ path: `${out}/${name}-14d-errands-partner.png` });
+    const partnerToday = await partner.evaluate(() => fetch("/app/api/today").then((r) => r.json()).then((t) => t.ready.cards.map((c) => c.title)));
+    expect(partnerToday.length === 2 && partnerToday.every((t) => /pumpkin|photo order form/.test(t)), "the partner’s Today showed another’s errands: " + partnerToday.join("|"));
+    await partnerCtx.close();
 
     // ---- Mail: what needs you, who never answered, what Hub sorted ----
     await tap(phone ? '.tabs .tab:text-is("Mail")' : '.rail .tab:text-is("Mail")');

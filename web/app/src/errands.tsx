@@ -2,6 +2,7 @@
 // they are looked at; nothing about them is kept on the device. A tap opens the exact place to finish one, filled in
 // (a reply in the mail app, an event in Google Calendar, the sender's own page, a call), and Hub notes it, so it can
 // watch for the proof and close the errand by itself. Putting things on the shopping list is the one thing Hub does.
+// Each person sees their own errands and the household's (the class guide's); Hub picks by the device's sign-in.
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { loadDay } from "./day";
@@ -229,9 +230,10 @@ function errandsSay(now: ErrandsData): string {
 }
 
 function errandsSub(now: ErrandsData): string {
-  if (now.reading) return "Reading your mail and the class guide now.";
+  if (now.reading) return now.own ? "Reading your mail and the class guide now." : "Reading the class guide now.";
   if (!now.set_up) return "Hub can’t draft errands yet: its private model key isn’t set up.";
   const looked = now.looked ? `${now.looked.text}.` : "Hub hasn’t looked yet.";
+  if (!now.own) return `${looked} Only the class guide’s are here: Hub doesn’t read your own mail.`;
   return `${looked} Nothing is sent, paid or booked until you do it.`;
 }
 
@@ -279,18 +281,26 @@ export function Errands() {
         <button type="button" class="btn ghost" disabled={now.reading} onClick={() => void send("read").then((a) => { say(a.error ?? a.said ?? "Looking"); void loadErrands(); })}>
           {now.reading ? "Looking…" : "Look again"}</button>
       </div>
-      <section class="block">
-        <h2>Replies open in</h2>
-        <div class="choices two" role="radiogroup" aria-label="Replies open in">
-          {([["mail", "Your mail app"], ["gmail", "Gmail on the web"]] as const).map(([value, name]) => (
-            <button type="button" role="radio" aria-checked={now.compose === value} class={"choice" + (now.compose === value ? " on" : "")} key={value}
-              onClick={() => void send("settings", { compose: value }).then((a) => { say(a.error ?? a.said ?? "Done"); void loadErrands(); })}>{name}</button>
-          ))}
-        </div>
-      </section>
-      <p class="quiet">Each morning Hub reads the emails that need you, bills, invitations and the class guide’s to-dos, and drafts what
-        would finish each one. It never sends, pays, books or orders anything: your tap opens it filled in, and you finish it there.
-        It closes an errand by itself when it sees your reply, the event on your calendar or a confirmation email.</p>
+      {now.own && (
+        <section class="block">
+          <h2>Replies open in</h2>
+          <div class="choices two" role="radiogroup" aria-label="Replies open in">
+            {([["mail", "Your mail app"], ["gmail", "Gmail on the web"]] as const).map(([value, name]) => (
+              <button type="button" role="radio" aria-checked={now.compose === value} class={"choice" + (now.compose === value ? " on" : "")} key={value}
+                onClick={() => void send("settings", { compose: value }).then((a) => { say(a.error ?? a.said ?? "Done"); void loadErrands(); })}>{name}</button>
+            ))}
+          </div>
+        </section>
+      )}
+      {now.own ? (
+        <p class="quiet">Each morning Hub reads the emails that need you, bills, invitations and the class guide’s to-dos, and drafts what
+          would finish each one. It never sends, pays, books or orders anything: your tap opens it filled in, and you finish it there.
+          It closes an errand by itself when it sees your reply, the event on your calendar or a confirmation email. Your errands
+          are yours alone; the class guide’s are everyone’s at home, and one tap of Done finishes them for all.</p>
+      ) : (
+        <p class="quiet">Each morning Hub reads the class guide’s to-dos and gets each one ready for a tap. They are everyone’s at
+          home: when one of you finishes one, it’s done for all. Errands from mail show only to the person whose mail it is.</p>
+      )}
     </div>
   );
 }

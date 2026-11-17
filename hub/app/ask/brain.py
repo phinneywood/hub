@@ -191,10 +191,11 @@ def earlier(login):
     return '\n'.join(lines)
 
 
-def _known(text, topics):
-    """What Hub knows about the day for these topics, as JSON for the model, or None when it can't be read."""
+def _known(text, topics, login=None):
+    """What Hub knows about the day for these topics, for the person asking, as JSON for the model, or None when it
+    can't be read."""
     try:
-        return json.dumps(private.data(text, topics), ensure_ascii=False, default=str)
+        return json.dumps(private.data(text, topics, login), ensure_ascii=False, default=str)
     except Exception:  # noqa: BLE001 - the model can still look it up, or say it can't see it
         log.warning('ask: the day could not be read')
         return None
@@ -258,7 +259,7 @@ async def run(text, login, build=None):
             yield finish(str(error), status='refused')
             return
         try:            # no model of Ask's own yet: Luna answers questions about the day, as before
-            said, usage = await run_in_threadpool(private.answer, text, topics)
+            said, usage = await run_in_threadpool(private.answer, text, topics, login)
             status = 'ok'
         except private.Unavailable as problem:
             said, usage, status = str(problem), None, 'failed'
@@ -267,7 +268,7 @@ async def run(text, login, build=None):
         yield finish(said, is_private=True, status=status)
         return
     before = await run_in_threadpool(earlier, login)
-    known = await run_in_threadpool(_known, text, topics) if topics else None
+    known = await run_in_threadpool(_known, text, topics, login) if topics else None
     turn = tools.Turn(text=text, login=login, strangers=bool(known))
     # Names, titles and mail are other people's text. None of it can close a section and start one of its own.
     prompt = (f'<house>\n{_inside(await run_in_threadpool(house))}\n</house>\n' + (f'<earlier>\n{_inside(before)}\n</earlier>\n' if before else '')

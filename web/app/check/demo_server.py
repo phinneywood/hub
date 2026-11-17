@@ -14,7 +14,9 @@ made-up day.
 
 Errands shows a made-up week (tests/errands_world.py): an invitation, a bill, a booking, a calendar invitation and
 two class to-dos, read once by Hub's real reading and drafting on a stand-in for its model. Opening a step only
-notes it here; nothing is sent anywhere, and "Add to the list" puts things on the made-up Kitchen list.
+notes it here; nothing is sent anywhere, and "Add to the list" puts things on the made-up Kitchen list. The mail's
+errands are the owner's; a request with the header `tailscale-user-login: casey@example.com` is the made-up partner,
+whose own mail Hub doesn't read, and sees the class guide's two only.
 
 Ask works here too, on a stand-in for its model (tests/ask_script.py) that picks a tool from a few plain words:
 "dim the kitchen", "everything off", "some jazz in the bedroom, softly", "play it in the dining room too",
@@ -34,7 +36,7 @@ from pathlib import Path
 scratch = tempfile.mkdtemp(prefix='hub-app-check-')
 os.environ.update(HUB_DATA_DIR=scratch, HUB_BACKGROUND_JOBS='disabled', HUB_BRIDGE_URL='http://127.0.0.1:9',
                   HUB_BRIDGE_TOKEN_FILE=str(Path(scratch) / 'absent'), HUB_KITCHEN_SOCKET=str(Path(scratch) / 'absent.sock'),
-                  HUB_HA_BROKER_SOCKET=str(Path(scratch) / 'absent-broker.sock'), HUB_ALLOWED_LOGINS='me@example.com',
+                  HUB_HA_BROKER_SOCKET=str(Path(scratch) / 'absent-broker.sock'), HUB_ALLOWED_LOGINS='me@example.com,casey@example.com',
                   PYDANTIC_AI_NO_BANNER='1', HUB_RELEASES_DIR=str(Path(scratch) / 'releases'))
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
@@ -61,7 +63,9 @@ _ready = Path(scratch) / 'releases'
 (_ready / ('d' * 40) / 'venv').mkdir(parents=True)
 (_ready / 'queue').mkdir()
 (_ready / 'pending.json').write_text(json.dumps({'sha': 'd' * 40, 'subjects': ['Home: a made-up change, ready to deploy']}))
-(Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'}}))
+# Two made-up people: the owner, whose Google account is the bridge's main one, and a partner Hub reads no mail of yet.
+(Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'}, 'people': [
+    {'name': 'Alex', 'logins': ['me@example.com'], 'accounts': ['default']}, {'name': 'Casey', 'logins': ['casey@example.com'], 'accounts': []}]}))
 world = app_world.install(patch)
 
 # The Activity screen: a made-up evening in Home Assistant's logbook, and Apple Home through a stand-in HomeClaw.
@@ -222,7 +226,8 @@ def stage(what: str):
 
 
 class SignedIn:
-    """Every request counts as the owner's phone, so taps work. The demo has only a made-up house to change."""
+    """A request without a login counts as the owner's phone, so taps work; one may name another login (the browser
+    check opens the app as the partner, casey@example.com). The demo has only a made-up house to change."""
 
     def __init__(self, inner):
         self.inner = inner

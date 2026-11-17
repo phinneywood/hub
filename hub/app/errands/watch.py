@@ -13,6 +13,11 @@ the owner has opened the others. A call can't be seen, so it waits for the owner
 back when its time comes; one whose event or class day has passed, or that waited STALE_DAYS, is let go as missed (a
 bill keeps waiting past its due date, as it still needs paying). A run makes at most WATCH_READS bridge reads; an
 errand nobody has tapped is looked at every CHECK_EVERY.
+
+Proof is looked for only in the account the errand came from: the main account's sent mail, calendar and sorted mail
+for its own errands (store.MAIN). A household errand (the class guide's) is never closed by what one person's mail or
+calendar shows; a tap closes it, or its day passing. An account no one at home owns (store.mapped()) isn't read for
+proof: nobody could see what it closed.
 """
 import re
 import threading
@@ -120,7 +125,7 @@ def finish(errand, how, now=None):
     from ...tools.gmail import triage
     now = store.now() if now is None else now
     store.update(errand['id'], state='done', how=how, ended_at=now, until=None)
-    if errand['message_id']:
+    if errand['message_id'] and errand['account'] == store.MAIN:        # Hub's sorted mail is the main account's
         row = triage.get(errand['message_id'])
         if row and row['state'] == 'open':
             triage.done(errand['message_id'])
@@ -143,7 +148,7 @@ def _quiet(errand, today, now):
         else:
             store.update(errand['id'], state='missed', ended_at=now)
         return True
-    row = triage.get(errand['message_id']) if errand['message_id'] else None
+    row = triage.get(errand['message_id']) if errand['message_id'] and errand['account'] == store.MAIN else None
     if row and row['state'] == 'done':
         store.update(errand['id'], state='done', how='handled', ended_at=now)
         return True
@@ -190,14 +195,14 @@ def run(now=None):
 
 
 def _run(now):
-    today, ended, reads = home.today(), 0, _Reads(WATCH_READS)
+    today, ended, reads, owned = home.today(), 0, _Reads(WATCH_READS), store.mapped()
     errands = store.rows("state in ('ready', 'opened', 'later')")
     errands.sort(key=lambda e: (e['state'] != 'opened', e['checked_at'] or 0))      # what was just tapped first
     for errand in errands:
         if _quiet(errand, today, now):
             ended += 1
             continue
-        if errand['state'] == 'later':
+        if errand['state'] == 'later' or errand['account'] != store.MAIN or store.MAIN not in owned:   # its own account's mail only
             continue
         left = reads.left
         proof, part = _proof(errand, now, reads)

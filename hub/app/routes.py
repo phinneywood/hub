@@ -351,10 +351,10 @@ def engine_tap(what: str, request: Request, body: dict = Body(...)):
 # ---- Today (hub/app/today.py): what needs a person, then the day ----
 
 @router.get('/api/today')
-def day():
-    """The Today screen as data. Reads what Hub already keeps; calls no model."""
+def day(request: Request):
+    """The Today screen as data, for the person whose device asks. Reads what Hub already keeps; calls no model."""
     from . import today
-    return today.picture()
+    return today.picture(login=_login(request))
 
 
 @router.post('/api/today/tick')

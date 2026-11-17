@@ -476,7 +476,7 @@ def look_up(ctx: RunContext[Turn], topics: list[Literal['mail', 'calendar', 'sch
     turn = ctx.deps
     turn.again = turn.strangers = True
     try:
-        return {'data': private.data(turn.text, set(topics) or {'today'})}
+        return {'data': private.data(turn.text, set(topics) or {'today'}, turn.login)}
     except Exception:  # noqa: BLE001 - a reader that failed is an answer the model can pass on
         return {'not_done': 'Hub couldn’t read that just now.'}
 
@@ -490,7 +490,7 @@ def errands(ctx: RunContext[Turn], show: Literal['ready', 'done'] = 'ready') -> 
     turn = ctx.deps
     turn.again = turn.strangers = True
     try:
-        found = catalog.errands_lookup(show)
+        found = catalog.errands_lookup(show, login=turn.login)
     except Exception:  # noqa: BLE001 - a reader that failed is an answer the model can pass on
         return {'not_done': 'Hub couldn’t read its errands just now.'}
     if show == 'ready' and found.get('errands'):

@@ -58,8 +58,9 @@ def about(text, rooms=()):
     return {topic for topic, pattern in TOPICS.items() if pattern.search(text)}
 
 
-def data(text, topics):
-    """The bounded lookups for these topics: what the old chat's model was given, and no more."""
+def data(text, topics, login=None):
+    """The bounded lookups for these topics: what the old chat's model was given, and no more. `login`: who asks;
+    the errands are only theirs and the household's."""
     from ...engine import catalog
     data = {'today': home.today().isoformat(), 'weekday': home.today().strftime('%A')}
     if 'mail' in topics:
@@ -78,27 +79,27 @@ def data(text, topics):
     if 'today' in topics:
         data['needs_the_owner_today'] = catalog.today_lookup()
         try:
-            data['errands_ready_for_a_tap'] = catalog.errands_lookup()
+            data['errands_ready_for_a_tap'] = catalog.errands_lookup(login=login)
         except Exception:  # noqa: BLE001 - the rest of the day still answers
             pass
     return data
 
 
-def request(text, topics):
+def request(text, topics, login=None):
     """The one request this sends: Luna's pinned route, the question, and the data for its topics."""
-    content = '<question>' + luna.clip(text, 600) + '</question>\n<data>' + json.dumps(data(text, topics), ensure_ascii=False) + '</data>'
+    content = '<question>' + luna.clip(text, 600) + '</question>\n<data>' + json.dumps(data(text, topics, login), ensure_ascii=False) + '</data>'
     return {'model': luna.MODEL, 'messages': [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': content}],
             'max_completion_tokens': OUTPUT_TOKENS, 'reasoning': {'effort': 'none'}, 'provider': luna.PROVIDER, 'stream': False}
 
 
-def answer(text, topics=None):
+def answer(text, topics=None, login=None):
     """(the answer, usage) for a question about mail, the calendar, school or today. Raises Unavailable."""
     topics = topics or about(text) or {'today', 'mail'}
     token = luna.key()
     if not token:
         raise Unavailable('Hub can’t look at mail or the calendar yet: its private model key isn’t set up.')
     try:
-        response = httpx.post(luna.URL, json=request(text, topics), timeout=luna.TIMEOUT, follow_redirects=False,
+        response = httpx.post(luna.URL, json=request(text, topics, login), timeout=luna.TIMEOUT, follow_redirects=False,
                               headers={'Authorization': 'Bearer ' + token, 'X-Title': 'Hub'})
     except httpx.HTTPError:
         raise Unavailable('Hub couldn’t reach its private model just now. Try again in a moment.') from None

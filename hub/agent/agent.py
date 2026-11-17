@@ -100,16 +100,19 @@ def _signed(run, source, slug, hidden=()):
 
 
 def _tool(lookup):
+    """A lookup as a tool. One that reads per person takes `login`: who asks comes from the turn, never the model."""
+    whose = 'login' in inspect.signature(lookup.run).parameters
+
     def run(ctx: RunContext[Turn], **kwargs) -> ToolReturn:
         with ask_trace.call(ctx.deps.trace, lookup.slug, 'lookup', kwargs, getattr(ctx, 'tool_call_id', None)) as call:
             try:
-                found = lookup.run(**kwargs)
+                found = lookup.run(**kwargs, **({'login': ctx.deps.login} if whose else {}))
             except Exception as error:  # noqa: BLE001 - a broken source is an answer the model can pass on, not a failed chat
                 call.failed(error)
                 found = dict(catalog.UNAVAILABLE)
             call.returned(found)
         return ToolReturn(return_value=found, metadata=[_citation(lookup)])
-    return _signed(run, lookup.run, lookup.slug)
+    return _signed(run, lookup.run, lookup.slug, hidden=('login',))
 
 
 def _handoff(handoff):

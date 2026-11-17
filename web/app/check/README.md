@@ -25,7 +25,8 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
 - Errands shows what Hub got ready, the most pressing first, with what finished by itself; puts the class guide's
   pumpkin on the shopping list and back with Undo; opens one errand's ways, steps and drafted reply; notes a reply
   opened in the mail app, and closes that errand by itself once the reply is in sent mail; Today shows the three
-  most pressing and counts them in its sentence, and Ask draws them under its answer;
+  most pressing and counts them in its sentence, and Ask draws them under its answer; and the other person at home,
+  whose mail Hub doesn't read, sees only the class guide's two on Errands and Today;
 - System opens Versions, which lists the releases and leads back;
 - Mail leads with the emails that need you and the unanswered question, takes a tick and puts it back, and
   files a kind; Kitchen shows the list with each thing's product and where it stands, what needs a pick, a cart

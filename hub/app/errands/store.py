@@ -8,29 +8,38 @@ States: ready (waiting for a tap), opened (the owner opened where it gets finish
 done, later (hidden until a time), dismissed ("Not this"), missed (its date passed, or it waited too long), skipped
 (Hub read it and nothing needed doing; no text is kept). `steps` holds the steps of the chosen way the owner has
 taken, as "kind" names (mail, open, call, calendar, list).
+
+Whose errand it is: `account` is the Google account it was read from ("default", the bridge's main account, for
+mail), and only those hub/people.py lets see that account see it or tap it. The class guide's to-dos are the
+household's (account ''): everyone sees them, and one person's Done closes them for all. A request with no login
+(this Mac itself), or with a login Hub doesn't know, sees the household's only.
 """
 import json
 import time
 from contextlib import closing
 
-from ... import home, store
+from ... import config, home, people, store
 
 KEEP_TEXT_DAYS = 14
 KEEP_DAYS = 60
 OPEN = ('ready', 'opened', 'later')
 ENDED = ('done', 'dismissed', 'missed', 'skipped')
+HOUSEHOLD = ''                   # the account of an errand that is everyone's: the class guide's to-dos
+MAIN = 'default'                 # the bridge's main account (/gmail/*, /calendar/events), as hub/people.py names it
 
 SCHEMA = """
 create table if not exists errands(
-  id integer primary key, key text not null unique, source text not null, kind text not null,
-  title text not null default '', why text not null default '', due text, facts text not null default '{}',
-  quote text not null default '', choices text not null default '[]',
+  id integer primary key, account text not null default '', key text not null, source text not null,
+  kind text not null, title text not null default '', why text not null default '', due text,
+  facts text not null default '{}', quote text not null default '', choices text not null default '[]',
   message_id text, thread_id text, sender text, sender_name text, subject text, reply_to text, received real,
   state text not null default 'ready', chose integer, steps text not null default '[]', how text,
   until real, undo text, made_day text not null,
-  created_at real not null, updated_at real not null, opened_at real, ended_at real, checked_at real);
+  created_at real not null, updated_at real not null, opened_at real, ended_at real, checked_at real,
+  unique(account, key));
 create index if not exists errands_state on errands(state);
-create table if not exists errands_tried(key text primary key, tries integer not null, at real not null);
+create table if not exists errands_tried(account text not null default '', key text not null, tries integer not null,
+  at real not null, primary key(account, key));
 create table if not exists errands_settings(key text primary key, value text not null);
 """
 JSON_FIELDS = ('facts', 'choices', 'steps', 'undo')
@@ -74,24 +83,47 @@ def get(errand_id):
     return found[0] if found else None
 
 
+def sees(login, errand):
+    """Whether this person may see the errand, and tap it: the household's, anyone; one read from a Google account,
+    only someone hub/people.py lets see that account."""
+    return errand['account'] == HOUSEHOLD or (bool(login) and people.sees(login, errand['account']))
+
+
+def rows_for(login, where='1', args=()):
+    """The errands this person may see, of those `where` picks."""
+    return [e for e in rows(where, args) if sees(login, e)]
+
+
+def accounts_of(login):
+    """This person's own accounts, in a steady order (hub/people.py gives a set)."""
+    return sorted(people.accounts(login)) if login else []
+
+
+def mapped():
+    """The accounts someone who may sign in owns: the only ones whose mail is read for errands, or watched for proof.
+    An account no one owns makes errands no one could see, so it isn't read at all."""
+    return {account for login in config.ALLOWED_LOGINS for account in people.accounts(login)}
+
+
 def keys():
-    """Every source item Hub has made an errand from, or read and found nothing to do in."""
+    """Every source item Hub has made an errand from, or read and found nothing to do in: (account, key) pairs, as the
+    same email in two people's mailboxes is two errands."""
     with closing(db()) as conn:
-        return {r['key'] for r in conn.execute('select key from errands')}
+        return {(r['account'], r['key']) for r in conn.execute('select account, key from errands')}
 
 
-def add(key, source, made, *, state='ready', how=None, message=None, now=None):
-    """Keep one new errand. `made` is the checked draft (draft.check); `message`: the email it came from
-    ({id, thread_id, sender, name, subject, reply_to, received}). Returns its id, or None when one exists for the key
-    already."""
+def add(key, source, made, *, account=HOUSEHOLD, state='ready', how=None, message=None, now=None):
+    """Keep one new errand, read from `account`. `made` is the checked draft (draft.check); `message`: the email it
+    came from ({id, thread_id, sender, name, subject, reply_to, received}). Returns its id, or None when one exists for
+    the key already."""
     now = now_() if now is None else now
     message = message or {}
     with closing(db()) as conn, conn:
         cursor = conn.execute(
-            'insert or ignore into errands(key, source, kind, title, why, due, facts, quote, choices, message_id, thread_id,'
-            ' sender, sender_name, subject, reply_to, received, state, how, made_day, created_at, updated_at, ended_at)'
-            ' values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            (key, source, made.get('kind') or 'none', made.get('title') or '', made.get('why') or '', made.get('due'),
+            'insert or ignore into errands(account, key, source, kind, title, why, due, facts, quote, choices, message_id,'
+            ' thread_id, sender, sender_name, subject, reply_to, received, state, how, made_day, created_at, updated_at,'
+            ' ended_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            (account, key, source, made.get('kind') or 'none', made.get('title') or '', made.get('why') or '', made.get('due'),
              json.dumps(made.get('facts') or {}), made.get('quote') or '', json.dumps(made.get('choices') or []),
              message.get('id'), message.get('thread_id'), message.get('sender'), message.get('name'), message.get('subject'),
              message.get('reply_to') or None, message.get('received'), state, how, home.today().isoformat(), now, now,
@@ -109,24 +141,36 @@ def update(errand_id, **fields):
         conn.execute(f'update errands set {", ".join(k + "=?" for k in fields)} where id=?', (*fields.values(), int(errand_id)))
 
 
-def tried(key, now=None):
+def tried(key, account=HOUSEHOLD, now=None):
     """Count one failed reading of a source item (the model gave nothing usable for it). Returns the count."""
     now = now_() if now is None else now
     with closing(db()) as conn, conn:
-        conn.execute('insert into errands_tried(key, tries, at) values(?, 1, ?) on conflict(key) do update'
-                     ' set tries=tries+1, at=excluded.at', (key, now))
-        return conn.execute('select tries from errands_tried where key=?', (key,)).fetchone()['tries']
+        conn.execute('insert into errands_tried(account, key, tries, at) values(?, ?, 1, ?) on conflict(account, key) do update'
+                     ' set tries=tries+1, at=excluded.at', (account, key, now))
+        return conn.execute('select tries from errands_tried where account=? and key=?', (account, key)).fetchone()['tries']
 
 
 def tries():
+    """{(account, key): failed readings}."""
     with closing(db()) as conn:
-        return {r['key']: r['tries'] for r in conn.execute('select key, tries from errands_tried')}
+        return {(r['account'], r['key']): r['tries'] for r in conn.execute('select account, key, tries from errands_tried')}
 
 
 def setting(key, default=None):
     with closing(db()) as conn:
         row = conn.execute('select value from errands_settings where key=?', (key,)).fetchone()
     return row['value'] if row else default
+
+
+def compose(account):
+    """Where replies to this account's errands open: 'mail' (the device's mail app) or 'gmail'."""
+    found = setting('compose:' + account, 'mail') if account else 'mail'
+    return found if found in ('mail', 'gmail') else 'mail'
+
+
+def mailbox(account):
+    """The address of a Google account Hub reads, as its profile gave it, for the pages a tap opens; '' if not known."""
+    return setting('mailbox:' + account, '') if account else ''
 
 
 def put_setting(key, value):

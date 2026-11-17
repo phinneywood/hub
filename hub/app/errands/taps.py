@@ -6,6 +6,7 @@
   (hub/app/kitchen.py), as the owner would by typing them, with Undo. It closes the errand once every step is taken.
 - done, later (until tomorrow morning) and not ("Not this"), each with Undo (back).
 An errand from an email that needs the owner closes that email with it on the Mail screen, and Undo opens it again.
+Only someone who may see an errand may tap it (store.sees); to anyone else it isn't there.
 """
 import time
 from datetime import datetime, time as clock, timedelta
@@ -37,7 +38,7 @@ def _undo(errand, **more):
 def _close_email(errand):
     """Mark the email the errand came from as handled. True if this tap did it."""
     from ...tools.gmail import triage
-    return bool(errand['message_id']) and triage.done(errand['message_id'])
+    return bool(errand['message_id']) and errand['account'] == store.MAIN and triage.done(errand['message_id'])
 
 
 def _choice(errand, body):
@@ -120,7 +121,7 @@ def _back(errand, login):
             kitchen.remove(item_id, login)
         except kitchen.Refused:
             continue                     # already off the list, or Kitchen isn't answering: the rest is put back
-    if was.get('email') and errand['message_id']:
+    if was.get('email') and errand['message_id'] and errand['account'] == store.MAIN:
         triage.reopen(errand['message_id'])
     store.update(errand['id'], undo=None, **{name: was.get(name) for name in
                                              ('state', 'chose', 'steps', 'how', 'until', 'opened_at', 'ended_at')})
@@ -135,7 +136,7 @@ def tap(errand_id, do, body, login, now=None):
         errand = store.get(int(errand_id))
     except (TypeError, ValueError):
         errand = None
-    if errand is None or errand['state'] == 'skipped':
+    if errand is None or errand['state'] == 'skipped' or not store.sees(login, errand):
         raise Refused('That errand isn’t there any more.')
     if do == 'back':
         return _back(errand, login)
@@ -159,3 +160,5 @@ def look(now=None):
     if store.rows("state='opened' limit 1"):
         return watch.watch_soon(now)
     return False
+
+

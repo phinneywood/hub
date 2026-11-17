@@ -11,6 +11,12 @@ Luna sees of it is in draft.py, and senders with AI switched off are never read.
 times a run and LUNA_CALLS_PER_DAY times a day, within the monthly limit every kind of run shares. An item whose
 answer couldn't be used is tried again on a later run, TRIES times in all; an item Luna says needs nothing is kept as
 a bare "skipped" row, without its text, so it isn't read again.
+
+The mail is the bridge's main account's, and so are its errands (store.MAIN); the class guide's are the household's.
+One call to Luna never holds two accounts' items, and the calendar's free times go only with that account's own mail,
+so nothing of one person's mail can shape an errand someone else sees. The morning reads each account someone at home
+owns (store.mapped(): one nobody owns isn't read, as nobody could see its errands); "Look again" reads the asker's
+own. The class guide is read either way. The limits are the household's, whoever asks.
 """
 import hashlib
 import re
@@ -87,7 +93,7 @@ def _mail(now, known, tries):
                         " order by received desc", (now - LOOK_DAYS * 86400,))
     picked = {'needs': [], 'record': [], 'calendar': []}
     for row in rows:
-        key, subject = MAIL + row['id'], row['subject'] or ''
+        key, subject = (store.MAIN, MAIL + row['id']), row['subject'] or ''
         if key in known or tries.get(key, 0) >= TRIES or hub_store.ai_blocked(row['sender']):
             continue
         if row['kind'] == 'needs' and row['state'] == 'open' and row['checked'] == 1:
@@ -105,7 +111,7 @@ def _from_mail(row, message):
     text = re.sub(r'\n\s*\n\s*(?:\n\s*)+', '\n\n', draft.scrubbed(message.get('text') or '')).strip()[:draft.BODY]
     subject = ' '.join(str(row['subject'] or message.get('subject') or '').split())[:200]
     shown = luna.clip(judge.scrub(subject), 200)
-    return {'key': MAIL + row['id'], 'source': 'mail', 'sorted': row['kind'], 'sender': sender,
+    return {'key': MAIL + row['id'], 'account': store.MAIN, 'source': 'mail', 'sorted': row['kind'], 'sender': sender,
             'from': luna.clip(judge.scrub(_named(row['name'], sender)), 80), 'reply_to': answer,
             'subject': shown, 'received': datetime.fromtimestamp(row['received'], home.PACIFIC).date(), 'text': text,
             'said': shown + '\n' + text, 'links': links.links(message, sender),
@@ -135,13 +141,14 @@ def _school(today, known, tries):
         except ValueError:
             continue
         key = school_key(row)
-        if not today <= day <= last or key in known or tries.get(key, 0) >= TRIES:
+        if not today <= day <= last or (store.HOUSEHOLD, key) in known or tries.get((store.HOUSEHOLD, key), 0) >= TRIES:
             continue
         title = luna.clip(judge.scrub(row.get('title') or ''), 160)
         details = luna.clip(judge.scrub(row.get('details') or ''), draft.BODY)
         start, end = row.get('start_time') or None, row.get('end_time') or None
         at = home.clock_label(start) if start else (row.get('time_note') or '')[:80] or None
-        found.append({'key': key, 'source': 'school', 'sorted': 'school', 'sender': '', 'from': 'the class guide',
+        found.append({'key': key, 'account': store.HOUSEHOLD, 'source': 'school', 'sorted': 'school', 'sender': '',
+                      'from': 'the class guide',
                       'reply_to': '', 'subject': title, 'received': None, 'text': details, 'said': title + '\n' + details,
                       'links': [], 'message': None,
                       'school': {'date': day.isoformat(), 'time': at, 'start': start, 'end': end,
@@ -174,46 +181,58 @@ def free_times(now=None):
     return spread[:FREE_TIMES]
 
 
-def _account():
-    """The owner's own mailbox, so the Gmail and Calendar pages a tap opens are in the right account."""
+def _mailbox():
+    """The main account's own address, so the Gmail and Calendar pages a tap opens are in the right account."""
     try:
         mailbox = str(bridge.get('/gmail/profile', ttl=300).get('mailbox') or '').strip().lower()
     except bridge.BridgeError:
         return
-    if links.address(mailbox) == mailbox and mailbox != store.setting('account'):
-        store.put_setting('account', mailbox)
+    if links.address(mailbox) == mailbox and mailbox != store.mailbox(store.MAIN):
+        store.put_setting('mailbox:' + store.MAIN, mailbox)
 
 
 def _keep(candidate, answer, today, now):
     """Check Luna's answer about one candidate and keep what passed. Returns 'made', 'skipped' or 'unusable'."""
+    key, source, account = candidate['key'], candidate['source'], candidate['account']
     try:
         made = draft.check(answer, candidate, today)
     except draft.Unusable:
-        store.tried(candidate['key'], now)
+        store.tried(key, account, now)
         return 'unusable'
     if made is None:
-        store.add(candidate['key'], candidate['source'], {'kind': draft.NOTHING}, state='skipped', now=now)
+        store.add(key, source, {'kind': draft.NOTHING}, account=account, state='skipped', now=now)
         return 'skipped'
     if made['facts'].get('autopay'):                      # nothing to do but know it: kept as done, said so
-        store.add(candidate['key'], candidate['source'], made, state='done', how='autopay', message=candidate['message'], now=now)
+        store.add(key, source, made, account=account, state='done', how='autopay', message=candidate['message'], now=now)
         return 'made'
-    store.add(candidate['key'], candidate['source'], made, message=candidate['message'], now=now)
+    store.add(key, source, made, account=account, message=candidate['message'], now=now)
     return 'made'
 
 
-def run(transport=None, now=None):
-    """Read what is new and draft its errands. Never raises; returns counts."""
+def _batches(candidates):
+    """The candidates in calls to Luna of at most ITEMS_PER_CALL, each holding one account's items only."""
+    by_account = {}
+    for candidate in candidates:
+        by_account.setdefault(candidate['account'], []).append(candidate)
+    return [items[start:start + draft.ITEMS_PER_CALL] for items in by_account.values()
+            for start in range(0, len(items), draft.ITEMS_PER_CALL)]
+
+
+def run(transport=None, now=None, accounts=None):
+    """Read what is new and draft its errands. `accounts`: whose mail to read (None: each one someone at home owns);
+    the class guide's to-dos are read either way. Never raises; returns counts."""
     if not _lock.acquire(blocking=False):
         return {'status': 'busy'}
     try:
-        return _run(transport, now)
+        return _run(transport, now, accounts)
     finally:
         _lock.release()
 
 
-def _run(transport, now):
+def _run(transport, now, accounts=None):
     now = store.now() if now is None else now
     today, day = home.today(), home.today().isoformat()
+    accounts = store.mapped() if accounts is None else set(accounts)
     store.prune(now)
     if not luna.configured():
         return {'status': 'not_set_up'}
@@ -229,11 +248,11 @@ def _run(transport, now):
     except Exception:  # noqa: BLE001 - the guide that can't be read leaves the mail to read
         school = []
     try:
-        rows = _mail(now, known, tries)
+        rows = _mail(now, known, tries) if store.MAIN in accounts else []     # the bridge reads the main account's only
     except Exception:  # noqa: BLE001
         rows, spend.failed = [], True
     if rows:
-        _account()
+        _mailbox()
     for row in rows:
         if reads >= READS_PER_RUN or spend.late():
             break
@@ -242,18 +261,18 @@ def _run(transport, now):
             message = bridge.get('/gmail/message', ttl=0, message_id=row['id'])
         except bridge.BridgeError as error:
             if error.status == 404:                    # gone from Gmail: nothing to do
-                store.add(MAIL + row['id'], 'mail', {'kind': draft.NOTHING}, state='skipped', now=now)
+                store.add(MAIL + row['id'], 'mail', {'kind': draft.NOTHING}, account=store.MAIN, state='skipped', now=now)
                 continue
             spend.failed = True
             break
         candidates.append(_from_mail(row, message))
     candidates += school[:max(0, READS_PER_RUN - len(candidates))]
     free = free_times() if any(c['source'] == 'mail' for c in candidates) else []
-    for start in range(0, len(candidates), draft.ITEMS_PER_CALL):
-        batch = candidates[start:start + draft.ITEMS_PER_CALL]
+    for batch in _batches(candidates):
         for n, candidate in enumerate(batch, 1):
             candidate['ref'] = f'i{n}'
-        reply = spend.luna(draft.request(batch, free, today), transport)
+        mine = free if batch[0]['account'] == store.MAIN else []      # the main calendar's free times: its own mail only
+        reply = spend.luna(draft.request(batch, mine, today), transport)
         if reply is None:
             break
         answers = {}
@@ -273,13 +292,14 @@ def reading():
     return bool(thread and thread.is_alive())
 
 
-def read_soon(transport=None):
-    """Read behind the page, so the phone doesn't wait. One at a time. Proof is looked for first."""
+def read_soon(transport=None, accounts=None):
+    """Read behind the page, so the phone doesn't wait. One at a time. Proof is looked for first. `accounts`: whose
+    mail, as for run()."""
     def work():
         from . import watch
         try:
             watch.run()
-            run(transport)
+            run(transport, accounts=accounts)
         except Exception:  # noqa: BLE001 - the screen says the read didn't finish; the reason is not kept
             hub_store.log('errands read failed')
     if not reading():

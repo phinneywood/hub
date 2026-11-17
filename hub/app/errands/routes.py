@@ -1,11 +1,14 @@
 """The app's door to errands: the screen as data, "Look again", the taps and the one setting.
 
-Looking is free for any device on the tailnet; a tap needs a signed-in device, as every other tap in the app does.
+Everything is for the person whose device asks (its Tailscale login): they see, tap and set only their own errands
+and the household's. A device with no login (this Mac itself) sees the household's only. A tap needs a signed-in
+device, as every other tap in the app does.
 """
 from fastapi import APIRouter, Body, Request
 from fastapi.responses import JSONResponse
 
-from . import picture, read, taps
+from ... import people
+from . import picture, read, store, taps
 
 router = APIRouter()
 
@@ -23,33 +26,38 @@ def _signed_out():
 
 
 @router.get('/api/errands')
-def errands_screen():
+def errands_screen(request: Request):
     """The Errands screen as data, from Hub's own table. No Gmail call, no model. When the owner has opened
     something, Hub looks for proof that it was finished behind the screen, and `checking` says so."""
     taps.look()
-    return picture.screen()
+    return picture.screen(login=_login(request))
 
 
 @router.post('/api/errands/read')
 def errands_read(request: Request):
-    """"Look again": close what is done, then read what is new, behind the screen. Within the day's limits."""
-    if _login(request) is None:
+    """"Look again": close what is done, then read what is new, behind the screen: the asker's own mail and the
+    class guide. Within the day's limits."""
+    login = _login(request)
+    if login is None:
         return _signed_out()
-    read.read_soon()
-    return {'ok': True, 'said': 'Looking through your mail and the class guide'}
+    mine = people.accounts(login)
+    read.read_soon(accounts=mine)
+    return {'ok': True, 'said': 'Looking through your mail and the class guide' if mine else 'Looking through the class guide'}
 
 
 @router.post('/api/errands/settings')
 def errands_settings(request: Request, body: dict = Body(default={})):
-    """{"compose": "mail" or "gmail"}: where a drafted reply opens."""
-    from . import store
-    if _login(request) is None:
+    """{"compose": "mail" or "gmail"}: where this person's drafted replies open."""
+    login = _login(request)
+    if login is None:
         return _signed_out()
     writes = body.get('compose')
     if writes not in picture.COMPOSE:
         return _refuse('Pick your mail app or Gmail.', 400)
-    store.put_setting('compose', writes)
-    return {'ok': True, 'said': 'Replies open in Gmail' if writes == 'gmail' else 'Replies open in your mail app'}
+    said = picture.set_compose(login, writes)
+    if said is None:
+        return _refuse('Hub doesn’t read your Google account yet, so there are no replies to open.')
+    return {'ok': True, 'said': said}
 
 
 @router.post('/api/errands/{errand_id}/{do}')
@@ -62,6 +70,5 @@ def errands_tap(errand_id: int, do: str, request: Request, body: dict = Body(def
         said, more = taps.tap(errand_id, do, body, login)
     except taps.Refused as error:
         return _refuse(error)
-    from . import store
     errand = store.get(errand_id)
-    return {'ok': True, 'said': said, 'card': picture.card(errand) if errand else None, **more}
+    return {'ok': True, 'said': said, 'card': picture.card(errand, login=login) if errand else None, **more}

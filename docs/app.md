@@ -144,7 +144,7 @@ restores each lamp's last brightness), `scene` (by its name, or by the words tha
 pause, resume, next, previous, volume, a room joining or leaving), `remember`, `groceries` (the shopping list and
 the cart; see “Kitchen”), `kitchen` (passes the owner's words to the kitchen assistant, whose answer appears
 under the request), `look_up` (reads mail, the calendar, the class guide or today's list; read-only), `errands`
-(the errands Hub got ready, drawn as cards under the answer; read-only), and the
+(the asker's errands Hub got ready, drawn as cards under the answer; read-only), and the
 tools that change how the house is set up and work every other device (next section). Lights, scenes and music go
 through `hub/tools/house/control.py` like a tap: the same allowlist, the same record and Undo, counted against
 Ask's 30 changes a minute. Ask changes nothing for a program without a login, or while the owner has that kind
@@ -336,7 +336,26 @@ calendar, unless the calendar sent the invitation itself. A bill paid automatica
 one to three ways to finish it. A way with one step is that step's button; one with more (a reply, then the
 calendar) opens a sheet with each step and the reply as it will be sent. Then Done, Tomorrow (back at 7 the next
 morning) and Not this, each with Undo; Done also marks the email handled on the Mail screen. "Replies open in"
-picks the mail app or Gmail. Every tap needs a signed-in device.
+picks the mail app or Gmail, for the person's own account. Every tap needs a signed-in device.
+
+**Who sees what** (`docs/people.md`, `hub/people.py`). Each errand keeps the account it was read from, never a login:
+`"default"` (the bridge's main Google account) for one from mail, a bill or a calendar invitation, and none for the
+class guide's to-dos, which are the household's.
+- A person sees, taps and is told about the errands of the accounts `people.sees` gives their login, and the
+  household's. That holds on the Errands screen, the cards on Today, Ask's `errands` lookup, what the older questions
+  about the day hand the model, and `catalog.errands_lookup`. Hub's "Needs you" list is made for no one, so its line
+  counts the household's only.
+- The household's are everyone's: one person's Done closes a class to-do for both, and either can put it back.
+- A device with no login (this Mac itself), a login `"people"` doesn't name, a person with no account, and a
+  `"people"` that can't be read see the household's errands only. Without `"people"` and with one allowed login, that
+  login owns `"default"`; with more, nobody does until `"people"` says whose it is.
+- A tap or an Undo on an errand the person can’t see is answered exactly as for one that doesn’t exist.
+- "Replies open in", the tries a failed reading has, and each item's key are kept per account. A person with no
+  account isn't offered "Replies open in".
+- The morning read and the proof watch cover only accounts someone who may sign in owns; "Look again" reads the
+  asker's own and the class guide. Mail comes only to `"default"` today, but nothing assumes it is the only account.
+  The class guide's errands are drafted in their own call to Luna, without anyone's calendar, and a class to-do is
+  never closed by one person's mail; Luna's limits stay the household's.
 
 **Closing by itself** (`watch.py`): Hub looks for proof, as little as it takes: something the owner sent to that
 address since the email came (sent mail through the bridge, dates only), an event that day on the calendar at the
@@ -347,15 +366,18 @@ every six hours, so a reply sent straight from the mail app closes it too. A cal
 Done. An errand whose event or class day has passed, or that waited 21 days, is let go as missed; a bill keeps
 waiting.
 
-**Elsewhere**: Hub's "Needs you" list (the older Today page, the morning brief) has one line with the count. Ask's
-model is given each errand's title, why, due date and button words when asked (`catalog.errands_lookup`), never
-addresses, links or the email's text, and nothing from a sender with AI switched off.
+**Elsewhere**: Hub's "Needs you" list (the older Today page, the morning brief) has one line with the count of the
+household's. Ask's model is given each of the asker's errands' title, why, due date and button words when asked
+(`catalog.errands_lookup`, whose login comes from the request and is hidden from the model), never addresses, links or
+the email's text, and nothing from a sender with AI switched off.
 
 **Keeping** (`store.py`): one row an errand in Hub's own database, never in Gmail. Its words are blanked 14 days
 after it ends and the row is deleted after 60, as sorted mail is.
 
 Tests: `tests/test_app_errands.py`, on a made-up week (`tests/errands_world.py`) with a stand-in for Luna and the
-made-up Kitchen. The demo server shows the same week, counted from the day it runs.
+made-up Kitchen, and two made-up people: one whose mail Hub reads and one whose it doesn't. The demo server shows the
+same week, counted from the day it runs, to the owner; a request with `tailscale-user-login: casey@example.com` is the
+made-up partner, who sees the class guide's two only.
 
 ## Mail
 

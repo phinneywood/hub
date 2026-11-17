@@ -9,18 +9,22 @@ from datetime import date, datetime, time as clock, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from hub import home, luna, store as hub_store
+from hub import config, home, luna, people, store as hub_store
 from hub.app import today as screen
-from hub.app.ask import route
+from hub.app.ask import private, route
 from hub.app.errands import draft, links, picture, read, store, taps, watch
 from hub.engine import catalog, overnight, state
+from hub.golden import dryrun
 from hub.main import app
 from hub.tools.gmail import triage
 from tests import app_world, ask_script, errands_world, kitchen_world
 from tests.errands_world import HOST, NOW
 
 client = TestClient(app)
-SIGNED_IN = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
+ME = 'me@example.com'                # the owner: Hub reads their mail (the bridge's main account)
+PARTNER = 'casey@example.com'        # the other person at home, whose own mail Hub doesn't read
+SIGNED_IN = {'origin': 'http://testserver', 'tailscale-user-login': ME}
+AS_PARTNER = {'origin': 'http://testserver', 'tailscale-user-login': PARTNER}
 ON_THIS_MAC = {'origin': 'http://testserver'}
 ADDRESS = re.compile(r'[\w.+-]+@[\w-]+(?:\.[\w-]+)+')
 MAILBOX = 'mailbox.example'          # stands for a mailbox anyone can have (gmail.com and the like)
@@ -30,6 +34,19 @@ MAILBOX = 'mailbox.example'          # stands for a mailbox anyone can have (gma
 def week(monkeypatch):
     """The made-up week, not read yet."""
     return errands_world.install(monkeypatch)
+
+
+def household(value):
+    (config.DATA_DIR / 'household.json').write_text(json.dumps(value))
+
+
+@pytest.fixture
+def two(monkeypatch):
+    """Two people at home, as household.json says (hub/people.py): the owner, whose Google account Hub reads, and a
+    partner whose account it doesn't read yet."""
+    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {ME, PARTNER})
+    household({'people': [{'name': 'Alex', 'logins': [ME], 'accounts': [people.DEFAULT]},
+                          {'name': 'Casey', 'logins': [PARTNER], 'accounts': []}]})
 
 
 @pytest.fixture
@@ -44,12 +61,13 @@ def by_title(words):
     return next(e for e in store.rows() if words in e['title'])
 
 
-def errands():
-    return client.get('/app/api/errands').json()
+def errands(headers=SIGNED_IN):
+    """The Errands screen, as the owner's phone (or another device) sees it."""
+    return client.get('/app/api/errands', headers=headers).json()
 
 
-def tap(errand, do, **body):
-    return client.post(f'/app/api/errands/{errand["id"]}/{do}', json=body, headers=SIGNED_IN)
+def tap(errand, do, headers=SIGNED_IN, **body):
+    return client.post(f'/app/api/errands/{errand["id"]}/{do}', json=body, headers=headers)
 
 
 def sorted_mail(message_id, sender, subject, received, kind='record', state='filed'):
@@ -102,6 +120,7 @@ def test_luna_sees_no_address_link_or_sender_switched_off_on_its_private_route(r
     guide = json.loads(ready.asked[1]['messages'][1]['content'].removeprefix('<data>').removesuffix('</data>'))
     assert [(i['from'], i['title'], i['date']) for i in guide['items']] == [
         ('the class guide', 'Return the photo order form', '2026-11-18'), ('the class guide', 'Bring a small pumpkin', '2026-11-20')]
+    assert guide['free_times'] == []          # the household's errands are drafted apart, with nothing from the owner's calendar
 
 
 def test_a_read_keeps_to_the_days_calls(week):
@@ -118,9 +137,10 @@ def test_a_read_keeps_to_the_months_money(week):
 def test_an_answer_that_cant_be_used_is_tried_twice_then_left(week):
     week.answers['cleaning'] = {'kind': 'pay me', 'title': 'Pay'}
     read.run(transport=week.luna)
-    assert 'mail:e-dentist' not in store.keys() and store.tries()['mail:e-dentist'] == 1
+    dentist = (store.MAIN, 'mail:e-dentist')
+    assert dentist not in store.keys() and store.tries()[dentist] == 1
     read.run(transport=week.luna)
-    assert store.tries()['mail:e-dentist'] == 2
+    assert store.tries()[dentist] == 2
     week.read.clear()
     read.run(transport=week.luna)
     assert 'e-dentist' not in week.read
@@ -383,7 +403,7 @@ def test_every_tap_needs_a_signed_in_device(ready):
         assert client.post(f'/app/api/errands/{path}', json=body, headers=ON_THIS_MAC).status_code == 403
     away = {'origin': 'https://evil.example', 'tailscale-user-login': 'me@example.com'}
     assert client.post(f'/app/api/errands/{party["id"]}/done', json={}, headers=away).status_code == 403
-    assert store.get(party['id'])['state'] == 'ready' and store.setting('compose') is None
+    assert store.get(party['id'])['state'] == 'ready' and store.setting('compose:' + store.MAIN) is None
 
 
 # ---- closing by itself ----
@@ -478,38 +498,43 @@ def test_the_screen_looks_for_proof_behind_itself_once_something_is_opened(ready
 # ---- Today, Hub's list and Ask ----
 
 def test_today_shows_the_three_most_pressing_and_lists_no_email_or_class_to_do_twice(ready):
-    part = screen._ready()
+    part = screen._ready(ME)
     assert [c['title'] for c in part['cards']] == [
         'Answer Sam’s invitation to parent coffee', 'Return the photo order form', 'RSVP to Jordan’s birthday party']
     assert part['more'] == 3 and [c['family'] for c in part['cards']] == [False, True, False]
     assert {row['key'] for row in screen._emails()} == {'mail:e-news', 'mail:e-quiet'}       # the others are errands
+    assert client.get('/app/api/today', headers=SIGNED_IN).json()['ready'] == part
     assert [row['title'] for row in screen._school(NOW.date())] == ['Photo day']
     tap(by_title('pumpkin'), 'done')
     assert [row['title'] for row in screen._school(NOW.date())] == ['Photo day', 'Bring a small pumpkin']
 
 
 def test_hubs_list_has_one_line_for_errands_without_a_sender_switched_off(ready):
-    line = picture.items()[0]
+    line = picture.items(ME)[0]
     assert (line['key'], line['tone'], line['title']) == ('errands', 'info', '6 errands ready for your tap')
     assert line['why'] == ('Answer Sam’s invitation to parent coffee; Return the photo order form; RSVP to Jordan’s birthday '
                            'party; and 3 more.')
     hub_store.set_ai_blocked(HOST, True)
-    assert 'Jordan' not in picture.items()[0]['why']
-    found = catalog.errands_lookup()
+    assert 'Jordan' not in picture.items(ME)[0]['why']
+    found = catalog.errands_lookup(login=ME)
     assert found['count'] == 5 and not any('Jordan' in e['what'] for e in found['errands'])
+    # The list itself is made for no one in particular, so it counts only the household's: the class guide's two.
+    assert [(i['title'], i['why']) for i in catalog.errand_items()] == [
+        ('2 errands ready for your tap', 'Return the photo order form; Get a small pumpkin for Friday.')]
 
 
 def test_what_ask_may_read_of_errands_holds_no_address_link_or_email_text(ready):
-    found = catalog.errands_lookup()
+    found = catalog.errands_lookup(login=ME)
     told = json.dumps(found, ensure_ascii=False)
     assert found['count'] == 6 and not ADDRESS.search(told) and 'http' not in told and 'Hi Jamie' not in told
     assert set(found['errands'][0]) == {'ref', 'what', 'why', 'from', 'kind', 'due', 'ways', 'started'}
     tap(by_title('Jordan'), 'done')
-    assert {e['what'] for e in catalog.errands_lookup('done')['errands']} == {'RSVP to Jordan’s birthday party', 'Water bill pays itself'}
+    assert {e['what'] for e in catalog.errands_lookup('done', login=ME)['errands']} == {
+        'RSVP to Jordan’s birthday party', 'Water bill pays itself'}
 
 
-def ask(text):
-    with client.stream('POST', '/app/api/ask', json={'text': text}, headers={**SIGNED_IN, 'accept': 'text/event-stream'}) as stream:
+def ask(text, headers=SIGNED_IN):
+    with client.stream('POST', '/app/api/ask', json={'text': text}, headers={**headers, 'accept': 'text/event-stream'}) as stream:
         events = [json.loads(line.removeprefix('data: ')) for line in stream.iter_lines() if line.startswith('data: ')]
     return ''.join(e['text'] for e in events if e['t'] == 'say').strip(), [e['card'] for e in events if e['t'] == 'card']
 
@@ -521,9 +546,103 @@ def test_ask_shows_errands_as_cards_and_its_model_sees_no_address(ready, monkeyp
     monkeypatch.setattr(route, 'ready', lambda: None)
     said, cards = ask('what errands are ready?')
     assert said == '6 errands are ready for your tap. First: Answer Sam’s invitation to parent coffee.'
-    assert cards == [{'kind': 'errands', 'ids': [e['id'] for e in picture.ready()]}]
+    assert cards == [{'kind': 'errands', 'ids': [e['id'] for e in picture.ready(login=ME)]}]
     seen = repr(ask_script.SEEN)
     assert HOST not in seen and 'https://' not in seen and 'Hi Jamie' not in seen
+
+
+@pytest.fixture
+def scripted(monkeypatch):
+    """Ask on its stand-in model (tests/ask_script.py), in a made-up house, with a made-up Kitchen."""
+    ask_script.SEEN.clear()
+    app_world.install(monkeypatch)
+    monkeypatch.setattr(route, 'build', lambda http_client=None: ask_script.MODEL)
+    monkeypatch.setattr(route, 'ready', lambda: None)
+    return kitchen_world.install(monkeypatch)
+
+
+def guide():
+    """The titles of the class guide's open errands: the household's, which everyone sees."""
+    return sorted(e['title'] for e in store.rows("state in ('ready', 'opened')") if e['account'] == store.HOUSEHOLD)
+
+
+# ---- each person's own ----
+
+def test_each_person_sees_their_own_errands_and_the_households(two, ready, scripted):
+    mine, theirs, mac = errands(), errands(AS_PARTNER), errands(ON_THIS_MAC)
+    assert len(guide()) == 2 and len(mine['ready']) == 6 and mine['own'] and mine['signed_in']
+    assert sorted(e['title'] for e in theirs['ready']) == guide() and all(e['family'] for e in theirs['ready'])
+    assert not theirs['own'] and theirs['signed_in'] and theirs['done'] == []      # the bill that pays itself is the owner's
+    assert sorted(e['title'] for e in mac['ready']) == guide() and not mac['own'] and not mac['signed_in']
+    # Today, Ask's lookup and what the older questions hand the model: the same for each
+    today = client.get('/app/api/today', headers=AS_PARTNER).json()['ready']
+    assert sorted(c['title'] for c in today['cards']) == guide() and today['more'] == 0
+    assert len(client.get('/app/api/today', headers=SIGNED_IN).json()['ready']['cards']) == 3
+    assert sorted(e['what'] for e in catalog.errands_lookup(login=PARTNER)['errands']) == guide()
+    assert catalog.errands_lookup('done', login=PARTNER)['errands'] == []
+    handed = private.data('what needs me today', {'today'}, PARTNER)['errands_ready_for_a_tap']
+    assert sorted(e['what'] for e in handed['errands']) == guide()
+    said, cards = ask('what errands are ready?', AS_PARTNER)
+    assert said.startswith('2 errands are ready for your tap.')
+    assert cards == [{'kind': 'errands', 'ids': [e['id'] for e in picture.ready(login=PARTNER)]}]
+    assert 'Lakeside' not in repr(ask_script.SEEN) and 'Jordan' not in repr(ask_script.SEEN)
+
+
+def test_someone_elses_errand_isnt_there_for_them(two, ready):
+    bill, pumpkin, missing = by_title('Lakeside'), by_title('pumpkin'), {'id': 999999}
+    for do, body in (('done', {}), ('later', {}), ('not', {}), ('back', {}), ('go', {'choice': 0, 'step': 'open'})):
+        theirs, nothing = tap(bill, do, AS_PARTNER, **body), tap(missing, do, AS_PARTNER, **body)
+        assert (theirs.status_code, theirs.json()) == (nothing.status_code, nothing.json())
+    assert store.get(bill['id'])['state'] == 'ready'
+    # the class guide's are everyone's: one person's Done closes it for both, and either can put it back
+    assert tap(pumpkin, 'done', AS_PARTNER).json()['said'] == 'Done'
+    assert pumpkin['id'] not in [e['id'] for e in errands()['ready']]
+    assert tap(pumpkin, 'back').json()['said'] == 'Put back' and store.get(pumpkin['id'])['state'] == 'ready'
+
+
+def test_where_replies_open_is_each_accounts_and_no_login_is_kept(two, ready):
+    refused = client.post('/app/api/errands/settings', json={'compose': 'gmail'}, headers=AS_PARTNER)
+    assert refused.status_code == 409 and 'Google account' in refused.json()['error']
+    assert client.post('/app/api/errands/settings', json={'compose': 'gmail'}, headers=SIGNED_IN).json()['said'] == 'Replies open in Gmail'
+    assert store.compose(store.MAIN) == 'gmail' and errands()['compose'] == 'gmail' and errands(AS_PARTNER)['compose'] == 'mail'
+    with closing(store.db()) as conn:
+        kept = [row['key'] for row in conn.execute('select key from errands_settings')]
+        columns = [row['name'] for row in conn.execute('pragma table_info(errands)')]
+    assert '@' not in ' '.join(kept) and 'login' not in columns
+
+
+def test_without_a_mapping_that_says_whose_nobody_sees_mail_errands(ready, monkeypatch):
+    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {ME, PARTNER})          # a second login, and nothing says whose mail is whose
+    assert sorted(e['title'] for e in errands()['ready']) == guide()
+    household({'people': {'name': 'Alex', 'logins': [ME], 'accounts': [people.DEFAULT]}})      # can't be read: no one's
+    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {ME})
+    assert sorted(e['title'] for e in errands()['ready']) == guide()
+    assert tap(by_title('Lakeside'), 'done').json() == {'error': 'That errand isn’t there any more.'}
+
+
+def test_the_morning_reads_only_mail_someone_at_home_owns(week, monkeypatch):
+    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {ME, PARTNER})          # nobody owns the main account yet
+    assert read.run(transport=week.luna)['status'] == 'ok'
+    assert {e['account'] for e in store.rows()} == {store.HOUSEHOLD} and len(week.asked) == 1     # the class guide only
+    household({'people': [{'name': 'Alex', 'logins': [ME], 'accounts': [people.DEFAULT]}]})
+    read.run(transport=week.luna)
+    assert {e['account'] for e in store.rows()} == {store.HOUSEHOLD, store.MAIN}
+    asked = []                                                            # "Look again" reads the asker's own
+    monkeypatch.setattr(read, 'read_soon', lambda transport=None, accounts=None: asked.append(set(accounts)))
+    assert client.post('/app/api/errands/read', headers=AS_PARTNER).json()['said'] == 'Looking through the class guide'
+    assert client.post('/app/api/errands/read', headers=SIGNED_IN).json()['said'] == 'Looking through your mail and the class guide'
+    assert asked == [set(), {store.MAIN}]
+
+
+def test_proof_is_looked_for_only_in_mail_someone_at_home_owns(ready, monkeypatch):
+    party = by_title('Jordan')
+    tap(party, 'go', choice=1, step='mail')
+    ready.replied(HOST, NOW.timestamp() + 60)
+    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {ME, PARTNER})          # nobody owns the main account now
+    searched = len(ready.searches)
+    assert watch.run() == 0 and len(ready.searches) == searched
+    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {ME})
+    assert watch.run() == 1
 
 
 # ---- keeping ----

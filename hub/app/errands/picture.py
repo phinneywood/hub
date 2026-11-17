@@ -4,12 +4,15 @@ Each errand is a card: what to do, one line of why, the facts that were found in
 and one to three ways to finish it. A way is one or more steps, each opening one exact place with everything filled
 in (links.py builds every address from what was checked when the errand was made), or, for the shopping list, the
 one thing Hub does itself. A way with a single step is the button itself; one with more opens a short list of them.
+
+Everything here is for one person, `login` (the Tailscale login of the device asking): only the errands they may see
+(store.sees), their own setting for where replies open, and Gmail and Google Calendar opened in their own account.
 """
 import re
 import time
 from datetime import date, datetime
 
-from ... import home, luna, store as hub_store, today as hub_today
+from ... import home, luna, people, store as hub_store, today as hub_today
 from ...engine import catalog, judge, state
 from . import draft, links, read, store, taps, watch
 
@@ -28,10 +31,35 @@ STILL = {'calendar': 'Add it to your calendar too, or tap Done.', 'mail': 'Send 
 COMPOSE = ('mail', 'gmail')
 
 
-def compose():
-    """Where a drafted reply opens: the device's own mail app (mailto:), or Gmail on the web."""
-    found = store.setting('compose', 'mail')
-    return found if found in COMPOSE else 'mail'
+def compose(login):
+    """Where this person's drafted replies open: the device's own mail app (mailto:), or Gmail on the web. The setting
+    belongs to their account; one with none has nothing to reply to."""
+    mine = store.accounts_of(login)
+    return store.compose(mine[0]) if mine else 'mail'
+
+
+def set_compose(login, writes):
+    """Where this person's replies open from now on: 'mail' or 'gmail', for each account of theirs. Returns what to
+    tell them, or None when Hub reads no account of theirs."""
+    mine = store.accounts_of(login)
+    for account in mine:
+        store.put_setting('compose:' + account, writes)
+    if not mine:
+        return None
+    return 'Replies open in Gmail' if writes == 'gmail' else 'Replies open in your mail app'
+
+
+def own(login):
+    """Whether Hub reads a Google account of this person's, so their own mail can make errands for them."""
+    return bool(store.accounts_of(login))
+
+
+def _opens_in(errand, login):
+    """The Google account Gmail and Calendar open in for this errand: the one its email came to, or for the
+    household's, the asker's own (when Hub knows its address). '' lets Google pick."""
+    if errand['account'] != store.HOUSEHOLD:
+        return store.mailbox(errand['account'])
+    return next((store.mailbox(a) for a in store.accounts_of(login) if store.mailbox(a)), '')
 
 
 def _hour(value):
@@ -178,26 +206,26 @@ def _opened(errand, ways, now):
     left = [s for s in way['steps'] if not s['taken'] and s['kind'] != seen]
     if seen:
         told = ENDINGS[errand['how']] + '. ' + (STILL.get(left[0]['kind'], 'Tap Done once it’s all done.') if left else 'Tap Done.')
-    else:
+    else:                       # the household's errands close by a tap: no one's own mail is read for them
         proof = next((LOOKING_FOR[s['kind']] for s in way['steps'] if s['kind'] in LOOKING_FOR
-                      and (s['kind'] != 'mail' or errand['reply_to'])), None)
+                      and (s['kind'] != 'mail' or errand['reply_to'])), None) if errand['account'] == store.MAIN else None
         told = f'Hub closes this when it sees {proof}.' if proof else 'Tap Done once it’s done.'
     return {'label': f'Opened {_ago(errand["opened_at"] or now, now)}', 'watch': told, 'way': way['n'], 'left': len(left)}
 
 
-def card(errand, now=None, account=None, writes=None):
-    """One errand as the app draws it."""
+def card(errand, now=None, login=None, writes=None):
+    """One errand as the app draws it for this person. Its replies open where its own account's setting says."""
     now_s = store.now() if now is None else now
     day = datetime.fromtimestamp(now_s, home.PACIFIC).date()
-    account = store.setting('account', '') if account is None else account
-    writes = writes or compose()
+    account = _opens_in(errand, login)
+    writes = writes or (store.compose(errand['account']) if errand['account'] != store.HOUSEHOLD else compose(login))
     ways = _ways(errand, account, writes, day) if errand['state'] in store.OPEN else []
     ended = errand['state'] in store.ENDED
     return {'id': errand['id'], 'key': f'errand-{errand["id"]}', 'kind': errand['kind'], 'name': NAMES.get(errand['kind'], ''),
             'title': errand['title'], 'why': errand['why'], 'quote': errand['quote'], 'from': _who(errand),
             'state': errand['state'], 'due': None if ended else due(errand, day), 'facts': facts(errand, day),
             'ways': ways, 'opened': _opened(errand, ways, now_s) if errand['state'] == 'opened' else None,
-            'email': _email(errand, account), 'family': errand['source'] == 'school',
+            'email': _email(errand, account), 'family': errand['account'] == store.HOUSEHOLD,
             'ended': ({'text': ENDINGS.get(errand['how'] or '', 'Done') if errand['state'] == 'done' else
                        'Not needed' if errand['state'] == 'dismissed' else 'Missed',
                        'when': _ago(errand['ended_at'] or now_s, now_s),
@@ -212,39 +240,39 @@ def _rank(errand, day):
     return (not soon, errand['state'] != 'opened', on, -errand['created_at'])
 
 
-def ready(now=None, most=None):
-    """The errands waiting for the owner, most pressing first, as cards."""
+def ready(now=None, most=None, login=None):
+    """The errands waiting for this person, most pressing first, as cards."""
     now = store.now() if now is None else now
     day = datetime.fromtimestamp(now, home.PACIFIC).date()
-    rows = sorted(store.rows("state in ('ready', 'opened')"), key=lambda e: _rank(e, day))
-    account, writes = store.setting('account', ''), compose()
-    return [card(e, now, account, writes) for e in rows[:most]]
+    rows = sorted(store.rows_for(login, "state in ('ready', 'opened')"), key=lambda e: _rank(e, day))
+    return [card(e, now, login) for e in rows[:most]]
 
 
-def screen(now=None):
-    """The Errands screen: what is ready, what was set aside, what finished lately, and how the reading went."""
+def screen(now=None, login=None):
+    """The Errands screen for this person: what is ready, what was set aside, what finished lately, how the reading
+    went, and whether Hub reads a Google account of theirs (`own`; without one, only the household's are here)."""
     now = store.now() if now is None else now
-    account, writes = store.setting('account', ''), compose()
-    later = sorted(store.rows("state='later'"), key=lambda e: e['until'] or 0)
-    ended = store.rows("state in ('done', 'dismissed', 'missed') and ended_at >= ? order by ended_at desc limit 20",
-                       (now - RECENT_DAYS * 86400,))
+    later = sorted(store.rows_for(login, "state='later'"), key=lambda e: e['until'] or 0)
+    ended = store.rows_for(login, "state in ('done', 'dismissed', 'missed') and ended_at >= ? order by ended_at desc",
+                           (now - RECENT_DAYS * 86400,))[:20]
     last = state.runs(read.KIND, limit=1)
     looked = last[0] if last else None
-    return {'ok': True, 'ready': ready(now), 'later': [card(e, now, account, writes) for e in later],
-            'done': [card(e, now, account, writes) for e in ended], 'reading': read.reading(), 'checking': watch.looking(),
+    return {'ok': True, 'ready': ready(now, login=login), 'later': [card(e, now, login) for e in later],
+            'done': [card(e, now, login) for e in ended], 'reading': read.reading(), 'checking': watch.looking(),
             'looked': ({'text': 'Looked ' + _ago(looked['ts'], time.time()), 'failed': looked['status'] == 'error'} if looked else None),
-            'set_up': luna.configured(), 'compose': writes}
+            'set_up': luna.configured(), 'compose': compose(login), 'own': own(login), 'signed_in': bool(login)}
 
 
-def today_part(now=None):
-    """For Today: the few most pressing errands and how many more there are."""
-    found = ready(now)
+def today_part(now=None, login=None):
+    """For Today: this person's few most pressing errands and how many more there are."""
+    found = ready(now, login=login)
     return {'cards': found[:TODAY_MOST], 'more': max(0, len(found) - TODAY_MOST)}
 
 
-def items():
-    """Hub's "Needs you" list: one line for all errands, its title counts only, as mail's is."""
-    rows = store.rows("state in ('ready', 'opened')")
+def items(login=None):
+    """Hub's "Needs you" list: one line for the errands this person may see, its title counts only, as mail's is. The
+    list is built with no one signed in, so by default only the household's are counted."""
+    rows = store.rows_for(login, "state in ('ready', 'opened')")
     if not rows:
         return []
     day = home.today()
@@ -259,19 +287,19 @@ def items():
                           href='/app/#errands', cta='Open')]
 
 
-def lookup(show: str = 'ready') -> dict:
-    """Errands Hub got ready for the owner from their mail and the class guide: replies drafted, invitations,
-    bills with the page to pay them on, bookings, renewals, forms, things to buy and dates. show: ready (waiting for a
-    tap, most pressing first) or done (finished in the last week, and how). Hub never sends, pays or books anything
-    itself; each errand is finished by the owner's tap on its card."""
+def lookup(show: str = 'ready', login: str | None = None) -> dict:
+    """Errands Hub got ready for the person asking from their own mail and the class guide: replies drafted,
+    invitations, bills with the page to pay them on, bookings, renewals, forms, things to buy and dates. show: ready
+    (waiting for a tap, most pressing first) or done (finished in the last week, and how). Hub never sends, pays or
+    books anything itself; each errand is finished by a tap on its card."""
     now, day = store.now(), home.today()
     if show not in ('ready', 'done'):
         return {'error': 'show must be ready or done'}
     if show == 'ready':
-        rows = sorted(store.rows("state in ('ready', 'opened')"), key=lambda e: _rank(e, day))
+        rows = sorted(store.rows_for(login, "state in ('ready', 'opened')"), key=lambda e: _rank(e, day))
     else:
-        rows = store.rows("state in ('done', 'dismissed', 'missed') and ended_at >= ? order by ended_at desc",
-                          (now - RECENT_DAYS * 86400,))
+        rows = store.rows_for(login, "state in ('done', 'dismissed', 'missed') and ended_at >= ? order by ended_at desc",
+                              (now - RECENT_DAYS * 86400,))
     rows = [e for e in rows if not hub_store.ai_blocked(e['sender'] or '')]
     found = []
     for errand in rows[:LOOKUP_MOST]:

@@ -13,7 +13,7 @@
     "src/changes.tsx": "2b79d17b08040a67af92a1537c05d29fc5d0f5048c3bb0ae0389b5fa290f71a2",
     "src/day.ts": "dc1a1bf92187bde50d54b2dffe6490421b8bc0e8ec0251599a90b30f00d78ce4",
     "src/engine.tsx": "73e02de7a0502401c9ffa1f7287078495da7389732de093b59ddd7b4f22b9a7d",
-    "src/errands.tsx": "09a6d50d3162618c55c586195296c2dffb7b45ebb21e48a0ba501ece900234e3",
+    "src/errands.tsx": "5c1729f1535adb0c5ae0e59a71d30e06aee8d28033af128d63a14bfc2d24fc8f",
     "src/kitchen.tsx": "9117b5b03deadf5115f2bab062055fcc8071ae533abaec8c2b64ecd6408ace51",
     "src/mail.tsx": "fa9e5d328cc151dcec5a095d7737c36466c83942be110c4e424ce072cb69a208",
     "src/mailrules.tsx": "05d6c96620db2074636d23836776ef01c893ee1138087f62be923ce635fb51b8",
@@ -22,7 +22,7 @@
     "src/sheets.tsx": "3bdcf8198d629bddcdf9610e2235eff6aba1fc33a83d5762493db52a6289619a",
     "src/state.ts": "bcbf79a5b7e41cc7a54151db479ff8b06ccbe68ab590c2655ea0251efe37d14e",
     "src/today.tsx": "86c8b33eb4a8a8834d66b7ebd11a065d3b9609b4dd99fb0c5b37001d6ff461c6",
-    "src/types.ts": "0a98a3aff0a2b341a7c3d73b441da01739b37f6f37f17ab0b2ec4920adfcb1d3",
+    "src/types.ts": "9039df11f2dd3a13e3c7f96ec86e84bc2941ae3900e136c848d2a6f201504432",
     "src/ui.tsx": "87459922615e1703413efd6a53ee9780f2baa63f1acaac601f4e9ffe696d70ba",
     "src/versions.tsx": "6d296b6cd0c20090e657db9cd0bef035acb71ff020c327896fb98494e8fc21e1",
     "src/vite-env.d.ts": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
@@ -30,6 +30,6 @@
   },
   "built": {
     "app.css": "db67cec30cae191e053de2fa65119f5559b68868212e07571aa656075cb1b82c",
-    "app.js": "a93407d035209c2fe7535603fcbb9f9ac2ea7b9a9dd4bad877091a928aced8c4"
+    "app.js": "5b263cec987c8f49c1a00217005ea888c735af008c39c0073a3dfbd350036eff"
   }
 }
