@@ -16,9 +16,11 @@ def test_home_renders_one_tile_per_tool_even_when_sources_fail(monkeypatch):
     def broken():
         raise RuntimeError('synthetic failure')
     monkeypatch.setattr(home, 'SUMMARIES', {**home.SUMMARIES, 'gmail': broken, 'network': broken})
-    page = TestClient(app).get('/today')
+    page = TestClient(app).get('/today', headers={'tailscale-user-login': 'me@example.com'})
     assert page.status_code == 200
     assert page.text.count('class="tile ') == 8     # every tool but Ask, which is a main view
+    # Without a login (this Mac itself) the page is the household's: no Gmail or Calendar card (hub/people.py).
+    assert TestClient(app).get('/today').text.count('class="tile ') == 6
     assert home.UNAVAILABLE in page.text
     assert '<a href="/app/#today">Today</a>' in page.text      # the app's tabs, on every older page
 

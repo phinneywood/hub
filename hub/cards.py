@@ -7,7 +7,7 @@ Ask Hub. Nothing here reads a source of its own, writes, or calls a model.
 “Ask about this” passes a short reference, never text. Hub turns the reference into the question, so a
 link from outside can only ever fill the box with one of Hub's own questions, and the owner still sends it.
 """
-from . import home, today
+from . import home, people, today
 
 REF_LENGTH = 200
 
@@ -68,19 +68,20 @@ def tools(tiles, decided=()):
     return found
 
 
-def about(ref):
-    """What a reference stands for: a label for the page, the question, and what Hub will look at. None if unknown."""
+def about(ref, login=None):
+    """What a reference stands for: a label for the page, the question, and what Hub will look at. None if unknown.
+    A list item is found only among what this login may see (people.py), so its title never reaches anyone else."""
     from .engine import judge
     ref = str(ref or '')[:REF_LENGTH]
     kind, _, key = ref.partition(':')
     topic = TOPICS.get(ref) if askable(ref) else None
     if kind == 'need' and key:
         slug = key.removeprefix('tile-')
-        if key.startswith('tile-') and askable('tool:' + slug):
+        if key.startswith('tile-') and askable('tool:' + slug) and today.mine([{'slug': slug}], people.accounts(login)):
             topic = TOPICS['tool:' + slug]
         else:
             try:
-                item = next((n for n in today.needs_you() if n['key'] == key), None)
+                item = next((n for n in today.needs_you(accounts=people.accounts(login)) if n['key'] == key), None)
             except Exception:  # noqa: BLE001 - the list failing must not break the Ask page
                 item = None
             if item:
@@ -97,10 +98,12 @@ def about(ref):
             'from': 'Insights' if kind == 'insight' else 'Today'}
 
 
-def page():
-    """Everything the Today page shows, gathered once: the list, then a card per tool."""
+def page(login=None):
+    """Everything the Today page shows to this login, gathered once: the list, then a card per tool. A tool that
+    reads someone else's account (people.py) has no card here, and its problems aren't on the list."""
     from .tools import TOOLS
     jobs = today.start()
-    tiles = home.tiles(TOOLS)
-    decided = decisions(today.collect(jobs, tiles))
+    accounts = people.accounts(login)
+    tiles = today.mine(home.tiles(TOOLS), accounts)
+    decided = decisions(today.collect(jobs, tiles, accounts=accounts))
     return {'decisions': decided, 'tools': tools(tiles, decided)}

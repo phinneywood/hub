@@ -21,6 +21,15 @@ login a request carries:
 
 ## What follows the rule
 
+- Today's list (`hub/today.py`): every item carries its source's account; `gather`, `collect` and `needs_you` take
+  the asker's `accounts` and leave out anyone else's. A home tile counts as its source's (Gmail's and the
+  calendar's are `"default"`'s). The overnight review's suggestions, Hub's notes on what it did by itself and Hub's
+  own upkeep (its runs, a new version and Deploy) are the owner's: the review reads the owner's mail. A key that
+  arrives without its item (a tap that hides or ticks it) is placed by `today.account_of(key)`.
+- The app's Today and `/app/api/brief`, the older `/today` page and its cards, and "Ask about this" on a list item
+  are the asker's. The kitchen wall (`?wall=1`) is no one's: the household's things only.
+- One exception: `/today/brief` without a login, which the morning job on this Mac reads to send the owner's
+  phone its count, is the owner's list (`"default"`'s). Through Tailscale it is the asker's.
 - **Mail and Mail settings** in the app read only for a login that may see `"default"`. Anyone else gets
   `{"ok": true, "connected": false}` from `/app/api/mail` and `/app/api/mail-settings`, and a calm screen saying their
   mail isn't connected yet; their taps there are refused (403) and change nothing. `/app/api/home` says `"mail"`, and
@@ -33,7 +42,9 @@ login a request carries:
 - **Insights** draws its two inbox charts only for that person.
 - **Ask** reads mail and the calendar only for that person; anyone else's model is told they aren't theirs
   (`catalog.NOT_YOURS`), and nothing is read. School is everyone's. Today's list mixes the household's lines with the
-  owner's mail and calendar ones, so it goes only to that person until it can be cut to whoever asks.
+  owner's mail and calendar ones, so it goes only to that person until it can be cut to whoever asks. The family
+  brief's household part (`catalog.brief_lookup`: the weather and the house) goes with a question about the weather or
+  the day, to anyone.
 - **The older chat**: a lookup whose source reads an account (`catalog.account_of`) answers anyone else the same
   `NOT_YOURS` without reading. A lookup that cuts its answer to the asker takes `login` or `accounts`, which Hub fills
   in from the request and hides from the model. A chat is the person's who started it ('' for this Mac): nobody
@@ -52,6 +63,10 @@ login a request carries:
   is theirs to set; to anyone else the action isn't there. Household actions are anyone's.
 - **Errands** keep the account each was read from: see "Errands" in `docs/app.md`.
 - `/status` says only whether the Gmail profile read worked, with no address, so it stays open to everyone.
+
+**Before a version with this goes live**, a Hub that allows more than one login needs `"people"` in
+`household.json`, or nobody sees the owner's mail and calendar on Today (each such login is told why in a quiet
+line). `household.json` is read on every request, so adding it takes effect at once, with no restart.
 
 Tests: `tests/test_people.py`, and `tests/test_per_person.py` with two made-up people, one whose mail Hub reads and
 one whose it doesn't.

@@ -32,6 +32,7 @@
   --sound: #7FE0CF;
   --alarm: #FF8372;
   --scrim: rgba(8, 12, 26, .5);
+  --sun: #FFC56E;
 }
 
 /* Day: the same plan on paper, in daylight. */
@@ -50,6 +51,7 @@
   --sound: #0B8573;
   --alarm: #CF3F2C;
   --scrim: rgba(23, 32, 58, .34);
+  --sun: #D18A00;
 }
 
 * { box-sizing: border-box; margin: 0; }
@@ -556,7 +558,7 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
 
 @media (min-width: 1500px) {
   .wrap.day { max-width: 980px; }
-  .wrap.day .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 64px; align-items: start; }
+  .wrap.day .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 64px; align-items: start; }
   .wrap { max-width: 900px; }
 }
 
@@ -744,4 +746,146 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
   .tabs { gap: 0; padding: 0 10px 0 4px; }
   .tab { position: relative; padding: 0 9px; font-size: 17px; }
   .tab::before { position: absolute; left: 50%; bottom: 3px; margin-left: -3px; }
+}
+
+/* ---------- the family brief: the weather drawn, the house, the night, the line Ask wrote ----------
+   The sun is the one thing in lamplight; rain, cloud and the moon are drawn in ink. */
+.wx { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.wx.big { width: 56px; height: 56px; stroke-width: 1.25; }
+.wx circle { fill: currentColor; stroke: none; }
+.wx .lit { stroke: var(--sun); }
+.wx .lit circle { fill: var(--lamp); stroke: var(--sun); }
+.wx .flakes { stroke-width: 2.6; }
+
+.brief-note { margin-top: 18px; padding-left: 14px; box-shadow: inset 2px 0 0 var(--lamp); font-size: var(--t-m); line-height: 1.4; text-wrap: pretty; max-width: 46ch; }
+
+.overnight { margin-top: 20px; padding: 13px 16px 14px; border-radius: 16px; background: var(--raised); }
+.overnight.needs { box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--alarm) 55%, transparent); }
+.overnight h3 { font-size: var(--t-xs); font-weight: 500; color: var(--ink-3); letter-spacing: .01em; }
+.overnight p { margin-top: 2px; font-weight: 500; text-wrap: pretty; }
+.overnight ul { list-style: none; padding: 0; margin-top: 8px; }
+.overnight li { position: relative; padding: 3px 0 3px 17px; font-size: var(--t-s); color: var(--ink-2); line-height: 1.35; text-wrap: pretty; }
+.overnight li::before { content: ""; position: absolute; left: 1px; top: .72em; width: 7px; height: 7px; border-radius: 50%; background: var(--line-2); }
+.overnight li.fixed::before { background: var(--sound); }
+.overnight li.needs_you { color: var(--ink); }
+.overnight li.needs_you::before { background: var(--alarm); }
+
+.wxnow { display: grid; grid-template-columns: auto 1fr; gap: 0 14px; align-items: center; margin-top: 10px; }
+.wxnow-text b { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 10px; font-size: 42px; line-height: 1.05; font-weight: 300; letter-spacing: -.02em; }
+.wxnow-text b small { font-size: var(--t-m); font-weight: 400; letter-spacing: 0; color: var(--ink-2); }
+.wxnow-text span { display: block; margin-top: 3px; font-size: var(--t-s); color: var(--ink-2); text-wrap: pretty; }
+.wear { margin-top: 12px; font-size: var(--t-s); text-wrap: pretty; }
+.hours { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(48px, 1fr); margin: 14px calc(var(--gut) * -1) 0; padding: 0 var(--gut); overflow-x: auto; scrollbar-width: none; }
+.hours::-webkit-scrollbar { display: none; }
+.hour { display: grid; justify-items: center; gap: 5px; padding: 9px 2px 10px; border-radius: 12px; font-size: var(--t-xs); color: var(--ink-3); white-space: nowrap; }
+.hour .wx { color: var(--ink); }
+.hour b { font-size: var(--t-s); font-weight: 500; color: var(--ink); }
+.hour.wet { background: var(--raised); }
+[data-theme="day"] .hour.wet { background: var(--room); }
+.wxdays { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-top: 12px; border-radius: 14px; overflow: hidden; }
+.wxday { display: grid; justify-items: center; gap: 4px; padding: 10px 6px 11px; background: var(--raised); font-size: var(--t-xs); color: var(--ink-3); }
+.wxday b { font-size: var(--t-m); font-weight: 500; color: var(--ink); line-height: 1.1; }
+.wxday small { font-size: var(--t-xs); }
+.sunline { margin-top: 10px; font-size: var(--t-xs); color: var(--ink-3); }
+
+.block-says { margin: -2px 0 8px; font-size: var(--t-s); color: var(--ink-2); text-wrap: pretty; }
+.houserow .state { font-size: var(--t-s); font-weight: 500; color: var(--ink-2); white-space: nowrap; }
+.houserow.warn .state, .houserow.bad .state { color: var(--alarm); }
+.houserow.low .row-main span { color: var(--alarm); }
+.row.todo .row-main b::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 8px 2px 0; border-radius: 50%; background: var(--lamp); vertical-align: middle; }
+.row.need .row-act[aria-label^="Add"] { color: var(--on-lamp); background: var(--lamp); box-shadow: none; }
+
+/* ---------- the wall: the brief on the kitchen iPad, read from across the room ----------
+   Two columns in landscape (the time and the weather; the night, what the household needs and the house), the time
+   and the weather above the rest in portrait. It moves a few pixels each minute and at night it is a dim clock, so
+   nothing stays lit in one place for long. */
+[data-wall] body { overflow: hidden; }
+[data-wall="night"] body { background: #000; }
+.wall {
+  --wgap: 46px;
+  height: 100dvh; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 0 calc(var(--wgap) * 1.4);
+  padding: max(34px, env(safe-area-inset-top)) max(var(--wgap), env(safe-area-inset-right)) max(26px, env(safe-area-inset-bottom)) max(var(--wgap), env(safe-area-inset-left));
+  transform: translate(calc((var(--shift, 3) - 3) * 1px), calc((3 - var(--shift, 3)) * 1px));
+  -webkit-user-select: none; user-select: none;
+}
+.wcol { min-height: 0; overflow: hidden; display: flex; flex-direction: column; -webkit-mask-image: linear-gradient(#000 calc(100% - 30px), #0000); mask-image: linear-gradient(#000 calc(100% - 30px), #0000); }
+.wclock { font-size: clamp(88px, 10vw, 136px); line-height: .92; font-weight: 300; letter-spacing: -.04em; white-space: nowrap; }
+.wclock small { font-size: .24em; font-weight: 500; letter-spacing: 0; margin-left: .2em; color: var(--ink-3); }
+.wdate { margin-top: 10px; font-size: var(--t-xl); color: var(--ink-2); }
+.wweather { margin-top: 34px; }
+.wnow { display: grid; grid-template-columns: auto auto 1fr; gap: 0 14px; align-items: center; }
+.wnow .wx.big { width: 66px; height: 66px; }
+.wnow b { font-size: 58px; line-height: 1; font-weight: 300; letter-spacing: -.03em; }
+.wnow span { font-size: var(--t-m); color: var(--ink-2); line-height: 1.3; }
+.wrain { margin-top: 16px; font-size: var(--t-l); color: var(--ink-2); text-wrap: pretty; }
+.wrain.wet { color: var(--ink); font-weight: 500; }
+.wall .wear { font-size: var(--t-m); color: var(--ink-2); margin-top: 6px; }
+.wall .hours { margin: 18px 0 0; padding: 0; grid-auto-columns: minmax(0, 1fr); overflow: hidden; }
+.wall .hour { font-size: var(--t-xs); padding: 8px 0 9px; }
+.wall .hour b { font-size: var(--t-m); }
+.wall h2 { font-size: var(--t-s); font-weight: 500; color: var(--ink-3); letter-spacing: .01em; margin-bottom: 6px; }
+.wblock, .wall .block { margin-top: 30px; flex: none; }
+.wcol > :first-child { margin-top: 0; }
+.wall .rows { border-top-color: var(--line); }
+.wall .row { min-height: 58px; padding: 9px 0; grid-template-columns: 84px 1fr auto; }
+.wall .row.free { grid-template-columns: 1fr auto; }
+.wall .row-t { font-size: 22px; }
+.wall .row-main b { font-size: var(--t-l); line-height: 1.22; }
+.wall .row-main span { font-size: var(--t-s); }
+.wall .brief-note { margin-top: 0; font-size: var(--t-l); line-height: 1.35; }
+.wall .overnight { margin-top: 22px; }
+.wall .overnight + .wblock, .wall .brief-note + .wblock { margin-top: 26px; }
+.wquiet { margin-top: 10px; font-size: var(--t-m); color: var(--ink-3); text-wrap: pretty; }
+/* a need on the wall: a dot for how much it matters, what it is, and the list's button when there is one */
+.wall .row.wallneed { grid-template-columns: 9px 1fr auto; gap: 0 12px; align-items: start; }
+.wallneed::before { content: ""; width: 9px; height: 9px; margin-top: 8px; border-radius: 50%; background: var(--ink-3); }
+.wallneed.warn::before, .wallneed.bad::before { background: var(--alarm); }
+.wallneed.ok::before { background: var(--lamp); }
+.wall .row.wallneed .row-main span { color: var(--ink-2); }
+.wallneed .row-act { align-self: center; color: var(--on-lamp); background: var(--lamp); box-shadow: none; }
+/* the house on the wall: tiles, two to a row */
+.wsays { margin: -2px 0 10px; font-size: var(--t-s); color: var(--ink-2); text-wrap: pretty; }
+.wtiles { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; border-radius: 14px; overflow: hidden; }
+.wtile { padding: 10px 13px 11px; background: var(--raised); min-width: 0; }
+[data-theme="day"] .wtile { background: var(--room); }
+.wtile span { display: block; font-size: var(--t-xs); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wtile b { display: block; margin-top: 1px; font-size: var(--t-l); font-weight: 500; line-height: 1.2; }
+.wtile small { display: block; font-size: var(--t-xs); color: var(--ink-2); margin-top: 1px; }
+.wtile.bad b, .wtile.warn b, .wtile.low small { color: var(--alarm); }
+.wtile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.wall .wxdays { margin-top: 14px; }
+.wall.stale .wcol { opacity: .62; }
+.wstale { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); padding: 10px 16px; border-radius: 12px; background: var(--raised); color: var(--alarm); font-size: var(--t-s); font-weight: 500; white-space: nowrap; }
+.wall .toast { bottom: 40px; }
+
+/* at night: the time, how the morning starts, nothing else, dim on black */
+.wall.asleep { display: grid; place-items: center; grid-template-columns: 1fr; color: #6E7690; }
+.wnight { text-align: center; transform: translate(calc((var(--shift, 3) - 3) * 18px), calc((var(--shift, 3) - 3) * -9px)); }
+.asleep .wclock { font-size: clamp(120px, 17vw, 230px); font-weight: 200; color: #7C849C; }
+.asleep .wclock small { color: #4B5267; }
+.wnight-line { margin-top: 14px; font-size: 24px; color: #5A6178; display: flex; justify-content: center; align-items: center; gap: 10px; }
+.wnight-line .wx { width: 30px; height: 30px; color: #5A6178; }
+.asleep .wx .lit { stroke: #7C6A45; }
+.asleep .wx .lit circle { fill: none; }
+
+@media (orientation: portrait) and (min-width: 700px) {
+  .wall { grid-template-columns: 1fr 1fr; grid-template-rows: auto minmax(0, 1fr); row-gap: 38px; }
+  .wtime { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; column-gap: var(--wgap);
+           -webkit-mask-image: none; mask-image: none; }
+  .wtime .wweather { grid-column: 2; grid-row: 1 / span 2; margin-top: 4px; }
+  .wtime .wxdays { display: none; }
+  .wside { grid-column: 1 / -1; }
+}
+@media (max-width: 1100px) and (orientation: landscape) {
+  .wall { --wgap: 34px; }
+  .wall .hour:nth-child(n+7) { display: none; }
+  .wnow b { font-size: 50px; }
+}
+/* a phone opened on the wall: one column that scrolls */
+@media (max-width: 699px) {
+  [data-wall] body { overflow: auto; }
+  .wall { height: auto; display: block; padding: 28px 18px 60px; }
+  .wcol { -webkit-mask-image: none; mask-image: none; }
+  .wcol + .wcol { margin-top: 30px; }
+  .wall.asleep { display: grid; min-height: 100dvh; }
 }

@@ -17,11 +17,12 @@ TRIP_HORIZON_DAYS = 120
 RANK = {'bad': 0, 'warn': 1, 'ok': 2, 'info': 3}
 
 
-def rec(key, tone, title, why, *, href, cta, action=None, suggested=False, acts=None):
+def rec(key, tone, title, why, *, href, cta, action=None, suggested=False, acts=None, add=None):
     """action: slug of a catalog action that performs this step. suggested: came from the overnight review.
-    acts: buttons of the item's own, each {'post', 'label', 'primary'}, in place of the usual step and Not today."""
+    acts: buttons of the item's own, each {'post', 'label', 'primary'}, in place of the usual step and Not today.
+    add: what to put on the shopping list for it ("AA batteries"), which the app offers as one tap."""
     return {'key': key, 'tone': tone, 'title': title, 'why': why, 'href': href, 'cta': cta, 'action': action,
-            'post': None, 'suggested': suggested, 'acts': acts}
+            'post': None, 'suggested': suggested, 'acts': acts, 'add': add}
 
 
 def _plural(count, word):
@@ -212,30 +213,56 @@ def trip():
 
 
 def from_tiles(tiles):
-    """Problems the home tiles already found, so nothing is fetched twice."""
-    return [rec('tile-' + t['slug'], 'bad', t['headline'], t['detail'], href=t['href'], cta=t.get('cta') or 'Details')
-            for t in tiles if t['tone'] == 'bad']
+    """Problems the home tiles already found, so nothing is fetched twice. Each says whose account its tile reads."""
+    whose = _accounts_of_tiles()
+    return [{**rec('tile-' + t['slug'], 'bad', t['headline'], t['detail'], href=t['href'], cta=t.get('cta') or 'Details'),
+             'account': whose.get(t['slug'])} for t in tiles if t['tone'] == 'bad']
 
 
 def _checks():
+    """Every source's checks, each with whose account its source reads (people.py; None: the household's)."""
     from .engine import catalog
-    return [check for source in catalog.SOURCES for check in source.items or ()]
+    return [(check, source.account) for source in catalog.SOURCES for check in source.items or ()]
+
+
+def _accounts_of_tiles():
+    """Whose account each home tile reads, by its slug: a tile about Gmail or the calendar is that account's."""
+    from .engine import catalog
+    return {source.slug: source.account for source in catalog.SOURCES}
 
 
 def start():
     """Begin every source's checks in the home pool; pair with collect()."""
-    return [home._pool.submit(check) for check in _checks()]
+    return [(home._pool.submit(check), account) for check, account in _checks()]
 
 
 def rule_items():
-    """Every rule-based item, gathered in turn. For the overnight review; never raises."""
+    """Every rule-based item, gathered in turn. For the overnight review, which is the owner's; never raises."""
     found = []
-    for check in _checks():
+    for check, _ in _checks():
         try:
             found += check()
         except Exception:  # noqa: BLE001
             continue
     return found
+
+
+# Whose account a list item's key is about, by its start: what the owner's mail and calendar raise, and the overnight
+# review's suggestions and Hub's notes on what it did by itself (both read the owner's mail). Any other key is the
+# household's. Used where a key arrives without its item: a tap that hides or ticks it.
+KEY_ACCOUNTS = ('mail:', 'gmail-', 'calendar-', 'tile-gmail', 'tile-calendar', 'ai-', 'auto-', 'hub-')
+
+
+def account_of(key):
+    """people.DEFAULT for a key about the owner's accounts or Hub's own upkeep, None for the household's."""
+    from . import people
+    return people.DEFAULT if str(key).startswith(KEY_ACCOUNTS) else None
+
+
+def mine(tiles, accounts):
+    """The home tiles this person may see: a tile reading an account of someone else's is left out."""
+    whose = _accounts_of_tiles()
+    return [t for t in tiles if whose.get(t['slug']) is None or whose[t['slug']] in accounts]
 
 
 def _settle(item):
@@ -258,38 +285,43 @@ def show(key):
         store.unsnooze(GMAIL_NEXT)
 
 
-def collect(jobs, tiles=()):
+def collect(jobs, tiles=(), *, accounts):
     """Up to MAX_ITEMS recommendations, most urgent first, without anything snoozed. Never raises."""
-    return gather(jobs, tiles)[:MAX_ITEMS]
+    return gather(jobs, tiles, accounts=accounts)[:MAX_ITEMS]
 
 
-def gather(jobs, tiles=()):
-    """Every recommendation, most urgent first, without anything snoozed. Never raises."""
-    from . import store
+def gather(jobs, tiles=(), *, accounts):
+    """Every recommendation this person may see, most urgent first, without anything snoozed. Never raises.
+
+    `accounts`: the accounts whose things they see (people.accounts(login)). An item read from anyone else's account
+    is left out; the household's own (account None) are everyone's. The overnight review's suggestions and Hub's notes
+    on what it did by itself are the owner's: the review reads the owner's mail."""
+    from . import people, store
     from .engine import state
-    wait(jobs, timeout=DEADLINE_SECONDS)
+    wait([job for job, _ in jobs], timeout=DEADLINE_SECONDS)
     found = list(from_tiles(tiles))
-    for job in jobs:
+    for job, account in jobs:
         if not job.done():
             continue
         try:
-            found += job.result()
+            found += [{**item, 'account': account} for item in job.result()]
         except Exception:  # noqa: BLE001 - one broken source must not hide the others
             continue
     try:
         day = home.today().isoformat()
-        found += [rec(s['key'], s.get('tone', 'info'), s['title'], s['why'], href=s['href'], cta=s['cta'],
-                      suggested=s['key'].startswith('ai-')) for s in state.suggestions(day)]
+        found += [{**rec(s['key'], s.get('tone', 'info'), s['title'], s['why'], href=s['href'], cta=s['cta'],
+                         suggested=s['key'].startswith('ai-')), 'account': people.DEFAULT} for s in state.suggestions(day)]
         hidden = store.snoozed(day)
         found = [_settle(r) for r in found if r['key'] not in hidden]
     except Exception:  # noqa: BLE001 - without the store, items stay as plain links
         pass
+    found = [r for r in found if r.get('account') is None or r['account'] in accounts]
     found.sort(key=lambda r: RANK.get(r['tone'], 9))
     return found
 
 
-def needs_you(tiles=()):
-    return collect(start(), tiles)
+def needs_you(tiles=(), *, accounts):
+    return collect(start(), tiles, accounts=accounts)
 
 
 def brief(items):

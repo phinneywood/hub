@@ -3,7 +3,7 @@
   "sha": null,
   "from": "436cf142152f7a4ac6bee6479691d1efd0604c1f",
   "live": null,
-  "title": "Hub opens on Ask, with errands ready for one tap",
+  "title": "Hub opens on Ask, with errands ready for a tap and the family brief on each phone and the kitchen wall",
   "changes": [
    "Hub opens on Ask, and Ask is a chat: Hub speaks first, in a bubble, with the day in a sentence, what needs you with its circle and its button, and the house in a line with its scenes. Your messages are on the right in the lamp’s colour, Hub’s on the left, and the field says Message Hub.",
    "The bar is two places, Ask and House. Today, Mail and Kitchen open from Ask: from its cards, from under an answer, or by typing a few letters of their name.",
@@ -21,7 +21,13 @@
    "Chats on the older Ask page are each person’s own as well.",
    "Preschool’s tools for your own mailbox, how far Hub files your mail on its own, and the overnight review are yours to use; the class guide and the shared school mailbox stay everyone’s.",
    "Plan what’s missing on a recipe no longer sits on Planning. Kitchen’s answer shows right under the recipe: the cart plan with Add to cart and Not now, or what Kitchen said instead.",
-   "When Kitchen couldn’t answer, for example because its Claude plan was at its limit, the recipe says so and the button comes back to try again."
+   "When Kitchen couldn’t answer, for example because its Claude plan was at its limit, the recipe says so and the button comes back to try again.",
+   "Today is the family brief: the weather drawn (now, when rain comes, what to wear, the next hours and days), every lock with its battery from Home Assistant and Apple Home, the alarm and the garage, the night’s word from the caretaker, school and the calendar. From five in the evening it turns to tomorrow.",
+   "Each of you sees your own Today: your mail, your calendar and the note are only yours, by the Tailscale login on your phone. The weather, the house, school, the trip and the household’s needs are everyone’s. Hub needs to know whose login is whose first (“people” in household.json).",
+   "A lock battery that is low or flat is one line in Needs you, the flattest first, with Add to list for the batteries it takes.",
+   "A short note at the top joins your brief’s parts, like rain that lands on a pickup. Ask’s model writes it from the weather, your calendar, school and the house, never mail or the shopping list, at most every half hour. \"brief\": {\"note\": false} in household.json switches it off.",
+   "The wall: open it on the kitchen iPad from System, The wall. A big clock, the weather, what needs the household and the house, kept fresh by itself, following the sun from day to dusk. It is the household’s only: calendars, school, mail and the note stay on your phones. At night it is a dim clock and tomorrow’s weather.",
+   "Ask knows the brief: ask about the weather, whether to take a jacket, or which lock needs batteries. The brief can also be read aloud from a Shortcut, from /app/api/brief."
   ]
  },
  {

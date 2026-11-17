@@ -1,8 +1,10 @@
-"""The Today screen's picture, as plain data for the app (web/app): what needs a person, then the day.
+"""The Today screen's picture, as plain data for the app (web/app): the family brief, what needs a person, then
+the day. The wall in the kitchen (the app's #wall) shows the same picture, kept to what is the household's.
 
-Built from what Hub already keeps and nothing else: the same "Needs you" list as the older Today page
-(hub/today.py), the calendar week, the reviewed class guide, the trip, and Kitchen's waiting cart. No model is
-called and nothing is changed by reading it. Every part fails soft: a source that can't be read is left out,
+Built from what Hub already keeps and reads and nothing else: the same "Needs you" list as the older Today page
+(hub/today.py), the calendar week, the reviewed class guide, the trip, Kitchen's waiting cart, and the brief's
+own parts (brief.py): the weather, the locks and doors, the overnight note, and a line from Ask's model while
+that is on. Nothing is changed by reading it. Every part fails soft: a source that can't be read is left out,
 and when that is a fault the owner should know about, the list itself says so.
 
 Errands Hub got ready (hub/app/errands/) are drawn as their own cards, finished with a tap, rather than as a line
@@ -17,7 +19,8 @@ Three things differ from the older page, all the owner's call (mail is "only wha
 """
 from datetime import date, datetime, timedelta
 
-from .. import home, today
+from .. import config, home, people, today
+from . import brief
 
 MOST = today.MAX_ITEMS
 EMAILS = 3                      # emails shown one by one; any more are counted
@@ -37,7 +40,8 @@ def clock():
 def _need(item):
     return {'key': item['key'], 'title': item['title'], 'why': item['why'], 'tone': item['tone'],
             'open': {'href': item['href'], 'label': item['cta'] or 'Open'},
-            'tick': 'Not this week' if item['key'].startswith(today.WEEK_KEYS) else 'Not today'}
+            'tick': 'Not this week' if item['key'].startswith(today.WEEK_KEYS) else 'Not today',
+            'add': item.get('add') or None}
 
 
 def _emails():
@@ -53,7 +57,7 @@ def _emails():
         waited = f'Waiting {row["days"]} days. ' if row['days'] >= triage.WAITING_DAYS else ''
         step = (row.get('step') or row.get('subject') or '').strip()
         rows.append({'key': MAIL + row['id'], 'title': f'Email from {row["who"]}', 'why': (waited + step).strip(),
-                     'tone': 'warn' if waited else 'info', 'open': {'href': '/gmail', 'label': 'Open'}, 'tick': 'Done'})
+                     'tone': 'warn' if waited else 'info', 'open': {'href': '/gmail', 'label': 'Open'}, 'tick': 'Done', 'add': None})
     return rows
 
 
@@ -61,7 +65,7 @@ def _cart():
     """What Kitchen needs from a person: an order or a cart plan that waits for a tap, and things on the list
     that need a product picked. One line, the most pressing."""
     from ..tools.kitchen import client
-    waiting = {'tone': 'warn', 'open': {'href': '/kitchen', 'label': 'Review'}, 'tick': 'Not today'}
+    waiting = {'tone': 'warn', 'open': {'href': '/kitchen', 'label': 'Review'}, 'tick': 'Not today', 'add': None}
     try:
         status, seen = client.call('GET', '/kitchen', timeout=2)
         if status == 200 and isinstance(seen.get('items'), list):
@@ -83,12 +87,13 @@ def _cart():
     return [{'key': CART, 'title': 'Approve the grocery cart', 'why': 'Kitchen has a cart ready. Nothing is ordered until you approve it.', **waiting}]
 
 
-def _list():
-    """(needs, how many more can wait, the quiet lines) from Hub's list, the emails and the cart."""
+def _list(accounts):
+    """(needs, how many more can wait, the quiet lines) from Hub's list, the emails and the cart: what a person who
+    sees these accounts may see (people.py). The emails are the owner's, so they come only with the owner's list."""
     from .. import store
     from ..tools import TOOLS
     jobs = today.start()
-    found = today.gather(jobs, home.tiles(TOOLS))
+    found = today.gather(jobs, today.mine(home.tiles(TOOLS), accounts), accounts=accounts)
     hidden = store.snoozed(home.today().isoformat())
     needs, quiet = [], []
     for item in found:
@@ -171,7 +176,8 @@ def _school(day):
         note = ', '.join(part for part in (hour, row.get('location') or '') if part)
         cancelled = row.get('status') == 'cancelled'
         rows.append({'day': 'Today' if on == day else on.strftime('%a'), 'title': row.get('title', 'Class date'),
-                     'note': 'Cancelled' if cancelled else note, 'struck': cancelled})
+                     'note': 'Cancelled' if cancelled else note, 'struck': cancelled, 'date': row['date'],
+                     'todo': row.get('kind') == 'action' and not cancelled})
     return rows
 
 
@@ -206,25 +212,53 @@ def _ready(login):
     return errands.today_part(login=login)
 
 
-def picture(now=None, login=None):
-    """The whole Today screen, for the person whose device asks (`login`, None for this Mac itself). Never raises."""
+def _unknown(login):
+    """A quiet line for a person Hub lets in but can't yet tell whose mail and calendar are theirs (household.json's
+    "people" doesn't name them, or several logins are allowed and it says nothing), so an empty day isn't mistaken
+    for a quiet one."""
+    if login is None or people.who(login) is not None or str(login).strip().lower() not in config.ALLOWED_LOGINS:
+        return []
+    return [{'text': 'Hub doesn’t know whose mail and calendar are yours yet, so they aren’t shown. The owner sets this in '
+                     'Hub’s settings file.', 'open': None}]
+
+
+def picture(now=None, wall=False, login=None):
+    """The whole Today screen for this login (people.py): the household's things, and the mail and calendar of the
+    accounts this person may see. With `wall`, the kitchen wall's: the household's things only, whoever is asking
+    (brief.family). Never raises."""
     now = now or clock()
-    needs, more, quiet = _soft(_list, ([], 0, []))
-    left, tomorrow = _soft(lambda: _calendar(now), ([], []))
-    return {'ok': True, 'at': now.isoformat(timespec='seconds'), 'needs': needs, 'more': more, 'today': left, 'tomorrow': tomorrow,
-            'school': _soft(lambda: _school(now.date()), []), 'trip': _soft(lambda: _trip(now.date()), None), 'quiet': quiet,
-            'ready': _soft(lambda: _ready(login), {'cards': [], 'more': 0})}
+    accounts = frozenset() if wall else _soft(lambda: people.accounts(login), frozenset())
+    theirs = people.DEFAULT in accounts                   # the calendar and the note are the owner's, for now
+    jobs = _soft(lambda: brief.start(now), None)
+    needs, more, quiet = _soft(lambda: _list(accounts), ([], 0, []))
+    left, tomorrow = _soft(lambda: _calendar(now), ([], [])) if theirs else ([], [])
+    found = {'ok': True, 'at': now.isoformat(timespec='seconds'), 'needs': needs, 'more': more, 'today': left, 'tomorrow': tomorrow,
+             'school': _soft(lambda: _school(now.date()), []), 'trip': _soft(lambda: _trip(now.date()), None),
+             'quiet': quiet + ([] if wall else _soft(lambda: _unknown(login), [])), 'wall': False, 'elsewhere': 0, 'mine': theirs,
+             'ready': {'cards': [], 'more': 0} if wall else _soft(lambda: _ready(login), {'cards': [], 'more': 0})}
+    found.update(_soft(lambda: brief.finish(jobs, now), {'part': brief.part(now), 'weather': None, 'weather_says': '', 'house': None,
+                                                         'overnight': None}) if jobs else
+                 {'part': brief.part(now), 'weather': None, 'weather_says': '', 'house': None, 'overnight': None})
+    found['note'] = brief.note(found) if theirs else None
+    return brief.family(found) if wall else found
+
+
+def yours(key, login):
+    """Whether this login may tick a need with this key: the household's are everyone's, the rest their account's."""
+    whose = today.account_of(key)
+    return whose is None or people.sees(login, whose)
 
 
 def tick(key):
     """A tap on a need's circle: an email is marked as handled, anything else is hidden for today (or a week).
-    What to tell the owner, or None when there is nothing to tick."""
+    What to tell the person, or None when there is nothing to tick. A household need is hidden for everyone."""
     from ..tools.gmail import triage
     key = str(key)[:200]
     if key.startswith(MAIL):
         return 'Marked as handled' if triage.done(key.removeprefix(MAIL)) else None
     today.hide(key)
-    return 'Hidden for a week' if key.startswith(today.WEEK_KEYS) else 'Hidden until tomorrow'
+    everyone = ' for everyone' if today.account_of(key) is None else ''
+    return f'Hidden{everyone} for a week' if key.startswith(today.WEEK_KEYS) else f'Hidden{everyone} until tomorrow'
 
 
 def untick(key):

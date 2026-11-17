@@ -72,10 +72,10 @@ def status():
 
 
 @router.get('/about')
-def about(ref: str = ''):
+def about(request: Request, ref: str = ''):
     """What an “Ask about this” link stands for: Hub's own question for that card or chart. Reads only."""
     from .. import cards
-    return cards.about(ref) or _error(404, 'Hub doesn’t know that card any more.')
+    return cards.about(ref, request.headers.get('tailscale-user-login')) or _error(404, 'Hub doesn’t know that card any more.')
 
 
 @router.get('/threads')

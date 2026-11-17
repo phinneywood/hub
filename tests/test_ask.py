@@ -53,7 +53,7 @@ def fictional(monkeypatch):
     monkeypatch.setattr(catalog, 'trip_evidence', lambda: {'today': '2027-03-10', 'start': '2027-06-05', 'end': '2027-06-12',
                                                            'flights_chosen': False})
     monkeypatch.setattr(catalog, 'network_evidence', lambda: {'headline': 'Internet is up', 'detail': '18 ms ping · router link up'})
-    monkeypatch.setattr(today, 'needs_you', lambda tiles=(): [
+    monkeypatch.setattr(today, 'needs_you', lambda tiles=(), **_: [
         today.rec('gmail-needs', 'warn', '3 emails need you', 'From Maple Street Dental, Alex Rivera and Sam Quiet.', href='/gmail', cta='Open'),
         today.rec('calendar-overlap', 'info', 'Two events overlap tomorrow', 'Dentist and Call with the plumber, both at 3:00 PM.',
                   href='/calendar', cta='Open'),

@@ -200,16 +200,39 @@ def _unavailable(error):
     return UNAVAILABLE
 
 
-def today_lookup() -> dict:
+def today_lookup(accounts=frozenset({people.DEFAULT})) -> dict:
     """The owner's "Needs you" list for today: the few things that want attention, most urgent first."""
     from . import judge
     items = []
-    for item in today.needs_you():
+    for item in today.needs_you(accounts=accounts):
         # A mail item's second line names senders, so only its title (counts and kinds) is passed on.
         # The mail lookup gives names and subjects, and leaves out senders with AI switched off.
         why = None if item['key'].startswith('gmail-') else judge.scrub(item['why'])[:200]
         items.append({'what': judge.scrub(item['title'])[:160], 'why': why})
     return {'today': home.today().isoformat(), 'items': items}
+
+
+def brief_lookup() -> dict:
+    """The household's part of the family brief, as Today and the kitchen wall show it: the weather now, today and
+    tomorrow (with when it rains and what to wear), the next hours and days, the locks with their batteries, the alarm,
+    doors left open, and the house's overnight note. Nobody's mail or calendar, nothing of Kitchen's."""
+    from ..app import brief
+    from ..app.today import clock
+    now = clock()
+    found = brief.finish(brief.start(now), now)
+    weather = found['weather']
+    plain = lambda row: {k: v for k, v in row.items() if k not in ('icon', 'wet')} if isinstance(row, dict) else row  # noqa: E731
+    house = found['house'] or {}
+    return {
+        'now': now.strftime('%A %-I:%M %p'),
+        'weather': {'said': found['weather_says'], 'now': plain(weather['now']), 'today': plain(weather['today']),
+                    'tomorrow': plain(weather['tomorrow']), 'hours': [plain(h) for h in weather['hours'][:12]],
+                    'days': [plain(d) for d in weather['days'][:5]], 'sun': weather['sun']} if weather else 'unavailable',
+        'house': {'said': house.get('says', ''), 'things': [
+            {'what': r['kind'], 'name': r['name'], 'state': r['state'], 'battery': r['note'], 'battery_low': bool(r['low'])}
+            for r in house.get('rows', ())]} if house else 'unavailable',
+        'overnight': found['overnight'],
+    }
 
 
 def mail_lookup(kind: str | None = None) -> dict:
@@ -317,6 +340,28 @@ def house_items():
     return [today.rec(f'house-{d["id"]}', tone, words, 'From Home Assistant just now.' if tone == 'bad' else
                       'It’s night. Check it in Home Assistant.', href=link, cta='Open Home Assistant')
             for tone, d, words in read.attention(found)]
+
+
+def lock_items():
+    """Locks that live only in Apple Home (read through HomeClaw): flat or low batteries, with what to buy, as one
+    line; a lock that stopped responding; and one left unlocked at night. Home Assistant's own locks are
+    house_items' and their batteries are here too."""
+    from ..tools.house import batteries, read
+    found = batteries.picture()
+    out = []
+    said = batteries.need(found['low'])
+    if said:
+        tone, title, why, buy = said
+        out.append(today.rec('house-batteries', tone, title, why, href='/app/#today', cta='See the locks', add=buy or None))
+    for lock in batteries.stopped(found['locks']):
+        out.append(today.rec(f'house-lock-{lock["id"]}', 'warn', f'{lock["name"]} isn’t responding',
+                             'It can’t be locked or checked from a phone until it answers again. Check its batteries and that '
+                             'it is in range.', href='/app/#today', cta='See the locks'))
+    if read.night():
+        out += [today.rec(f'house-lock-{lock["id"]}', 'warn', f'{lock["name"]} is unlocked', 'It’s night. Lock it in the Home app.',
+                          href='/app/#today', cta='See the locks')
+                for lock in found['locks'] if lock['id'].startswith('apple-') and lock['state'] == 'unlocked']
+    return out
 
 
 def music_items():
@@ -963,12 +1008,19 @@ SOURCES = [
                            'Device and Deco names, online or offline, Wi-Fi band, which Deco, and current speed; a '
                            'device’s local IP address only when you ask about it. Never MAC addresses.',
                            '/network/devices', 'Open devices', network_devices_lookup))),
-    Source('house', 'Home', 'Lights, plugs, speakers, the thermostat, locks, the garage door and the alarm, from Home '
-           'Assistant through the HA broker on this Mac. Never cameras, location or automations. Read-only for now.',
+    Source('house', 'Home', 'Lights, plugs, speakers, the thermostat, locks, the garage door, the alarm, batteries and the '
+           'weather forecast, from Home Assistant through the HA broker on this Mac; and the locks and batteries Apple Home '
+           'knows, read from HomeClaw’s own list. Never cameras, location or automations. Read-only for now.',
            'Nothing to the overnight review. To Ask Hub when you ask: room and device names and their states, the '
-           'thermostat’s readings, and what each speaker is playing.',
-           items=(house_items, music_items),
-           lookups=(Lookup('home_status', 'Home', 'Lights, plugs, the thermostat, locks, the garage door and the alarm.',
+           'thermostat’s readings, and what each speaker is playing. To the brief’s note (only while it is on): the weather, '
+           'and the names and states of the locks, the alarm and doors left open.',
+           items=(house_items, lock_items, music_items),
+           lookups=(Lookup('family_brief', 'Home', 'The family brief: the weather forecast, the locks and their batteries, '
+                           'doors left open and the house’s overnight note.',
+                           'The forecast, the names and states of the locks, the alarm and doors left open, lock battery '
+                           'levels, and the overnight note. Never mail, the calendar or Kitchen’s list.',
+                           '/app/#today', 'Open Today', brief_lookup),
+                    Lookup('home_status', 'Home', 'Lights, plugs, the thermostat, locks, the garage door and the alarm.',
                            'Room and device names and whether each is on, locked or open, and the thermostat’s readings.',
                            '/house', 'Open Home', home_lookup),
                     Lookup('music_now', 'Speakers', 'The Music Assistant speakers.',
@@ -980,7 +1032,7 @@ SOURCES = [
     Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
            'What is already on your list and what you said “Not today” to this week. To Ask Hub when you ask: what its '
            'runs cost against each limit and how many finished.', items=(hub_faults, hub_release, live_items, improvement_items, friction_items),
-           prepare=hub_prepare,
+           prepare=hub_prepare, account=people.DEFAULT,      # Hub's own upkeep (its runs, a new version, Deploy) is the owner's
            lookups=(Lookup('today_list', 'Needs you', 'Today’s list, as the Today page shows it.',
                            'Each item’s title, and its second line unless it is about mail. No addresses or links.',
                            '/today', 'Open today’s list', today_lookup),
@@ -1119,14 +1171,18 @@ def lookups():
 # ---- whose it is: what came from one person's account is given only to them (hub/people.py) ----
 
 MAIN_UNTIL_CUT = ('today_list',)    # holds the main account's mail and calendar until it can be cut to whoever asks
+EVERYONES = ('ai_spend',)           # under Hub itself, whose upkeep is the owner's, but only counts and dollars
 
 
 def account_of(lookup):
     """The account a lookup reads (its source's), or None for the household's own things, which are everyone's.
     Today's list sits under Hub itself but holds mail counts and calendar titles, so it is the main account's, as Ask
-    in the app treats it, until it takes the asker's accounts."""
+    in the app treats it, until it takes the asker's accounts. Hub's own upkeep is the owner's, but what its model runs
+    cost (`ai_spend`) is everyone's."""
     if lookup.slug in MAIN_UNTIL_CUT:
         return people.DEFAULT
+    if lookup.slug in EVERYONES:
+        return None
     return next((s.account for s in SOURCES if lookup in s.lookups), None)
 
 

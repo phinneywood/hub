@@ -123,7 +123,7 @@ def test_the_pages_carry_no_inline_style_or_script_so_the_content_policy_holds(c
 # ---- “Ask about this” ----
 
 def test_a_reference_becomes_hubs_own_question_and_never_carries_text_from_the_link(client, monkeypatch):
-    monkeypatch.setattr(today, 'needs_you', lambda tiles=(): [
+    monkeypatch.setattr(today, 'needs_you', lambda tiles=(), **_: [
         today.rec('gmail-needs', 'warn', '2 emails need you', 'From Alex Rivera and Sam Quiet.', href='/gmail', cta='Open'),
         today.rec('synthetic', 'info', 'Reply to alex@friends.example at https://plans.example/sat', '', href='/trip', cta='Open')])
     found = client.get('/ask/about', params={'ref': 'need:gmail-needs'}).json()
@@ -142,7 +142,7 @@ def test_a_reference_becomes_hubs_own_question_and_never_carries_text_from_the_l
 def test_asking_about_a_card_reads_the_list_and_sends_nothing(client, monkeypatch):
     from hub.agent import model
     monkeypatch.setattr(model, 'build', lambda http_client=None: pytest.fail('opening Ask with a question must not call a model'))
-    monkeypatch.setattr(today, 'needs_you', lambda tiles=(): [today.rec('a', 'info', 'Synthetic item', '', href='/trip', cta='Open')])
+    monkeypatch.setattr(today, 'needs_you', lambda tiles=(), **_: [today.rec('a', 'info', 'Synthetic item', '', href='/trip', cta='Open')])
     assert client.get('/ask?about=need%3Aa').status_code == 200 and client.get('/ask/about?ref=need%3Aa').status_code == 200
     assert client.get('/ask/threads').json() == [] and state.runs('chat') == []
 
@@ -271,7 +271,7 @@ def test_every_chart_and_every_card_with_a_lookup_offers_ask_about_this(client, 
     assert cards_shown == {'gmail': 'tool:gmail', 'calendar': 'tool:calendar', 'kitchen': None, 'house': 'tool:house', 'preschool': None,
                            'network': 'tool:network', 'mobility': None, 'trip': 'tool:trip'}
     # A list item about mail names both the list and the mail lookup; a tile's problem asks about its tool.
-    monkeypatch.setattr(today, 'needs_you', lambda tiles=(): [today.rec('gmail-needs', 'warn', '2 emails need you', '', href='/gmail', cta='Open')])
+    monkeypatch.setattr(today, 'needs_you', lambda tiles=(), **_: [today.rec('gmail-needs', 'warn', '2 emails need you', '', href='/gmail', cta='Open')])
     assert client.get('/ask/about', params={'ref': 'need:gmail-needs'}).json()['looks_at'] == ['Needs you', 'Gmail']
     assert client.get('/ask/about', params={'ref': 'need:tile-network'}).json()['question'] == cards.TOPICS['tool:network'][1]
 
