@@ -8,10 +8,11 @@ export interface Card { kind: string; rooms?: string[]; speakers?: string[]; bat
   lines?: string[]; missed?: string[]; title?: string; why?: string; do?: string; items?: number[]; all?: boolean; cart?: boolean; since?: number;
   ids?: number[]; show?: string[] }
 // `waiting`: asked while another request was still going; it goes as soon as that one ends. `at`: when it was asked (ms).
+// `id`: the turn's number on Hub, for one kept there; reading back through the conversation starts before the oldest.
 export interface Turn { n: number; asked: string; answer: string; cards: Card[]; busy: boolean; waiting: boolean; doing: string; ms: number;
-  status: string; at: number }
+  status: string; at: number; id?: number }
 interface Kept { id: number; at: number; asked: string; answer: string; cards: Card[]; ms: number; status: string }
-interface Able { ready: boolean; why: string | null; recent: Kept[]; usual: string[]; remembers: { id: number; note: string }[] }
+interface Able { ready: boolean; why: string | null; recent: Kept[]; more: boolean; usual: string[]; remembers: { id: number; note: string }[] }
 type Event = { t: "say"; text: string } | { t: "doing"; what: string } | { t: "card"; card: Card }
   | { t: "done"; id: number | null; ms: number; status: string };
 
@@ -22,7 +23,8 @@ const DOING: Record<string, string> = { lights: "Switching the lights", scene: "
   device: "Working on it", setting: "Changing the settings", integration: "Reloading it", dashboard: "Making the dashboard" };
 
 export const asked = signal("");                 // what is in the field
-export const talk = signal<Turn[]>([]);          // this sitting's requests and answers
+export const talk = signal<Turn[]>([]);          // the one conversation: what was read back from Hub, then this sitting's
+export const older = signal(false);               // whether Hub keeps more of the conversation than is shown
 export const able = signal<Able | null>(null);   // whether Ask itself can run here, and what Hub remembers
 let count = 0;
 
@@ -32,12 +34,30 @@ export async function loadAble() {
     if (!answer.ok) return;
     const found = (await answer.json()) as Able;
     able.value = found;
-    if (!talk.value.length && found.recent.length) {     // today's conversation, so it is still there when the app opens again
-      talk.value = found.recent.map((kept) => ({ n: ++count, asked: kept.asked, answer: kept.answer, cards: kept.cards, busy: false,
-        waiting: false, doing: "", ms: 0, status: kept.status, at: kept.at * 1000 }));
+    if (!talk.value.length && found.recent.length) {     // the conversation as Hub keeps it, so it is there when the app opens again
+      talk.value = found.recent.map(fromKept);
+      older.value = found.more;
     }
   } catch {
     /* asked again the next time Ask opens */
+  }
+}
+
+const fromKept = (kept: Kept): Turn => ({ n: ++count, id: kept.id, asked: kept.asked, answer: kept.answer, cards: kept.cards,
+  busy: false, waiting: false, doing: "", ms: 0, status: kept.status, at: kept.at * 1000 });
+
+/** Read further back through the one conversation: the turns before the oldest one shown. */
+export async function loadOlder() {
+  const first = talk.value.find((turn) => turn.id !== undefined);
+  if (!first) { older.value = false; return; }
+  try {
+    const answer = await fetch(`/app/api/ask?before=${first.id}`, { headers: { accept: "application/json" } });
+    if (!answer.ok) return;
+    const found = (await answer.json()) as Able;
+    talk.value = [...found.recent.map(fromKept), ...talk.value];
+    older.value = found.more;
+  } catch {
+    say("Can’t reach Hub.");
   }
 }
 
@@ -93,7 +113,7 @@ async function send(n: number, text: string, signal: AbortSignal) {
     if (event.t === "say") change((turn) => ({ answer: turn.answer + event.text, doing: "" }));
     else if (event.t === "doing") change(() => ({ doing: DOING[event.what] ?? "Working" }));
     else if (event.t === "card") change((turn) => ({ cards: [...turn.cards, event.card] }));
-    else change(() => ({ busy: false, doing: "", ms: event.ms, status: event.status }));
+    else change(() => ({ busy: false, doing: "", ms: event.ms, status: event.status, id: event.id ?? undefined }));
   };
   try {
     let answer: Response;

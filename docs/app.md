@@ -181,6 +181,28 @@ instead. Cmd-K (Ctrl-K) puts the cursor in the field from anywhere.
    one trip. One the words missed, the model reads with `look_up`. On a Hub without Ask's model yet, Luna
    answers these on its zero-retention route (`private.answer`), as before.
 
+**One conversation per person** (owner's request, 2026-11-17: one chat that keeps going and manages its own context;
+no side chats). Code: `hub/app/ask/thread.py`. Each person has exactly one conversation with Hub; two logins
+`people` gives one member are the same one. It never resets by itself. The app shows it as one scroll, marked by day,
+and reads back through it 40 turns at a time (`GET /app/api/ask?before=<id>`); turns are kept 90 days.
+
+- **What the model is given of it** (`brain.earlier`): the running summary, then the last 20 turns word for word (at
+  most about 9,000 characters), however long ago they were. An answer made from mail, the calendar or school goes in
+  as a placeholder, never its words, as before.
+- **The running summary.** Once 30 turns sit before the recent ones and outside the summary, they are folded into
+  it after a turn, on a thread of its own, by one Luna call on its zero-retention route (`ask_summary` in the
+  engine's record, under the shared monthly limit, at most 3 a day per person). Luna gets the summary so far and
+  those turns, with the same placeholder for private answers; what it writes is cut to about 350 words, with links,
+  addresses and long numbers taken out. It is a record beside the house, never instructions: it can't save a note
+  or allow anything. A failed or empty fold leaves the summary as it was.
+- **Asked in Ask** (`conversation`): "what do you remember about our conversation?" reads the summary back;
+  "start fresh" (only when the person's own words ask to start over, start fresh or clear the conversation)
+  starts the context over from now. The messages stay on screen and notes stay; nothing opens a second
+  conversation. `POST /app/api/ask/fresh` does the same from a tap. The dry run holds it back.
+- **No side chats.** The Engine screen no longer has its own box: guidance is told in Ask ("remember that …"), and
+  a wish ("Hub should …", "I wish Hub …") becomes a line for the morning's fix cards, as the older chat's did. System
+  no longer lists the older chat once Ask runs; `/ask` stays for a Hub where Ask isn't set up, and for the deployer.
+
 **One trip to the model.** A tool that did the job says so itself, in a sentence Hub writes
 (“The kitchen and the living room are at 40%.”), and the turn ends there: no second trip for the model to
 describe what happened. Only when a tool could not do it as asked (nothing matched a search, a room it
@@ -299,7 +321,7 @@ record under the chat's own $10 a month limit; the words do not.
 | The thermostat, locks, the garage door and the alarm as they stand; the names of automations and scripts | Yes (since 2026-11-15) | No |
 | Any other device, a routine's config, a room's contents | Only what a request needs, read with `find` and `details`: never tokens, addresses, pictures, or where people are | No |
 | What Hub remembers | Yes | No |
-| Earlier requests and Hub's answers | Yes | No |
+| Earlier requests and Hub's answers, and the running summary of them | Yes | Writes the summary, from the same record (`thread.py`) |
 | Mail, the calendar, school, today's list | Yes, the bounded lookups, mail and the calendar only the asker's own; never senders with AI switched off | Yes, the same lookups |
 | Kitchen's answers; products, prices and notes on the shopping list | Never. Ask's sentences about the list carry counts and the member's own words; the rest is drawn on cards | No |
 | The family brief, for its note: the day's weather, the owner's calendar titles and times for today and tomorrow, the class guide's dates, the locks, alarm, garage and doors as they stand, and the titles of the house's and the trip's needs | Yes (since 2026-11-16), and only that: never mail, never Kitchen's list. See “Today” | No |

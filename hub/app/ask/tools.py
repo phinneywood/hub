@@ -352,6 +352,29 @@ def music(ctx: RunContext[Turn], do: Literal['play', 'pause', 'resume', 'next', 
         return _say(turn, 'The house isn’t answering, so nothing was changed.')
 
 
+# ---- the one conversation: what Hub keeps of it, and starting over ----
+
+def conversation(ctx: RunContext[Turn], do: Literal['show', 'fresh']) -> dict:
+    """This person's one conversation with Hub (it keeps going; there is no other chat). show: what Hub keeps of it,
+    when they ask what you remember of your conversation. fresh: start the context over, only when their own words
+    ask to start over, start fresh or clear the conversation; the messages stay on screen."""
+    from . import thread
+    turn = ctx.deps
+    if turn.login is None:
+        return _say(turn, 'Ask from your phone or laptop.')
+    if do == 'fresh':
+        if not thread.asked_fresh(turn.text):
+            return _again(turn, 'Their message doesn’t ask to start over, so nothing changed.')
+        thread.start_fresh(turn.login)
+        return _say(turn, 'Starting fresh. Earlier messages stay on screen, but Hub won’t carry them into what comes next. '
+                          'What you asked Hub to remember stays.', {'kind': 'thread', 'fresh': True})
+    kept = thread.summary(turn.login)
+    if not kept:
+        return _say(turn, 'Hub is going by your last few messages; there’s no summary of anything before them yet.')
+    return _say(turn, 'Here’s what Hub keeps of our conversation before your last few messages:\n' + kept,
+                {'kind': 'thread', 'fresh': False})
+
+
 # ---- remembering, Kitchen, and reading mail, the calendar and school ----
 
 def remember(ctx: RunContext[Turn], note: str, together: list[str] | None = None) -> dict:
@@ -749,5 +772,5 @@ def setting(ctx: RunContext[Turn], do: Literal['add', 'change', 'remove'],
     return _setup(ctx.deps, 'helper', {'do': do, 'kind': kind, 'name': name or '', 'fields': fields, 'new_name': new_name})
 
 
-ALL = (lights, scene, music, remember, groceries, kitchen, look_up, errands, errand, find, details, arrange, rooms, scene_setup, routine,
+ALL = (lights, scene, music, remember, conversation, groceries, kitchen, look_up, errands, errand, find, details, arrange, rooms, scene_setup, routine,
        device, setting, integration, dashboard)

@@ -34,7 +34,7 @@ from pathlib import Path
 COVERED = {'home_control': 'home', 'play_music': 'home', 'edit_playlist': 'music', 'remember': 'proposal',
            'propose_recipe': 'proposal', 'run_recipe': 'home', 'kitchen': 'kitchen'}
 # Ask in the app: each tool, and the door its changes leave by ('read' for one that changes nothing).
-COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'remember': 'note', 'groceries': 'kitchen', 'kitchen': 'kitchen',
+COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'remember': 'note', 'conversation': 'thread', 'groceries': 'kitchen', 'kitchen': 'kitchen',
                'look_up': 'read', 'errands': 'read', 'errand': 'errands', 'find': 'read', 'details': 'read', 'arrange': 'setup',
                'rooms': 'setup', 'scene_setup': 'setup', 'routine': 'setup', 'device': 'setup', 'setting': 'setup',
                'integration': 'setup', 'dashboard': 'setup'}
@@ -124,6 +124,7 @@ def layer(house_writes=False, recipes=()):
     and in Hub's own change log, so the runner can undo them right after the scenario's checks. Everything else
     (Music Assistant edits, Kitchen, notes, recipes, playlists to make) is still held back.
     `recipes`: (name, steps) pairs a scenario starts with, saved in the scratch database after the usual checks."""
+    from ..app.ask import thread
     from ..app.errands import picture as errand_picture, taps as errand_taps
     from ..engine import notes, recipes as recipe_book
     from ..tools.house import admin, broker, control, music
@@ -133,7 +134,7 @@ def layer(house_writes=False, recipes=()):
     saved = {'broker': real_exchange, 'music_send': real_send, 'settle': music._settle, 'kitchen': real_call,
              'control_db': control._db, 'music_db': music._db, 'notes_db': notes._db, 'admin_db': admin._db,
              'note': notes.propose, 'playlist': music.propose, 'recipes_db': recipe_book._db, 'recipe': recipe_book.propose,
-             'errand_tap': errand_taps.tap, 'compose': errand_picture.set_compose}
+             'errand_tap': errand_taps.tap, 'compose': errand_picture.set_compose, 'fresh': thread.start_fresh}
 
     def exchange(message, timeout):
         path, method = str(message.get('path', '')), message.get('method')
@@ -208,6 +209,9 @@ def layer(house_writes=False, recipes=()):
         ledger.add('errands', 'replies', {'in': writes})
         return 'Replies open in Gmail' if writes == 'gmail' else 'Replies open in your mail app'
 
+    def fresh(login):
+        ledger.add('thread', 'fresh', {})
+
     with tempfile.TemporaryDirectory(prefix='hub-golden-') as folder:
         broker._exchange, music._send, client.call = exchange, send, kitchen
         music._settle = lambda playlist_id, want: 'done'     # nothing was sent, so there is nothing to read back
@@ -219,6 +223,7 @@ def layer(house_writes=False, recipes=()):
         recipe_book._db = _with_schema(_scratch_db(Path(folder)), recipe_book.SCHEMA)
         notes.propose, music.propose, recipe_book.propose = note, playlist, recipe
         errand_taps.tap, errand_picture.set_compose = errand_tap, compose
+        thread.start_fresh = fresh
         try:
             for name, steps in recipes:
                 recipe_book.keep(name, steps)
@@ -231,6 +236,7 @@ def layer(house_writes=False, recipes=()):
             notes.propose, music.propose = saved['note'], saved['playlist']
             recipe_book._db, recipe_book.propose = saved['recipes_db'], saved['recipe']
             errand_taps.tap, errand_picture.set_compose = saved['errand_tap'], saved['compose']
+            thread.start_fresh = saved['fresh']
 
 
 def _with_schema(db, schema):

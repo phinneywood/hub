@@ -223,14 +223,14 @@ def test_a_look_up_by_the_model_adds_its_topics_to_one_day_card():
     tools.shown(tools.Turn(text='x'), set())
 
 
-def test_the_app_opens_on_the_days_conversation_while_the_model_sees_only_the_last_half_hour(house):
+def test_the_app_opens_on_the_one_conversation_and_the_model_is_given_its_recent_turns(house):
     import time
-    for hours_ago in (13, 5, 2, 0.1):
+    for hours_ago in (50, 13, 5, 2, 0.1):
         turns.save('me@example.com', f'asked {hours_ago} hours ago', 'Done.', at=time.time() - hours_ago * 3600)
-    shown = client.get('/app/api/ask', headers=SIGNED_IN).json()['recent']
-    assert [turn['asked'] for turn in shown] == ['asked 5 hours ago', 'asked 2 hours ago', 'asked 0.1 hours ago']
-    assert [turn['asked'] for turn in turns.recent('me@example.com')] == ['asked 0.1 hours ago']
-    assert 'asked 5 hours ago' not in brain.earlier('me@example.com')
+    found = client.get('/app/api/ask', headers=SIGNED_IN).json()
+    assert [turn['asked'] for turn in found['recent']][0] == 'asked 50 hours ago' and not found['more']
+    assert 'asked 50 hours ago' in brain.earlier('me@example.com')        # no half-hour cut: one conversation
+    assert brain.earlier('casey@example.com') == ''
 
 
 def test_without_asks_own_model_luna_still_answers_about_the_day(house, monkeypatch):
@@ -497,7 +497,7 @@ def test_the_real_route_thinks_acts_once_and_stops(world, monkeypatch):
     body = json.loads(request.content)
     assert str(request.url) == 'https://api.anthropic.com/v1/messages' and body['model'] == 'claude-sonnet-5-5' and body['stream'] is True
     assert body['thinking'] == {'type': 'adaptive'} and body['output_config'] == {'effort': 'high'}
-    assert [tool['name'] for tool in body['tools']] == ['lights', 'scene', 'music', 'remember', 'groceries', 'kitchen', 'look_up', 'errands',
+    assert [tool['name'] for tool in body['tools']] == ['lights', 'scene', 'music', 'remember', 'conversation', 'groceries', 'kitchen', 'look_up', 'errands',
                                                        'errand', 'find', 'details', 'arrange', 'rooms', 'scene_setup', 'routine', 'device',
                                                        'setting', 'integration', 'dashboard']
     assert body['system'][-1]['cache_control']['type'] == 'ephemeral' and 'cache_control' in body['tools'][-1]

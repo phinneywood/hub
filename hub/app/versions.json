@@ -28,7 +28,10 @@
    "A short note at the top joins your brief’s parts, like rain that lands on a pickup. Ask’s model writes it from the weather, your calendar, school and the house, never mail or the shopping list, at most every half hour. \"brief\": {\"note\": false} in household.json switches it off.",
    "The wall: open it on the kitchen iPad from System, The wall. A big clock, the weather, what needs the household and the house, kept fresh by itself, following the sun from day to dusk. It is the household’s only: calendars, school, mail and the note stay on your phones. At night it is a dim clock and tomorrow’s weather.",
    "Ask knows the brief: ask about the weather, whether to take a jacket, or which lock needs batteries. The brief can also be read aloud from a Shortcut, from /app/api/brief.",
-   "What you ask Hub to remember is yours: your notes steer your own Ask and nobody else’s, and only you see, save or remove them. Notes saved before are the owner’s, and the overnight review follows the owner’s."
+   "What you ask Hub to remember is yours: your notes steer your own Ask and nobody else’s, and only you see, save or remove them. Notes saved before are the owner’s, and the overnight review follows the owner’s.",
+   "Ask is one conversation that keeps going. Scroll back through it by day, as far as three months. Hub keeps a short summary of what came before your last messages, so “what did we decide about that?” works days later.",
+   "Ask “what do you remember about our conversation?” to read that summary, or say “start fresh” to have Hub set it aside. Your messages stay on screen either way. Your conversation is yours alone.",
+   "There’s one place to talk to Hub now. Tell it things in Ask: “remember that …” for guidance, or “Hub should …” for something to build."
   ]
  },
  {

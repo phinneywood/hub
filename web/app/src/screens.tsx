@@ -268,7 +268,8 @@ export function System() {
         <h2>Older pages</h2>
         <p class="sub">Hub’s earlier screens, until each moves in here or goes.</p>
         <div class="rows spaced">
-          {OLDER.filter(([, href]) => me.value.mail !== false || !MAILBOX.includes(href)).map(([name, href]) =>
+          {OLDER.filter(([, href]) => (me.value.mail !== false || !MAILBOX.includes(href)) && !(href === "/ask" && able.value?.ready))
+            .map(([name, href]) =>
             <a class="row free" href={href} key={href}><div class="row-main"><b>{name}</b></div></a>)}
         </div>
       </section>

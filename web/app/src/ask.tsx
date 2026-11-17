@@ -1,7 +1,8 @@
 // Ask, the screen Hub opens to: a conversation with Hub, which speaks first with what needs you and the house.
+import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { post } from "./api";
-import { able, ask, asked, forgetNote, loadAble, stop, talk } from "./asking";
+import { able, ask, asked, forgetNote, loadAble, loadOlder, older, stop, talk } from "./asking";
 import type { Card, Turn } from "./asking";
 import { ErrandsCard } from "./errands";
 import { GroceriesCard, KitchenReply } from "./kitchen";
@@ -178,6 +179,16 @@ function CardView({ card, now }: { card: Card; now: House }) {
 const FRESH = 30 * 60 * 1000;      // a pause this long ends a conversation; what came before it is earlier
 const SHOWN_EARLIER = 2;      // earlier requests shown as a pair of small bubbles each; the rest gather under one line
 
+/** The day a turn was asked, as a chat marks it: Today, Yesterday, a weekday this week, else the date. */
+function dayName(at: number): string {
+  const day = new Date(at), today = new Date();
+  const days = Math.round((new Date(today.toDateString()).getTime() - new Date(day.toDateString()).getTime()) / 86400000);
+  if (days <= 0) return "Earlier today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return day.toLocaleDateString(undefined, { weekday: "long" });
+  return day.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+}
+
 /** Where the conversation going on now starts: after its last pause of half an hour, if its last word was in the last half hour. */
 function sessionStart(turns: Turn[]): number {
   const last = turns[turns.length - 1];
@@ -265,7 +276,8 @@ function Prompts({ quiet }: { quiet: boolean }) {
 
 /** Ask, as a conversation with Hub. `home`: the screen Hub opens to, where Hub speaks first with the day (and the
  * house too when it isn't beside it). Without `home`: the conversation alone, beside another screen on a wide one.
- * Earlier conversations sit above what Hub says now, folded to small bubbles; the one going on now follows it. */
+ * It is one conversation that keeps going: what came before the last pause sits above what Hub says now, folded to
+ * small bubbles under the day it was said, and reads back as far as Hub keeps it; what is going on now follows. */
 export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
   const scroll = useRef<HTMLDivElement>(null);
   const [opened, setOpened] = useState<number[]>([]);
@@ -311,20 +323,24 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
   }, []);
   const hidden = all ? [] : earlier.slice(0, Math.max(0, earlier.length - SHOWN_EARLIER)).map((turn) => turn.n);
   const back = (turn: Turn) => { pinned.current = false; setOpened([...opened, turn.n]); };   // read where it is
-  const today = earlier[0] && new Date(earlier[0].at).toDateString() === new Date().toDateString();
+  const showing = earlier.filter((turn) => !hidden.includes(turn.n));
   return (
     <div class={"ask" + (home ? " askpage" : "")}>
       {home && <ChatHead />}
       <div class="ask-scroll" ref={scroll}>
         <div class="ask-said" aria-live="polite">
-          {earlier.length > 0 && <p class="chat-time">{today ? "Earlier today" : "Earlier"}</p>}
-          {hidden.length > 0 && (
+          {hidden.length > 0 ? (
             <button type="button" class="fold-more" onClick={() => { pinned.current = false; setAll(true); }}>
               {hidden.length === 1 ? "Show one earlier message" : `Show ${hidden.length} earlier messages`}
             </button>
+          ) : older.value && (
+            <button type="button" class="fold-more" onClick={() => { pinned.current = false; void loadOlder(); }}>Show earlier messages</button>
           )}
-          {now && earlier.filter((turn) => !hidden.includes(turn.n)).map((turn) => (
-            <TurnView turn={turn} now={now} key={turn.n} open={opened.includes(turn.n)} onOpen={() => back(turn)} />
+          {now && showing.map((turn, i) => (
+            <Fragment key={turn.n}>
+              {(i === 0 || dayName(showing[i - 1]!.at) !== dayName(turn.at)) && <p class="chat-time">{dayName(turn.at)}</p>}
+              <TurnView turn={turn} now={now} open={opened.includes(turn.n)} onOpen={() => back(turn)} />
+            </Fragment>
           ))}
           {home && (
             <div class="nowtop">
