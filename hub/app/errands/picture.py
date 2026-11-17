@@ -287,6 +287,16 @@ def items(login=None):
                           href='/app/#errands', cta='Open')]
 
 
+def _what(errand):
+    return luna.clip(judge.scrub(errand['title']), 80)
+
+
+def titles(rows):
+    """These errands' titles as Ask's model may be told them, as lookup gives them: scrubbed and clipped, and none from
+    a sender with AI switched off."""
+    return [_what(e) for e in rows if not hub_store.ai_blocked(e['sender'] or '')][:LOOKUP_MOST]
+
+
 def lookup(show: str = 'ready', login: str | None = None) -> dict:
     """Errands Hub got ready for the person asking from their own mail and the class guide: replies drafted,
     invitations, bills with the page to pay them on, bookings, renewals, forms, things to buy and dates. show: ready
@@ -303,7 +313,7 @@ def lookup(show: str = 'ready', login: str | None = None) -> dict:
     rows = [e for e in rows if not hub_store.ai_blocked(e['sender'] or '')]
     found = []
     for errand in rows[:LOOKUP_MOST]:
-        entry = {'ref': errand['id'], 'what': luna.clip(judge.scrub(errand['title']), 80),
+        entry = {'ref': errand['id'], 'what': _what(errand),
                  'why': luna.clip(judge.scrub(errand['why']), 180), 'from': luna.clip(judge.scrub(_who(errand)), 60),
                  'kind': NAMES.get(errand['kind'], errand['kind'])}
         if show == 'ready':

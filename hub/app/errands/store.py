@@ -56,8 +56,46 @@ def now_():
 
 def db():
     conn = store.db()
+    _whose(conn)
     conn.executescript(SCHEMA)
     return conn
+
+
+def _whose(conn):
+    """A database made before errands kept whose they are has no `account` column. Rebuild both tables in one
+    transaction: the class guide's rows become the household's, every other row the main account's (all mail came from
+    it then), and the old global settings become the main account's. A plain added column would have made old mail
+    errands everyone's."""
+    columns = [r['name'] for r in conn.execute('pragma table_info(errands)')]
+    tried = [r['name'] for r in conn.execute('pragma table_info(errands_tried)')]
+    if (not columns or 'account' in columns) and (not tried or 'account' in tried):
+        return
+    conn.execute('begin immediate')
+    try:
+        if columns and 'account' not in columns:
+            conn.execute('alter table errands rename to errands_before')
+        if tried and 'account' not in tried:
+            conn.execute('alter table errands_tried rename to errands_tried_before')
+        for statement in SCHEMA.split(';'):
+            if statement.strip() and 'create index' not in statement:
+                conn.execute(statement)
+        if columns and 'account' not in columns:
+            kept = ', '.join(columns)
+            conn.execute(f"insert into errands(account, {kept}) select case when source = 'school' then ? else ? end, {kept}"
+                         ' from errands_before', (HOUSEHOLD, MAIN))
+            conn.execute('drop table errands_before')
+        if tried and 'account' not in tried:
+            conn.execute("insert into errands_tried(account, key, tries, at) select case when key like 'mail:%' then ? else ? end,"
+                         ' key, tries, at from errands_tried_before', (MAIN, HOUSEHOLD))
+            conn.execute('drop table errands_tried_before')
+        for old, new in (('compose', 'compose:' + MAIN), ('account', 'mailbox:' + MAIN)):
+            conn.execute('insert or ignore into errands_settings(key, value) select ?, value from errands_settings where key = ?',
+                         (new, old))
+            conn.execute('delete from errands_settings where key = ?', (old,))
+        conn.execute('commit')
+    except BaseException:
+        conn.execute('rollback')
+        raise
 
 
 def _row(row):

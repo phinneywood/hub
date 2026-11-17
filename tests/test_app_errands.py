@@ -670,30 +670,87 @@ def test_ask_finishes_sets_aside_and_puts_back_an_errand_named_in_the_message(tw
 def test_ask_cant_reach_someone_elses_errand_or_setting(two, ready, scripted):
     bill = by_title('Lakeside')
     said, cards = ask('I paid the power bill', AS_PARTNER)
-    assert said == 'Hub couldn’t do that. None of your errands fits “the power bill”.' and cards == []
+    assert said == 'Hub couldn’t do that. None of your errands fits “power bill”.' and cards == []
     assert ask('open my replies in Gmail', AS_PARTNER)[0].startswith('Hub couldn’t do that. Hub doesn’t read')
     assert client.post(f'/app/api/undo/r{bill["id"]}', headers=AS_PARTNER).json() == {'error': 'There is nothing left to undo there.'}
     assert store.get(bill['id'])['state'] == 'ready' and store.compose(store.MAIN) == 'mail'
 
 
-@pytest.mark.parametrize('said, which', [
-    ('did I pay the power bill?', ['power bill']),                       # a question
-    ('I haven’t paid the power bill yet', ['power bill']),               # not yet
-    ('if I paid the power bill, what is left?', ['power bill']),
-    ('the power bill is due on Friday', ['power bill']),                 # asks for nothing
-    ('I paid the power bill', ['electricity bill']),                     # not the person's words
-    ('I paid the power bill', ['bill power']),                           # nor in their order
-    ('I paid the power bill, and the party sounds fun', ['power bill', 'party']),      # the party's part asks nothing
-    ('I paid the power bill', ['all errands']),                          # words from mail, not the message
+@pytest.fixture
+def noted(ready, monkeypatch):
+    """Three more made-up errands (a water bill due, a form, hats for a party), and taps that only note what they were
+    asked, so a test sees exactly which errands words would change."""
+    for key, kind, title, buy in (('mail:e-water-due', 'pay', 'Pay the Example Water bill', None),
+                                  ('mail:e-permission', 'sign', 'Sign the permission form', None),
+                                  ('mail:e-hats', 'buy', 'Get hats for Friday', ['party hats'])):
+        store.add(key, 'mail', {'kind': kind, 'title': title, 'choices': [{'label': 'Add to the list', 'buy': buy}] if buy else []},
+                  account=store.MAIN)
+    tapped = []
+    monkeypatch.setattr(taps, 'tap', lambda errand_id, do, body, login, now=None: tapped.append(store.get(errand_id)['title']) or ('Done', {}))
+    return tapped
+
+
+@pytest.mark.parametrize('do, said, which, picked', [
+    ('done', 'I paid the power bill', ['power bill'], ['Lakeside Power']),
+    ('done', 'I paid the power bill and the water bill', ['power bill', 'water bill'], ['Lakeside Power', 'Example Water']),
+    ('done', 'mark the permission form done', ['permission form'], ['permission form']),
+    ('done', 'the power bill is paid', ['power bill'], ['Lakeside Power']),
+    ('done', 'power bill done', ['power bill'], ['Lakeside Power']),
+    ('done', 'can you mark the power bill done?', ['power bill'], ['Lakeside Power']),
+    ('done', 'I paid the power bill, skip the dentist', ['power bill'], ['Lakeside Power']),
+    ('done', 'I paid the power bill before the party', ['power bill'], ['Lakeside Power']),
+    ('not', 'skip the dentist', ['dentist'], ['dental']),
+    ('not', 'I don’t need the party', ['party'], ['birthday party']),
+    ('later', 'remind me about the dentist tomorrow', ['dentist'], ['dental']),
+    ('later', 'the photo form can wait till tomorrow', ['photo form'], ['photo order form']),
+    ('later', 'I paid the power bill and the dentist can wait till tomorrow', ['dentist'], ['dental']),
+    ('list', 'put the party things on the list', ['party things'], ['hats']),
+    ('list', 'the pumpkin goes on the list', ['pumpkin'], ['pumpkin']),
 ])
-def test_ask_changes_nothing_unless_the_persons_own_words_ask_for_it(ready, said, which):
-    before = [(e['id'], e['state']) for e in store.rows()]
+def test_ask_does_what_the_persons_own_words_ask(noted, do, said, which, picked):
+    asked.asked(do, which, said, ME)
+    assert len(noted) == len(picked) and all(words in title for words, title in zip(picked, noted)), noted
+
+
+@pytest.mark.parametrize('do, said, which', [
+    ('done', 'I paid the power bill before the party', ['power bill', 'party']),       # the party isn't what was paid
+    ('done', 'I paid the power bill and the dentist can wait till tomorrow', ['dentist']),
+    ('done', 'I paid the power bill and the dentist can wait till tomorrow', ['power bill', 'dentist']),
+    ('done', 'I paid the power bill, skip the dentist', ['dentist']),
+    ('done', 'I paid the power bill, skip the dentist', ['power bill', 'dentist']),
+    ('done', 'the power bill is unpaid, the form is signed', ['power bill']),
+    ('done', 'I’m done for the day, what is the power bill about', ['power bill']),
+    ('done', 'I paid the power bill, and the party sounds fun', ['power bill', 'party']),
+    ('not', 'don’t skip the power bill', ['power bill']),
+    ('not', 'never ignore the power bill', ['power bill']),
+    ('done', 'did I pay the power bill?', ['power bill']),
+    ('done', 'has the power bill been paid', ['power bill']),
+    ('done', 'is the power bill paid', ['power bill']),
+    ('done', 'who sent the photo form', ['photo form']),
+    ('done', 'when was the power bill sent', ['power bill']),
+    ('later', 'what’s on tomorrow besides the party', ['party']),
+    ('done', 'I haven’t paid the power bill yet', ['power bill']),
+    ('done', 'if I paid the power bill, what is left?', ['power bill']),
+    ('done', 'I wish I had paid the power bill', ['power bill']),
+    ('done', 'tell me when I’ve paid the power bill', ['power bill']),
+    ('done', 'the power bill is due on Friday', ['power bill']),           # asks for nothing
+    ('done', 'I paid the power bill', ['electricity bill']),              # not the person's words
+    ('done', 'I paid the power bill', ['bill power']),                    # nor in their order
+    ('done', 'I paid the power bill', ['all errands']),                   # words from mail, not the message
+])
+def test_ask_changes_nothing_unless_the_persons_own_words_ask_for_it(noted, do, said, which):
     with pytest.raises(taps.Refused):
-        asked.asked('done', which, said, ME)
-    assert [(e['id'], e['state']) for e in store.rows()] == before
+        asked.asked(do, which, said, ME)
+    assert noted == []
 
 
-def test_a_name_that_fits_several_errands_or_none_changes_nothing(ready):
+def test_the_persons_whole_phrase_must_fit_not_only_the_models_word(ready, monkeypatch):
+    monkeypatch.setattr(taps, 'tap', lambda *a, **k: pytest.fail('nothing should change'))
+    with pytest.raises(asked.Unclear, match='“water bill”'):                 # only the power bill is open
+        asked.asked('done', ['bill'], 'I paid the water bill', ME)
+
+
+def test_a_name_that_fits_several_errands_or_none_changes_nothing_and_ask_hears_only_what_it_may(ready):
     store.add('mail:e-made-up', 'mail', {'kind': 'book', 'title': 'Book the Lakeside Power meter check'}, account=store.MAIN)
     with pytest.raises(asked.Unclear) as several:
         asked.asked('done', ['lakeside power'], 'I paid lakeside power', ME)
@@ -701,14 +758,66 @@ def test_a_name_that_fits_several_errands_or_none_changes_nothing(ready):
     with pytest.raises(asked.Unclear):
         asked.asked('done', ['power bill', 'gym'], 'I paid the power bill and the gym', ME)
     assert by_title('Lakeside Power bill')['state'] == 'ready'
-    assert asked.asked('done', ['power bill'], 'Can you mark the power bill done?', ME)['told'] == 'Marked done.'
+    hub_store.set_ai_blocked(HOST, True)                                     # the party's sender: AI switched off
+    with pytest.raises(asked.Unclear) as none:
+        asked.asked('done', ['zebra'], 'I paid the zebra', ME)
+    assert none.value.found and not any('Jordan' in title for title in none.value.found)
+    assert none.value.found == picture.titles(store.rows_for(ME, "state in ('ready', 'opened', 'later')"))
 
 
-def test_where_replies_open_changes_only_when_the_person_says_where(ready):
-    for said in ('what’s in my gmail?', 'don’t open replies in gmail', 'I like gmail'):
-        with pytest.raises(taps.Refused):
-            asked.asked('replies', [], said, ME, 'gmail')
+@pytest.mark.parametrize('said, where', [('open replies in Gmail', 'gmail'), ('use the mail app for replies', 'mail'),
+                                         ('please open my replies in gmail', 'gmail')])
+def test_where_replies_open_changes_when_the_person_says_so(ready, said, where):
+    client.post('/app/api/errands/settings', json={'compose': 'gmail' if where == 'mail' else 'mail'}, headers=SIGNED_IN)
+    assert asked.asked('replies', [], said, ME, where)['told'].startswith('Replies open in')
+    assert store.compose(store.MAIN) == where
+
+
+@pytest.mark.parametrize('said', ['what’s in my gmail?', 'don’t open replies in gmail', 'I like gmail', 'I use gmail at work',
+                                  'why does it open gmail', 'if replies opened in gmail I would like that'])
+def test_where_replies_open_changes_only_when_the_person_says_where(ready, said):
+    with pytest.raises(taps.Refused):
+        asked.asked('replies', [], said, ME, 'gmail')
     assert store.compose(store.MAIN) == 'mail'
+
+
+# ---- a database from before errands knew whose they are ----
+
+BEFORE = """
+create table if not exists errands(
+  id integer primary key, key text not null unique, source text not null, kind text not null,
+  title text not null default '', why text not null default '', due text, facts text not null default '{}',
+  quote text not null default '', choices text not null default '[]',
+  message_id text, thread_id text, sender text, sender_name text, subject text, reply_to text, received real,
+  state text not null default 'ready', chose integer, steps text not null default '[]', how text,
+  until real, undo text, made_day text not null,
+  created_at real not null, updated_at real not null, opened_at real, ended_at real, checked_at real);
+create index if not exists errands_state on errands(state);
+create table if not exists errands_tried(key text primary key, tries integer not null, at real not null);
+create table if not exists errands_settings(key text primary key, value text not null);
+"""
+
+
+def test_a_database_from_before_errands_knew_whose_they_are_is_rebuilt(two):
+    with closing(hub_store.db()) as conn, conn:
+        conn.executescript(BEFORE)
+        for key, source in (('mail:e-old', 'mail'), ('school:old', 'school')):
+            conn.execute("insert into errands(key, source, kind, title, made_day, created_at, updated_at)"
+                         " values (?, ?, 'pay', ?, '2026-11-16', 1, 1)", (key, source, 'Old ' + source))
+        conn.execute("insert into errands_tried(key, tries, at) values ('mail:e-tried', 1, 1), ('school:tried', 2, 1)")
+        conn.execute("insert into errands_settings(key, value) values ('compose', 'gmail'), ('account', 'alex@mailbox.example')")
+    assert store.keys() == {(store.MAIN, 'mail:e-old'), (store.HOUSEHOLD, 'school:old')}
+    assert store.tries() == {(store.MAIN, 'mail:e-tried'): 1, (store.HOUSEHOLD, 'school:tried'): 2}
+    assert (store.compose(store.MAIN), store.mailbox(store.MAIN), store.setting('compose'), store.setting('account')) == (
+        'gmail', 'alex@mailbox.example', None, None)
+    assert [e['title'] for e in store.rows_for(PARTNER)] == ['Old school'] and len(store.rows_for(ME)) == 2
+    assert store.add('mail:e-old', 'mail', {'kind': 'pay', 'title': 'Again'}, account=store.MAIN) is None
+    assert store.add('mail:e-old', 'mail', {'kind': 'pay', 'title': 'Another account'}, account='other') is not None
+    assert store.tried('mail:e-tried', store.MAIN) == 2
+    with closing(store.db()) as conn:
+        assert 'errands_state' in [r['name'] for r in conn.execute('pragma index_list(errands)')]
+        assert {r['name'] for r in conn.execute("select name from sqlite_master where type='table'")} >= {'errands', 'errands_tried'}
+        assert not [r for r in conn.execute("select name from sqlite_master where name like '%before'")]
 
 
 # ---- keeping ----

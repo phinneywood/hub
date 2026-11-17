@@ -363,10 +363,20 @@ class guide's to-dos, which are the household's.
 tomorrow", "I don't need the dental cleaning", "the pumpkin goes on the list", "undo the dental cleaning" and "open my
 replies in Gmail" do what the same taps do, with Undo under the answer and the errand's card drawn as it now is.
 Sending, paying, booking and the calendar stay buttons on the card. An errand's title comes from mail, so the person's
-own words decide, checked in code: one sentence of what they typed must both ask for the tap and name the errand in
-its own words and order; a question, an "if" or a "not yet" asks for nothing; a name is matched only against the
-errand's title, kind and sender (and its things, for the list) and fits one errand at most; if any name fits none or
-several, nothing changes. Only the asker's own errands and the household's can be named.
+own words decide, checked in code, and when in doubt nothing changes (the card's buttons are always there):
+- each name the model passes must be in what the person typed, and counts as their whole phrase there ("water bill"
+  when the model passed "bill"); every word of it must fit the errand's title, kind or sender (for the list, its
+  things too), never the email's text, and it may fit one errand only;
+- a name must stand right after the words asking for that tap ("I paid the power bill", "skip the dentist"), right
+  before them ("the power bill is paid", "the photo form can wait") or between their halves ("mark the permission form
+  done"), with only small words between; another name joins only through "and" or a comma right after one already
+  tied, said exactly as the model passed it, where the sentence ends ("... and the water bill");
+- in that part of the sentence, a question ("is the power bill paid", "who sent the photo form"), a condition ("if",
+  "when", "once", "wish") or a "not" outside the asking words ("don't skip the dentist") asks for nothing;
+- "Replies open in" changes only when a part of a sentence starts by telling Hub to ("open replies in Gmail", "use the
+  mail app for replies") or names replies and where;
+- if any name fails, nothing changes. Only the asker's own errands and the household's can be named, and a "which
+  one?" lists their titles as the `errands` lookup gives them (none from a sender with AI switched off).
 
 **Closing by itself** (`watch.py`): Hub looks for proof, as little as it takes: something the owner sent to that
 address since the email came (sent mail through the bridge, dates only), an event that day on the calendar at the
@@ -383,7 +393,9 @@ household's. Ask's model is given each of the asker's errands' title, why, due d
 the email's text, and nothing from a sender with AI switched off.
 
 **Keeping** (`store.py`): one row an errand in Hub's own database, never in Gmail. Its words are blanked 14 days
-after it ends and the row is deleted after 60, as sorted mail is.
+after it ends and the row is deleted after 60, as sorted mail is. A database from before errands kept their account is
+rebuilt once, in one transaction: the class guide's rows become the household's, every other row the main account's,
+and the old "Replies open in" and mailbox settings the main account's.
 
 Tests: `tests/test_app_errands.py`, on a made-up week (`tests/errands_world.py`) with a stand-in for Luna and the
 made-up Kitchen, and two made-up people: one whose mail Hub reads and one whose it doesn't. The demo server shows the
