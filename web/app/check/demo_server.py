@@ -18,6 +18,10 @@ notes it here; nothing is sent anywhere, and "Add to the list" puts things on th
 errands are the owner's; a request with the header `tailscale-user-login: casey@example.com` is the made-up partner,
 whose own mail Hub doesn't read, and sees the class guide's two only.
 
+Today is also the family brief: the made-up house's weather (rain this afternoon, sun tomorrow), its locks (one
+with a flat battery that stopped responding, one low) and a note from a stand-in for Ask's model. The wall, the brief
+on the kitchen iPad, is at /app/#wall. POST /demo/morning, /demo/evening or /demo/night moves the made-up clock.
+
 Ask works here too, on a stand-in for its model (tests/ask_script.py) that picks a tool from a few plain words:
 "dim the kitchen", "everything off", "some jazz in the bedroom, softly", "play it in the dining room too",
 "pause", "movie night", "remember to start music softly", "what should we cook this week?", "what needs me today?",
@@ -26,6 +30,7 @@ Ask works here too, on a stand-in for its model (tests/ask_script.py) that picks
 "every evening at 6:45 turn on the hallway light", "what errands are ready?".
 The stand-in is only a script; how well Ask understands is the real model's job and can't be judged here.
 """
+import copy
 import json
 import os
 import sys
@@ -50,7 +55,7 @@ check_guard.apply(patch)   # before the app exists: no key store, no other machi
 
 import uvicorn  # noqa: E402
 
-from hub import store  # noqa: E402
+from hub import people, store  # noqa: E402
 from hub.app import levels, routes, scenes  # noqa: E402
 from hub.app.ask import private, route, turns  # noqa: E402
 from hub.main import app  # noqa: E402
@@ -122,6 +127,48 @@ from hub import home  # noqa: E402
 
 EVENING = datetime.now(home.PACIFIC).replace(hour=18, minute=10, second=0, microsecond=0)
 day = day_world.install(patch, kitchen_too=False, now=EVENING)
+
+# The family brief on the made-up house. The forecast, the sun and the brief's clock follow the demo's own clock,
+# which /demo/morning, /demo/evening and /demo/night move; the locks are read as well as the made-up list; and the
+# note comes from a stand-in for Ask's model, a made-up line for each part of the day.
+from hub.app import today as screen  # noqa: E402
+from hub.app.ask import note  # noqa: E402
+from hub.engine import catalog  # noqa: E402
+from hub.engine.registry import Source  # noqa: E402
+
+CLOCK = {'now': EVENING}
+HOURS = {'morning': (7, 40), 'evening': (18, 10), 'night': (22, 40)}
+SKIES = {'morning': ('partlycloudy', 45), 'evening': ('cloudy', 48), 'night': ('clear-night', 44)}
+NOTES = {'morning': 'The rain holds off until about 3, so lunch with Sam stays dry; it clears by 6 for dinner at home.',
+         'evening': 'Alex is away tomorrow, so the swim lesson at 9:30 and the grocery pickup at 11 fall to one person.'}
+
+
+def at_hour(part):
+    hour, minute = HOURS[part]
+    CLOCK['now'] = EVENING.replace(hour=hour, minute=minute)
+    sky, degrees = SKIES[part]
+    world.states['weather.home'] = {'entity_id': 'weather.home', 'state': sky, 'attributes': {
+        'friendly_name': 'Home', 'temperature': degrees, 'temperature_unit': '°F', 'precipitation_unit': 'in', 'wind_speed': 6,
+        'wind_speed_unit': 'mph', 'humidity': 80, 'uv_index': 0.4}}
+    note.forget()
+
+
+async def made_up_note(facts, transport=None):
+    part = facts['when'].split(',')[0]
+    return NOTES.get(part, ''), {'tokens_in': 0, 'tokens_out': 0, 'cost': 0.0}
+
+
+world.clock = lambda: CLOCK['now']
+patch.setattr(screen, 'clock', lambda: CLOCK['now'])
+patch.setattr(home, 'today', lambda: CLOCK['now'].date())
+_night = read.night
+patch.setattr(read, 'night', lambda now=None: _night(now or CLOCK['now']))
+patch.setattr(catalog, 'SOURCES', [Source('gmail', 'Gmail', '', '', items=(day.mail_items,), account=people.DEFAULT),     # the owner's
+                                   Source('calendar', 'Calendar', '', '', account=people.DEFAULT),
+                                   Source('made-up', 'Made up', '', '', items=(day.items, catalog.house_items, catalog.lock_items))])
+patch.setattr(note, 'write', made_up_note)
+patch.setattr(note, 'GAP_SECONDS', 0)
+at_hour('evening')
 
 # Ask, without a model: the stand-in picks the tool; the private desk and Kitchen answer with made-up words.
 patch.setattr(route, 'build', lambda http_client=None: ask_script.MODEL)
@@ -199,10 +246,15 @@ def stage(what: str):
         with turns._db() as conn:
             conn.execute('delete from app_ask')
         a_habit()
+        world.accessories = copy.deepcopy(app_world.ACCESSORIES)
+        at_hour('evening')
+    elif what in HOURS:
+        at_hour(what)
     elif what in ('down', 'up'):
         world.down = what == 'down'
     elif what == 'quiet-day':
         day.events, day.school, day.mail, day.filed, day.cart = [], [], [], 0, False
+        world.accessories = []          # new batteries all round
         shop.reset(cart_waiting=False)
         shop.items = [i for i in shop.items if i['state'] != 'pick']
         errands_world.quiet()
@@ -222,7 +274,7 @@ def stage(what: str):
         return {'ok': False}
     read.clear_cache()
     routes.feed.poke()
-    return {'ok': True}
+    return {'ok': True, 'at': CLOCK['now'].isoformat()}
 
 
 class SignedIn:

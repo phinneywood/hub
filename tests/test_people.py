@@ -53,4 +53,5 @@ def test_the_catalog_says_which_sources_read_a_persons_account():
     from hub.engine import catalog
     account = {source.slug: source.account for source in catalog.SOURCES}
     assert account['gmail'] == account['calendar'] == people.DEFAULT
-    assert all(account[slug] is None for slug in ('preschool', 'trip', 'network', 'house', 'hub'))
+    assert account['hub'] == people.DEFAULT                 # Hub's own upkeep (its runs, a new version) is the owner's
+    assert all(account[slug] is None for slug in ('preschool', 'trip', 'network', 'house'))

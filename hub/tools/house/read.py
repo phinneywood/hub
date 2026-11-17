@@ -58,9 +58,13 @@ def forget_states():
 
 
 def clear_cache():
+    """Forget everything read from the house, the forecast and Apple Home's list included."""
+    from . import apple, weather
     with _lock:
         _cache.update(registry=None, registry_at=float('-inf'), snapshot=None, snapshot_at=float('-inf'),
                       floors=None, floors_at=float('-inf'), presses={}, presses_at=float('-inf'))
+    weather.forget()
+    apple.forget()
 
 
 def _clip(text):
@@ -248,7 +252,80 @@ def _build(registry, states):
             'lights_on': sum(d['on'] for d in devices if d['kind'] == 'light'),
             'room_floor': registry.get('room_floor', {}),
             'outside': _outside(items), 'openings': _openings(items, registry), 'buttons': _buttons(items, registry),
-            'routines': _routines(items, registry), 'read_at': datetime.now(home.PACIFIC)}
+            'routines': _routines(items, registry), 'weather': _weathers(items), 'sun': _sun(items),
+            'batteries': _batteries(items, registry), 'read_at': datetime.now(home.PACIFIC)}
+
+
+def _number(value):
+    try:
+        found = float(value)
+    except (TypeError, ValueError):
+        return None
+    return found if found == found and abs(found) < 1e6 else None        # not NaN, not absurd
+
+
+def _weathers(items):
+    """Home Assistant's weather entities as they stand, for the brief (weather.py): each one's id, condition,
+    temperature, wind, humidity, UV and units. Its forecasts are asked for separately."""
+    found = []
+    for s in items:
+        attrs = s.get('attributes') if isinstance(s.get('attributes'), dict) else {}
+        if not s['entity_id'].startswith('weather.') or s.get('state') in OFFLINE:
+            continue
+        found.append({'id': s['entity_id'], 'condition': str(s.get('state') or '')[:40], 'temperature': _number(attrs.get('temperature')),
+                      'unit': attrs.get('temperature_unit') if attrs.get('temperature_unit') in ('°F', '°C') else None,
+                      'wind': _number(attrs.get('wind_speed')), 'wind_unit': _clip(attrs.get('wind_speed_unit'))[:10],
+                      'humidity': _number(attrs.get('humidity')), 'uv': _number(attrs.get('uv_index')),
+                      'rain_unit': attrs.get('precipitation_unit') if attrs.get('precipitation_unit') in ('in', 'mm') else None})
+    return found
+
+
+def _sun(items):
+    """When the sun next rises and sets, as Home Assistant's sun says (UTC times), and whether it is up; or None."""
+    for s in items:
+        if s['entity_id'] == 'sun.sun' and isinstance(s.get('attributes'), dict):
+            attrs = s['attributes']
+            times = {key: attrs.get(f'next_{key}') for key in ('rising', 'setting')}
+            if all(isinstance(t, str) and len(t) < 40 for t in times.values()):
+                return {**times, 'up': s.get('state') == 'above_horizon'}
+    return None
+
+
+BATTERY_WORDS = re.compile(r'\s+battery(\s+level)?$', re.I)
+
+
+def _batteries(items, registry):
+    """Every battery Home Assistant reports, one row a device: {'id', 'name', 'room', 'level' (percent or None),
+    'low' (whether it says low)}. From battery sensors, low-battery binary sensors, and the battery_low or
+    battery_level an alarm system's sensors carry. Whether one needs a look is batteries.py's call."""
+    found = {}
+    for s in items:
+        entry = registry['entities'].get(s['entity_id'], {})
+        attrs = s.get('attributes') if isinstance(s.get('attributes'), dict) else {}
+        kind = attrs.get('device_class') or entry.get('original_device_class')
+        domain = s['entity_id'].partition('.')[0]
+        if entry.get('hidden_by') or entry.get('disabled_by') or s.get('state') in OFFLINE \
+                or entry.get('platform') == 'mobile_app' or domain in ('device_tracker', 'person'):
+            continue            # phones and watches are charged every night; their batteries aren't the house's
+        level = low = None
+        if domain == 'sensor' and kind == 'battery':
+            level = _number(s.get('state'))
+        elif domain == 'binary_sensor' and kind == 'battery':
+            low = s.get('state') == 'on'
+        elif isinstance(attrs.get('battery_low'), bool) or _number(attrs.get('battery_level')) is not None:
+            low, level = attrs.get('battery_low') if isinstance(attrs.get('battery_low'), bool) else None, _number(attrs.get('battery_level'))
+        else:
+            continue
+        device = entry.get('device_id')
+        name = registry.get('device_name', {}).get(device) or BATTERY_WORDS.sub('', _clip(
+            entry.get('name') or attrs.get('friendly_name') or entry.get('original_name') or s['entity_id']))
+        row = found.setdefault(device or s['entity_id'], {
+            'id': s['entity_id'], 'name': name, 'level': None, 'low': False,
+            'room': registry['rooms'].get(_room_id(s['entity_id'], entry, registry)) or OTHER_ROOM})
+        if level is not None and 0 <= level <= 100:
+            row['level'] = round(level) if row['level'] is None else min(row['level'], round(level))
+        row['low'] = row['low'] or bool(low)
+    return sorted(found.values(), key=lambda b: b['name'].lower())
 
 
 ROUTINES = 60       # automations and scripts named to Ask

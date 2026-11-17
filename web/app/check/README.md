@@ -19,9 +19,10 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
 - Ask adds to the shopping list, draws the product Hub picked under the answer, takes a pick there, reads the cart
   from its own page, and changes a number when a thing is said again;
 - on a Hub where Ask isn't set up, what is typed still reaches the older chat;
-- Today says the right sentence, lists what needs you with the longest wait first, shows the evening,
-  tomorrow, the week at school and the trip, marks two things at once, takes a tick and puts it back, and
-  says so when nothing needs you;
+- Today says the right sentence and the weather in words, lists what needs you (a flat lock battery first,
+  then the longest wait), shows the evening, tomorrow and its weather drawn, the house's locks, the week at
+  school and the trip, shows the note from a stand-in for Ask's model, marks two things at once, takes a tick
+  and puts it back, puts a lock's batteries on the shopping list in one tap, and says so when nothing needs you;
 - Errands shows what Hub got ready, the most pressing first, with what finished by itself; puts the class guide's
   pumpkin on the shopping list and back with Undo; opens one errand's ways, steps and drafted reply; notes a reply
   opened in the mail app, and closes that errand by itself once the reply is in sent mail; Today shows the three
@@ -30,6 +31,10 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   whose mail Hub doesn't read, sees only the class guide's two on Errands and Today, is told on Mail and Mail
   settings that their mail isn't connected yet with none of the owner's shown, isn't offered the older Gmail and
   Calendar pages, and finds the older Gmail page saying it isn't theirs;
+- the wall (the brief on a kitchen iPad, at iPad size) shows the household's needs and only counts the rest,
+  keeps mail off, follows the sun from the day look to dusk, never opens the house's live line, keeps the day
+  and says so when Hub can't be reached and comes back by itself, and at night is a dim clock and how
+  tomorrow starts;
 - System opens Versions, which lists the releases and leads back;
 - Mail leads with the emails that need you and the unanswered question, takes a tick and puts it back, and
   files a kind; Kitchen shows the list with each thing's product and where it stands, what needs a pick, a cart
@@ -51,7 +56,10 @@ Run it after changing the app or updating its packages.
        .venv/bin/python web/app/check/demo_server.py
 
    It listens on `http://127.0.0.1:8912/`. Open that in a browser to try the app by hand.
-   Today there shows a made-up day (`tests/day_world.py`) seen from ten past six this evening.
+   Today there shows a made-up day (`tests/day_world.py`) seen from ten past six this evening, with a made-up
+   forecast and locks (`tests/app_world.py`). The wall is at `http://127.0.0.1:8912/app/#wall`; to see the
+   morning or the night, `curl -X POST -H 'Origin: http://127.0.0.1:8912' http://127.0.0.1:8912/demo/morning`
+   (or `night`, or `evening`), then reload with the browser's clock at that hour.
    Ask there runs on a stand-in for its model (`tests/ask_script.py`): a script that knows the made-up rooms
    and a few verbs, such as “dim the kitchen”, “everything off”, “some jazz in the bedroom, softly”,
    “play it in the dining room too”, “pause”, “movie night”, “remember to start music softly”,

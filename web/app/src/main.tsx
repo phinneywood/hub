@@ -8,6 +8,7 @@ import { Ask, AskSheet, CardSheet } from "./ask";
 import { loadAble } from "./asking";
 import { loadDay, watchDay } from "./day";
 import { Today } from "./today";
+import { Wall } from "./wall";
 import { Versions } from "./versions";
 import { Engine } from "./engine";
 import { MailSettings } from "./mailrules";
@@ -68,6 +69,7 @@ function App() {
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
   }, []);
+  if (view.value === "wall") return <Wall />;         // the kitchen iPad: the brief alone, nothing to steer the house with
   return (
     <div class="app">
       <Rail />
@@ -99,8 +101,15 @@ async function keepOnDevice() {
 const root = document.getElementById("app");
 if (root) {
   render(<App />, root);
-  start();
-  void loadAble();
+  // The wall reads only the day. The house's live line (and Ask) start the first time the app itself is shown, so a
+  // wall left on all day doesn't keep Hub reading the house.
+  let begun = false;
+  view.subscribe((where) => {
+    if (where === "wall" || begun) return;
+    begun = true;
+    start();
+    void loadAble();
+  });
   watchDay();
   watchMail();
   watchErrands();

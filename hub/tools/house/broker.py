@@ -5,7 +5,8 @@ administrator token; Hub never sees it. The broker passes on whatever it is sent
 are two doors, and nothing else leaves Hub:
 
 - **The everyday door**: the reads in READS and ASKS and the actions in WRITES. Lights, power and speakers: what a
-  tap in the app or a plain request to Ask needs.
+  tap in the app or a plain request to Ask needs. Also the weather forecast (forecast()), the one service call that
+  only answers and changes nothing.
 - **The setup door** (owner decision, 2026-11-15: Ask may change anything in Home Assistant): the named commands in
   SETUP_READS and SETUP_WRITES, the scene, automation and script configs in CONFIGS, and services in
   SERVICE_DOMAINS, reloading an integration, and the dashboards a person made. Used only by admin.py, which records every change with the way
@@ -164,6 +165,34 @@ def ask(*commands, timeout=TIMEOUT):
     if not isinstance(results, list) or len(results) != len(commands):
         raise HomeDown('The Home Assistant broker gave an answer Hub couldn’t read.')
     return results
+
+
+# The forecast for a weather entity: Home Assistant's weather.get_forecasts, a service that only answers. Nothing
+# but the entity and the kind of forecast is ever sent with it.
+WEATHER = re.compile(r'^weather\.[a-z0-9_]{1,120}$')
+FORECASTS = ('daily', 'hourly', 'twice_daily')
+
+
+def _rows(result, entity_id):
+    response = result.get('response') if isinstance(result, dict) else None
+    entity = response.get(entity_id) if isinstance(response, dict) else None
+    rows = entity.get('forecast') if isinstance(entity, dict) else None
+    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else None
+
+
+def forecast(entity_id, *kinds, timeout=TIMEOUT):
+    """The forecasts of one weather entity, a list of rows for each kind asked ('daily', 'hourly' or
+    'twice_daily'), in order, over one connection. Read-only: the service changes nothing."""
+    if not isinstance(entity_id, str) or not WEATHER.fullmatch(entity_id) or not kinds \
+            or any(k not in FORECASTS for k in kinds) or len(set(kinds)) != len(kinds):
+        raise ValueError('Hub only reads the weather here.')
+    results = _exchange({'op': 'ws', 'commands': [
+        {'type': 'call_service', 'domain': 'weather', 'service': 'get_forecasts', 'service_data': {'type': kind},
+         'target': {'entity_id': entity_id}, 'return_response': True} for kind in kinds]}, timeout)
+    found = [_rows(r, entity_id) for r in results] if isinstance(results, list) and len(results) == len(kinds) else [None]
+    if any(rows is None for rows in found):
+        raise HomeDown('Home Assistant gave a forecast Hub couldn’t read.')
+    return found
 
 
 def _numbers(value, bounds):
