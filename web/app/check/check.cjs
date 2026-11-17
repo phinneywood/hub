@@ -52,7 +52,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.reload(); await page.waitForSelector(".askpage .now"); await page.waitForTimeout(2000);
     await shot("0-ask");
     const greets = () => page.locator(".askpage .greet-text").innerText().catch(() => "(nothing)");
-    expect(await until(() => document.querySelector(".askpage .greet-text")?.textContent.endsWith(" Dinner at home is at seven. Three things need you.")),
+    expect(await until(() => document.querySelector(".askpage .greet-text")?.textContent.endsWith(" Dinner at home is at seven. Nine things need you.")),
       "Ask did not open with Hub saying the day: " + await greets());
     expect(await page.locator(".askpage .chathead .chat-who b").innerText() === "Hub", "Ask did not say who you are talking to");
     expect(await page.getAttribute("#askq", "placeholder") === "Message Hub" && await page.locator('.composer [aria-label="Send"]').count() === 1,
