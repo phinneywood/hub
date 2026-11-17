@@ -57,12 +57,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.locator(".askpage .chathead .chat-who b").innerText() === "Hub", "Ask did not say who you are talking to");
     expect(await page.getAttribute("#askq", "placeholder") === "Message Hub" && await page.locator('.composer [aria-label="Send"]').count() === 1,
       "the field does not read as a message to Hub");
-    // On a phone the house card shares the screen, so two needs show and the other two are a tap away in Today.
-    expect((await page.locator(".askpage .now .row.need .row-main b").allInnerTexts()).join("|")
-      === (phone ? "Side door lock’s battery is flat|Email from Sam Rivera"
-        : "Side door lock’s battery is flat|Email from Sam Rivera|Approve the grocery cart"),
-      "Ask did not open on what needs you: " + (await page.locator(".askpage .now .row.need .row-main b").allInnerTexts()).join("|"));
-    expect((await page.locator(".askpage .now-more").first().innerText()).trim() === (phone ? "2 more in Today" : "One more in Today"),
+    // Hub's morning message is the first turn of the day: three numbered things, the house and money first, each with
+    // one button; under the greeting only the day's next thing and Open Today stay, and Today has the rest.
+    const morning = await page.locator(".askpage .morning .row-main b").allInnerTexts();
+    expect(morning.length === 3 && morning[0].startsWith("Side door lock’s battery is flat.") && morning[1].startsWith("Pay the Lakeside Power bill.")
+      && morning[2].startsWith("Email from Sam Rivera."), "Ask did not open on the morning message: " + morning.join("|"));
+    expect(await page.locator(".askpage .now .row.need").count() === 0, "what needs you was said twice: as rows and in the morning message");
+    expect((await page.locator(".askpage .now-more").first().innerText()).trim() === "Open Today",
       "the rest of what needs you was not a tap away");
     expect(phone ? (await page.locator(".askpage .house-now .house-words b").innerText()) === "Four rooms are lit."
       : await page.locator(".side .plan").count() > 0, phone ? "the house card did not say the house" : "the house was not beside Ask");

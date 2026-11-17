@@ -57,9 +57,11 @@ import uvicorn  # noqa: E402
 
 from hub import people, store  # noqa: E402
 from hub.app import levels, routes, scenes  # noqa: E402
-from hub.app.ask import private, route, turns  # noqa: E402
+from hub.app.ask import morning, private, route, turns  # noqa: E402
 from hub.main import app  # noqa: E402
 from hub.tools.house import admin, control, read  # noqa: E402
+
+morning.MORNING_HOUR = 0        # Ask opens on the morning message at any hour the check runs
 from hub.tools.gmail import filing, inbox, missions, triage  # noqa: E402
 from tests import app_world, ask_script, day_world, errands_world, kitchen_world  # noqa: E402
 
@@ -246,6 +248,9 @@ def stage(what: str):
             conn.commit()
         with turns._db() as conn:
             conn.execute('delete from app_ask')
+        with morning._db() as conn:          # and the day's morning message is made again when Ask opens
+            for table in ('app_ask_morning', 'app_ask_morning_day', 'app_ask_watch'):
+                conn.execute(f'delete from {table}')
         a_habit()
         world.accessories = copy.deepcopy(app_world.ACCESSORIES)
         at_hour('evening')

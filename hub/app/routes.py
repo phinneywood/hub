@@ -394,11 +394,24 @@ def ask_status(request: Request, before: int | None = None):
     """Whether Ask can run, this person's one conversation (its last turns, or the turns before turn `before` when
     the app scrolls back), what they tend to ask around now, and what Hub remembers. (The model is given less:
     `brain.earlier`.)"""
-    from .ask import brain, thread, turns
+    from .ask import brain, morning, thread, turns
     why, login = brain.warm() or brain.limits(), _login(request)
+    if before is None:          # the day's morning message is the first thing in the conversation (no model)
+        morning.message(login)
     shown = thread.history(login, before, turns.SHOWN_TURNS)
     return {'ready': why is None, 'why': why, 'recent': shown, 'more': len(shown) == turns.SHOWN_TURNS,
-            'usual': turns.usual(login) if why is None else [], 'remembers': turns.remembered(login)}
+            'usual': turns.usual(login) if why is None else [], 'remembers': turns.remembered(login),
+            'morning': morning.made(login)}
+
+
+@router.post('/api/ask/morning/opened')
+def ask_morning_opened(request: Request, body: dict = Body(...)):
+    """A tap on a morning item's button: counted as acted on, for this person (hub/app/ask/morning.py)."""
+    from .ask import morning
+    login = _login(request)
+    if login is None:
+        return _signed_out()
+    return {'ok': morning.opened(login, str(body.get('key') or ''))}
 
 
 @router.post('/api/ask/fresh')

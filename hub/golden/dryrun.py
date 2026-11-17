@@ -8,6 +8,8 @@ Every way Ask can change something leaves Hub through one of three doors, and th
   Kitchen          kitchen client.call, for anything but a read
   Errands          errands taps.tap and picture.set_compose (hub/app/errands/), after asked.asked has checked the
                    owner's words and picked the errands they named
+  Morning          morning.act and morning.switch (hub/app/ask/morning.py): a typed answer to the morning message,
+                   or switching what it covers, after the words were matched to today's numbered things
 
 Reads go through untouched, so a golden run sees the real house, library and lists. A change that passes
 Hub's checks is recorded in `Ledger.changes` and answered as if it had worked; one that fails them is
@@ -124,7 +126,7 @@ def layer(house_writes=False, recipes=()):
     and in Hub's own change log, so the runner can undo them right after the scenario's checks. Everything else
     (Music Assistant edits, Kitchen, notes, recipes, playlists to make) is still held back.
     `recipes`: (name, steps) pairs a scenario starts with, saved in the scratch database after the usual checks."""
-    from ..app.ask import thread
+    from ..app.ask import morning, thread
     from ..app.errands import picture as errand_picture, taps as errand_taps
     from ..engine import notes, recipes as recipe_book
     from ..tools.house import admin, broker, control, music
@@ -134,7 +136,8 @@ def layer(house_writes=False, recipes=()):
     saved = {'broker': real_exchange, 'music_send': real_send, 'settle': music._settle, 'kitchen': real_call,
              'control_db': control._db, 'music_db': music._db, 'notes_db': notes._db, 'admin_db': admin._db,
              'note': notes.propose, 'playlist': music.propose, 'recipes_db': recipe_book._db, 'recipe': recipe_book.propose,
-             'errand_tap': errand_taps.tap, 'compose': errand_picture.set_compose, 'fresh': thread.start_fresh}
+             'errand_tap': errand_taps.tap, 'compose': errand_picture.set_compose, 'fresh': thread.start_fresh,
+             'morning_act': morning.act, 'morning_switch': morning.switch}
 
     def exchange(message, timeout):
         path, method = str(message.get('path', '')), message.get('method')
@@ -212,6 +215,12 @@ def layer(house_writes=False, recipes=()):
     def fresh(login):
         ledger.add('thread', 'fresh', {})
 
+    def morning_act(login, item, do, until=None, now=None):
+        ledger.add('morning', do, {'key': item['key'], 'until': until.isoformat() if until else None})
+
+    def morning_switch(login, kinds, on):
+        ledger.add('morning', 'watch' if on else 'stop watching', {'kinds': list(kinds)})
+
     with tempfile.TemporaryDirectory(prefix='hub-golden-') as folder:
         broker._exchange, music._send, client.call = exchange, send, kitchen
         music._settle = lambda playlist_id, want: 'done'     # nothing was sent, so there is nothing to read back
@@ -224,6 +233,7 @@ def layer(house_writes=False, recipes=()):
         notes.propose, music.propose, recipe_book.propose = note, playlist, recipe
         errand_taps.tap, errand_picture.set_compose = errand_tap, compose
         thread.start_fresh = fresh
+        morning.act, morning.switch = morning_act, morning_switch
         try:
             for name, steps in recipes:
                 recipe_book.keep(name, steps)
@@ -237,6 +247,7 @@ def layer(house_writes=False, recipes=()):
             recipe_book._db, recipe_book.propose = saved['recipes_db'], saved['recipe']
             errand_taps.tap, errand_picture.set_compose = saved['errand_tap'], saved['compose']
             thread.start_fresh = saved['fresh']
+            morning.act, morning.switch = saved['morning_act'], saved['morning_switch']
 
 
 def _with_schema(db, schema):

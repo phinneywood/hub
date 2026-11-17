@@ -203,6 +203,27 @@ and reads back through it 40 turns at a time (`GET /app/api/ask?before=<id>`); t
   a wish ("Hub should …", "I wish Hub …") becomes a line for the morning's fix cards, as the older chat's did. System
   no longer lists the older chat once Ask runs; `/ask` stays for a Hub where Ask isn't set up, and for the deployer.
 
+**The morning message** (owner's decision, 2026-11-17: one voice in the morning, replacing the separate lists in
+Ask). Code: `hub/app/ask/morning.py`. The first time a person opens Ask from 5 am, Hub adds one turn to their
+conversation, written by code (no model): at most three numbered things, ranked house safety and money first, then
+what is overdue or due within a day, then the soonest due. The pool is the errands that person may see and Today's
+"Needs you" list (mail, the overnight review's suggestions, fix cards, the house, Kitchen's cart, Hub's own health);
+cut as the brief cuts Today for that person, so nobody hears of another's things. Under the greeting, Ask then shows
+only the day's next thing and Open Today: the morning message takes the Needs-you rows' place, and Today keeps the
+full list. The turn is kept as private (it holds errand titles and senders), so the model and the summary see only
+that it was given.
+
+- **Typed answers, in code before the model.** "done 2", "paid", "not this 1", "Thursday 3", "later", "build it"
+  (a fix card) are matched to today's numbered things (`morning.reply`); with several open and no number, Hub asks
+  which. An errand goes through its own tap (`taps.tap`: done, not, later; a named day sets when it comes back), a
+  Today need through its tick, a suggestion through the engine's dismissal, a fix card through its decision. A tap on
+  a thing's button counts as acted on (`POST /app/api/ask/morning/opened`).
+- **Quieting.** Two "not this" to a low-stakes kind in 30 days leave that kind out for 30 days, said once. Money,
+  the house and errands (which carry deadlines) never quiet that way. "What are you watching?" lists the kinds in
+  plain words with the last two weeks' counts; "stop watching …" and "watch … again" switch one (`morning.watching`).
+- **Counts, per person**, for the 14-day test: shown, done, not, later, opened, build (`morning.counts`), in Hub's
+  own database. Code reads them; no model sees them. The dry run holds back `morning.act` and `morning.switch`.
+
 **One trip to the model.** A tool that did the job says so itself, in a sentence Hub writes
 (“The kitchen and the living room are at 40%.”), and the turn ends there: no second trip for the model to
 describe what happened. Only when a tool could not do it as asked (nothing matched a search, a room it

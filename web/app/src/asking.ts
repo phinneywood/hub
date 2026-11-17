@@ -6,13 +6,16 @@ import { say } from "./state";
 // What the app draws under an answer. `setup`: changes to how the house is set up; `confirm`: one that waits for a tap.
 export interface Card { kind: string; rooms?: string[]; speakers?: string[]; batch?: string; after?: number; id?: number; note?: string;
   lines?: string[]; missed?: string[]; title?: string; why?: string; do?: string; items?: number[]; all?: boolean; cart?: boolean; since?: number;
-  ids?: number[]; show?: string[] }
+  ids?: number[]; show?: string[]; things?: Thing[]; hint?: string }
+// One line of Hub's morning message (hub/app/ask/morning.py): its number, the sentence, and the one button it has.
+export interface Thing { n: number; key: string; text: string; open: { href: string; label: string } | null }
 // `waiting`: asked while another request was still going; it goes as soon as that one ends. `at`: when it was asked (ms).
 // `id`: the turn's number on Hub, for one kept there; reading back through the conversation starts before the oldest.
 export interface Turn { n: number; asked: string; answer: string; cards: Card[]; busy: boolean; waiting: boolean; doing: string; ms: number;
   status: string; at: number; id?: number }
 interface Kept { id: number; at: number; asked: string; answer: string; cards: Card[]; ms: number; status: string }
-interface Able { ready: boolean; why: string | null; recent: Kept[]; more: boolean; usual: string[]; remembers: { id: number; note: string }[] }
+interface Able { ready: boolean; why: string | null; recent: Kept[]; more: boolean; usual: string[]; remembers: { id: number; note: string }[];
+  morning?: boolean }
 type Event = { t: "say"; text: string } | { t: "doing"; what: string } | { t: "card"; card: Card }
   | { t: "done"; id: number | null; ms: number; status: string };
 

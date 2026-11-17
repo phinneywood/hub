@@ -7,9 +7,9 @@
     "record-build.mjs": "0d1ca0afe2544a3dd8c957be6a95cb5eafeed4daad8a9f68d4f315126e9537d8",
     "src/activity.tsx": "77377995178139cbc7345f3b8327dc0fe67600069fb45f0e7d4080a7207c125b",
     "src/api.ts": "5560e8374457364129af4ad01e52fa23e57be575a4e0f1b024ca265e8c7904a0",
-    "src/app.css": "39be69d9c3940a80ace44abf43b04ab8f682dd2d17cde37209ec408cfdc86e77",
-    "src/ask.tsx": "3cd4867a803b3dc2564787d704b32844c3576dd32c961e5274ac87ea45efa2ec",
-    "src/asking.ts": "7e5c3c9d5b769a48577a8f2f9a1cb96fe745e538c337404751703b2b23974683",
+    "src/app.css": "db3dc2576214d2a66038ba5f521700e191eb7164482b7f285ed92cc6bd4e7537",
+    "src/ask.tsx": "010acde6d67ca868e4676ea618868762968c5791bd9e87f4b3693c3404722a85",
+    "src/asking.ts": "fae682f2599fd6a480eeae895b416acaef144163998485cebf6f0b3a56ec877d",
     "src/brief.tsx": "4feb40d304cf5933e37a44a6735032c78d198645d22b67b193e1ad687ecf43d2",
     "src/changes.tsx": "2b79d17b08040a67af92a1537c05d29fc5d0f5048c3bb0ae0389b5fa290f71a2",
     "src/day.ts": "aa38aeb6d468f5f2fd1dc95c8790f1e53479a2cc684e352caee8d9de36bb0736",
@@ -19,7 +19,7 @@
     "src/mail.tsx": "0dd8f178e949aeab251480c9ac89db3f21c3000952ed1db2a66cf3fe834ff972",
     "src/mailrules.tsx": "55ef5fa538b196cb752bd4bc5e542b05fb29e4d8146e54dcdd57dbff7ba8f992",
     "src/main.tsx": "08a098ea8433732a469ee71aa4eb9655cf7084856db50362b498c70f47060016",
-    "src/now.tsx": "5fde44a832bc186c39c698ddb7ab6d8d378a60231f0bec8c90c2f3aa927d5b5c",
+    "src/now.tsx": "5259644a22edb36269d7451e7ac75d2e311a15f9b969758ac30b59e3ac3ba855",
     "src/screens.tsx": "5fe98459d76285303a5566bdd8076d05d4396d53bfd80559bcd4c52a552b9bb1",
     "src/sheets.tsx": "3bdcf8198d629bddcdf9610e2235eff6aba1fc33a83d5762493db52a6289619a",
     "src/state.ts": "56746db634cc67f5283d024235fb7457454a708ee8e4478664ffbfdafc234ed8",
@@ -33,7 +33,7 @@
     "src/words.ts": "dfcfa37638ad8ab6347f8a66f30cabf7e6619c00e828ac7da8ebc41b2b944117"
   },
   "built": {
-    "app.css": "3fd65b979a5b997a61274555f7326c6b0d0a31c9c7f19fa8b682a5bd2f6378cc",
-    "app.js": "800915f2b93563552a449602beecd5b3ec0eda95a1ab7b531fbfd5cae3530ea6"
+    "app.css": "43b5485c8cd735ab78db7713e9bd1c6ae821aa282044b2eee51ddb610c233854",
+    "app.js": "d479db01ddccb6757169f6d76d0cb1d316c52f77863e9d1eccba327e89cd1559"
   }
 }

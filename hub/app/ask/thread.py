@@ -32,6 +32,8 @@ SUMMARY_CHARS = 2400         # about 350 words
 KIND = 'ask_summary'         # its runs in the engine's record, under the shared monthly limit
 CALLS_PER_DAY = 3            # per person
 OUTPUT_TOKENS = 600
+MORNING = ('(The morning message: up to three numbered things from their errands and Today. They answer it with '
+           '"done", "not this" or a day, with its number.)')
 ASKED_FRESH = re.compile(r"\b(start (?:over|fresh|afresh|again)|fresh start|clean slate|forget (?:this|our|the) "
                          r"(?:conversation|chat)|clear (?:the |our |this )?(?:conversation|chat|context))\b", re.I)
 SCHEMA = """
@@ -125,6 +127,8 @@ def recent(login):
 def line(turn, placeholder):
     """One turn as a record: what was asked and what Hub said, with an answer from mail, the calendar or school left
     out."""
+    if not turn['asked']:           # Hub spoke first: the morning message (morning.py)
+        return 'Hub, unasked: ' + (MORNING if turn['private'] else turn['answer'])
     return f'Asked: {turn["asked"]}\nHub: ' + (placeholder if turn['private'] else turn['answer'] or 'Done.')
 
 
