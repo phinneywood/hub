@@ -3,11 +3,12 @@ import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, loadOlder, older, stop, talk } from "./asking";
-import type { Card, Turn } from "./asking";
+import type { Card, Thing, Turn } from "./asking";
 import { ErrandsCard } from "./errands";
 import { GroceriesCard, KitchenReply } from "./kitchen";
 import { ChatHead, DayRows, Greeting, HouseCard, NeedsCard } from "./now";
 import { RoomCell, spans } from "./screens";
+import { inApp } from "./today";
 import { dragVolume, go, loadPicks, picks, playPick, runScene, say, seen, setVolume, switchRoom, undo, undone } from "./state";
 import type { View } from "./state";
 import type { House, Room } from "./types";
@@ -130,7 +131,27 @@ function ConfirmCard({ card }: { card: Card }) {
   );
 }
 
+/** Hub's morning message: a numbered line each, with its one button. Answered by typing "done 2", or by the button. */
+function MorningCard({ things, hint }: { things: Thing[]; hint: string }) {
+  return (
+    <div class="morning">
+      <ol class="rows">
+        {things.map((thing) => (
+          <li class="row" key={thing.key}>
+            <span class="row-t day">{thing.n}</span>
+            <div class="row-main"><b>{thing.text}</b></div>
+            {thing.open && <a class="row-act" href={inApp(thing.open.href)}
+              onClick={() => void post("ask/morning/opened", { key: thing.key })}>{thing.open.label}</a>}
+          </li>
+        ))}
+      </ol>
+      {hint && <p class="took">{hint}</p>}
+    </div>
+  );
+}
+
 function CardView({ card, now }: { card: Card; now: House }) {
+  if (card.kind === "morning" && card.things) return <MorningCard things={card.things} hint={card.hint ?? ""} />;
   if (card.kind === "confirm" && card.id !== undefined) return <ConfirmCard card={card} />;
   if (card.kind === "setup") {      // several changes from one request: each on its own line, under one Undo
     const lines = card.lines ?? [], missed = card.missed ?? [];
@@ -207,7 +228,7 @@ function TurnView({ turn, now, open, onOpen }: { turn: Turn; now: House; open: b
     return (
       <div class={"turn folded" + (back ? " back" : "") + (batch ? " undoable" : "")}>
         <button type="button" class="fold" aria-expanded="false" aria-label={`${turn.asked}. Hub: ${turn.answer}`} onClick={onOpen}>
-          <span class="fold-asked">{turn.asked}</span>
+          {turn.asked && <span class="fold-asked">{turn.asked}</span>}
           {first && <span class="fold-answer">{first}</span>}
         </button>
         {batch && (back ? <span class="fold-back">Undone</span>
@@ -215,12 +236,14 @@ function TurnView({ turn, now, open, onOpen }: { turn: Turn; now: House; open: b
       </div>
     );
   }
+  const morning = turn.cards.some((card) => card.kind === "morning");
+  const shown = morning ? (turn.answer.split("\n")[0] ?? "") : turn.answer;
   const took = !turn.ms ? "" : turn.ms < 950 ? "Done in under a second" : `Done in ${(turn.ms / 1000).toFixed(1)} seconds`;
   return (
     <div class={"turn" + (back ? " back" : "")}>
-      <p class="asked">{turn.asked}</p>
+      {turn.asked && <p class="asked">{turn.asked}</p>}
       {turn.waiting ? <p class="took waits">Waits for the last request to finish</p>
-        : <div class="hub">{turn.answer ? <p class={"answer" + (turn.answer.length > 160 ? " long" : "")}>{turn.answer}</p>
+        : <div class="hub">{shown ? <p class={"answer" + (shown.length > 160 ? " long" : "")}>{shown}</p>
           : <span class="dots" role="status" aria-label="Hub is working"><i /><i /><i /></span>}</div>}
       {turn.busy && turn.doing && <p class="took">{turn.doing}</p>}
       {turn.cards.map((card, n) => <CardView card={card} now={now} key={n} />)}
@@ -259,7 +282,8 @@ function Composer() {
 // Questions anyone can ask without changing anything, offered as a start beside what this person often asks.
 const STARTERS = ["What needs me today?", "What’s on tomorrow?", "What’s on the list?"];
 
-/** Suggested messages above the field, as a chat offers them, until a conversation is going. One tap sends it. */
+/** Suggested messages above the field, as a chat offers them, until the person says something (Hub speaking first
+ * with the morning message doesn't count). One tap sends it. */
 function Prompts({ quiet }: { quiet: boolean }) {
   const usual = able.value?.usual ?? [];
   if (!quiet || able.value?.ready === false || asked.value.trim()) return null;
@@ -346,7 +370,7 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
             <div class="nowtop">
               {earlier.length > 0 && <p class="chat-time">Now</p>}
               <Greeting />
-              <NeedsCard most={house ? 2 : 3} />
+              <NeedsCard most={able.value?.morning ? 0 : house ? 2 : 3} />
               {house && now && <HouseCard now={now} />}
             </div>
           )}
@@ -354,7 +378,7 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
           {now && <Found now={now} text={text} />}
         </div>
       </div>
-      <Prompts quiet={!current.length} />
+      <Prompts quiet={!current.some((turn) => turn.asked)} />
       <Composer />
     </div>
   );

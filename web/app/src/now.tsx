@@ -43,12 +43,21 @@ function upNext(now: Day): Slot | undefined {
   return now.today.find((slot) => slot.next) ?? now.today[0];
 }
 
-/** What needs you: the first few of Today's rows (`most`: fewer on a phone, where the house card shares the screen). */
+/** What needs you: the first few of Today's rows (`most`: fewer on a phone, where the house card shares the screen;
+ * 0 once the day's morning message is in the conversation, which says it instead: then only the day's next thing). */
 export function NeedsCard({ most }: { most: number }) {
   const now = day.value;
   if (!now) return null;
   const more = Math.max(0, now.needs.length - most) + now.more;
-  const next = now.needs.length ? undefined : upNext(now);
+  const next = now.needs.length && most ? undefined : upNext(now);
+  if (!most) {      // the morning message in the conversation says what needs you; this keeps the day's next thing
+    return next ? (
+      <section class="now" aria-label="Next">
+        <div class="rows"><SlotRow slot={next} /></div>
+        <button type="button" class="now-more" onClick={() => go("today")}>Open Today<Icon name="right" /></button>
+      </section>
+    ) : null;
+  }
   if (!now.needs.length && !next) return null;
   return (
     <section class="now" aria-label="Needs you">

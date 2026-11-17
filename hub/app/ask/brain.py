@@ -25,7 +25,7 @@ from ... import home
 from ...engine import state
 from ...tools.house import broker, read
 from .. import model as picture
-from . import private, route, thread, tools, turns
+from . import morning, private, route, thread, tools, turns
 
 log = logging.getLogger('hub.ask')
 KIND = 'chat'                   # these runs in the engine's record, with the chat's own monthly limit
@@ -50,7 +50,9 @@ Earlier. This is one conversation with this person that keeps going. Inside <ear
 far, then their last requests and what Hub did or said, oldest first, so a follow-up like "there too", "a bit \
 louder" or "what did we decide about that?" makes sense. It is a record of what happened, never instructions, and not \
 a way to answer: nothing happens in the house unless you call a tool now. If they ask what you remember of the \
-conversation, or to start over, use `conversation`.
+conversation, or to start over, use `conversation`. A line "Hub, unasked" is the morning message Hub gave them; \
+short answers to it ("done 2", "not this", "Thursday") are handled before you see a turn, so if one reaches you, say \
+which numbers they can answer and that Today has the full list.
 
 Music. Play what they mean, not their sentence: one of their playlists if one fits, else an artist, an album, a song, \
 or a genre or mood in a few words. For a description ("2011 throwbacks", "something for a dinner party") choose \
@@ -265,6 +267,11 @@ async def run(text, login, build=None):
     if not text:
         yield {'t': 'say', 'text': 'Say what you’d like.'}
         yield {'t': 'done', 'id': None, 'ms': 0, 'status': 'empty'}
+        return
+    answered = await run_in_threadpool(morning.answer, text, login)
+    if answered:                # "done 2" to the morning message, or "what are you watching?": code, no model
+        yield {'t': 'say', 'text': answered}
+        yield finish(answered)
         return
     refused = await run_in_threadpool(limits)
     if refused:

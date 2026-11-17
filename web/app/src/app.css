@@ -889,3 +889,7 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
   .wcol + .wcol { margin-top: 30px; }
   .wall.asleep { display: grid; min-height: 100dvh; }
 }
+.morning { margin-top: 8px; }
+.morning ol.rows { list-style: none; margin: 0; padding: 0; }
+.morning .row { grid-template-columns: 24px 1fr auto; }
+.morning .row-main b { font-weight: 400; }
