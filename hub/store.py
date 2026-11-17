@@ -69,6 +69,9 @@ def db():
     for name, kind in NEW_COLUMNS.items():
         if name not in have:
             conn.execute(f"alter table plan_items add column {name} {kind}")
+    # Whose standing note it is (hub/engine/state.py). A note from before notes were kept per person has none: the owner's.
+    if "login" not in {r["name"] for r in conn.execute("pragma table_info(engine_instructions)")}:
+        conn.execute("alter table engine_instructions add column login text")
     return conn
 
 

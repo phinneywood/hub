@@ -274,8 +274,8 @@ the model, so two live checks (`hub/live/checks.py`, on the Checks page) do the 
   outcome, checked in code. It runs once per version. What was asked and what Ask did is kept in Hub's private
   folder (`ask-trial.json`), since it names the house's things; the check itself says only how many.
 
-**What Hub remembers.** One list: the engine's standing notes (`hub/engine/state.py`), the same list the older
-chat saved to. Ask keeps a note at once when asked, shows it with Forget, and lists them under System. The
+**What Hub remembers.** One list per person: the engine's standing notes (`hub/engine/state.py`), the same list the
+older chat saved to, each kept with the login that saved it, so a note steers only its own person's turns. Ask keeps a note at once when asked, shows it with Forget, and lists them under System. The
 engine's own test still decides what may become a note (`notes.grounded`): the owner's latest message must ask
 for something to be remembered, and the note must be made of that message's words, so a song title, a device
 name or a model's invention never becomes one. A note that says some rooms play together keeps them as a zone.

@@ -33,8 +33,9 @@ def _runs(kind, limit):
              'cost': round(r['cost'] or 0, 4)} for r in state.runs(kind, limit=limit)]
 
 
-def picture():
-    """The Engine screen as data. Reads what Hub keeps; calls no model."""
+def picture(login):
+    """The Engine screen as data, for `login`: their own standing notes and the notes waiting for their tap; the rest
+    is the household's. Reads what Hub keeps; calls no model."""
     from ..tools.gmail import triage
     from ..tools.house import zones
     day = home.today().isoformat()
@@ -43,12 +44,12 @@ def picture():
 
     def zone(ids):
         return [names.get(e, e.partition('.')[2]) for e in ids]
-    asked = [{'id': i['id'], 'text': i['text'], 'zone': zone(by_note.get(i['id'], ()))} for i in state.instructions()]
+    asked = [{'id': i['id'], 'text': i['text'], 'zone': zone(by_note.get(i['id'], ()))} for i in state.instructions(login)]
     used, sort_used = state.used(day, overnight.KIND), state.used(day, triage.KIND)
     return {
         'sorting': luna.configured() and state.used(day, ask.KIND)['luna_calls'] < ask.CALLS_PER_DAY,
         'asked': asked, 'full': len(asked) >= state.MAX_INSTRUCTIONS,
-        'notes': [{'id': p['id'], 'text': p['text'], 'said': p['said'], 'zone': zone(p['zone'])} for p in notes.waiting()],
+        'notes': [{'id': p['id'], 'text': p['text'], 'said': p['said'], 'zone': zone(p['zone'])} for p in notes.waiting(login)],
         'recipes': [{'id': r['id'], 'name': r['name'], 'steps': [recipes.describe(s) for s in r['steps']], 'said': r.get('said')}
                     for r in recipes.waiting()],
         'kept': [{'id': r['id'], 'name': r['name'], 'steps': [recipes.describe(s) for s in r['steps']]} for r in recipes.saved()],
@@ -66,9 +67,9 @@ def picture():
     }
 
 
-def tell(text):
-    """One line the owner typed: guidance Hub follows, or a note of something to build."""
-    result = ask.submit(text)
+def tell(text, login):
+    """One line someone typed: guidance Hub follows for them, or a note of something to build."""
+    result = ask.submit(text, login=login)
     store.log('engine_ask', result)
     return TOLD.get(result, TOLD['unsorted']), result in ('instruction', 'request', 'unsorted')
 
@@ -79,7 +80,8 @@ def do(what, key, value=None, login=None):
     overnight review, which reads the main account, is its owner's: to anyone else they aren't there."""
     key = str(key or '')[:40]
     if what == 'forget':
-        state.remove_instruction(int(key))
+        if not state.remove_instruction(int(key), login):
+            raise Refused('That note isn’t there any more.')
         store.log('engine_instruction', 'removed')
         return 'Removed. Hub won’t follow that any more.'
     if what == 'request-done':
@@ -90,7 +92,7 @@ def do(what, key, value=None, login=None):
         return 'Removed.'
     if what in ('note-save', 'note-skip'):
         try:
-            notes.save(key) if what == 'note-save' else notes.skip(key)
+            notes.save(key, login) if what == 'note-save' else notes.skip(key, login)
         except notes.Refused as error:
             raise Refused(error) from None
         return 'Saved. Ask and the overnight review follow it from now on.' if what == 'note-save' else 'Not saved.'

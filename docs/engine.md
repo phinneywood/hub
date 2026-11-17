@@ -13,8 +13,12 @@ Code: `hub/engine/`. Owner's page: `/engine`.
 | Actions | What Hub may do, each with a preview page, an undo and a trust level | `catalog.ACTIONS` |
 | Record and limits | Every run with its calls and cost; daily and monthly stops | `state.py` |
 
-Standing instructions (“What you’ve asked for” on the Engine page) are the owner's plain-words
-guidance. They steer judgement and are given to Ask Hub on every turn. They cannot add a source or an action.
+Standing instructions (“What you’ve asked for” on the Engine page) are a person's plain-words
+guidance. They cannot add a source or an action. Each is kept with the login that saved it
+(`state.instructions(login)`): it is given to that person's Ask turns only, and only they see, save or remove it.
+The overnight review reads the owner's accounts, so it follows the owner's (`state.owners_instructions()`). A note
+saved before notes were kept per person is the owner's. A speaker zone saved with a note is the house's, so it
+plays together for everyone (`hub/tools/house/zones.py`).
 
 ## Adding something
 

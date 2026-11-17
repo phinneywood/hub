@@ -13,10 +13,10 @@ NOTE = 'The porch light goes off at midnight'
 
 def test_the_screen_reads_what_the_engine_keeps_and_calls_no_model(monkeypatch):
     monkeypatch.setattr(config, 'ALLOWED_LOGINS', {'me@example.com'})
-    state.add_instruction('Always tell me about school mail with a deadline.')
+    state.add_instruction('Always tell me about school mail with a deadline.', 'me@example.com')
     state.add_request('A button that warms the house before we wake')
     notes.propose(NOTE, SAID, login='me@example.com')
-    seen = client.get('/app/api/engine').json()
+    seen = client.get('/app/api/engine', headers=OWNER).json()
     assert [i['text'] for i in seen['asked']] == ['Always tell me about school mail with a deadline.']
     assert [r['text'] for r in seen['requests']] == ['A button that warms the house before we wake']
     assert [n['text'] for n in seen['notes']] == [NOTE] and not seen['full']
@@ -31,12 +31,12 @@ def test_every_tap_needs_a_signed_in_device_and_does_what_the_older_page_did(mon
     [request] = state.requests()
     assert client.post('/app/api/engine/note-save', json={'key': proposed['id']}, headers={'origin': 'http://testserver'}).status_code == 403
     assert client.post('/app/api/engine/tell', json={'text': 'x'}, headers={'origin': 'http://testserver'}).status_code == 403
-    assert state.instructions() == []
+    assert state.instructions('me@example.com') == []
     assert client.post('/app/api/engine/note-save', json={'key': proposed['id']}, headers=OWNER).json()['ok']
-    [kept] = state.instructions()
+    [kept] = state.instructions('me@example.com')
     assert kept['text'] == NOTE
     assert client.post('/app/api/engine/note-save', json={'key': proposed['id']}, headers=OWNER).status_code == 409
-    assert client.post('/app/api/engine/forget', json={'key': kept['id']}, headers=OWNER).json()['ok'] and state.instructions() == []
+    assert client.post('/app/api/engine/forget', json={'key': kept['id']}, headers=OWNER).json()['ok'] and state.instructions('me@example.com') == []
     assert client.post('/app/api/engine/request-done', json={'key': request['id']}, headers=OWNER).json()['ok'] and state.requests() == []
     action = next(a for a in catalog.ACTIONS if len(a.levels()) > 1)
     other = next(level for level in action.levels() if level != state.trust(action))

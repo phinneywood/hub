@@ -20,7 +20,7 @@ def test_a_note_is_only_proposed_from_the_owners_own_request_and_words():
     assert 'links' in _refused('Remember the page https://example.com', 'remember the page https://example.com')
     assert 'under 160' in _refused('remember ' * 30, 'remember ' * 30)
     assert 'two speakers' in _refused(NOTE, SAID, zone=['media_player.kitchen'])
-    assert notes.waiting() == [] and state.instructions() == []
+    assert notes.waiting('me@example.com') == [] and state.instructions('me@example.com') == []
 
 
 def _refused(note, said, zone=()):
@@ -35,7 +35,7 @@ def test_the_remember_tool_proposes_and_saves_nothing():
     assert 'signed in' in catalog.remember(None, NOTE, said=SAID)['refused']
     found = catalog.remember('me@example.com', NOTE, said=SAID)
     assert 'Nothing is saved yet' in found['needs_tap'] and NOTE in found['needs_tap']
-    assert state.instructions() == [] and [p['text'] for p in notes.waiting()] == [NOTE]
+    assert state.instructions('me@example.com') == [] and [p['text'] for p in notes.waiting('me@example.com')] == [NOTE]
     assert 'doesn’t ask' in catalog.remember('me@example.com', NOTE, said='play some music')['refused']
 
 
@@ -48,29 +48,29 @@ def test_only_a_signed_in_tap_saves_a_note_and_it_can_be_removed():
     assert client.post(f'/engine/notes/{proposed["id"]}/save', headers={'sec-fetch-site': 'same-origin'}).status_code == 403
     assert client.post(f'/engine/notes/{proposed["id"]}/save', headers={'origin': 'https://elsewhere.example',
                                                                          'tailscale-user-login': 'me@example.com'}).status_code == 403
-    assert state.instructions() == []
+    assert state.instructions('me@example.com') == []
     reply = client.post(f'/engine/notes/{proposed["id"]}/save', headers=SIGNED_IN, follow_redirects=False)
-    assert reply.status_code == 303 and [i['text'] for i in state.instructions()] == [NOTE] and notes.waiting() == []
-    assert NOTE in notes.for_ask() and 'own tap' in notes.for_ask()
+    assert reply.status_code == 303 and [i['text'] for i in state.instructions('me@example.com')] == [NOTE] and notes.waiting('me@example.com') == []
+    assert NOTE in notes.for_ask('me@example.com') and 'own tap' in notes.for_ask('me@example.com')
     assert 'Notes and zones' in client.get('/engine', headers=SIGNED_IN).text
     again = client.post(f'/engine/notes/{proposed["id"]}/save', headers=SIGNED_IN)
-    assert 'isn’t waiting any more' in again.text and len(state.instructions()) == 1
-    client.post('/engine/notes/remove', data={'instruction_id': state.instructions()[0]['id']}, headers=SIGNED_IN)
-    assert state.instructions() == [] and notes.for_ask() == ''
+    assert 'isn’t waiting any more' in again.text and len(state.instructions('me@example.com')) == 1
+    client.post('/engine/notes/remove', data={'instruction_id': state.instructions('me@example.com')[0]['id']}, headers=SIGNED_IN)
+    assert state.instructions('me@example.com') == [] and notes.for_ask('me@example.com') == ''
 
 
 def test_not_now_and_a_full_list():
     proposed = notes.propose(NOTE, SAID, login='me@example.com')
     TestClient(app).post(f'/engine/notes/{proposed["id"]}/skip', headers=SIGNED_IN)
-    assert notes.waiting() == []
+    assert notes.waiting('me@example.com') == []
     for n in range(state.MAX_INSTRUCTIONS):
-        state.add_instruction(f'Synthetic {n}')
+        state.add_instruction(f'Synthetic {n}', 'me@example.com')
     proposed = notes.propose(NOTE, SAID, login='me@example.com')
     try:
-        notes.save(proposed['id'])
+        notes.save(proposed['id'], 'me@example.com')
     except notes.Refused as error:
         assert 'at most' in str(error)
-    assert notes.waiting() and len(state.instructions()) == state.MAX_INSTRUCTIONS
+    assert notes.waiting('me@example.com') and len(state.instructions('me@example.com')) == state.MAX_INSTRUCTIONS
 
 
 def test_the_owners_typed_message_reaches_a_control_and_the_model_cant_set_it():

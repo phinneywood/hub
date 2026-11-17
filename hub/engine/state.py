@@ -1,12 +1,14 @@
 """What the engine remembers: trust levels, standing instructions, runs and suggestions.
 
+Standing instructions are per person (hub/people.py): each is kept with the login that saved it.
+
 Runs hold counts and cost only. Suggestions hold the short text shown in “Needs you”.
 """
 import json
 import time
 from contextlib import closing
 
-from .. import store
+from .. import people, store
 from .registry import TRUST
 
 MAX_INSTRUCTIONS = 12
@@ -34,23 +36,46 @@ def set_trust(action, level):
     return True
 
 
-def instructions():
+def _theirs(saved_by, login):
+    """Whether a note saved by `saved_by` is `login`'s. A note from before notes were kept per person is the owner's."""
+    return people.owner(login) if saved_by is None else people.same(saved_by, login)
+
+
+def _all_instructions():
     with closing(store.db()) as conn:
-        return [dict(r) for r in conn.execute('select id, text, created_at from engine_instructions order by id')]
+        return [dict(r) for r in conn.execute('select id, text, created_at, login from engine_instructions order by id')]
 
 
-def add_instruction(text):
-    """Save one standing instruction. Its id, or False when it is empty or the list is full."""
+def instructions(login):
+    """This person's standing notes, oldest first. Each person's notes are their own: they steer that person's Ask,
+    and nobody else's. No login (this Mac itself) has none."""
+    return [{k: r[k] for k in ('id', 'text', 'created_at')} for r in _all_instructions() if _theirs(r['login'], login)]
+
+
+def owners_instructions():
+    """The owner's standing notes, for the runs that read the owner's own accounts (the overnight review)."""
+    return [{k: r[k] for k in ('id', 'text', 'created_at')} for r in _all_instructions()
+            if r['login'] is None or people.owner(r['login'])]
+
+
+def add_instruction(text, login):
+    """Save one of this person's standing notes. Its id, or False when it is empty, nobody is asking, or their list is
+    full."""
     text = ' '.join(str(text).split())[:INSTRUCTION_LENGTH]
-    if not text or len(instructions()) >= MAX_INSTRUCTIONS:
+    if not text or not login or len(instructions(login)) >= MAX_INSTRUCTIONS:
         return False
     with closing(store.db()) as conn, conn:
-        return conn.execute('insert into engine_instructions(text, created_at) values(?,?)', (text, time.time())).lastrowid
+        return conn.execute('insert into engine_instructions(text, created_at, login) values(?,?,?)',
+                            (text, time.time(), str(login).strip().lower())).lastrowid
 
 
-def remove_instruction(instruction_id):
+def remove_instruction(instruction_id, login):
+    """Remove one of this person's notes. False when it isn't theirs (or doesn't exist): someone else's is left alone."""
+    if not any(i['id'] == instruction_id for i in instructions(login)):
+        return False
     with closing(store.db()) as conn, conn:
         conn.execute('delete from engine_instructions where id=?', (instruction_id,))
+    return True
 
 
 def record_run(day, kind, status, luna_calls=0, jev_calls=0, tokens_in=0, tokens_out=0, cost=0.0):

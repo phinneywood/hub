@@ -11,7 +11,7 @@ import re
 import time
 import uuid
 
-from .. import store
+from .. import people, store
 from . import judge, state
 
 NOTE_LENGTH = 160
@@ -75,25 +75,27 @@ def propose(note, said, *, login, zone=()):
     return found
 
 
-def waiting():
-    """Proposals still waiting for a tap, newest first."""
+def waiting(login):
+    """This person's proposals still waiting for their tap, newest first. Someone else's are never shown or saved:
+    a note is the person's who asked for it."""
     with _db() as conn:
         rows = conn.execute("select * from ask_note_proposals where status = 'waiting' and ts > ? order by ts desc",
                             (time.time() - WAIT_SECONDS,)).fetchall()
-    return [{**dict(r), 'zone': json.loads(r['zone'])} for r in rows]
+    return [{**dict(r), 'zone': json.loads(r['zone'])} for r in rows if people.same(r['login'], login)]
 
 
-def _waiting(proposal_id):
-    return next((p for p in waiting() if p['id'] == str(proposal_id)[:12]), None)
+def _waiting(proposal_id, login):
+    return next((p for p in waiting(login) if p['id'] == str(proposal_id)[:12]), None)
 
 
-def save(proposal_id):
-    """The owner's tap: the note becomes a standing instruction, with its zone. Raises Refused."""
+def save(proposal_id, login):
+    """The tap of the person who asked: the note becomes one of their standing instructions, with its zone.
+    Raises Refused."""
     from ..tools.house import zones
-    found = _waiting(proposal_id)
+    found = _waiting(proposal_id, login)
     if found is None:
         raise Refused('That note isn’t waiting any more. Ask again in the chat.')
-    instruction_id = state.add_instruction(found['text'])
+    instruction_id = state.add_instruction(found['text'], found['login'])
     if not instruction_id:
         raise Refused(f'Hub keeps at most {state.MAX_INSTRUCTIONS} notes. Remove one first.')
     if found['zone']:
@@ -104,15 +106,17 @@ def save(proposal_id):
     return found
 
 
-def skip(proposal_id):
+def skip(proposal_id, login):
+    found = _waiting(proposal_id, login)
+    if found is None:
+        return
     with _db() as conn:
-        conn.execute("update ask_note_proposals set status = 'skipped' where id = ? and status = 'waiting'",
-                     (str(proposal_id)[:12],))
+        conn.execute("update ask_note_proposals set status = 'skipped' where id = ? and status = 'waiting'", (found['id'],))
 
 
-def for_ask():
-    """The saved notes, for Ask's instructions on each turn, or ''."""
-    saved = state.instructions()
+def for_ask(login):
+    """The asker's saved notes, for Ask's instructions on their turn, or ''."""
+    saved = state.instructions(login)
     if not saved:
         return ''
     return ('Standing notes the owner saved with their own tap. Follow them unless the owner\'s latest message '

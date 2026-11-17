@@ -363,14 +363,14 @@ def remember(ctx: RunContext[Turn], note: str, together: list[str] | None = None
         return _say(turn, 'Ask Hub to remember things from your phone or laptop.')
     try:
         zone = _speakers(together, read.snapshot()) if together else []
-        number = turns.remember(note, turn.text, zone)
+        number = turns.remember(note, turn.text, zone, login=turn.login)
     except turns.NotKept as error:
         return _again(turn, error) if error.again else _say(turn, str(error))
     except control.Refused as error:
         return _again(turn, error)
     except broker.HomeDown:
         return _say(turn, 'The house isn’t answering, so Hub couldn’t check those rooms. Nothing was kept.')
-    kept = next(n['note'] for n in turns.remembered() if n['id'] == number)
+    kept = next(n['note'] for n in turns.remembered(turn.login) if n['id'] == number)
     return _say(turn, 'Hub will remember that.', {'kind': 'memory', 'id': number, 'note': kept})
 
 

@@ -547,7 +547,7 @@ def test_the_engine_record_holds_counts_and_cost_never_text(ready):
 def test_saved_notes_reach_the_model_on_later_chats(ready):
     ask(ready, 'What needs me today?', headers={**ORIGIN, **OWNER})
     assert 'Standing notes' not in ''.join(m.instructions or '' for m in SEEN[-1] if isinstance(m, ModelRequest))
-    state.add_instruction('Kitchen and Living room are one space: play music there together')
+    state.add_instruction('Kitchen and Living room are one space: play music there together', 'me@example.com')
     ask(ready, 'What needs me today?', headers={**ORIGIN, **OWNER})
     given = ''.join(m.instructions or '' for m in SEEN[-1] if isinstance(m, ModelRequest))
     assert 'Standing notes the owner saved' in given and 'one space: play music there together' in given

@@ -235,7 +235,7 @@ def settings(text, login, shown, trace=None, accounts=None):
     their tap), their saved recipes, what other assistants answered earlier (as data) and the limits. The /ask route and the golden
     tests both use this, so they run alike; only the /ask route passes a `trace`, and only the golden runs `accounts`."""
     from ..engine import notes, recipes
-    extra = '\n\n'.join(filter(None, (notes.for_ask(), recipes.for_ask(), recall(shown))))
+    extra = '\n\n'.join(filter(None, (notes.for_ask(login), recipes.for_ask(), recall(shown))))
     return {'deps': Turn(text=text, login=login, trace=trace, accounts=accounts), 'instructions': extra or None,
             'usage_limits': UsageLimits(request_limit=REQUESTS_PER_TURN)}
 

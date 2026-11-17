@@ -147,7 +147,7 @@ def test_dry_run_holds_back_music_edits_proposals_and_kitchen(world):
     assert added['done'] and made['needs_tap'] and noted['needs_tap'] and sent == {'message': dryrun.DRY_ID}
     assert [(c['to'], c['what']) for c in ledger.changes] == [
         ('music', 'music/playlists/add_playlist_tracks'), ('proposal', 'playlist'), ('proposal', 'note'), ('kitchen', 'POST /messages')]
-    assert world.sent == [] and music.recent_changes() == [] and music.proposals() == [] and notes.waiting() == []
+    assert world.sent == [] and music.recent_changes() == [] and music.proposals() == [] and notes.waiting('me@example.com') == []
 
 
 def test_live_writes_only_for_light_and_music_scenarios_and_put_back_after(world):

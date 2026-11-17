@@ -319,10 +319,10 @@ def deploy(request: Request):
 # ---- Engine (hub/app/engine.py): what the owner asked for, what Hub may do, what it spent ----
 
 @router.get('/api/engine')
-def engine_picture():
-    """The Engine screen as data. Reads what Hub keeps; calls no model."""
+def engine_picture(request: Request):
+    """The Engine screen as data, for the person asking. Reads what Hub keeps; calls no model."""
     from . import engine
-    return engine.picture()
+    return engine.picture(_login(request))
 
 
 @router.post('/api/engine/tell')
@@ -331,7 +331,7 @@ def engine_tell(request: Request, body: dict = Body(...)):
     from . import engine
     if _login(request) is None:
         return _refuse('Tell Hub from your phone or laptop.', 403)
-    said, ok = engine.tell(str(body.get('text') or ''))
+    said, ok = engine.tell(str(body.get('text') or ''), _login(request))
     return {'ok': ok, 'said': said} if ok else _refuse(said)
 
 
@@ -397,7 +397,7 @@ def ask_status(request: Request):
     why, login = brain.warm() or brain.limits(), _login(request)
     return {'ready': why is None, 'why': why, 'recent': turns.recent(login, turns.SHOWN_SECONDS, turns.SHOWN_TURNS),
             'usual': turns.usual(login) if why is None else [],
-            'remembers': turns.remembered()}
+            'remembers': turns.remembered(login)}
 
 
 @router.post('/api/ask')
@@ -443,7 +443,8 @@ def forget_note(note: int, request: Request):
     from .ask import turns
     if _login(request) is None:
         return _signed_out()
-    turns.forget(note)
+    if not turns.forget(note, _login(request)):
+        return _refuse('That note isn’t there any more.', 404)
     return {'ok': True, 'said': 'Forgotten'}
 
 
