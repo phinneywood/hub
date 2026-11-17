@@ -399,16 +399,24 @@ def test_a_change_the_broker_reports_is_read_at_once_and_the_timer_relaxes(monke
     async def listen():
         queue = feed.listen(asyncio.get_running_loop())
         await asyncio.wait_for(queue.get(), 2)
+        for _ in range(200):            # wait for the line, however slowly a busy machine starts its thread
+            if feed.listening_live():
+                break
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.1)        # a reading already on the 0.05 s timer lands; after it the timer relaxes
+        before = len(reads)
         await asyncio.sleep(0.4)
-        quiet = len(reads)              # on the 0.05 s timer this would be many; relaxed, it is the first few
+        quiet = len(reads) - before     # on the 0.05 s timer this would be about 8; relaxed, none
+        while not queue.empty():        # only a picture read after the switch counts below
+            queue.get_nowait()
         said.set()
         await asyncio.wait_for(queue.get(), 2)
         live = feed.listening_live()
         feed.leave(queue)
-        return quiet, live
+        return before, quiet, live
 
-    quiet, live = asyncio.run(listen())
-    assert live and quiet <= 3 and len(reads) >= quiet + 1
+    before, quiet, live = asyncio.run(listen())
+    assert live and quiet <= 1 and len(reads) > before + quiet
 
 
 def test_without_a_broker_that_listens_the_house_is_read_on_the_timer():

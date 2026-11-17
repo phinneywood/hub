@@ -28,8 +28,12 @@ function keep(cards: Errand[]) {
   known.value = all;
 }
 
-export async function loadErrands() {
+let toldAt = 0;               // when the screen last said that Hub saw an errand finished
+
+/** Reads the errands again. True when it said that one finished. */
+export async function loadErrands(): Promise<boolean> {
   asked = Date.now();
+  let told = false;
   clearTimeout(timer);
   try {
     const answer = await fetch("/app/api/errands", { headers: { accept: "application/json" } });
@@ -39,7 +43,7 @@ export async function loadErrands() {
     if (before) {             // what Hub saw finished since the last look: told once
       const was = new Set(before.ready.map((e) => e.id));
       const closed = found.done.find((e) => was.has(e.id) && e.ended?.seen);
-      if (closed?.ended) say(`${closed.ended.text}: ${closed.title}`);
+      if (closed?.ended) { say(`${closed.ended.text}: ${closed.title}`); toldAt = Date.now(); told = true; }
     }
     errands.value = found;
     errandsAway.value = false;
@@ -50,6 +54,17 @@ export async function loadErrands() {
   } catch {
     errandsAway.value = true;
   }
+  return told;
+}
+
+/** Look again: a finished errand found by this read (or by a look already under way) is what the screen says,
+ *  not "Looking", which would cover it. */
+async function lookAgain() {
+  const at = Date.now();
+  const answer = await send("read");
+  const told = await loadErrands();
+  if (answer.error) say(answer.error);
+  else if (!told && toldAt < at) say(answer.said ?? "Looking");
 }
 
 export function seeErrands(cards: Errand[]) {
@@ -278,7 +293,7 @@ export function Errands() {
         </section>
       )}
       <div class="btns">
-        <button type="button" class="btn ghost" disabled={now.reading} onClick={() => void send("read").then((a) => { say(a.error ?? a.said ?? "Looking"); void loadErrands(); })}>
+        <button type="button" class="btn ghost" disabled={now.reading} onClick={() => void lookAgain()}>
           {now.reading ? "Looking…" : "Look again"}</button>
       </div>
       {now.own && (

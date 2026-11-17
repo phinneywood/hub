@@ -55,7 +55,8 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
 It saves screenshots of each state and prints how long a tap took to show.
 
 It is not part of the test suite: it needs Node and Playwright, which Hub's tests and deployer do not.
-Run it after changing the app or updating its packages.
+GitHub runs it on every push and pull request (`.github/workflows/browser-check.yml`) and keeps the
+screenshots with the run for 14 days. Run it here when you change the app, and add steps for the change.
 
 1. Start the demo (from the repository root; a throwaway data folder, no key, no real house):
 

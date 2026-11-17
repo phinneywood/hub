@@ -123,8 +123,18 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.waitForTimeout(600);
 
     // ---- hold a room: everything in it ----
-    await page.locator(room("kitchen")).scrollIntoViewIfNeeded();     // the page may have scrolled: hold where the room is
-    const box = await page.locator(room("kitchen")).boundingBox();
+    // The page may still be scrolling (new content below can move it): hold only once the room sits still under the finger.
+    let box = null;
+    for (let i = 0; i < 20 && !box; i++) {
+      await page.locator(room("kitchen")).scrollIntoViewIfNeeded();
+      const a = await page.locator(room("kitchen")).boundingBox();
+      await page.waitForTimeout(150);
+      const b = await page.locator(room("kitchen")).boundingBox();
+      const still = a && b && a.x === b.x && a.y === b.y;
+      if (still && await page.evaluate(([x, y, sel]) => !!document.elementFromPoint(x, y)?.closest(sel), [b.x + 40, b.y + 40, room("kitchen")])) box = b;
+    }
+    expect(box, "the kitchen never sat still on screen to be held");
+    box = box || await page.locator(room("kitchen")).boundingBox();
     if (phone) {
       const cdp = await ctx.newCDPSession(page);
       const point = { x: box.x + 40, y: box.y + 40 };
