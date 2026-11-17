@@ -9,6 +9,7 @@ import copy
 import json
 import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from hub import home
 from hub.tools.house import admin, apple, broker, control, read
@@ -526,11 +527,12 @@ def install(patch, accessories=True):
     patch.setattr(broker, '_exchange', world.exchange)
     patch.setattr(control, 'CHECK_WAIT', 0)
     real = apple._run
+    patch.setattr(apple, 'CLI', Path('/nonexistent/homeclaw-cli'))    # never the Mac's own HomeClaw, if it has one
 
     def homeclaw(*args):
         if args == ('list',) and world.accessories is not None:
             return json.loads(json.dumps(world.accessories))
-        return real(*args)
+        return real(*args)                      # Hub's own checks, then "HomeClaw isn't installed on this Mac."
     patch.setattr(apple, '_run', homeclaw)
     admin.forget()
     read.clear_cache()
