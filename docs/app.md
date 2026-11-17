@@ -101,12 +101,17 @@ Four things differ from Ask's path:
 When two rooms play different things (music downstairs, a lullaby in one bedroom), the picture still has one
 main music, the one the playing strip works: it stays the main one for as long as it plays, and otherwise the
 one in more rooms is. The others are named in `music.also`, their rooms show the playing bars, the sentence and
-the playing strip say so, and the music sheet lists every room under “Other rooms”: one playing its own music with
-its volume and a pause, a quiet one with **Play here** and **Join**. Play here picks a playlist for that room alone
+the playing strip say so. The music sheet then becomes “Music in the house”: one card for each music, the main one
+first, each with what it is and where, play or pause and next, one volume for all its rooms (`group_volume`: each
+room moves by the same step, so their balance stays), and its rooms opened up, each with its own volume and a way
+out (not the room that leads: Music Assistant can't take it out while others follow). **Add a room** on a card
+brings in a quiet room, or a room from another music, which then leaves it (never one that leads a music others
+follow); **Change music** picks a playlist for that card's rooms only. With one music the sheet looks as before:
+the track, the big buttons and the rooms where it plays. Under the cards, each quiet room has **Play here** and
+**Join**; with two musics playing Join asks which. Play here picks a playlist for that room alone
 (`play/{speaker}` with `"here": true`, as Ask plays in a named room: its zone comes along, it leaves a group it
-shared, it starts softly from silence) and never touches what plays elsewhere; Join adds it to the main music. A
-room's own sheet offers the same. Nothing in the app moves a room that plays its own music into the main music
-without the owner tapping Join on it.
+shared, it starts softly from silence) and never touches what plays elsewhere. A room's own sheet offers the same.
+Nothing in the app moves a room that plays its own music into another music without the owner tapping on it.
 
 ## Scenes
 

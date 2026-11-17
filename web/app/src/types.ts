@@ -14,7 +14,10 @@ export interface Room {
 }
 export interface Speaker { id: string; name: string; in: boolean; leads: boolean; volume: number | null; offline: boolean; other: boolean }
 /** Music playing somewhere else in the house, apart from the main one. */
-export interface Stream { speaker: string; title: string; artist: string; speakers: string[]; rooms: string[] }
+export interface Stream {
+  speaker: string; title: string; artist: string; album?: string; playing?: boolean; volume?: number | null;
+  speakers: string[]; rooms: string[];
+}
 export interface Music {
   speaker: string; playing: boolean; state: string; title: string; artist: string; album: string;
   volume: number | null; speakers: Speaker[]; also: Stream[];

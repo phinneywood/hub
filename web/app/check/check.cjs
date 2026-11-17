@@ -206,7 +206,30 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect((await sub()).includes("Something else is playing in the bedroom"), "the main music did not play on beside the bedroom: " + await sub());
     await page.locator(".np").click({ position: { x: 120, y: 20 } });
     await page.waitForSelector(".sheet.in"); await page.waitForTimeout(450); await shot("5c-two-rooms");
-    expect(await page.locator('.sheet [aria-label="Pause the music in Bedroom"]').count() === 1, "the bedroom's own music had no pause");
+    // One card for each music: the main one first, the bedroom's own after it, each with its own play and pause.
+    expect(await page.locator(".sheet .tune").count() === 2, "the music sheet did not show a card for each music");
+    expect((await page.locator(".sheet-head h1").innerText()) === "Music in the house", "two musics did not make it the house's music");
+    const bedroom = page.locator('.sheet .tune:has(.tune-where:text-is("Bedroom"))');
+    expect(await bedroom.locator('[aria-label^="Pause"]').count() === 1, "the bedroom's own music had no pause");
+    // The main music's volume moves every room in it at once, and a room comes out of it.
+    const main = page.locator(".sheet .tune").first();
+    await main.locator('.pill:has-text("Rooms")').click();
+    const kitchenWas = Number((await main.locator('.ctl:has-text("Kitchen") .ctl-name span').innerText()).replace("%", ""));
+    await main.locator('input[aria-label^="Volume of"]').fill("45");
+    expect(await until((n) => [...document.querySelectorAll(".sheet .tune .ctl")].some((row) => row.querySelector("b")?.textContent === "Kitchen"
+      && Number(row.querySelector(".ctl-name span")?.textContent.replace("%", "")) > n), kitchenWas),
+      "the rooms did not follow the music's volume");
+    await main.locator('[aria-label="Take Kitchen out"]').click();
+    expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Kitchen stopped"), "a room did not come out of the music");
+    await page.waitForTimeout(1200);
+    expect(await page.locator('.sheet [aria-label="Kitchen joins some music"]').count() === 1, "a quiet room did not ask which music to join");
+    await page.locator('.sheet [aria-label="Kitchen joins some music"]').click();
+    await page.locator('.sheet .ctl.choose .pill').first().click();
+    expect(await until(() => document.querySelector(".toast span")?.textContent.includes("Kitchen is playing")), "a room did not join the music it was given");
+    await page.waitForTimeout(1200);
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px in the music sheet: " + (await small()).join(", "));
+    await bedroom.locator('[aria-label^="Pause"]').click();
+    expect(await until(() => document.querySelector('.sheet [aria-label="Play something in Bedroom"]')), "the bedroom's own music did not pause");
     await page.keyboard.press("Escape"); await page.waitForTimeout(400);
 
     // ---- Ask: what is usually asked around now is one tap ----
