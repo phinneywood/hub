@@ -342,7 +342,7 @@ def engine_tap(what: str, request: Request, body: dict = Body(...)):
     if _login(request) is None:
         return _refuse('Change this from your phone or laptop.', 403)
     try:
-        return {'ok': True, 'said': engine.do(what, body.get('key'), body.get('value'))}
+        return {'ok': True, 'said': engine.do(what, body.get('key'), body.get('value'), _login(request))}
     except engine.Refused as error:
         return _refuse(error)
     except (ValueError, TypeError):

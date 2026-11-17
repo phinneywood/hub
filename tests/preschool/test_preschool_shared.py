@@ -8,7 +8,7 @@ from preschool.support import bridge, luna
 from hub.main import app
 from preschool import mail, scanner, store, _view_key
 
-client = TestClient(app)
+client = TestClient(app, headers={'tailscale-user-login': 'me@example.com'})     # the owner's phone: the personal mailbox is theirs
 ORIGIN = {'Origin': 'http://testserver'}
 MID = 'abcdef1234567890'
 

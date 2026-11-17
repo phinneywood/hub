@@ -3,7 +3,7 @@
 The same reading and the same changes as the older Engine page (hub/main.py `/engine`, hub/engine/), in the app's
 shape. Nothing new is read and no new effect is possible: every tap here was a form on that page.
 """
-from .. import home, luna, store
+from .. import home, luna, people, store
 from ..engine import ask, catalog, improve, notes, overnight, recipes, registry, state
 
 TOLD = {'instruction': 'Got it. The overnight review and Ask follow that from tonight.',
@@ -73,8 +73,10 @@ def tell(text):
     return TOLD.get(result, TOLD['unsorted']), result in ('instruction', 'request', 'unsorted')
 
 
-def do(what, key, value=None):
-    """One tap on the Engine screen. Returns the sentence to show; raises Refused when it can't be done."""
+def do(what, key, value=None, login=None):
+    """One tap on the Engine screen, by `login`. Returns the sentence to show; raises Refused when it can't be done.
+    How far Hub goes with an action on one person's account (filing their mail) is theirs to set, and a run of the
+    overnight review, which reads the main account, is its owner's: to anyone else they aren't there."""
     key = str(key or '')[:40]
     if what == 'forget':
         state.remove_instruction(int(key))
@@ -101,9 +103,10 @@ def do(what, key, value=None):
         return {'recipe-save': 'Saved. Name it in Ask to run it.', 'recipe-skip': 'Not saved.', 'recipe-remove': 'Removed.'}[what]
     if what == 'trust':
         found = catalog.action(key)
-        if not found or not state.set_trust(found, str(value)):
+        whose = catalog.action_account(found) if found else None
+        if not found or (whose and not people.sees(login, whose)) or not state.set_trust(found, str(value)):
             raise Refused('Hub can’t go that far with this one.')
         return f'{found.name}: {registry.TRUST_WORDS[str(value)].lower()}.'
-    if what == 'run':
+    if what == 'run' and people.owner(login):
         return RAN.get(overnight.prepare()['status'], RAN['error'])
     raise Refused('Hub couldn’t read that request.')

@@ -9,7 +9,7 @@ from preschool.support import bridge, config, luna
 from hub.main import app
 from preschool import _view_key, jev, site_store, store, website
 
-client = TestClient(app)
+client = TestClient(app, headers={'tailscale-user-login': 'me@example.com'})     # the owner's phone: the personal mailbox is theirs
 ORIGIN = {'Origin':'http://testserver'}
 
 

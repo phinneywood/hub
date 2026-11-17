@@ -32,7 +32,7 @@ def test_maintenance_reuses_hub_shell_and_all_declared_assets_resolve():
                 url = attrs.get('src') or attrs.get('href')
                 if url and url.startswith('/'): self.urls.append(url)
     client = TestClient(app)
-    response = client.get('/preschool/manage')
+    response = client.get('/preschool/manage', headers={'tailscale-user-login': 'me@example.com'})     # the owner's
     assert response.status_code == 200
     assets = Assets(); assets.feed(response.text)
     assert '/static/style.css' in assets.urls

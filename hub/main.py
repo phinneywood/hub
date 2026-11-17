@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
 from . import actions, bridge, config, delayed, luna, worker
-from .auth import NOT_YOURS, NotYours, account_owner, require_owner
+from .auth import NOT_YOURS, NotYours, account_owner, main_owner, require_owner
 from .bridge import BridgeError
 from .templating import mine, render
 from .tools import TOOLS
@@ -356,17 +356,21 @@ def engine_deploy(request: Request):
     return RedirectResponse("/app/#versions" if asked else "/engine?deploy=none", status_code=303)
 
 
-@app.post("/engine/prepare")
+@app.post("/engine/prepare", dependencies=[Depends(main_owner)])
 def engine_prepare():
     from .engine import overnight
     return RedirectResponse("/engine?ran=" + overnight.prepare()["status"], status_code=303)
 
 
 @app.post("/engine/trust")
-def engine_trust(action: str = Form(...), level: str = Form(...)):
+def engine_trust(request: Request, action: str = Form(...), level: str = Form(...)):
+    """How far Hub goes with an action. One on a person's own account (filing their mail) is theirs to set: for anyone
+    else the action isn't there."""
+    from . import people
     from .engine import catalog, state
     found = catalog.action(action)
-    if found:
+    whose = catalog.action_account(found) if found else None
+    if found and (not whose or people.sees(request.headers.get("tailscale-user-login"), whose)):
         state.set_trust(found, level)
     return RedirectResponse("/engine", status_code=303)
 

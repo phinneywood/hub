@@ -9,7 +9,7 @@ from hub import store as hub_store
 from hub.main import app
 from preschool import extract, processor, store
 
-client = TestClient(app)
+client = TestClient(app, headers={'tailscale-user-login': 'me@example.com'})     # the owner's phone: the personal mailbox is theirs
 ORIGIN = {'Origin': 'http://testserver'}
 SENDER = 'school@example.org'
 MID = 'abcdef1234567890'

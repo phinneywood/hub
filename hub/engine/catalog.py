@@ -1118,9 +1118,23 @@ def lookups():
 
 # ---- whose it is: what came from one person's account is given only to them (hub/people.py) ----
 
+MAIN_UNTIL_CUT = ('today_list',)    # holds the main account's mail and calendar until it can be cut to whoever asks
+
+
 def account_of(lookup):
-    """The account a lookup reads (its source's), or None for the household's own things, which are everyone's."""
+    """The account a lookup reads (its source's), or None for the household's own things, which are everyone's.
+    Today's list sits under Hub itself but holds mail counts and calendar titles, so it is the main account's, as Ask
+    in the app treats it, until it takes the asker's accounts."""
+    if lookup.slug in MAIN_UNTIL_CUT:
+        return people.DEFAULT
     return next((s.account for s in SOURCES if lookup in s.lookups), None)
+
+
+def action_account(action):
+    """The account an action changes things in: its source's (the slug's first part, "gmail.file_noise"), or None for
+    the household's."""
+    found = source(action.slug.split('.')[0])
+    return found.account if found else None
 
 
 NOT_YOURS = {'not_yours': 'Hub shows mail and calendars only to the person they belong to, and the person asking has no '

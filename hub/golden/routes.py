@@ -8,10 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from .. import config, home
+from ..auth import main_owner
 from ..templating import render
 from . import runner, scenarios
 
@@ -27,7 +28,7 @@ def page(request: Request, said: str = ''):
                   spent=state.spent(home.today().isoformat(), runner.KIND)['month_cost'])
 
 
-@router.post('/run')
+@router.post('/run', dependencies=[Depends(main_owner)])
 def start():
     if runner.refusal() is None:
         subprocess.Popen([sys.executable, '-m', 'hub.golden', 'live'], cwd=str(Path(__file__).resolve().parents[2]),

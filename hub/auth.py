@@ -31,3 +31,10 @@ def account_owner(account):
         if not people.sees(request.headers.get("tailscale-user-login"), account):
             raise NotYours()
     return check
+
+
+def main_owner(request: Request):
+    """For a run that reads as the owner of the main account and spends their budget (the overnight review, the golden
+    runs): anyone else, a program on this Mac included, is answered as if nothing were here."""
+    if not people.owner(request.headers.get("tailscale-user-login")):
+        raise HTTPException(status_code=404)

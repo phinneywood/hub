@@ -9,14 +9,21 @@ from functools import wraps
 from urllib.parse import quote, urlencode
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+
+from hub import people
+from hub.auth import NotYours, account_owner
 
 from .support import bridge, luna, senders
 from .templating import render
 from . import criteria, extract, mail, publication, scanner, schedule, school, school_calendar, site_store, store, website
 
 router = APIRouter()
+# The personal mailbox is the owner's Google account (mail.py reads its /gmail/*): what reads or changes it, or shows
+# what came of it, opens only for them (hub/people.py). The class guide, the family preview and the shared mailbox's
+# pages (/shared/*, registered without this) are the household's.
+OWNERS = [Depends(account_owner(people.DEFAULT))]
 ID_RE = re.compile(r'^[a-fA-F0-9]{8,32}$')
 PAGE_RE = re.compile(r'^[A-Za-z0-9_=-]{1,2048}$')
 LABELS = {'action': 'To-dos & deadlines', 'event': 'Dates & events',
@@ -334,7 +341,7 @@ def save_class_topic(request: Request,slug: str,body: str=Form(''),revision: int
     return RedirectResponse(topic['href'],status_code=303)
 
 
-@router.get('/manage',response_class=HTMLResponse)
+@router.get('/manage',response_class=HTMLResponse,dependencies=OWNERS)
 def maintenance(request: Request, dismissed: int = 0, q: str = ''):
     items, candidates, needs_review, filtered, messages, senders_all, counts, auto_enabled, statuses, scan_last, backfills, scan_last_success = _all_mailbox_data(bool(dismissed))
     matches = similarities(items)
@@ -512,10 +519,24 @@ def _settings_for_both(key):
     return values
 
 
-@router.post('/scan')
+def _mailboxes():
+    """The mailboxes a tap reaches: from a shared page (/shared/*), the shared one only; otherwise, where only the owner
+    gets in, both."""
+    return ('shared',) if store.current_account() == 'shared' else ('personal', 'shared')
+
+
+def _theirs(request, account):
+    """What came of the personal mailbox is the owner's only; the shared mailbox's is everyone's."""
+    if account != 'shared' and not people.sees(request.headers.get('tailscale-user-login'), people.DEFAULT):
+        raise NotYours()
+
+
+@router.post('/scan', dependencies=OWNERS)
 def scan():
+    names = _mailboxes()
+
     def job():
-        for name in ('personal', 'shared'):
+        for name in names:
             with store.account(name):
                 scanner.run(force=True)
     threading.Thread(target=job, daemon=True).start()
@@ -533,9 +554,9 @@ def test_luna():
         return JSONResponse({'ok': False})
 
 
-@router.post('/auto')
+@router.post('/auto', dependencies=OWNERS)
 def auto_mode(enabled: str = Form('0')):
-    for account in ('personal', 'shared'):
+    for account in _mailboxes():
         with store.account(account):
             store.set_setting('auto_enabled', '1' if enabled == '1' else '0')
             if enabled == '1':
@@ -543,7 +564,7 @@ def auto_mode(enabled: str = Form('0')):
     return go('/preschool#inbox')
 
 
-@router.get('/candidate/{mid}', response_class=HTMLResponse)
+@router.get('/candidate/{mid}', response_class=HTMLResponse, dependencies=OWNERS)
 def candidate_page(request: Request, mid: str):
     candidate = store.candidate(mid) if ID_RE.fullmatch(mid) else None
     if not candidate:
@@ -560,6 +581,7 @@ def unified_candidate_page(request: Request, key: str):
     if not found:
         return go()
     account, candidate = found
+    _theirs(request, account)
     with store.account(account):
         candidate['view_key'] = key
         candidate['gmail_url'] = _gmail_url(account, store.setting('mailbox', ''), candidate['id'])
@@ -572,6 +594,7 @@ def unified_edit(request: Request, key: str):
     if not found:
         return go('/preschool#saved')
     account, item = found
+    _theirs(request, account)
     with store.account(account):
         return page(request, 'edit', item=item, labels=LABELS, error=None)
 
@@ -584,21 +607,23 @@ def unified_save_edit(request: Request, key: str, kind: str = Form(...), title: 
     if not found:
         return go('/preschool#saved')
     account, item = found
+    _theirs(request, account)
     with store.account(account):
         return save_edit(request, item['id'], kind, title, details, date_value, time, location, uncertainty)
 
 
 @router.post('/record/{key}/dismiss')
-def unified_dismiss(key: str, dismissed: int = Form(1)):
+def unified_dismiss(request: Request, key: str, dismissed: int = Form(1)):
     found = _resolve_item(key)
     if found:
         account, item = found
+        _theirs(request, account)
         with store.account(account):
             store.dismiss(item['id'], dismissed == 1)
     return RedirectResponse('/preschool?dismissed=1#saved' if dismissed != 1 else '/preschool#saved', status_code=303)
 
 
-@router.post('/sender')
+@router.post('/sender', dependencies=OWNERS)
 def add_sender(sender: str = Form(...)):
     sender = sender.strip().lower()
     if not senders.valid_sender(sender):
@@ -607,13 +632,13 @@ def add_sender(sender: str = Form(...)):
     return go()
 
 
-@router.post('/sender/remove')
+@router.post('/sender/remove', dependencies=OWNERS)
 def remove_sender(sender: str = Form(...)):
     store.remove_sender(sender.strip().lower())
     return go()
 
 
-@router.get('/discover', response_class=HTMLResponse)
+@router.get('/discover', response_class=HTMLResponse, dependencies=OWNERS)
 def discover(request: Request):
     candidates = {}
     error = None
@@ -636,7 +661,7 @@ def discover(request: Request):
                 approved=set(store.senders()), error=error)
 
 
-@router.get('/preview', response_class=HTMLResponse)
+@router.get('/preview', response_class=HTMLResponse, dependencies=OWNERS)
 def preview(request: Request, sender: str = '', page_token: str = ''):
     sender = sender.strip().lower()
     error, messages, next_page = None, [], None
@@ -661,7 +686,7 @@ def preview(request: Request, sender: str = '', page_token: str = ''):
                 error=error)
 
 
-@router.get('/item/{item_id}/edit', response_class=HTMLResponse)
+@router.get('/item/{item_id}/edit', response_class=HTMLResponse, dependencies=OWNERS)
 def edit(request: Request, item_id: int):
     item = store.get_item(item_id)
     if not item:
@@ -669,7 +694,7 @@ def edit(request: Request, item_id: int):
     return page(request, 'edit', item=item, labels=LABELS, error=None)
 
 
-@router.post('/item/{item_id}/edit', response_class=HTMLResponse)
+@router.post('/item/{item_id}/edit', response_class=HTMLResponse, dependencies=OWNERS)
 def save_edit(request: Request, item_id: int, kind: str = Form(...), title: str = Form(...),
               details: str = Form(''), date_value: str = Form(''), time: str = Form(''),
               location: str = Form(''), uncertainty: str = Form('')):
@@ -695,7 +720,7 @@ def save_edit(request: Request, item_id: int, kind: str = Form(...), title: str 
     return go('/preschool#saved')
 
 
-@router.post('/item/{item_id}/dismiss')
+@router.post('/item/{item_id}/dismiss', dependencies=OWNERS)
 def dismiss(item_id: int, dismissed: int = Form(1)):
     store.dismiss(item_id, dismissed == 1)
     return RedirectResponse('/preschool?dismissed=1#saved' if dismissed != 1 else '/preschool#saved', status_code=303)
@@ -714,7 +739,7 @@ def save_shared_group(group: str = Form('')):
     return RedirectResponse('/preschool/shared', status_code=303)
 
 
-@router.post('/group')
+@router.post('/group', dependencies=OWNERS)
 def save_class_group(group: str = Form('')):
     group = group.strip()
     if group and not re.fullmatch(r"[A-Za-z0-9._%+'@-]{2,320}", group):
@@ -764,7 +789,7 @@ def _start_shared_backfill():
     return RedirectResponse('/preschool/shared', status_code=303)
 
 
-@router.post('/backfill')
+@router.post('/backfill', dependencies=OWNERS)
 def start_backfill():
     if not all(_settings_for_both('auto_enabled')):
         for account in ('personal','shared'):

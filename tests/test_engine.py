@@ -145,7 +145,7 @@ def test_engine_page_and_routes(ready, monkeypatch):
     assert client.post('/today/prepare', headers={'sec-fetch-site': 'none'}).json() == {'status': 'ok', 'suggestions': 0, 'done': 0}
     assert client.post('/today/prepare', headers={**ORIGIN, 'tailscale-user-login': 'me@example.com'}).status_code == 403
     assert client.post('/today/prepare').status_code == 403  # a cross-site form can't trigger it
-    assert 'Done.' in client.post('/engine/prepare', headers=ORIGIN).text
+    assert 'Done.' in client.post('/engine/prepare', headers={**ORIGIN, 'tailscale-user-login': 'me@example.com'}).text
 
 
 def test_asking_files_guidance_or_a_build_request_in_the_owners_own_words(ready):

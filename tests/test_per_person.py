@@ -54,7 +54,8 @@ def test_the_mail_and_calendar_lookups_read_alexs_account_and_the_rest_are_every
     assert people.sees(ALEX, people.DEFAULT) and not people.sees(CASEY, people.DEFAULT) and not people.sees(None, people.DEFAULT)
     assert {slug: catalog.account_of(lookup(slug)) for slug in ('sorted_mail', 'inbox_trend', 'calendar_week')} == dict.fromkeys(
         ('sorted_mail', 'inbox_trend', 'calendar_week'), people.DEFAULT)
-    assert all(catalog.account_of(lookup(slug)) is None for slug in ('today_list', 'trip_status', 'network_status', 'ai_spend', 'home_status'))
+    assert catalog.account_of(lookup('today_list')) == people.DEFAULT        # mail counts and calendar titles, until it can be cut
+    assert all(catalog.account_of(lookup(slug)) is None for slug in ('trip_status', 'network_status', 'ai_spend', 'home_status'))
 
 
 # ---- the older pages ----
@@ -270,3 +271,116 @@ def test_chats_kept_from_before_each_persons_were_apart_are_the_owners():
     threads.save('thread-before', [], CASEY)
     threads.delete('thread-before', CASEY)
     assert [t['id'] for t in threads.threads(ALEX)] == ['thread-before'] and not threads.taken('thread-before', ALEX)
+
+
+def test_todays_list_in_the_older_chat_is_alexs_until_it_can_be_cut_to_whoever_asks():
+    for who in (CASEY, None):
+        turn = SimpleNamespace(deps=agent.Turn(text='what needs me today?', login=who))
+        assert agent._tool(lookup('today_list')).function(turn).return_value == catalog.NOT_YOURS
+
+
+def test_one_persons_many_chats_never_push_out_anothers(monkeypatch):
+    monkeypatch.setattr(threads, 'MAX_THREADS', 3)
+    threads.save('thread-alex', [], ALEX)
+    for n in range(5):
+        threads.save(f'thread-casey-{n}', [], CASEY)
+    threads.sweep()
+    assert [t['id'] for t in threads.threads(ALEX)] == ['thread-alex'] and len(threads.threads(CASEY)) == 3
+
+
+# ---- Preschool's personal mailbox is Alex's; the class guide and the shared mailbox are everyone's ----
+
+@pytest.fixture
+def preschool_mail(monkeypatch):
+    """What Preschool would read of a mailbox, scan, or change, noted instead of done."""
+    import preschool
+    from preschool import mail as preschool_mail, scanner, store as preschool_store
+    done = {'read': [], 'scanned': [], 'changed': []}
+    monkeypatch.setattr(preschool_mail.bridge, 'get', lambda path, **params: done['read'].append(path) or {'messages': []})
+    monkeypatch.setattr(scanner, 'run', lambda force=False: done['scanned'].append(preschool_store.current_account()))
+    monkeypatch.setattr(preschool.threading, 'Thread', lambda target, daemon=True: SimpleNamespace(start=target))
+    for name in ('add_sender', 'remove_sender', 'set_setting', 'dismiss'):
+        monkeypatch.setattr(preschool_store, name, lambda *args, name=name: done['changed'].append((name, *args)))
+    return done
+
+
+PERSONAL_PAGES = ('/preschool/discover', '/preschool/preview?sender=news@example.com', '/preschool/candidate/abcdef12',
+                  '/preschool/manage', '/preschool/item/1/edit')
+PERSONAL_TAPS = (('/preschool/sender', {'sender': 'news@example.com'}), ('/preschool/sender/remove', {'sender': 'news@example.com'}),
+                 ('/preschool/scan', {}), ('/preschool/auto', {'enabled': '1'}), ('/preschool/backfill', {}),
+                 ('/preschool/group', {'query': 'class news'}), ('/preschool/item/1/dismiss', {'dismissed': '1'}),
+                 ('/preschool/item/1/edit', {'kind': 'event', 'title': 'Picture day'}))
+
+
+@pytest.mark.parametrize('who', [CASEY, None])
+def test_preschools_personal_mailbox_shows_someone_else_a_calm_page_and_changes_nothing(who, preschool_mail):
+    for path in PERSONAL_PAGES:
+        answer = client.get(path, headers=by(who))
+        assert answer.status_code == 200 and 'Not yours to open' in answer.text, path
+    for path, form in PERSONAL_TAPS:
+        assert client.post(path, data=form, headers={**ORIGIN, **by(who)}, follow_redirects=False).status_code == 403, path
+    assert preschool_mail == {'read': [], 'scanned': [], 'changed': []}
+
+
+def test_the_class_guide_and_the_shared_mailbox_stay_everyones(preschool_mail):
+    assert 'Not yours to open' not in client.get('/preschool/guide', headers=by(CASEY)).text
+    shared = client.get('/preschool/shared/discover', headers=by(CASEY))
+    assert shared.status_code == 200 and 'Not yours to open' not in shared.text
+    assert preschool_mail['read'] and all(path.startswith('/gmail/shared/') for path in preschool_mail['read'])
+    client.post('/preschool/shared/scan', headers={**ORIGIN, **by(CASEY)}, follow_redirects=False)
+    client.post('/preschool/shared/auto', data={'enabled': '1'}, headers={**ORIGIN, **by(CASEY)}, follow_redirects=False)
+    assert preschool_mail['scanned'] == ['shared'] and len(preschool_mail['changed']) == 2      # the shared mailbox's only
+    client.post('/preschool/scan', headers={**ORIGIN, **by(ALEX)}, follow_redirects=False)
+    assert preschool_mail['scanned'] == ['shared', 'personal', 'shared']
+
+
+def test_a_record_from_alexs_mailbox_is_alexs_and_one_from_the_shared_mailbox_everyones(preschool_mail, monkeypatch):
+    import preschool
+    key = 'a' * 64
+    monkeypatch.setattr(preschool, '_resolve_item', lambda found: ('personal', {'id': 7}))
+    assert client.post(f'/preschool/record/{key}/dismiss', headers={**ORIGIN, **by(CASEY)}, follow_redirects=False).status_code == 403
+    assert 'Not yours to open' in client.get(f'/preschool/record/{key}/edit', headers=by(CASEY)).text
+    monkeypatch.setattr(preschool, '_resolve_candidate', lambda found: ('personal', {'id': 'abcdef12'}))
+    assert 'Not yours to open' in client.get(f'/preschool/review/{key}', headers=by(CASEY)).text
+    assert preschool_mail['changed'] == []
+    monkeypatch.setattr(preschool, '_resolve_item', lambda found: ('shared', {'id': 8}))
+    assert client.post(f'/preschool/record/{key}/dismiss', headers={**ORIGIN, **by(CASEY)}, follow_redirects=False).status_code == 303
+    assert preschool_mail['changed'] == [('dismiss', 8, True)]
+
+
+# ---- the Engine: how far Hub files Alex's mail, and the runs that read as Alex ----
+
+def test_how_far_hub_files_alexs_mail_is_alexs_to_set():
+    from hub.engine import state
+    noise = catalog.action('gmail.file_noise')
+    before = state.trust(noise)
+    target = 'auto' if before != 'auto' else 'suggest'
+    tap = {'key': 'gmail.file_noise', 'value': target}
+    refused = client.post('/app/api/engine/trust', json=tap, headers={**ORIGIN, **by(CASEY)})
+    missing = client.post('/app/api/engine/trust', json={**tap, 'key': 'gmail.file_nothing'}, headers={**ORIGIN, **by(CASEY)})
+    assert (refused.status_code, refused.json()) == (missing.status_code, missing.json())
+    client.post('/engine/trust', data={'action': 'gmail.file_noise', 'level': target}, headers={**ORIGIN, **by(CASEY)}, follow_redirects=False)
+    assert state.trust(noise) == before and catalog.action_account(noise) == people.DEFAULT
+    household = catalog.action('house.control')
+    assert catalog.action_account(household) is None
+    assert client.post('/app/api/engine/trust', json={'key': 'house.control', 'value': 'suggest'}, headers={**ORIGIN, **by(CASEY)}).json()['ok']
+    assert client.post('/app/api/engine/trust', json=tap, headers={**ORIGIN, **by(ALEX)}).json()['ok'] and state.trust(noise) == target
+
+
+def test_runs_that_read_as_alex_start_only_for_alex(monkeypatch):
+    from hub.engine import overnight
+    from hub.golden import routes as golden
+    started = []
+    monkeypatch.setattr(overnight, 'prepare', lambda: started.append('review') or {'status': 'ok'})
+    monkeypatch.setattr(golden.subprocess, 'Popen', lambda *args, **kwargs: started.append('golden'))
+    monkeypatch.setattr(golden.runner, 'refusal', lambda: None)
+    for who in (CASEY, None):
+        for path in ('/engine/prepare', '/golden/run'):
+            answer = client.post(path, headers={**ORIGIN, **by(who)}, follow_redirects=False)
+            assert (answer.status_code, answer.json()) == (404, {'detail': 'Not Found'}), (who, path)
+        assert client.post('/app/api/engine/run', json={}, headers={**ORIGIN, **by(who)}).status_code in (403, 409)
+    assert started == []
+    for path in ('/engine/prepare', '/golden/run'):
+        assert client.post(path, headers={**ORIGIN, **by(ALEX)}, follow_redirects=False).status_code == 303
+    assert client.post('/app/api/engine/run', json={}, headers={**ORIGIN, **by(ALEX)}).json()['ok']
+    assert started == ['review', 'golden', 'review']

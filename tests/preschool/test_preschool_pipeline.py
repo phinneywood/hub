@@ -9,7 +9,7 @@ from preschool.support import bridge, luna, store as hub_store
 from hub.main import app
 from preschool import ical, jev, processor, scanner, school_calendar, sources, store
 
-client = TestClient(app)
+client = TestClient(app, headers={'tailscale-user-login': 'me@example.com'})     # the owner's phone: the personal mailbox is theirs
 ORIGIN = {'Origin': 'http://testserver'}
 MID = 'a123456789abcdef'
 SENDER = 'parent@example.org'

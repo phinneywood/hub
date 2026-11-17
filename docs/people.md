@@ -37,9 +37,19 @@ login a request carries:
 - **The older chat**: a lookup whose source reads an account (`catalog.account_of`) answers anyone else the same
   `NOT_YOURS` without reading. A lookup that cuts its answer to the asker takes `login` or `accounts`, which Hub fills
   in from the request and hides from the model. A chat is the person's who started it ('' for this Mac): nobody
-  else can list, read, continue or delete it. Chats kept from before have no login and are the owner's.
+  else can list, read, continue or delete it. Chats kept from before have no login and are the owner's. Today's list
+  counts as the owner's there too (`catalog.MAIN_UNTIL_CUT`), and the 200 kept chats are counted per person.
 - **Golden runs** ask as a made-up login but read as the owner (`runner.READS`), so their mail and calendar scenarios
-  still read.
+  still read. Starting one (`/golden/run`), and the overnight review (`/engine/prepare`, Engine's Run), is the owner's:
+  anyone else gets a 404, as if there were nothing there (`auth.main_owner`).
+- **Preschool's personal mailbox** is the owner's Google account (`preschool/mail.py` reads `/gmail/*`): finding
+  senders and previewing them, a candidate, its review, a saved record from it, the maintenance page, scanning,
+  backfilling, automatic mode and the class group open only for the owner (`OWNERS`; the same "Not yours to open"
+  page, a 403 for a change). The class guide, the family preview, `calendar.ics` and the shared mailbox's pages
+  (`/preschool/shared/*`) are the household's; a scan or automatic mode started from a shared page reaches the shared
+  mailbox only.
+- **The Engine**: how far Hub goes with an action on a person's account (filing their mail, `catalog.action_account`)
+  is theirs to set; to anyone else the action isn't there. Household actions are anyone's.
 - **Errands** keep the account each was read from: see "Errands" in `docs/app.md`.
 - `/status` says only whether the Gmail profile read worked, with no address, so it stays open to everyone.
 

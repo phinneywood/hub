@@ -77,12 +77,13 @@ def recent(history, turns):
 
 
 def sweep(now=None):
-    """Remove threads untouched for TEXT_DAYS, and the oldest beyond MAX_THREADS."""
+    """Remove threads untouched for TEXT_DAYS, and each person's oldest beyond MAX_THREADS of theirs: one person's
+    many chats never push out another's."""
     now = time.time() if now is None else now
     with closing(db()) as conn, conn:
         conn.execute('delete from ask_threads where updated < ?', (now - TEXT_DAYS * 86400,))
-        conn.execute('delete from ask_threads where id not in (select id from ask_threads order by updated desc limit ?)',
-                     (MAX_THREADS,))
+        conn.execute('delete from ask_threads where id in (select id from (select id, row_number() over'
+                     ' (partition by login order by updated desc) as n from ask_threads) where n > ?)', (MAX_THREADS,))
 
 
 def threads(login=None):
