@@ -18,3 +18,30 @@ login a request carries:
 - No login (this Mac itself), or a login `"people"` doesn't name, sees the household's things only. So does a
   shared screen such as the kitchen wall. A `"people"` that can't be read counts as no one.
 - The owner is whoever owns `"default"`: `people.owner(login)`. Everyone else `"people"` names is a member.
+
+## What follows the rule
+
+- **Mail and Mail settings** in the app read only for a login that may see `"default"`. Anyone else gets
+  `{"ok": true, "connected": false}` from `/app/api/mail` and `/app/api/mail-settings`, and a calm screen saying their
+  mail isn't connected yet; their taps there are refused (403) and change nothing. `/app/api/home` says `"mail"`, and
+  System's list of older pages leaves out Gmail and Calendar when it is false.
+- **The older pages** of a tool whose `TOOL` names an `"account"` (Gmail, Calendar) open only for that person
+  (`auth.account_owner`, mounted in `hub/main.py`); `/tools` lists them only for them. Anyone else, this Mac included,
+  gets a plain page titled "Not yours to open", and nothing of the mailbox is read. It is a 200 on purpose: after
+  every deploy the deployer loads the Gmail pages on this Mac with no login, as do the live checks, and takes anything
+  else for a release to go back from. A change there is a 403.
+- **Insights** draws its two inbox charts only for that person.
+- **Ask** reads mail and the calendar only for that person; anyone else's model is told they aren't theirs
+  (`catalog.NOT_YOURS`), and nothing is read. School is everyone's. Today's list mixes the household's lines with the
+  owner's mail and calendar ones, so it goes only to that person until it can be cut to whoever asks.
+- **The older chat**: a lookup whose source reads an account (`catalog.account_of`) answers anyone else the same
+  `NOT_YOURS` without reading. A lookup that cuts its answer to the asker takes `login` or `accounts`, which Hub fills
+  in from the request and hides from the model. A chat is the person's who started it ('' for this Mac): nobody
+  else can list, read, continue or delete it. Chats kept from before have no login and are the owner's.
+- **Golden runs** ask as a made-up login but read as the owner (`runner.READS`), so their mail and calendar scenarios
+  still read.
+- **Errands** keep the account each was read from: see "Errands" in `docs/app.md`.
+- `/status` says only whether the Gmail profile read worked, with no address, so it stays open to everyone.
+
+Tests: `tests/test_people.py`, and `tests/test_per_person.py` with two made-up people, one whose mail Hub reads and
+one whose it doesn't.

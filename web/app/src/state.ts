@@ -419,7 +419,8 @@ function connect() {
 async function look_now() {
   try {
     const first = await api.home();
-    me.value = { signed_in: first.signed_in, initial: first.initial, versions: first.versions, links: first.links, update: first.update };
+    me.value = { signed_in: first.signed_in, initial: first.initial, versions: first.versions, links: first.links, update: first.update,
+      mail: first.mail };
     accept(first);
   } catch {
     trouble.value = "hub";

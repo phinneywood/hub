@@ -8,9 +8,9 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
 from . import actions, bridge, config, delayed, luna, worker
-from .auth import require_owner
+from .auth import NOT_YOURS, NotYours, account_owner, require_owner
 from .bridge import BridgeError
-from .templating import render
+from .templating import mine, render
 from .tools import TOOLS
 
 HERE = Path(__file__).parent
@@ -37,7 +37,9 @@ app.mount("/preschool/static", StaticFiles(directory=str(Path(preschool.__file__
 app.mount("/static", GZipMiddleware(StaticFiles(directory=str(HERE / "static")), minimum_size=1024), name="static")
 
 for tool in TOOLS:
-    app.include_router(tool["router"], prefix="/" + tool["slug"])
+    # A tool that reads one person's Google account (Gmail, Calendar) opens only for that person (hub/people.py).
+    app.include_router(tool["router"], prefix="/" + tool["slug"],
+                       dependencies=[Depends(account_owner(tool["account"]))] if tool.get("account") else [])
 
 from .golden.routes import router as golden_router  # noqa: E402
 app.include_router(golden_router, prefix="/golden")
@@ -70,6 +72,16 @@ def ready():
 @app.exception_handler(BridgeError)
 async def bridge_error(request: Request, exc: BridgeError):
     return render(request, "error.html", message=str(exc), status_code=502)
+
+
+@app.exception_handler(NotYours)
+async def not_yours(request: Request, exc: NotYours):
+    """A change is refused; a page is answered with a plain one saying whose it is. That page is a 200 on purpose:
+    after every deploy the deployer loads the Gmail pages on this Mac, with no login, and takes anything but a 200
+    for a release to go back from (tests/test_views.py DEPLOYER_PAGES); hub/live/checks.py reads them the same way."""
+    if request.method not in ("GET", "HEAD"):
+        return JSONResponse({"error": NOT_YOURS}, status_code=403)
+    return render(request, "error.html", title="Not yours to open", message=NOT_YOURS)
 
 
 @app.middleware("http")
@@ -232,14 +244,14 @@ def today_page(request: Request, snoozed: int = 0, home: str = ""):
 @app.get("/insights", response_class=HTMLResponse)
 def insights_page(request: Request):
     from . import insights
-    return render(request, "insights.html", active="insights", **insights.page())
+    return render(request, "insights.html", active="insights", **insights.page(request.headers.get("tailscale-user-login")))
 
 
 @app.get("/tools", response_class=HTMLResponse)
 def all_tools(request: Request):
     """The secondary menu: every tool's own page."""
     from .tools.house import read
-    return render(request, "tools.html", active="tools", listed=[t for t in TOOLS if t["slug"] != "ask"],
+    return render(request, "tools.html", active="tools", listed=[t for t in mine(request, TOOLS) if t["slug"] != "ask"],
                   elsewhere=read.elsewhere())
 
 

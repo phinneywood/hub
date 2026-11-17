@@ -10,6 +10,7 @@
 </div>
 <div class="viz-grid">
 
+{% if inbox is not none %}
 <section class="viz-card" aria-labelledby="viz-inbox">
   <div class="viz-head"><h2 id="viz-inbox">Inbox size</h2>{{ ask('inbox', 'Inbox size') }}</div>
   {% if inbox.has %}
@@ -49,6 +50,7 @@
   {% elif mail.empty %}<p class="viz-empty">The last sort left nothing in the inbox.</p>
   {% else %}<p class="viz-empty">Mail hasn’t been sorted yet. The chart appears after the first sort.</p>{% endif %}
 </section>
+{% endif %}
 
 <section class="viz-card" aria-labelledby="viz-spend">
   <div class="viz-head"><h2 id="viz-spend">AI spend</h2>{{ ask('spend', 'AI spend') }}</div>

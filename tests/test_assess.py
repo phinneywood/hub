@@ -7,9 +7,9 @@ from fastapi.testclient import TestClient
 from hub import bridge, luna, store
 from hub.main import app
 from hub.tools.gmail import assess
-from tests.test_app import ORIGIN, fake_get
+from tests.test_app import AS_OWNER, ORIGIN, fake_get
 
-client = TestClient(app)
+client = TestClient(app, headers=AS_OWNER)
 SENDER = 'news@loud.example'
 
 

@@ -409,6 +409,24 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await partner.waitForTimeout(300); await partner.screenshot({ path: `${out}/${name}-14d-errands-partner.png` });
     const partnerToday = await partner.evaluate(() => fetch("/app/api/today").then((r) => r.json()).then((t) => t.ready.cards.map((c) => c.title)));
     expect(partnerToday.length === 2 && partnerToday.every((t) => /pumpkin|photo order form/.test(t)), "the partner’s Today showed another’s errands: " + partnerToday.join("|"));
+    // ... and the mail is the owner's alone: Mail and Mail settings say the partner's isn't connected and show none of
+    // the owner's, System doesn't offer the older Gmail and Calendar pages, and opened anyway they say whose they are
+    const partnerSays = (words) => partner.waitForFunction((w) => document.querySelector(".say")?.textContent.trim() === w, words, { timeout: 6000 })
+      .then(() => true, () => false);
+    await partner.goto(base + "/app/#mail");
+    expect(await partnerSays("Your mail isn’t connected yet"), "the partner’s Mail: " + await partner.textContent(".say"));
+    expect(!/Sam Rivera|Maple Street Dental|Saturday plans/.test(await partner.textContent("body")), "the partner saw the owner’s mail");
+    expect(await partner.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the partner’s Mail scrolls sideways");
+    await partner.waitForTimeout(300); await partner.screenshot({ path: `${out}/${name}-12c-mail-partner.png` });
+    await partner.goto(base + "/app/#mailsettings");
+    expect(await partnerSays("Your mail isn’t connected yet"), "the partner’s Mail settings: " + await partner.textContent(".say"));
+    expect(!(await partner.textContent("body")).includes("news@example.com"), "the partner saw the owner’s mail settings");
+    await partner.goto(base + "/app/#system");
+    await partner.waitForSelector('a.row.free[href="/trip"]', { timeout: 6000 });
+    const olderPages = await partner.locator("a.row.free").evaluateAll((links) => links.map((a) => a.getAttribute("href")));
+    expect(!olderPages.includes("/gmail") && !olderPages.includes("/calendar"), "the partner was offered the owner’s Gmail or Calendar: " + olderPages.join(" "));
+    const olderGmail = await partner.goto(base + "/gmail");
+    expect(olderGmail.status() === 200 && (await partner.textContent("main h1")).trim() === "Not yours to open", "the older Gmail page opened for the partner");
     await partnerCtx.close();
 
     // ---- Mail: what needs you, who never answered, what Hub sorted ----

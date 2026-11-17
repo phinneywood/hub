@@ -472,7 +472,8 @@ def kitchen(ctx: RunContext[Turn]) -> dict:
 
 def look_up(ctx: RunContext[Turn], topics: list[Literal['mail', 'calendar', 'school', 'today']]) -> dict:
     """Read the owner's mail, their calendar, their child's school (the class guide) or what needs them today, to
-    answer a question about them. Read-only: Hub can't send, file, delete or book anything from here."""
+    answer a question about them. Read-only: Hub can't send, file, delete or book anything from here. Mail and the
+    calendar are read only for the person they belong to; anyone else is told so."""
     turn = ctx.deps
     turn.again = turn.strangers = True
     try:

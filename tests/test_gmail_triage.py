@@ -15,9 +15,9 @@ from hub import actions, bridge, home, luna, store, today, worker
 from hub.engine import catalog, overnight, sorting, state
 from hub.main import app
 from hub.tools.gmail import filing, inbox, nightly, triage
-from tests.test_app import ORIGIN, PROFILE, fake_get
+from tests.test_app import AS_OWNER, ORIGIN, PROFILE, fake_get
 
-client = TestClient(app)
+client = TestClient(app, headers=AS_OWNER)
 NOW = time.time()
 DAY = 86400
 USAGE = {'tokens_in': 900, 'tokens_out': 120, 'cost': 0.002}
@@ -778,7 +778,7 @@ def test_at_just_do_it_the_morning_job_sorts_then_files_and_tells_the_owner(gmai
     receipts(gmail, 2)
     gmail.add('n1', 'School Office <office@school.example>', 'Permission slip due Friday')
     trust('record', 'auto')
-    response = client.post('/today/prepare', headers=LOCAL)
+    response = TestClient(app).post('/today/prepare', headers=LOCAL)
     assert response.status_code == 200 and response.json()['done'] == 0  # no note per kind; one line on the list instead
     assert states() == {'r1': 'filed', 'r2': 'filed', 'n1': 'open'} and len(gmail.applied()) == 1
     found = today_keys()
@@ -790,7 +790,7 @@ def test_at_just_do_it_the_morning_job_sorts_then_files_and_tells_the_owner(gmai
 def test_the_morning_job_files_nothing_at_tap_to_file(gmail):
     receipts(gmail, 2)
     trust('record', 'undo')
-    assert client.post('/today/prepare', headers=LOCAL).status_code == 200
+    assert TestClient(app).post('/today/prepare', headers=LOCAL).status_code == 200
     assert not gmail.posts and set(states().values()) == {'open'}
 
 

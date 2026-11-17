@@ -16,9 +16,9 @@ from hub.engine import auto, catalog, prep, state
 from hub.engine.registry import Source
 from hub.main import app
 from hub.tools.gmail import assess, missions, nightly
-from tests.test_app import ORIGIN, fake_get
+from tests.test_app import AS_OWNER, ORIGIN, fake_get
 
-client = TestClient(app)
+client = TestClient(app, headers=AS_OWNER)
 
 
 @pytest.fixture(autouse=True)
@@ -200,7 +200,7 @@ def test_sources_prepare_once_a_day_and_one_failure_does_not_stop_the_rest(monke
     assert [(a['action'], a['detail']) for a in store.recent_activity()] == [('engine_prepare_failed', 'broken')]
     from hub.engine import overnight
     monkeypatch.setattr(overnight, 'prepare', lambda: {'status': 'ok', 'suggestions': 0})
-    assert client.post('/today/prepare', headers={'sec-fetch-site': 'none'}).status_code == 200 and ran == ['fine', 'fine']
+    assert TestClient(app).post('/today/prepare', headers={'sec-fetch-site': 'none'}).status_code == 200 and ran == ['fine', 'fine']
 
 
 def test_the_real_catalog_prepares_gmail_and_the_key_reminder():

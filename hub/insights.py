@@ -164,15 +164,18 @@ def _soft(build):
         return {'has': False, 'failed': True}
 
 
-def page():
-    from . import cards
+def page(login=None):
+    """Everything the Insights page shows. The two inbox charts are one person's mail (the bridge's main Google
+    account), so they are drawn only for a login that may see it (hub/people.py); for anyone else, None."""
+    from . import cards, people
     from .tools.network import pages as network
     try:
         net = network.summary()
     except Exception:  # noqa: BLE001
         net = None
     from .golden import runner as golden
-    return {'inbox': _soft(inbox), 'mail': _soft(mail), 'spend': _soft(spend), 'network': net,
+    theirs = people.sees(login, people.DEFAULT)
+    return {'inbox': _soft(inbox) if theirs else None, 'mail': _soft(mail) if theirs else None, 'spend': _soft(spend), 'network': net,
             'golden': _soft(lambda: golden.latest() or {'has': False}),
             'asks': {key: cards.askable('insight:' + key) for key in ('inbox', 'mail', 'spend', 'network')},
             'w': W, 'h': H, 'left': LEFT, 'right': W - RIGHT, 'floor_y': TOP + PLOT_H}

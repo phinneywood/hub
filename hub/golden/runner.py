@@ -20,7 +20,7 @@ from datetime import datetime
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
 from pydantic_ai.models.function import DeltaToolCall, FunctionModel
 
-from .. import config, home, household
+from .. import config, home, household, people
 from . import checks, dryrun, scenarios
 
 KIND = 'golden'               # these runs in the engine's record, with a monthly limit of their own
@@ -28,6 +28,9 @@ RUN_COST_CAP = 0.50           # dollars a live run may spend; it stops before a 
 MONTH_COST_CAP = 5.00         # dollars of live runs in a calendar month
 RUN_CALLS_CAP = 80            # model calls a live run may make, for when no cost is reported
 LOGIN = 'golden-test@hub.invalid'   # who "asks" in a golden run; marks any live-write change as a test's
+# Whose accounts a golden run reads: the owner starts it, so it reads as the owner, their mail and calendar included
+# (hub/people.py). In the test suite that is the made-up mailbox.
+READS = frozenset({people.DEFAULT})
 KEEP = 30                     # result files kept
 FOLDER = 'golden'
 REQUESTS_PER_TURN = 6         # as agent.REQUESTS_PER_TURN; checked equal in the tests
@@ -161,7 +164,7 @@ async def _turns(scenario, make_model, aliases, ledger, spend):
         text = _fill(words, aliases, lower=True)
         ledger.turn = n
         trace.texts.append(text)
-        settings = agent.settings(text, LOGIN, history)
+        settings = agent.settings(text, LOGIN, history, accounts=READS)
         result = await agent.build().run(text, model=make_model(), message_history=history, event_stream_handler=drain,
                                          **settings)
         spend.add(result)

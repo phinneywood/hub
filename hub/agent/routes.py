@@ -55,6 +55,10 @@ def _thread(thread_id):
     return thread_id if THREAD_ID.fullmatch(thread_id) else None
 
 
+def _login(request):
+    return request.headers.get('tailscale-user-login')
+
+
 @router.get('', response_class=HTMLResponse)
 def page(request: Request):
     return render(request, 'ask/chat.html', active='ask')
@@ -75,16 +79,17 @@ def about(ref: str = ''):
 
 
 @router.get('/threads')
-def threads():
-    return store.threads()
+def threads(request: Request):
+    """The asker's own threads: an answer can hold their mail and calendar, so no one else sees it."""
+    return store.threads(_login(request))
 
 
 @router.get('/threads/{thread_id}/messages')
-def messages(thread_id: str):
-    if not _thread(thread_id):
+def messages(thread_id: str, request: Request):
+    if not _thread(thread_id) or store.taken(thread_id, _login(request)):
         return _error(404, 'No such chat.')
     return [m.model_dump(by_alias=True, exclude_none=True, mode='json')
-            for m in VercelAIAdapter.dump_messages(agent.cite(store.history(thread_id)), sdk_version=7)]
+            for m in VercelAIAdapter.dump_messages(agent.cite(store.history(thread_id, _login(request))), sdk_version=7)]
 
 
 @router.get('/card/{kind}/{proposal_id}')
@@ -112,16 +117,18 @@ async def improve(thread_id: str, request: Request):
     `turn` counts the owner's messages before that answer, from 0. No message or answer text is kept. A failed
     answer is saved too, so it can be improved; its trace adds how it failed and how each tool answered."""
     from ..engine import improve as improvements
+    login = _login(request)
     if not _thread(thread_id):
         return _error(404, 'No such chat.')
-    login = request.headers.get('tailscale-user-login')
     if login is None:
         return _error(403, 'Send this from your phone or laptop.')
+    if store.taken(thread_id, login):
+        return _error(404, 'No such chat.')
     try:
         turn = int(json.loads(await request.body())['turn'])
     except (ValueError, KeyError, TypeError):
         return _error(400, 'That couldn’t be read.')
-    turns = _turns(await run_in_threadpool(store.history, thread_id))
+    turns = _turns(await run_in_threadpool(store.history, thread_id, login))
     if not 0 <= turn < len(turns):
         return _error(404, 'Hub can’t find that answer any more.')
     traced = await run_in_threadpool(lambda: ask_trace.turn(trace_id(turns[turn])) if trace_id(turns[turn]) else None)
@@ -131,9 +138,9 @@ async def improve(thread_id: str, request: Request):
 
 
 @router.delete('/threads/{thread_id}')
-def delete(thread_id: str):
+def delete(thread_id: str, request: Request):
     if _thread(thread_id):
-        store.delete(thread_id)
+        store.delete(thread_id, _login(request))
     return {'ok': True}
 
 
@@ -189,10 +196,10 @@ def _watched(adapter, trace):
     return adapter
 
 
-def _end_failed(thread_id, history, text, day, trace):
+def _end_failed(thread_id, history, text, day, trace, login=None):
     """A turn that didn't finish: saved as a failed answer, counted, and traced. Never raises."""
     try:
-        store.save(thread_id, history + failed_turn(text, trace))
+        store.save(thread_id, history + failed_turn(text, trace), login)
     except Exception as error:  # noqa: BLE001 - the trace still says what happened
         trace.fail(error)
     try:
@@ -203,7 +210,8 @@ def _end_failed(thread_id, history, text, day, trace):
 
 @router.post('/threads/{thread_id}/chat')
 async def chat(thread_id: str, request: Request):
-    if not _thread(thread_id):
+    login = _login(request)
+    if not _thread(thread_id) or await run_in_threadpool(store.taken, thread_id, login):
         return _error(404, 'No such chat.')
     if request.headers.get('content-type', '').split(';')[0].strip() != 'application/json':
         return _error(415, 'JSON only.')
@@ -234,7 +242,7 @@ async def chat(thread_id: str, request: Request):
         _running.discard(thread_id)
         return _error(400, 'That message couldn’t be read.')
     day = _day()
-    older, shown = store.recent(await run_in_threadpool(store.history, thread_id), TURNS_SHOWN)
+    older, shown = store.recent(await run_in_threadpool(store.history, thread_id, login), TURNS_SHOWN)
     trace = await run_in_threadpool(ask_trace.Trace, thread_id)
     done = []
 
@@ -243,7 +251,7 @@ async def chat(thread_id: str, request: Request):
         answer = next((m for m in reversed(messages) if isinstance(m, ModelResponse)), None)
         if answer is not None:
             answer.provider_details = {**(answer.provider_details or {}), 'hub_turn': trace.id}
-        store.save(thread_id, older + messages)
+        store.save(thread_id, older + messages, login)
         _record(day, 'ok', result)
         friction.from_turn(text, result.new_messages(), shown)   # scrubbed one-liners for the morning's fix cards
         done.append(True)
@@ -251,7 +259,7 @@ async def chat(thread_id: str, request: Request):
     adapter = _watched(VercelAIAdapter(agent=agent.build(), run_input=run_input, accept=request.headers.get('accept'),
                                        sdk_version=7, manage_message_history='server'), trace)
     # Who asked, the owner's saved notes, what Kitchen answered before (as data), the limits and the turn's trace.
-    settings = await run_in_threadpool(agent.settings, text, request.headers.get('tailscale-user-login'), shown, trace)
+    settings = await run_in_threadpool(agent.settings, text, login, shown, trace)
     events = adapter.run_stream(model=agent.Traced(chat_model, trace), message_history=shown, on_complete=on_complete,
                                 **settings)
 
@@ -266,6 +274,6 @@ async def chat(thread_id: str, request: Request):
             if done:
                 trace.finish('ok')
             else:
-                _end_failed(thread_id, older + shown, text, day, trace)
+                _end_failed(thread_id, older + shown, text, day, trace, login)
 
     return adapter.streaming_response(stream())

@@ -144,12 +144,12 @@ def test_a_failed_model_call_is_traced_saved_as_a_failed_answer_and_can_be_impro
     assert [c['tool'] for c in turn['tool_calls']] == ['music_library']
     assert 'status=failed' in capfd.readouterr().err
 
-    saved = client.get(f'/ask/threads/{THREAD}/messages').json()
+    saved = client.get(f'/ask/threads/{THREAD}/messages', headers=OWNER).json()
     assert [m['role'] for m in saved] == ['user', 'assistant']
     said = ''.join(p.get('text', '') for p in saved[1]['parts'])
     assert said.startswith('**This answer failed.**') and 'Music library (couldn’t read it)' in said
     assert 'Nothing was changed' in said
-    assert [t['title'] for t in client.get('/ask/threads').json()] == [OWNER_WORDS[:store.TITLE_LENGTH]]
+    assert [t['title'] for t in client.get('/ask/threads', headers=OWNER).json()] == [OWNER_WORDS[:store.TITLE_LENGTH]]
 
     filed = client.post(f'/ask/threads/{THREAD}/improve', json={'turn': 0}, headers={**ORIGIN, **OWNER})
     assert filed.status_code == 200
@@ -160,9 +160,9 @@ def test_a_failed_model_call_is_traced_saved_as_a_failed_answer_and_can_be_impro
     assert 'The answer said Hub couldn’t' not in brief
 
     use(monkeypatch, calls(then='The trick was the shuffle setting.'))
-    again, _ = ask(client, 'What was the trick?')
+    again, _ = ask(client, 'What was the trick?', headers={**ORIGIN, **OWNER})
     assert again.status_code == 200                                   # the thread is free and goes on after a failure
-    assert len(client.get(f'/ask/threads/{THREAD}/messages').json()) == 4
+    assert len(client.get(f'/ask/threads/{THREAD}/messages', headers=OWNER).json()) == 4
 
 
 def test_the_engine_record_counts_the_model_calls_a_failed_turn_made(client, monkeypatch):
@@ -207,7 +207,7 @@ def test_when_the_model_fails_after_a_change_the_chat_never_says_nothing_changed
     use(monkeypatch, broken_after('home_control'))
     _, chunks = ask(client, 'Turn on the reading lamp', headers={**ORIGIN, **OWNER})
     assert [c['errorText'] for c in chunks if c['type'] == 'error'] == [routes.FAILED_CHANGED]
-    said = ''.join(p.get('text', '') for p in client.get(f'/ask/threads/{THREAD}/messages').json()[1]['parts'])
+    said = ''.join(p.get('text', '') for p in client.get(f'/ask/threads/{THREAD}/messages', headers=OWNER).json()[1]['parts'])
     assert 'Something may have changed' in said and 'Nothing was changed' not in said and 'Home control (done)' in said
 
 

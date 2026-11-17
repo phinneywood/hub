@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block body %}
-<h1>Something went wrong</h1>
+<h1>{{ title or "Something went wrong" }}</h1>
 <p class="warn">{{ message }}</p>
 <p><a href="/today">Today</a> · <a href="/status">Check status</a></p>
 {% endblock %}

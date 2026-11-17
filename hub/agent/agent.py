@@ -16,7 +16,7 @@ from pydantic_ai.messages import ToolReturn, ToolReturnPart
 from pydantic_ai.models.wrapper import WrapperModel
 from pydantic_ai.ui.vercel_ai.response_types import SourceUrlChunk
 
-from .. import ask_trace
+from .. import ask_trace, people
 from ..engine import catalog
 
 INSTRUCTIONS = """You are Hub, a private household dashboard. You answer the owner's questions about today's list,
@@ -66,6 +66,10 @@ class Turn:
     login: str | None = None
     handed: set = field(default_factory=set)   # hand-offs already made this turn: each passes the message on once
     trace: object = None                       # the turn's ask_trace.Trace on the /ask route; None in golden runs
+    accounts: frozenset | None = None          # whose accounts it may read; None: the asker's own (hub/people.py)
+
+    def sees(self):
+        return people.accounts(self.login) if self.accounts is None else self.accounts
 
 
 def _citation(lookup):
@@ -99,20 +103,30 @@ def _signed(run, source, slug, hidden=()):
     return Tool(run, name=slug, takes_ctx=True)
 
 
+ASKER = ('login', 'accounts')     # who is asking, for a lookup that cuts its answer to them: filled in here, never by the model
+
+
 def _tool(lookup):
-    """A lookup as a tool. One that reads per person takes `login`: who asks comes from the turn, never the model."""
-    whose = 'login' in inspect.signature(lookup.run).parameters
+    """A lookup as a tool. One that reads a person's account (`catalog.account_of`) tells anyone else it isn't theirs,
+    without reading it. One that cuts its answer to the asker takes `login` or `accounts`: who asks comes from the
+    turn, never the model."""
+    takes = [name for name in ASKER if name in inspect.signature(lookup.run).parameters]
 
     def run(ctx: RunContext[Turn], **kwargs) -> ToolReturn:
         with ask_trace.call(ctx.deps.trace, lookup.slug, 'lookup', kwargs, getattr(ctx, 'tool_call_id', None)) as call:
-            try:
-                found = lookup.run(**kwargs, **({'login': ctx.deps.login} if whose else {}))
-            except Exception as error:  # noqa: BLE001 - a broken source is an answer the model can pass on, not a failed chat
-                call.failed(error)
-                found = dict(catalog.UNAVAILABLE)
+            account = catalog.account_of(lookup)
+            if account is not None and account not in ctx.deps.sees():   # another person's mail or calendar: nothing is read
+                found = dict(catalog.NOT_YOURS)
+            else:
+                asker = {'login': ctx.deps.login, 'accounts': ctx.deps.sees()}
+                try:
+                    found = lookup.run(**kwargs, **{name: asker[name] for name in takes})
+                except Exception as error:  # noqa: BLE001 - a broken source is an answer the model can pass on, not a failed chat
+                    call.failed(error)
+                    found = dict(catalog.UNAVAILABLE)
             call.returned(found)
         return ToolReturn(return_value=found, metadata=[_citation(lookup)])
-    return _signed(run, lookup.run, lookup.slug, hidden=('login',))
+    return _signed(run, lookup.run, lookup.slug, hidden=ASKER)
 
 
 def _handoff(handoff):
@@ -216,13 +230,13 @@ def _so_far(streamed):
         return None
 
 
-def settings(text, login, shown, trace=None):
+def settings(text, login, shown, trace=None, accounts=None):
     """What one turn runs with besides the model and the history: who asked, the owner's own notes (saved by
     their tap), their saved recipes, what other assistants answered earlier (as data) and the limits. The /ask route and the golden
-    tests both use this, so they run alike; only the /ask route passes a `trace`."""
+    tests both use this, so they run alike; only the /ask route passes a `trace`, and only the golden runs `accounts`."""
     from ..engine import notes, recipes
     extra = '\n\n'.join(filter(None, (notes.for_ask(), recipes.for_ask(), recall(shown))))
-    return {'deps': Turn(text=text, login=login, trace=trace), 'instructions': extra or None,
+    return {'deps': Turn(text=text, login=login, trace=trace, accounts=accounts), 'instructions': extra or None,
             'usage_limits': UsageLimits(request_limit=REQUESTS_PER_TURN)}
 
 

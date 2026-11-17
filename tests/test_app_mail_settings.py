@@ -25,7 +25,7 @@ def test_the_screen_shows_levels_charges_senders_and_the_plan(monkeypatch):
     _ready(monkeypatch)
     triage.always('alex@example.com', 'reading')
     store.set_decision('news@example.com', 'archive', 120, True)
-    seen = client.get('/app/api/mail-settings').json()
+    seen = client.get('/app/api/mail-settings', headers=OWNER).json()
     assert {k['kind'] for k in seen['levels']} == set(filing.ACTIONS) and not seen['paused']
     assert seen['senders'] == [{'sender': 'alex@example.com', 'kind': triage.NAMES['reading']}]
     [item] = seen['plan']['planned']
@@ -60,6 +60,6 @@ def test_a_paused_helper_applies_nothing_and_says_so(monkeypatch):
     store.set_decision('news@example.com', 'archive', 120, True)
     answer = client.post('/app/api/mail-settings/apply', json={}, headers=OWNER)
     assert answer.status_code == 409 and 'paused' in answer.json()['error'] and started == []
-    assert client.get('/app/api/mail-settings').json()['paused']
+    assert client.get('/app/api/mail-settings', headers=OWNER).json()['paused']
     assert client.post('/app/api/mail-settings/rules-check', json={}, headers=OWNER).status_code == 409
     assert delayed.rules() == []

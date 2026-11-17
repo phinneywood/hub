@@ -3,8 +3,8 @@
 // device. Rules, levels and the backlog stay on the older Mail page.
 import { signal } from "@preact/signals";
 import { Top } from "./screens";
-import { go, say, view } from "./state";
-import type { Email, Mail as MailData, Shelf } from "./types";
+import { go, me, say, view } from "./state";
+import type { Email, Mail as MailData, NotConnected as Elsewhere, Shelf } from "./types";
 import { Icon } from "./ui";
 
 const EVERY = 60_000;
@@ -12,6 +12,7 @@ const BUSY_EVERY = 3000;
 
 export const mail = signal<MailData | null>(null);
 export const mailAway = signal(false);
+export const mailMine = signal(true);     // false: the mail Hub reads is someone else's, and none of it came here
 const ticked = signal<string[]>([]);
 let asked = 0, timer = 0;
 
@@ -21,9 +22,14 @@ export async function loadMail() {
   try {
     const answer = await fetch("/app/api/mail", { headers: { accept: "application/json" } });
     if (!answer.ok) throw new Error("Hub is away");
-    const found = (await answer.json()) as MailData;
-    mail.value = found;
+    const found = (await answer.json()) as MailData | Elsewhere;
     mailAway.value = false;
+    mailMine.value = !("connected" in found);
+    if ("connected" in found) {
+      mail.value = null;
+      return;
+    }
+    mail.value = found;
     if (found.notice) say(found.notice);
     const open = new Set([...found.needs, ...found.odd].map((e) => e.id).concat(found.asked.map((a) => a.id)));
     ticked.value = ticked.value.filter((key) => open.has(key));
@@ -132,8 +138,22 @@ function ShelfRow({ shelf, busy, paused }: { shelf: Shelf; busy: boolean; paused
   );
 }
 
+/** Mail for someone whose Google account Hub doesn't read: theirs isn't here yet, and no one else's is shown. */
+export function NotConnected() {
+  const here = me.value.signed_in;
+  return (
+    <div class="wrap">
+      <Top />
+      <h1 class="say">{here ? "Your mail isn’t connected yet" : "Mail stays on each person’s phone"}</h1>
+      <p class="sub">{here ? "Hub shows each person only their own mail. Once your Google account is connected, yours shows here, and only to you."
+        : "Open Hub on your own phone or laptop to see yours."}</p>
+    </div>
+  );
+}
+
 export function Mail() {
   const now = mail.value;
+  if (!mailMine.value) return <NotConnected />;
   if (!now) {
     return (
       <div class="wrap">

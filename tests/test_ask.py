@@ -231,7 +231,7 @@ def test_a_cooking_question_goes_to_kitchen_word_for_word_with_the_owners_login_
     assert 'never an empty reply' in agent.INSTRUCTIONS     # an empty reply after a hand-off fails the turn
     returned = [p.content for m in SEEN[-1] if isinstance(m, ModelRequest) for p in m.parts if isinstance(p, ToolReturnPart)]
     assert returned == out          # this turn the model sees only that Kitchen was asked
-    saved = ready.get(f'/ask/threads/{THREAD}/messages').json()
+    saved = ready.get(f'/ask/threads/{THREAD}/messages', headers=OWNER).json()
     assert [p['output'] for m in saved for p in m['parts'] if p['type'] == 'tool-kitchen'] == out   # the page can find the reply again
 
 
@@ -400,23 +400,23 @@ def test_only_the_signed_in_owner_and_only_this_site_can_use_it(ready):
 # ---- a turn ----
 
 def test_a_question_streams_lookups_words_and_hubs_own_citations_then_is_saved_and_recorded(ready):
-    reply, chunks = ask(ready, 'What needs me today?')
+    reply, chunks = ask(ready, 'What needs me today?', headers={**ORIGIN, **OWNER})
     assert reply.status_code == 200
     kinds = [c['type'] for c in chunks]
     assert kinds.count('tool-output-available') == 2 and kinds.count('text-delta') > 5 and 'error' not in kinds
     assert {(c['url'], c['title']) for c in chunks if c['type'] == 'source-url'} == {('/today', 'Needs you'), ('/calendar', 'Calendar')}
     text = ''.join(c['delta'] for c in chunks if c['type'] == 'text-delta')
     assert '3 things' in text and 'Dentist' in text
-    saved = ready.get(f'/ask/threads/{THREAD}/messages').json()
+    saved = ready.get(f'/ask/threads/{THREAD}/messages', headers=OWNER).json()
     assert saved[0]['role'] == 'user' and {m['role'] for m in saved[1:]} == {'assistant'}
     parts = [p for m in saved[1:] for p in m['parts']]
     assert [p['state'] for p in parts if p['type'].startswith('tool-')] == ['output-available'] * 2
     assert {p['url'] for p in parts if p['type'] == 'source-url'} == {'/today', '/calendar'}           # citations survive a reload
-    assert [t['title'] for t in ready.get('/ask/threads').json()] == ['What needs me today?']
+    assert [t['title'] for t in ready.get('/ask/threads', headers=OWNER).json()] == ['What needs me today?']
     run = state.runs(routes.KIND)[0]
     assert run['status'] == 'ok' and run['luna_calls'] == 2 and run['tokens_in'] > 0
-    assert ready.delete(f'/ask/threads/{THREAD}', headers=ORIGIN).json() == {'ok': True}
-    assert ready.get('/ask/threads').json() == [] and ready.get(f'/ask/threads/{THREAD}/messages').json() == []
+    assert ready.delete(f'/ask/threads/{THREAD}', headers={**ORIGIN, **OWNER}).json() == {'ok': True}
+    assert ready.get('/ask/threads', headers=OWNER).json() == [] and ready.get(f'/ask/threads/{THREAD}/messages', headers=OWNER).json() == []
 
 
 def test_the_server_keeps_the_conversation_and_takes_only_the_new_message_from_the_browser(ready):

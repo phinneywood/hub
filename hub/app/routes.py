@@ -117,7 +117,8 @@ def home(request: Request):
     login = _login(request)
     links = read.opens()
     return {**model.now(), 'signed_in': login is not None, 'initial': (login or 'H')[:1].upper(), 'versions': versions(),
-            'links': {'ha': links.get('ha_url'), 'music': links.get('music_url')}, 'update': _update_ready()}
+            'links': {'ha': links.get('ha_url'), 'music': links.get('music_url')}, 'update': _update_ready(),
+            'mail': not _not_theirs(request)}
 
 
 def _update_ready():
@@ -530,18 +531,33 @@ def kitchen_tap(do: str, request: Request, body: dict = Body(default={})):
 
 
 # ---- Mail (hub/app/mail.py): what needs the owner, then what Hub sorted ----
+# The mail Hub reads is one person's Google account (the bridge's main one), so all of it, and every tap on it, is
+# for a login that may see that account (hub/people.py). Anyone else is told theirs isn't connected, the same answer
+# whatever they ask about, so nothing is learned of the owner's mail.
+
+NOT_CONNECTED = 'Your Google account isn’t connected to Hub, so there’s no mail of yours here.'
+
+
+def _not_theirs(request):
+    from .. import people
+    return not people.sees(_login(request), people.DEFAULT)
+
 
 @router.get('/api/mail')
-def mail_picture():
+def mail_picture(request: Request):
     """The Mail screen as data, from Hub's own sorting tables. No Gmail call, no model."""
     from . import mail
+    if _not_theirs(request):
+        return {'ok': True, 'connected': False}
     return mail.picture()
 
 
 @router.get('/api/mail-settings')
-def mail_settings():
+def mail_settings(request: Request):
     """The Mail settings screen as data: levels, the charge alert, senders sorted by hand, the plan, the rules."""
     from . import mailrules
+    if _not_theirs(request):
+        return {'ok': True, 'connected': False}
     return mailrules.picture()
 
 
@@ -551,6 +567,8 @@ def mail_settings_tap(do: str, request: Request, body: dict = Body(default={})):
     from . import mailrules
     if _login(request) is None:
         return _refuse('Change mail from your phone or laptop.', 403)
+    if _not_theirs(request):
+        return _refuse(NOT_CONNECTED, 403)
     try:
         return {'ok': True, 'said': mailrules.tap(do, body.get('key'), body.get('value'))}
     except mailrules.Refused as error:
@@ -565,6 +583,8 @@ def mail_tap(do: str, request: Request, body: dict = Body(default={})):
     from . import mail
     if _login(request) is None:
         return _refuse('Change mail from your phone or laptop.', 403)
+    if _not_theirs(request):
+        return _refuse(NOT_CONNECTED, 403)
     ok, said = mail.tap(do, body.get('key'))
     return {'ok': True, 'said': said} if ok else _refuse(said)
 

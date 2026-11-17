@@ -211,6 +211,7 @@ export function Rail() {
   );
 }
 
+const MAILBOX = ["/gmail", "/calendar"];     // one person's Google account: listed only for them
 const OLDER = [["Ask, the chat", "/ask"], ["Today, the cards", "/today"], ["Kitchen, the older page", "/kitchen"], ["Mail, the older page", "/gmail"], ["Calendar", "/calendar"],
   ["Preschool", "/preschool/"], ["Trip", "/trip"], ["Bike + bus", "/mobility"], ["Network", "/network"], ["Insights", "/insights"],
   ["Settings and checks", "/settings"]] as const;
@@ -264,7 +265,8 @@ export function System() {
         <h2>Older pages</h2>
         <p class="sub">Hub’s earlier screens, until each moves in here or goes.</p>
         <div class="rows spaced">
-          {OLDER.map(([name, href]) => <a class="row free" href={href} key={href}><div class="row-main"><b>{name}</b></div></a>)}
+          {OLDER.filter(([, href]) => me.value.mail !== false || !MAILBOX.includes(href)).map(([name, href]) =>
+            <a class="row free" href={href} key={href}><div class="row-main"><b>{name}</b></div></a>)}
         </div>
       </section>
       {!me.value.signed_in && <p class="quiet">This screen is open on the Mac itself, which can look but not change the house.</p>}

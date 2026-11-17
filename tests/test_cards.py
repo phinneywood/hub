@@ -89,7 +89,7 @@ def _thread():
 
 
 def test_improve_this_files_a_brief_without_the_message_or_the_answer():
-    store.save(THREAD, _thread())
+    store.save(THREAD, _thread(), ME)          # a thread is its asker's own
     client = TestClient(app)
     assert client.post(f'/ask/threads/{THREAD}/improve', json={'turn': 1}, headers={'origin': 'http://testserver'}).status_code == 403
     assert client.post(f'/ask/threads/{THREAD}/improve', json={'turn': 2}, headers=SIGNED_IN).status_code == 404   # no such turn
@@ -109,7 +109,7 @@ def test_improve_this_files_a_brief_without_the_message_or_the_answer():
 
 
 def test_a_read_only_turn_says_what_was_read_and_nothing_of_it():
-    store.save(THREAD, _thread())
+    store.save(THREAD, _thread(), ME)          # a thread is its asker's own
     TestClient(app).post(f'/ask/threads/{THREAD}/improve', json={'turn': 0}, headers=SIGNED_IN)
     brief = improve.requests()[0]['brief']
     assert 'today_list (read)' in brief and 'Alex' not in brief and 'Saturday' not in brief

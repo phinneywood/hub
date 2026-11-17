@@ -7,13 +7,18 @@ the words missed, the model reads with its `look_up` tool.
 
 Luna, on the pinned zero-retention route (`hub/luna.py`), still answers them (`answer`) on a Hub where Ask's
 model isn't set up yet, so these questions work either way.
+
+Mail and the calendar are one person's Google account, so they are read only for a login that may see it
+(`hub/people.py`): anyone else is told they aren't theirs, and nothing of them is read. School is everyone's. Today's
+list mixes the household's lines with the owner's mail and calendar ones, so until it can be cut to the person
+asking it goes only to someone who may see that account.
 """
 import json
 import re
 
 import httpx
 
-from ... import home, luna
+from ... import home, luna, people
 
 OUTPUT_TOKENS = 500
 ANSWER = 1200
@@ -59,25 +64,29 @@ def about(text, rooms=()):
 
 
 def data(text, topics, login=None):
-    """The bounded lookups for these topics: what the old chat's model was given, and no more. `login`: who asks;
-    the errands are only theirs and the household's."""
+    """The bounded lookups for these topics: what the old chat's model was given, and no more. `login`: who asks.
+    Mail and the calendar only for a login that may see that Google account, and for anyone else a line saying they
+    aren't theirs; the errands only theirs and the household's."""
     from ...engine import catalog
     data = {'today': home.today().isoformat(), 'weekday': home.today().strftime('%A')}
-    if 'mail' in topics:
+    theirs = people.sees(login, people.DEFAULT)
+    if 'mail' in topics and not theirs:
+        data['mail'] = dict(catalog.NOT_YOURS)
+    elif 'mail' in topics:
         data['mail'] = catalog.mail_lookup()
         data['mail_that_needs_the_owner'] = catalog.mail_lookup('needs')
         for kind, words in MAIL_KINDS.items():
             if re.search(words, text, re.I):
                 data[f'mail_{kind}'] = catalog.mail_lookup(kind)
     if topics & {'calendar', 'today'}:
-        data['calendar'] = catalog.calendar_lookup()
+        data['calendar'] = catalog.calendar_lookup() if theirs else dict(catalog.NOT_YOURS)
     if topics & {'school', 'today'}:
         try:
             data['school'] = catalog.preschool_evidence() or {'note': 'No class guide has been published yet.'}
         except Exception:  # noqa: BLE001 - a missing class guide is an answer, not a failed question
             data['school'] = dict(catalog.UNAVAILABLE)
     if 'today' in topics:
-        data['needs_the_owner_today'] = catalog.today_lookup()
+        data['needs_the_owner_today'] = catalog.today_lookup() if theirs else dict(catalog.NOT_YOURS)
         try:
             data['errands_ready_for_a_tap'] = catalog.errands_lookup(login=login)
         except Exception:  # noqa: BLE001 - the rest of the day still answers

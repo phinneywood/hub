@@ -27,7 +27,9 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   opened in the mail app, and closes that errand by itself once the reply is in sent mail; Today shows the three
   most pressing and counts them in its sentence, and Ask draws them under its answer; Ask marks one done when told
   "I paid the power bill", draws it so under the answer and puts it back with Undo; and the other person at home,
-  whose mail Hub doesn't read, sees only the class guide's two on Errands and Today;
+  whose mail Hub doesn't read, sees only the class guide's two on Errands and Today, is told on Mail and Mail
+  settings that their mail isn't connected yet with none of the owner's shown, isn't offered the older Gmail and
+  Calendar pages, and finds the older Gmail page saying it isn't theirs;
 - System opens Versions, which lists the releases and leads back;
 - Mail leads with the emails that need you and the unanswered question, takes a tick and puts it back, and
   files a kind; Kitchen shows the list with each thing's product and where it stands, what needs a pick, a cart

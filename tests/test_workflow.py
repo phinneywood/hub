@@ -3,9 +3,9 @@ from fastapi.testclient import TestClient
 
 from hub import apply, bridge, senders, store, worker
 from hub.main import app
-from tests.test_app import ORIGIN, PROFILE, STATE, fake_get
+from tests.test_app import AS_OWNER, ORIGIN, PROFILE, STATE, fake_get
 
-client = TestClient(app)
+client = TestClient(app, headers=AS_OWNER)
 
 
 @pytest.fixture(autouse=True)

@@ -44,7 +44,7 @@ def mailbox(monkeypatch):
 
 
 def picture():
-    return client.get('/app/api/mail').json()
+    return client.get('/app/api/mail', headers=SIGNED_IN).json()
 
 
 def test_mail_leads_with_what_needs_the_owner_and_who_never_answered(mailbox):

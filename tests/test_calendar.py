@@ -8,6 +8,7 @@ from hub import bridge, home, today
 from hub.engine import catalog
 from hub.main import app
 from hub.tools.calendar import read
+from tests.test_app import AS_OWNER
 
 NOW = datetime(2026, 3, 4, 9, 0, tzinfo=home.PACIFIC)  # a Wednesday
 
@@ -98,12 +99,12 @@ def test_evidence_sends_titles_times_and_places_only(helper, monkeypatch):
 
 
 def test_page_lists_the_week_and_explains_a_lapsed_sign_in(helper):
-    page = TestClient(app).get('/calendar')
+    page = TestClient(app).get('/calendar', headers=AS_OWNER)
     assert page.status_code == 200 and 'The next seven days' in page.text
     helper['fail'] = bridge.BridgeError('authorization may need renewal', 401)
-    assert 'phone-setup --calendar-auth' in TestClient(app).get('/calendar').text
+    assert 'phone-setup --calendar-auth' in TestClient(app).get('/calendar', headers=AS_OWNER).text
     helper['fail'] = bridge.BridgeError('Gmail bridge is unreachable')
-    assert 'isn’t answering' in TestClient(app).get('/calendar').text
+    assert 'isn’t answering' in TestClient(app).get('/calendar', headers=AS_OWNER).text
 
 
 def test_an_event_runs_on_every_day_it_covers(monkeypatch):

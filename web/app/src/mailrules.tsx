@@ -3,6 +3,7 @@
 // it is looked at; the taps are the older Mail pages' own.
 import { useEffect, useState } from "preact/hooks";
 import * as api from "./api";
+import { NotConnected } from "./mail";
 import { Top } from "./screens";
 import { go, me, say } from "./state";
 import type { MailSettings, PlanItem } from "./types";
@@ -28,7 +29,15 @@ export function MailSettings() {
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [charge, setCharge] = useState("");
-  const load = () => api.mailSettings().then((now) => { setFound(now); setFailed(false); setCharge(String(now.charge)); return now; }, () => { setFailed(true); return null; });
+  const [mine, setMine] = useState(true);
+  const load = () => api.mailSettings().then((now) => {
+    setFailed(false);
+    setMine(!("connected" in now));
+    if ("connected" in now) return null;
+    setFound(now);
+    setCharge(String(now.charge));
+    return now;
+  }, () => { setFailed(true); return null; });
   useEffect(() => { void load(); }, []);
   useEffect(() => {
     if (!found || !(found.plan.working || found.checking || found.plan.running.length)) return;
@@ -47,6 +56,7 @@ export function MailSettings() {
   const now = found;
   const locked = busy || !me.value.signed_in;
   const plan = now?.plan;
+  if (!mine) return <NotConnected />;
   return (
     <div class="wrap">
       <Top />

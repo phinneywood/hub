@@ -4,7 +4,8 @@ from fastapi.testclient import TestClient
 from hub import bridge, config
 from hub.main import app
 
-client = TestClient(app)
+AS_OWNER = {"tailscale-user-login": "me@example.com"}     # the one allowed login, so it owns the bridge's mailbox
+client = TestClient(app, headers=AS_OWNER)
 REAL_GET = bridge.get
 
 

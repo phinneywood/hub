@@ -253,7 +253,7 @@ record under the chat's own $10 a month limit; the words do not.
 | Any other device, a routine's config, a room's contents | Only what a request needs, read with `find` and `details`: never tokens, addresses, pictures, or where people are | No |
 | What Hub remembers | Yes | No |
 | Earlier requests and Hub's answers | Yes | No |
-| Mail, the calendar, school, today's list | Yes, the bounded lookups; never senders with AI switched off | Yes, the same lookups |
+| Mail, the calendar, school, today's list | Yes, the bounded lookups, mail and the calendar only the asker's own; never senders with AI switched off | Yes, the same lookups |
 | Kitchen's answers; products, prices and notes on the shopping list | Never. Ask's sentences about the list carry counts and the member's own words; the rest is drawn on cards | No |
 
 **Until it is set up.** Ask needs two things a Hub may not have yet: the Anthropic SDK among the reviewed
@@ -419,6 +419,10 @@ It is drawn from Hub's own sorting tables (`hub/tools/gmail/triage.py`), never a
   charge limit, the backlog and the plan.
 
 Every tap needs a signed-in device. Tests: `tests/test_app_mail.py`, on made-up rows in Hub's own tables.
+
+**Whose it is.** The mail is one person's: the bridge's main Google account (`"default"`, `hub/people.py`). For
+anyone else, Mail and Mail settings answer `{"ok": true, "connected": false}` and draw a calm screen saying their
+mail isn't connected yet, and their taps change nothing; see “What follows the rule” in `docs/people.md`.
 
 ## Kitchen
 

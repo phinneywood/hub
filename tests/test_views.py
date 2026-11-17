@@ -69,8 +69,11 @@ def test_every_older_page_carries_the_apps_tabs_and_leads_back_to_it(client):
 
 def test_all_tools_lists_every_tool_and_settings_holds_engine_and_status(client):
     from hub.tools import TOOLS
-    menu = client.get('/tools').text.split('<nav class="menu"')[1].split('</nav>')[0]
+    menu = client.get('/tools', headers=test_app.AS_OWNER).text.split('<nav class="menu"')[1].split('</nav>')[0]
     assert [part.split('"')[0] for part in menu.split('href="')[1:]] == ['/' + t['slug'] for t in TOOLS if t['slug'] != 'ask']
+    menu = client.get('/tools').text.split('<nav class="menu"')[1].split('</nav>')[0]      # this Mac: one person's mailbox isn't listed
+    assert [part.split('"')[0] for part in menu.split('href="')[1:]] == ['/' + t['slug'] for t in TOOLS
+                                                                          if t['slug'] != 'ask' and not t.get('account')]
     settings = client.get('/settings').text.split('<nav class="menu"')[1].split('</nav>')[0]
     assert 'href="/engine"' in settings and 'href="/status"' in settings
 
@@ -158,7 +161,7 @@ def test_the_bundle_reads_the_reference_and_fills_the_box_without_sending():
 def test_inbox_trend_is_a_line_over_real_dates_and_waits_for_two_readings(client):
     assert insights.inbox() == {'has': False, 'now': None}
     store.record_inbox('2027-03-01', 1200, 300)
-    assert insights.inbox()['now'] == 1200 and 'The trend appears once' in client.get('/insights').text
+    assert insights.inbox()['now'] == 1200 and 'The trend appears once' in client.get('/insights', headers=test_app.AS_OWNER).text
     store.record_inbox('2027-03-02', 1150, 290)
     store.record_inbox('2027-03-11', 1000, None)
     chart = insights.inbox()
@@ -168,14 +171,14 @@ def test_inbox_trend_is_a_line_over_real_dates_and_waits_for_two_readings(client
     assert round((xs[1] - xs[0]) * 9, 0) == round(xs[2] - xs[1], 0)            # a nine-day gap is nine times as wide as one day
     assert [t['label'] for t in chart['ticks']] == ['1K', '1.2K'] and all(insights.TOP <= p['y'] <= insights.TOP + insights.PLOT_H for p in chart['points'])
     assert chart['points'][-1]['tip'] == 'Mar 11\n1,000 in inbox' and chart['rows'][0] == {'day': 'Mar 11', 'total': 1000, 'unread': None}
-    page = client.get('/insights').text
+    page = client.get('/insights', headers=test_app.AS_OWNER).text
     assert 'class="viz-line s1"' in page and '<td class="num">1,150</td>' in page and 'aria-label="Line chart' in page
 
 
 def test_spend_shows_each_limit_and_every_kind_of_run_and_says_so_when_a_limit_is_reached(client, monkeypatch):
     day = date(2027, 3, 20)
     monkeypatch.setattr(home, 'today', lambda: day)
-    assert insights.spend()['has'] is False and 'No model runs recorded' in client.get('/insights').text
+    assert insights.spend()['has'] is False and 'No model runs recorded' in client.get('/insights', headers=test_app.AS_OWNER).text
     state.record_run('2027-03-20', 'overnight', 'ok', luna_calls=1, cost=0.5)
     state.record_run('2027-03-20', 'sort', 'ok', luna_calls=3, jev_calls=7, cost=3.5)
     state.record_run('2027-03-19', 'chat', 'error', luna_calls=1)
@@ -193,25 +196,25 @@ def test_spend_shows_each_limit_and_every_kind_of_run_and_says_so_when_a_limit_i
     last = spend['columns'][-1]
     assert [s['series'] for s in last['segments']] == [1, 2] and last['tip'] == 'Mar 20\n$0.50 Overnight review\n$3.50 Mail sorting\n$4.00 in all'
     assert spend['columns'][0]['segments'] == [] and spend['columns'][0]['tip'].endswith('Nothing spent')
-    page = client.get('/insights').text
+    page = client.get('/insights', headers=test_app.AS_OWNER).text
     assert 'Limit reached. Paused until next month.' in page and 'Close to the limit.' in page and 'viz-fill s3' in page
 
 
 def test_sorted_mail_is_drawn_by_kind_and_the_page_survives_a_broken_source(client, monkeypatch):
     from tests import test_ask
-    assert 'Mail hasn’t been sorted yet' in client.get('/insights').text
+    assert 'Mail hasn’t been sorted yet' in client.get('/insights', headers=test_app.AS_OWNER).text
     test_ask.fictional(monkeypatch)
     mail = insights.mail()
     assert [(b['name'], b['count']) for b in mail['bars']] == [('Needs you', 3), ('Records', 14)] and mail['total'] == 17
     assert mail['bars'][1]['width'] > mail['bars'][0]['width'] > 0
-    assert 'Bar chart: sorted mail in the inbox by kind. Needs you 3, Records 14.' in client.get('/insights').text
+    assert 'Bar chart: sorted mail in the inbox by kind. Needs you 3, Records 14.' in client.get('/insights', headers=test_app.AS_OWNER).text
 
     def broken(*args, **kwargs):
         raise RuntimeError('synthetic failure')
     for name in ('inbox', 'mail', 'spend'):
         monkeypatch.setattr(insights, name, broken)
     monkeypatch.setattr(ha, 'configured', broken)
-    page = client.get('/insights')
+    page = client.get('/insights', headers=test_app.AS_OWNER)
     assert page.status_code == 200 and 'No network readings to show just now' in page.text and 'svg class="viz"' not in page.text
 
 
@@ -221,7 +224,7 @@ def test_insights_carries_the_network_summary_and_the_rest_stays_on_the_network_
     monkeypatch.setattr(ha, 'configured', lambda: True)
     monkeypatch.setattr(ha, 'states', lambda: states)
     monkeypatch.setattr(ha, 'history', lambda ids, start, end=None, include_attributes=False: [])
-    section = client.get('/insights').text.split('id="network"')[1]
+    section = client.get('/insights', headers=test_app.AS_OWNER).text.split('id="network"')[1]
     assert 'Internet is up' in section and 'Reported up' in section and section.count('class="metric-card"') == 3
     assert 'href="/network">Incidents, speed history and devices' in section          # one clear way to the rest
     for only_on_network in ('Performance history', 'Recent incidents', 'Top active clients', 'action="/network/source"',
@@ -232,7 +235,7 @@ def test_insights_carries_the_network_summary_and_the_rest_stays_on_the_network_
                  'href="/network?range=6h"', 'id="network-auto"', 'Sources &amp; coverage'):
         assert kept in own
     monkeypatch.setattr(ha, 'states', lambda: (_ for _ in ()).throw(ha.HomeAssistantError('Synthetic outage')))
-    quiet = client.get('/insights')
+    quiet = client.get('/insights', headers=test_app.AS_OWNER)
     assert quiet.status_code == 200 and 'No network readings to show just now' in quiet.text and 'Synthetic outage' not in quiet.text
 
 
@@ -257,7 +260,7 @@ def test_charts_and_the_network_have_read_only_lookups_that_give_counts_and_doll
 
 
 def test_every_chart_and_every_card_with_a_lookup_offers_ask_about_this(client, monkeypatch):
-    page = client.get('/insights').text
+    page = client.get('/insights', headers=test_app.AS_OWNER).text
     for key, question in (('inbox', 'size of my inbox'), ('mail', 'kinds of mail'), ('spend', 'spent on AI'), ('network', 'home network')):
         assert f'href="/ask?about=insight%3A{key}"' in page
         found = client.get('/ask/about', params={'ref': 'insight:' + key}).json()

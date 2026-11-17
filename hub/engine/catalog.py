@@ -1116,6 +1116,17 @@ def lookups():
     return [lookup for s in SOURCES for lookup in s.lookups]
 
 
+# ---- whose it is: what came from one person's account is given only to them (hub/people.py) ----
+
+def account_of(lookup):
+    """The account a lookup reads (its source's), or None for the household's own things, which are everyone's."""
+    return next((s.account for s in SOURCES if lookup in s.lookups), None)
+
+
+NOT_YOURS = {'not_yours': 'Hub shows mail and calendars only to the person they belong to, and the person asking has no '
+                          'Google account connected to Hub. Nothing was read.'}
+
+
 def handoffs():
     return list(HANDOFFS)
 

@@ -30,7 +30,10 @@ export interface Down { ok: false; why: string }
 export interface Me {
   signed_in: boolean; initial: string; versions: { js: string; css: string };
   links: { ha: string | null; music: string | null }; update?: boolean;
+  mail?: boolean;           // whether the mail Hub reads is this person's own (hub/people.py)
 }
+// What Mail and Mail settings answer to a person whose Google account Hub doesn't read: nothing of anyone's mail.
+export interface NotConnected { ok: true; connected: false }
 // Versions, as Hub sends them (hub/app/versions.py).
 export interface Release {
   sha: string | null; short: string | null; live: string | null; title: string; changes: string[];

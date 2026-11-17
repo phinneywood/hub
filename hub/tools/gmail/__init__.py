@@ -1,3 +1,4 @@
+from ... import people
 from . import assess, explore, inbox, missions, organize, sweep
 
 router = inbox.router  # the page at /gmail itself lives here, so this is the one the others join
@@ -7,4 +8,5 @@ router.include_router(organize.router)
 router.include_router(sweep.router)
 router.include_router(assess.router)
 
-TOOL = {"slug": "gmail", "name": "Gmail", "description": "What needs you, what Hub sorted, and inbox cleanup", "router": router}
+TOOL = {"slug": "gmail", "name": "Gmail", "description": "What needs you, what Hub sorted, and inbox cleanup", "router": router,
+        "account": people.DEFAULT}      # one person's mailbox: only a login that may see it opens these pages
