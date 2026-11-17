@@ -22,7 +22,7 @@ from hub.app.routes import NOT_CONNECTED
 from hub.engine import catalog, registry
 from hub.golden import runner
 from hub.main import app
-from hub.tools.gmail import triage
+from hub.tools.gmail import missions, triage
 from tests import test_app
 from tests.ask_script import SEEN
 from tests.test_app_ask import ask as ask_app, house, said_to_model, world  # noqa: F401 - the made-up house and Ask's stand-in
@@ -96,7 +96,14 @@ def test_insights_draws_the_inbox_charts_only_for_alex(mailbox):
 
 # ---- the app ----
 
-def test_the_mail_screens_are_alexs_and_anyone_else_is_told_theirs_isnt_connected(mailbox):
+@pytest.fixture
+def settled(mailbox, monkeypatch):
+    """The made-up inbox, with the mail helper not paused: Mail settings asks the bridge otherwise."""
+    monkeypatch.setattr(missions, 'pause_state', lambda: 'ok')
+    return mailbox
+
+
+def test_the_mail_screens_are_alexs_and_anyone_else_is_told_theirs_isnt_connected(settled):
     assert [e['who'] for e in client.get('/app/api/mail', headers=by(ALEX)).json()['needs']] == ['Sam Rivera', 'Maple Street Dental']
     assert {row['kind']: row['level'] for row in client.get('/app/api/mail-settings', headers=by(ALEX)).json()['levels']}['reading'] == 'undo'
     for who in (CASEY, None):
@@ -104,7 +111,7 @@ def test_the_mail_screens_are_alexs_and_anyone_else_is_told_theirs_isnt_connecte
             assert client.get(path, headers=by(who)).json() == {'ok': True, 'connected': False}, (who, path)
 
 
-def test_caseys_taps_on_alexs_mail_change_nothing(mailbox):
+def test_caseys_taps_on_alexs_mail_change_nothing(settled):
     for path, body in (('/app/api/mail/done', {'key': 'm2'}), ('/app/api/mail/fine', {'key': 'r2'}),
                        ('/app/api/mail/answered', {'key': 'a1'}), ('/app/api/mail-settings/level', {'key': 'reading', 'value': 'suggest'})):
         refused = client.post(path, json=body, headers={**ORIGIN, **by(CASEY)})
