@@ -19,7 +19,7 @@ export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind:
   | { kind: "item"; id: number } | { kind: "card"; card: Card } | null;
 export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
-export type View = "home" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity";
+export type View = "home" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity" | "wall";
 
 function kept(): House | null {
   try {
@@ -45,7 +45,7 @@ export const trouble = signal<Trouble>("");   // "hub": can't reach Hub; "house"
 export const why = signal("");
 export const me = signal<Me>({ signed_in: true, initial: "", versions: { js: "", css: "" }, links: { ha: null, music: null } });
 export const sheet = signal<Sheet>(null);
-const VIEWS: View[] = ["today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity"];
+const VIEWS: View[] = ["today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "wall"];
 const here = (): View => VIEWS.find((v) => location.hash === "#" + v) ?? "home";
 export const view = signal<View>(here());
 export const toast = signal<Toast | null>(null);

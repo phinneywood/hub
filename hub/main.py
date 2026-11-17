@@ -226,7 +226,7 @@ def today_page(request: Request, snoozed: int = 0, home: str = ""):
     except Exception:  # noqa: BLE001 - the banner is a nicety; Today shows without it
         home_change = None
     return render(request, "today.html", active="today", snoozed=snoozed if snoozed in (1, 7) else 0, home_change=home_change,
-                  greeting_text=greeting_text, date_text=date_text, **cards.page())
+                  greeting_text=greeting_text, date_text=date_text, **cards.page(request.headers.get("tailscale-user-login")))
 
 
 @app.get("/insights", response_class=HTMLResponse)
@@ -249,10 +249,15 @@ def settings(request: Request):
 
 
 @app.post("/today/snooze")
-def today_snooze(key: str = Form(...)):
-    """Hide one recommendation until tomorrow (a week for a repeating offer). Changes nothing outside Hub."""
-    from . import today
+def today_snooze(request: Request, key: str = Form(...)):
+    """Hide one recommendation until tomorrow (a week for a repeating offer). Changes nothing outside Hub. One read from
+    an account (people.py) is hidden only by someone who may see it."""
+    from . import people, today
     from .engine import state
+    whose = today.account_of(key)
+    login = request.headers.get("tailscale-user-login")
+    if whose is not None and login is not None and not people.sees(login, whose):   # no login: this Mac itself
+        return RedirectResponse("/today", status_code=303)
     today.hide(key)
     if key.startswith("ai-"):
         state.dismiss(key)  # remembered for a week so the overnight review doesn't raise it again
@@ -528,10 +533,14 @@ def store_log(action, detail):
 
 
 @app.get("/today/brief", response_class=PlainTextResponse)
-def today_brief():
-    """Short text for the morning message: recommendation titles only."""
-    from . import home as summaries, today
-    return today.brief(today.needs_you(summaries.tiles(TOOLS)))
+def today_brief(request: Request):
+    """Short text for the morning message: recommendation titles only. It is the owner's message, sent to the owner's
+    phone by the morning job on this Mac, so a request without a login (this Mac itself) gets the owner's list; one
+    through Tailscale gets that person's own (people.py)."""
+    from . import home as summaries, people, today
+    login = request.headers.get("tailscale-user-login")
+    accounts = people.accounts(login) if login is not None else frozenset({people.DEFAULT})
+    return today.brief(today.needs_you(today.mine(summaries.tiles(TOOLS), accounts), accounts=accounts))
 
 
 @app.post("/status/jev-test", response_class=HTMLResponse)

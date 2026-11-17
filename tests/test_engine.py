@@ -11,6 +11,8 @@ from hub.engine import ask, auto, catalog, judge, overnight, release, state
 from hub.engine.registry import TRUST, Source
 from hub.main import app
 
+OWNER = frozenset({"default"})  # the owner's accounts (hub/people.py)
+
 ORIGIN = {'origin': 'http://testserver'}
 USAGE = {'tokens_in': 900, 'tokens_out': 120, 'cost': 0.002}
 ASK = {'ref': 'm1', 'sender': 'office@school.example', 'from': 'School Office', 'subject': 'Form due Friday',
@@ -47,9 +49,9 @@ def test_trust_level_decides_between_one_tap_and_a_link(monkeypatch):
     rule = lambda: [today.rec('r', 'warn', 'Synthetic rules stopped', '', href='/gmail/delayed', cta='Turn back on',  # noqa: E731
                               action=action.slug)]
     monkeypatch.setattr(catalog, 'SOURCES', [Source('synthetic', 'Synthetic', '', '', items=(rule,))])
-    assert today.needs_you()[0]['post'] == '/gmail/delayed/resume-safe'
+    assert today.needs_you(accounts=OWNER)[0]['post'] == '/gmail/delayed/resume-safe'
     assert state.set_trust(action, 'suggest') and not state.set_trust(catalog.action('gmail.apply_plan'), 'auto')
-    [item] = today.needs_you()
+    [item] = today.needs_you(accounts=OWNER)
     assert item['post'] is None and item['cta'] == 'Review' and item['href'] == '/gmail/delayed'
     assert not state.set_trust(catalog.action('gmail.apply_plan'), 'undo')
 
@@ -75,7 +77,7 @@ def test_review_saves_checked_suggestions_with_links_chosen_by_hub(ready):
         ('Off the list', 'Unknown page.', 'https://evil.example', None),
         ('return the school form', 'Repeat.', 'gmail', None)))
     assert result == {'status': 'ok', 'suggestions': 3}
-    first, second, third = today.needs_you()
+    first, second, third = today.needs_you(accounts=OWNER)
     assert first['suggested'] and first['cta'] == 'Find the message'
     assert first['href'] == '/gmail/search?q=from%3Aoffice%40school.example+newer_than%3A3d'
     # a ref Hub didn't supply can't steer the link anywhere but the source's own page
@@ -110,9 +112,11 @@ def test_review_does_nothing_without_a_key(monkeypatch):
 def test_not_today_on_a_suggestion_is_remembered_for_the_next_run(ready):
     overnight.prepare(luna_transport=_reply(('Synthetic nudge', 'Why.', 'gmail', None)))
     client = TestClient(app)
-    key = today.needs_you()[0]['key']
-    assert 'Suggestion' in client.get('/today').text
-    assert 'Synthetic nudge' not in client.post('/today/snooze', data={'key': key}, headers=ORIGIN).text
+    key = today.needs_you(accounts=OWNER)[0]['key']
+    me = {'tailscale-user-login': 'me@example.com'}
+    assert 'Suggestion' in client.get('/today', headers=me).text
+    assert 'Suggestion' not in client.get('/today').text      # the overnight review's suggestions are the owner's
+    assert 'Synthetic nudge' not in client.post('/today/snooze', data={'key': key}, headers={**ORIGIN, **me}).text
     assert state.recent_suggestions('2999-01-01') == [
         {'day': state.runs(overnight.KIND)[0]['day'], 'title': 'Synthetic nudge', 'owner_said_not_today': True}]
 
@@ -212,7 +216,7 @@ def test_a_checked_version_becomes_a_deploy_item_only_a_signed_in_owner_can_requ
     client = TestClient(app)
     assert catalog.hub_release() == [] and 'Nothing new is waiting.' in client.get('/engine').text
     (releases / 'pending.json').write_text(json.dumps({'sha': SHA_NEW, 'subjects': ['Synthetic change', 'Another']}))
-    [item] = [i for i in today.needs_you() if i['key'] == 'hub-release']
+    [item] = [i for i in today.needs_you(accounts=OWNER) if i['key'] == 'hub-release']
     assert item['post'] == '/engine/deploy' and item['why'] == 'Synthetic change and 1 more'
     assert 'own signed-in device' in client.post('/engine/deploy', headers=ORIGIN).text
     assert not (releases / 'queue' / 'request.json').exists()  # a program on this Mac can't ask
@@ -256,10 +260,10 @@ def test_unasked_actions_run_only_at_the_owners_level_and_leave_a_note(monkeypat
     assert state.set_trust(action, 'auto')
     [note] = auto.run()
     assert resumed == [1] and note['title'] == 'Hub turned 1 stopped Gmail rule back on'
-    [item] = [i for i in today.collect([]) if i['key'] == 'auto-gmail.resume_rules']
+    [item] = [i for i in today.collect([], accounts=OWNER) if i['key'] == 'auto-gmail.resume_rules']
     assert not item['suggested'] and 'To undo: Stop them again' in item['why'] and item['href'] == '/gmail/delayed'
     assert overnight.prepare(luna_transport=_reply()) in ({'status': 'not_set_up'}, {'status': 'ok', 'suggestions': 0})
-    assert any(i['key'] == 'auto-gmail.resume_rules' for i in today.collect([]))  # the review doesn't erase it
+    assert any(i['key'] == 'auto-gmail.resume_rules' for i in today.collect([], accounts=OWNER))  # the review doesn't erase it
     monkeypatch.setattr(missions, 'is_paused', lambda: True)
     resumed.clear()
     assert catalog.resume_safe_rules() is None and resumed == []  # a pause stops it too

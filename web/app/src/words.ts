@@ -95,9 +95,10 @@ export function daySays(day: Day): string {
   return (next.time === "Now" ? `${next.title} is on now. ` : timed(next) ? `${next.title} is at ${saidTime(next)}. ` : "") + needs;
 }
 
-/** Under the headline: the weather outside, and how tomorrow starts once today is done. */
+/** Under the headline: the weather as Hub says it (or the temperature outside, when there's no forecast), and how
+ * tomorrow starts once today is done. */
 export function daySub(day: Day, outside: string): string {
-  const weather = outside ? `${outside} outside.` : "";
+  const weather = day.weather_says || (outside ? `${outside} outside.` : "");
   const first = day.tomorrow.find(timed);
   const tomorrow = !day.today.some((slot) => slot.next) && first ? `Tomorrow starts with ${first.title} at ${saidTime(first)}.` : "";
   return [weather, tomorrow].filter(Boolean).join(" ");

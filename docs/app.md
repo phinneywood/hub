@@ -45,7 +45,8 @@ sets this in the private settings file (`household.json`):
 | `GET /app/api/ask` | Whether Ask can run here, the last half hour of this person's requests, what they often ask around now, and what Hub remembers |
 | `POST /app/api/ask` | One request, `{"text": ...}`, answered as it happens (see “Ask”) |
 | `POST /app/api/memory/{note}/forget` | Forget one thing Hub remembers |
-| `GET /app/api/today` | Today as data: what needs a person, the rest of today, tomorrow, the week at school, the trip |
+| `GET /app/api/today` | Today as data, for the person asking: what needs them, the rest of today, tomorrow, the week at school, the trip, and the family brief's weather, house, night and note; `?wall=1` is the wall's version, the household's only, whoever asks |
+| `GET /app/api/brief` | The brief in words, as plain text, for a Shortcut or a speaker to read out: the asker's own; `?wall=1` the household's |
 | `GET /app/api/versions` | Each release of Hub, newest first, in plain words, and which one is running (see “Versions”) |
 | `POST /app/api/deploy` | Ask the deployer for the checked version waiting, from a signed-in device (see “Versions”) |
 | `GET /app/api/activity` | What happened in the house, newest first; `kinds`, `sources` (comma lists) and `before` (a time, for more) (see “Activity”) |
@@ -249,6 +250,8 @@ record under the chat's own $10 a month limit; the words do not.
 | Earlier requests and Hub's answers | Yes | No |
 | Mail, the calendar, school, today's list | Yes, the bounded lookups; never senders with AI switched off | Yes, the same lookups |
 | Kitchen's answers; products, prices and notes on the shopping list | Never. Ask's sentences about the list carry counts and the member's own words; the rest is drawn on cards | No |
+| The family brief, for its note: the day's weather, the owner's calendar titles and times for today and tomorrow, the class guide's dates, the locks, alarm, garage and doors as they stand, and the titles of the house's and the trip's needs | Yes (since 2026-11-16), and only that: never mail, never Kitchen's list. See “Today” | No |
+| The family brief's household part, beside a question about the weather, the locks' batteries or “brief me” (`catalog.brief_lookup`): the forecast, the locks, alarm and doors with battery levels, the overnight note | Yes: nobody's mail or calendar, nothing of Kitchen's | Yes, the same lookup |
 
 **Until it is set up.** Ask needs two things a Hub may not have yet: the Anthropic SDK among the reviewed
 wheels (`anthropic`, an extra of `pydantic-ai-slim`), and the key. Without either, `GET /app/api/ask` says
@@ -266,18 +269,35 @@ one. Two tests run the real model adapter with only the network replaced, to pin
 and the cost that is recorded. How well the real model understands is not something these can show: that
 needs the live comparison on real requests.
 
-## Today
+## Today: the family brief
 
-What needs a person, then the day. Data: `hub/app/today.py`. In the app: `web/app/src/today.tsx` and `day.ts`.
-It reads what Hub already keeps and nothing else: the "Needs you" list of the older Today page
-(`hub/today.py`: the sources' own checks, faults, the overnight review's suggestions, what was hidden), the
-calendar week, the reviewed class guide, the trip, and whether Kitchen has a cart waiting. No model is called,
-nothing is changed by reading it, and every part fails soft. The app asks for it when the screen is looked at
-and once a minute while it is, and keeps none of it on the device.
+What needs a person, then the day, as one brief for the household: the calendar, school, the weather, the locks and
+anything that needs attention. Each person sees their own (the owner's decision, 2026-11-16, `docs/people.md`): the
+household's things (the weather, the house, the night, school, the trip, Kitchen's cart, the house's needs) are
+everyone's; mail, the calendar, the note and Hub's own upkeep only the person whose account they come from, by the
+Tailscale login the phone carries. A login Hub lets in but can't place is told so in a quiet line, so an empty day
+isn't mistaken for a quiet one. A household need hidden with its circle is hidden for everyone ("Hidden for everyone
+until tomorrow"), and a need from someone else's account can't be ticked. Data: `hub/app/today.py` and `hub/app/brief.py`. In the app: `web/app/src/today.tsx`,
+`brief.tsx` and `day.ts`. It reads what Hub already keeps, plus the house's weather and locks, and changes nothing
+by being read. The app asks for it when the screen is looked at and once a minute while it is, and keeps none of
+it on the device. Every part fails soft: the weather, the house and the night are each read on a thread of their
+own and left out if they haven't answered in two seconds, so a slow Home Assistant never holds Today up.
 
 - **The sentence** is written in the app from the data: the next thing today, then how much needs you
-  ("Dinner at home is at seven. Three things need you."). Under it, the temperature outside, and how tomorrow
-  starts once today is done.
+  ("Dinner at home is at seven. Four things need you."). Under it, the weather in words ("45° and partly cloudy,
+  up to 53°. Rain from 3 pm to 6 pm."; from five in the evening, tomorrow's), and how tomorrow starts once today
+  is done.
+- **The note**: one or two sentences that join the brief's parts ("Alex is away tomorrow, so the swim lesson at
+  9:30 and the grocery pickup at 11 fall to one person."), written by Ask's model (`hub/app/ask/note.py`, Ask's
+  own route and key, counted in Ask's spending and budget). It is written from the owner's calendar, so it is the
+  owner's, on the owner's phone only. It is given only what is listed in “What reaches which model” above: never
+  mail, never Kitchen's list and never Hub's own upkeep. It is written when someone looks and
+  what it would be given has changed, at most once every half hour and eight times a day, never on a schedule
+  and never at night; until a new one is ready the last one stays, if it was written for the same part of the day.
+  When nothing joins up the model says so and there is no note. `household.json` `"brief": {"note": false}` turns
+  it off; without Ask's key there is simply none.
+- **Overnight**: the caretaker's word on the night (`hub.caretaker.note()`, when it is installed): until noon its
+  headline and lines, then only the headline, unless something still needs someone.
 - **Needs you**, at most five, the most pressing first. Three things differ from the older page, all from the
   owner's "mail is only what needs me":
   - each email that needs the owner is its own line (who it is from, the next step), three at most, the
@@ -285,16 +305,64 @@ and once a minute while it is, and keeps none of it on the device.
   - Hub's own housekeeping offers (filing sorted mail, archive rules, planned changes) are not asked: they
     are one quiet line under the day, still a tap from their page;
   - what has its own place on the screen isn't listed twice: class dates, two events at once, the trip.
+  A lock's battery that is low or flat is one line, the flattest first with the rest named after it, and an
+  **Add to list** button that puts what it takes on the shopping list in one tap ("AA batteries", unless
+  `household.json` `"brief": {"batteries": {"lock": "..."}}` says otherwise). A lock that stopped responding
+  for another reason, and an Apple Home lock left unlocked at night, are lines of their own.
 - **The circle** beside a need marks an email as handled in Hub's own sorting (nothing changes in Gmail) and
   hides anything else until tomorrow, or for a week where the older page did. It shows at once, and Undo
   puts it back. It needs a signed-in device.
 - **The day**: what is left of today and all of tomorrow from the calendar, all-day events first; an event
   under way says Now; two busy events at once are marked on the later one.
-- **This week at school**: the reviewed class guide's dates for seven days, a cancelled one struck through.
+- **The weather**, drawn: now and the day's high and low, when rain comes, what to wear, the next twelve hours
+  (the wet ones marked), the next four days, and sunrise or sunset. From Home Assistant's forecast
+  (`weather.get_forecasts`, the one service call the everyday door in `broker.py` makes, which only answers),
+  read at most every fifteen minutes; when it can't be read the last one is used for up to three hours. Which
+  weather entity: `household.json` `"brief": {"weather": "weather.…"}`, else the forecast for home.
+- **The house**: every lock, from Home Assistant and from Apple Home (HomeClaw's `list`, read-only, merged by
+  name), with its battery; the alarm; the garage; doors left open. A sentence on top says what matters.
+- **This week at school**: the reviewed class guide's dates for seven days, a cancelled one struck through,
+  something to bring marked.
 - **The trip**, from four months before it until it ends.
 
-Tests: `tests/test_app_today.py`, on a made-up day (`tests/day_world.py`) that replaces Hub's readers, so no
-real calendar, mailbox or service is read. The demo server shows the same made-up day.
+In the morning the order is what needs you, the rest of today, the weather, school, the house, tomorrow, the
+trip; from five in the evening it is what needs you, the rest of the evening, tomorrow, tomorrow's weather, the
+house, school, the trip. A wide screen shows two columns.
+
+**Read aloud.** `GET /app/api/brief` is the same brief as a few plain sentences, for a Shortcut or a speaker
+(the 4:30 nudge reads the older `/today/brief`).
+
+Tests: `tests/test_app_today.py` and `tests/test_app_brief.py`, on a made-up day (`tests/day_world.py`) and
+house (`tests/app_world.py`: a forecast, a sun, Apple Home locks, one flat and one low) that replace Hub's
+readers, so no real calendar, mailbox, house or model is reached. The demo server shows the same made-up day.
+
+## The wall
+
+The brief on the kitchen iPad, all day: `/app/#wall` (System, The wall). Open it there in Safari, then Share,
+Add to Home Screen, and open it from the Home Screen so it fills the screen. In the iPad's settings, Display &
+Brightness, Auto-Lock: Never, unless the page's own request to keep the screen on is honoured; Guided Access
+keeps it from being swiped away. Code: `web/app/src/wall.tsx`.
+
+- **What it shows**: a large clock and the date; the weather now, today's high and low (from five, tomorrow's),
+  when rain comes, what to wear, the next eight hours and four days; the overnight note in the morning; what needs
+  the household; the house as tiles. It is laid out for a landscape iPad in two columns (the time and the weather;
+  the rest), and in portrait with the time and the weather above the rest.
+- **Only the household's** (the owner's decision, 2026-11-16): anyone in the kitchen sees it, so calendars,
+  school, mail and the note stay on each person's phone. `?wall=1` is read as nobody's, whoever asks, and keeps
+  the needs that are the household's (the house, Kitchen's cart, the trip), only counting any other household
+  need ("One more thing is on the phone."). The wall's picture carries only the parts the wall draws (`brief.WALL`
+  in `hub/app/brief.py`), so a part added to Today later stays off the wall until it is added there.
+- **By itself**: it reads the day once a minute (a quarter hour at night), checks for a new version of the app
+  every ten minutes and reloads into it, and says when Hub can't be reached while it keeps showing the day as it
+  was. It never opens the house's live line and starts no Ask, so a wall left on all day costs Hub one reading of
+  the day a minute.
+- **The look follows the sun**: the day look while the sun is up and dusk after it sets, unless the iPad was
+  given a look of its own in System.
+- **At night**, from ten to half past five, it is a dim clock on black with the next day's weather, named by the
+  day so it reads the same before and after midnight.
+- **Burn-in**: everything moves a few pixels each minute, and the night clock further.
+- **Add to list** works on the wall only when the iPad is signed in to Hub (its Tailscale login); otherwise
+  the button isn't shown.
 
 ## Mail
 

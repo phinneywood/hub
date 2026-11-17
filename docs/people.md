@@ -18,3 +18,21 @@ login a request carries:
 - No login (this Mac itself), or a login `"people"` doesn't name, sees the household's things only. So does a
   shared screen such as the kitchen wall. A `"people"` that can't be read counts as no one.
 - The owner is whoever owns `"default"`: `people.owner(login)`. Everyone else `"people"` names is a member.
+
+Where it is applied so far (the family brief, 2026-11-16):
+
+- Today's list (`hub/today.py`): every item carries its source's account; `gather`, `collect` and `needs_you` take
+  the asker's `accounts` and leave out anyone else's. A home tile counts as its source's (Gmail's and the
+  calendar's are `"default"`'s). The overnight review's suggestions, Hub's notes on what it did by itself and Hub's
+  own upkeep (its runs, a new version and Deploy) are the owner's: the review reads the owner's mail. A key that
+  arrives without its item (a tap that hides or ticks it) is placed by `today.account_of(key)`.
+- The app's Today and `/app/api/brief`, the older `/today` page and its cards, and "Ask about this" on a list item
+  are the asker's. The kitchen wall (`?wall=1`) is no one's: the household's things only.
+- One exception: `/today/brief` without a login, which the morning job on this Mac reads to send the owner's
+  phone its count, is the owner's list (`"default"`'s). Through Tailscale it is the asker's.
+- Still to come (a separate change): Mail and Mail settings in the app, the older Gmail, Calendar and Insights
+  pages, and Ask's mail and calendar lookups.
+
+**Before a version with this goes live**, a Hub that allows more than one login needs `"people"` in
+`household.json`, or nobody sees the owner's mail and calendar on Today (each such login is told why in a quiet
+line). `household.json` is read on every request, so adding it takes effect at once, with no restart.

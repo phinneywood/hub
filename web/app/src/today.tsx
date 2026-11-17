@@ -1,9 +1,13 @@
-// Today: a sentence, what needs you, then the day, tomorrow, the week at school and a trip when one is near.
+// Today, the family brief on the phone: a sentence and the weather, the line Ask's model wrote, the night, then
+// what needs you, the day, school, the house, tomorrow and a trip when one is near. In the evening tomorrow comes up.
+import type { ComponentChildren } from "preact";
+import { HouseBlock, NoteLine, OvernightBlock, WeatherBlock, addToList, adding, aboutTomorrow } from "./brief";
 import { day, dayAway, tickNeed, ticked } from "./day";
 import { Top } from "./screens";
-import { seen } from "./state";
+import { me, seen } from "./state";
 import type { Day, Need, Slot } from "./types";
 import { Icon } from "./ui";
+import { daySays, daySub, partOfDay } from "./words";
 
 // Mail, Kitchen and Engine are screens of the app now: their older addresses open here instead.
 const HERE: Record<string, string> = {
@@ -12,17 +16,22 @@ const HERE: Record<string, string> = {
   "/house/changes": "#changes", "/house/playlists": "#changes", "/gmail/plan": "#mailsettings", "/gmail/delayed": "#mailsettings", "/gmail/backlog": "#mailsettings",
 };
 const inApp = (href: string) => HERE[href] ?? href;
-import { daySays, daySub, partOfDay } from "./words";
+const HERE_ALREADY = new Set(["/app/#today", "#today"]);       // a need about something this screen shows needs no link
 
 function NeedRow({ need }: { need: Need }) {
   const done = ticked.value.includes(need.key);
+  const busy = adding.value.includes(need.key);
+  const add = need.add && me.value.signed_in;
   return (
     <div class={"row tick need" + (done ? " on" : "")}>
       <button type="button" class="tickbtn" aria-label={`${need.tick}: ${need.title}`} disabled={done} onClick={() => void tickNeed(need)}>
         <span class="ring"><Icon name="check" /></span>
       </button>
       <div class="row-main"><b>{need.title}</b>{need.why && <span>{need.why}</span>}</div>
-      {!done && <a class="row-act" href={inApp(need.open.href)}>{need.open.label}</a>}
+      {!done && add ? (
+        <button type="button" class="row-act" disabled={busy} aria-label={`Add ${need.add} to the shopping list`}
+          onClick={() => void addToList(need.key, need.add!)}>{busy ? "Adding" : "Add to list"}</button>
+      ) : !done && !HERE_ALREADY.has(need.open.href) && <a class="row-act" href={inApp(need.open.href)}>{need.open.label}</a>}
     </div>
   );
 }
@@ -37,58 +46,67 @@ function SlotRow({ slot }: { slot: Slot }) {
   );
 }
 
-function Sections({ now }: { now: Day }) {
+function Block({ title, children }: { title: string; children: ComponentChildren }) {
+  return <section class="block"><h2>{title}</h2>{children}</section>;
+}
+
+function Needs({ now }: { now: Day }) {
+  if (!now.needs.length) return null;
   return (
-    <div class="cols">
-      <div>
-        {now.needs.length > 0 && (
-          <section class="block">
-            <h2>Needs you</h2>
-            <div class="rows">{now.needs.map((need) => <NeedRow need={need} key={need.key} />)}</div>
-            {now.more > 0 && <p class="quiet-line">{now.more === 1 ? "One more thing can wait." : `${now.more} more things can wait.`}</p>}
-          </section>
-        )}
-        {now.today.length > 0 && (
-          <section class="block">
-            <h2>{partOfDay(now.at)}</h2>
-            <div class="rows">{now.today.map((slot, n) => <SlotRow slot={slot} key={n} />)}</div>
-          </section>
-        )}
-      </div>
-      <div>
-        {now.tomorrow.length > 0 && (
-          <section class="block">
-            <h2>Tomorrow</h2>
-            <div class="rows">{now.tomorrow.map((slot, n) => <SlotRow slot={slot} key={n} />)}</div>
-          </section>
-        )}
-        {now.school.length > 0 && (
-          <section class="block">
-            <h2>This week at school</h2>
-            <div class="rows">
-              {now.school.map((s, n) => (
-                <div class={"row" + (s.struck ? " struck" : "")} key={n}>
-                  <span class="row-t day">{s.day}</span>
-                  <div class="row-main"><b>{s.title}</b>{s.note && <span>{s.note}</span>}</div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-        {now.trip && (
-          <section class="block">
-            <h2>{now.trip.title}</h2>
-            <div class="rows">
-              <div class="row free">
-                <div class="row-main"><b>{now.trip.when}</b>{now.trip.note && <span>{now.trip.note}</span>}</div>
-                <a class="row-act" href={now.trip.open.href}>{now.trip.open.label}</a>
-              </div>
-            </div>
-          </section>
-        )}
-      </div>
-    </div>
+    <Block title="Needs you">
+      <div class="rows">{now.needs.map((need) => <NeedRow need={need} key={need.key} />)}</div>
+      {now.more > 0 && <p class="quiet-line">{now.more === 1 ? "One more thing can wait." : `${now.more} more things can wait.`}</p>}
+    </Block>
   );
+}
+
+function Calendar({ title, slots }: { title: string; slots: Slot[] }) {
+  if (!slots.length) return null;
+  return <Block title={title}><div class="rows">{slots.map((slot, n) => <SlotRow slot={slot} key={n} />)}</div></Block>;
+}
+
+function School({ now }: { now: Day }) {
+  if (!now.school.length) return null;
+  return (
+    <Block title="This week at school">
+      <div class="rows">
+        {now.school.map((s, n) => (
+          <div class={"row" + (s.struck ? " struck" : "") + (s.todo ? " todo" : "")} key={n}>
+            <span class="row-t day">{s.day}</span>
+            <div class="row-main"><b>{s.title}</b>{s.note && <span>{s.note}</span>}</div>
+          </div>
+        ))}
+      </div>
+    </Block>
+  );
+}
+
+function TripBlock({ now }: { now: Day }) {
+  if (!now.trip) return null;
+  return (
+    <Block title={now.trip.title}>
+      <div class="rows">
+        <div class="row free">
+          <div class="row-main"><b>{now.trip.when}</b>{now.trip.note && <span>{now.trip.note}</span>}</div>
+          <a class="row-act" href={now.trip.open.href}>{now.trip.open.label}</a>
+        </div>
+      </div>
+    </Block>
+  );
+}
+
+/** Two columns on a wide screen, one after the other on a phone: what needs you, then the rest of today and the
+ * weather. In the evening the rest of the evening, then tomorrow and its weather, come up. */
+function Sections({ now }: { now: Day }) {
+  const later = aboutTomorrow(now.part);
+  const today = <Calendar title={partOfDay(now.at)} slots={now.today} key="today" />;
+  const tomorrow = <Calendar title="Tomorrow" slots={now.tomorrow} key="tomorrow" />;
+  const weather = <WeatherBlock day={now} key="weather" />;
+  const left = later ? [<Needs now={now} key="needs" />, today, tomorrow] : [<Needs now={now} key="needs" />, today, weather];
+  const right = later
+    ? [weather, <HouseBlock day={now} key="house" />, <School now={now} key="school" />, <TripBlock now={now} key="trip" />]
+    : [<School now={now} key="school" />, <HouseBlock day={now} key="house" />, tomorrow, <TripBlock now={now} key="trip" />];
+  return <div class="cols"><div>{left}</div><div>{right}</div></div>;
 }
 
 export function Today() {
@@ -104,16 +122,19 @@ export function Today() {
     );
   }
   const outside = seen.value?.facts.find((fact) => fact.label === "Outside")?.value ?? "";
-  const bare = !now.needs.length && !now.today.length && !now.tomorrow.length && !now.school.length && !now.trip;
+  const bare = !now.needs.length && !now.today.length && !now.tomorrow.length && !now.school.length && !now.trip
+    && !now.weather && !now.house?.rows.length;
   return (
     <div class={"wrap day" + (dayAway.value ? " offline" : "") + (bare ? " bare" : "")}>
       <Top />
       {dayAway.value && <div class="banner"><b>Can’t reach Hub</b><span>Showing the day as it was when Hub last answered.</span></div>}
       <h1 class="say">{daySays(now)}</h1>
       <p class="sub">{daySub(now, outside)}</p>
+      <NoteLine day={now} />
+      <OvernightBlock night={now.overnight} part={now.part} />
       {!bare && <Sections now={now} />}
       {now.quiet.map((line) => (
-        <p class="quiet-line" key={line.text}>{line.text} <a href={inApp(line.open.href)}>{line.open.label}</a></p>
+        <p class="quiet-line" key={line.text}>{line.text}{line.open && <> <a href={inApp(line.open.href)}>{line.open.label}</a></>}</p>
       ))}
     </div>
   );

@@ -4,7 +4,7 @@ fictional. Nothing here reads a real calendar, mailbox or service: the readers t
 """
 from datetime import datetime, timedelta
 
-from hub import home, today
+from hub import home, people, today
 from hub.app import today as screen
 from hub.engine import catalog
 from hub.engine.registry import Source
@@ -84,14 +84,19 @@ class Day:
         return {'synced_at': self.now.timestamp() - 600, 'needs': needs, 'waiting': [r for r in needs if r['days'] >= triage.WAITING_DAYS], 'odd': [],
                 'asked': [dict(a) for a in self.asked], 'kinds': kinds, 'review': 0, 'sorted_today': 0, 'filed_today': self.filed}
 
-    def items(self):
-        """Hub's own list, as its sources would give it."""
+    def mail_items(self):
+        """What the owner's mail puts on Hub's list, as the Gmail source would give it."""
         found = []
         seen = self.picture()
         if seen['needs']:
             found.append(today.rec('gmail-needs', 'info', f'{len(seen["needs"])} emails need you', 'From two people.', href='/gmail', cta='Open'))
         if self.filed:
             found.append(today.rec(today.GMAIL_FILED, 'info', f'Hub filed {self.filed} emails', 'Receipts and newsletters.', href='/gmail', cta='See'))
+        return found
+
+    def items(self):
+        """The household's part of Hub's list, as its other sources would give it."""
+        found = []
         found.append(today.rec('trip-flights', 'info', 'Choose flights', 'Nothing is selected.', href='/trip', cta='Compare flights'))
         found.append(today.rec('preschool-x-Photo day', 'ok', 'Photo day', 'Monday', href='/preschool/', cta='Class guide'))
         return found
@@ -127,7 +132,9 @@ def install(patch, kitchen_too=True, now=NOW):
     patch.setattr(triage, 'done', day.done)
     patch.setattr(triage, 'reopen', day.reopen)
     patch.setattr(trips, 'load', lambda: dict(day.trip))
-    patch.setattr(catalog, 'SOURCES', [Source('made-up', 'Made up', '', '', items=(day.items,))])
+    patch.setattr(catalog, 'SOURCES', [Source('gmail', 'Gmail', '', '', items=(day.mail_items,), account=people.DEFAULT),
+                                       Source('calendar', 'Calendar', '', '', account=people.DEFAULT),
+                                       Source('made-up', 'Made up', '', '', items=(day.items,))])
     patch.setattr(home, 'tiles', day.tiles)
     if kitchen_too:
         patch.setattr(kitchen, 'call', day.kitchen)

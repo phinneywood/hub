@@ -79,15 +79,36 @@ export interface SourceRead { read: number | null; trouble: string; off: boolean
 export interface Activity { events: Happening[]; more: boolean; kinds: ActivityKind[]; sources: ActivitySource[]; status: { ha: SourceRead; apple: SourceRead } }
 export interface Pick { name: string; kind: string; uri: string }
 
-// Today, as Hub sends it (hub/app/today.py).
+// Today, as Hub sends it (hub/app/today.py and the brief's own parts, hub/app/brief.py).
 export interface Open { href: string; label: string }
-export interface Need { key: string; title: string; why: string; tone: string; open: Open; tick: string }
+/** `add`: what to put on the shopping list for it, offered as one tap. */
+export interface Need { key: string; title: string; why: string; tone: string; open: Open; tick: string; add?: string | null }
 export interface Slot { time: string; half: string; title: string; note: string; warn: boolean; next: boolean }
-export interface SchoolDay { day: string; title: string; note: string; struck: boolean }
+export interface SchoolDay { day: string; title: string; note: string; struck: boolean; date?: string; todo?: boolean }
 export interface Trip { title: string; when: string; note: string; open: Open }
+/** One hour of the forecast, one day ahead, and the shape of a whole day: from Home Assistant's weather. */
+export interface Hour { at: string; temp: string; icon: string; words: string; wet: boolean }
+export interface Ahead { day: string; date: string; high: string; low: string; icon: string; words: string; wet: boolean }
+export interface WholeDay { high: string; low: string; words: string; icon: string; rain: string; wet: boolean; wear: string }
+export interface Weather {
+  now: { temp: string; words: string; icon: string; said: string }; today: WholeDay | null; tomorrow: WholeDay | null;
+  hours: Hour[]; days: Ahead[]; sun: { rise: string; set: string; up: boolean };
+}
+/** A lock, the alarm, the garage or a door left open, from Home Assistant and Apple Home. `tone` is about its state;
+ * `low`, its battery. */
+export interface HouseRow { kind: "lock" | "alarm" | "garage" | "open"; name: string; state: string; note: string; tone: string; low?: boolean }
+/** The caretaker's word on the night: what broke, what fixed itself, what needs someone. */
+export interface Overnight { head: string; lines: { text: string; tone: "fixed" | "by_itself" | "needs_you" | "info" }[]; needs: number }
+export type Part = "morning" | "day" | "evening" | "night";
 export interface Day {
   ok: true; at: string; needs: Need[]; more: number; today: Slot[]; tomorrow: Slot[]; school: SchoolDay[];
-  trip: Trip | null; quiet: { text: string; open: Open }[];
+  trip: Trip | null; quiet: { text: string; open: Open | null }[];
+  part?: Part; weather?: Weather | null; weather_says?: string; house?: { rows: HouseRow[]; says: string } | null;
+  overnight?: Overnight | null; note?: { text: string; at: number } | null;
+  /** The wall's version: only the household's needs; `elsewhere` counts the rest, which stay on the phones. */
+  wall?: boolean; elsewhere?: number;
+  /** Whether this person's own calendar (and the note written from it) is part of their Today. */
+  mine?: boolean;
 }
 export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string; card?: Card }
 

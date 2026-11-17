@@ -18,6 +18,8 @@ from hub.main import app
 from hub.tools.gmail import assess, missions, nightly
 from tests.test_app import ORIGIN, fake_get
 
+OWNER = frozenset({"default"})  # the owner's accounts (hub/people.py)
+
 client = TestClient(app)
 
 
@@ -133,15 +135,15 @@ def test_not_this_week_hides_an_offer_for_a_week_and_the_slot_for_the_day(monkey
     assert '20,000 inbox messages are over 30 days old' in page and 'Not this week' in page
     gone = client.post('/today/snooze', data={'key': 'gmail-next-backlog'}, headers=ORIGIN, follow_redirects=False)
     assert gone.headers['location'] == '/today?snoozed=7' and 'Hidden for a week.' in client.get(gone.headers['location']).text
-    assert today.needs_you() == []
+    assert today.needs_you(accounts=OWNER) == []
     assert store.snoozed('2026-01-05') >= {'gmail-next', 'gmail-next-backlog'}  # the offer, and the slot for today
     for later in (date(2026, 1, 6), date(2026, 1, 11)):
         day[0] = later
         _save(backlog=20_000)
-        assert today.needs_you() == [] and 'gmail-next' not in store.snoozed(later.isoformat())
+        assert today.needs_you(accounts=OWNER) == [] and 'gmail-next' not in store.snoozed(later.isoformat())
     day[0] = date(2026, 1, 12)
     _save(backlog=20_000)
-    assert [i['key'] for i in today.needs_you()] == ['gmail-next-backlog']
+    assert [i['key'] for i in today.needs_you(accounts=OWNER)] == ['gmail-next-backlog']
     client.post('/today/snooze', data={'key': 'tile-network'}, headers=ORIGIN)  # anything else: today only
     assert store.snoozed('2026-01-13') == set()
 
@@ -176,7 +178,7 @@ def test_late_rules_become_a_one_tap_item_and_run_unasked_only_at_the_owners_lev
     monkeypatch.setattr(catalog, 'SOURCES', [Source('gmail', 'Gmail', '', '', items=(today.gmail_rules_due,))])
     action = catalog.action('gmail.run_rules')
     delayed.enable('shop@example.com', now=time.time() - 4 * delayed.INTERVAL)
-    [item] = today.needs_you()
+    [item] = today.needs_you(accounts=OWNER)
     assert item['title'] == '1 archive rule hasn’t run for 4 days' and item['post'] == '/gmail/delayed/run-now'
     assert item['later'] == 'Not today'
     assert state.trust(action) == 'undo' and auto.run() == [] and delayed.runs() == []  # nothing starts at “auto”
@@ -184,7 +186,7 @@ def test_late_rules_become_a_one_tap_item_and_run_unasked_only_at_the_owners_lev
     [note] = auto.run()
     assert note['title'] == 'Hub archived 2 old messages from 1 sender' and note['href'] == '/gmail/delayed'
     assert 'Each check has its own Undo' in note['why']
-    assert [i['key'] for i in today.needs_you()] == ['auto-gmail.run_rules']  # caught up: only the report is left
+    assert [i['key'] for i in today.needs_you(accounts=OWNER)] == ['auto-gmail.run_rules']  # caught up: only the report is left
     assert auto.run() == []  # nothing due, nothing said
     delayed.enable('news@example.com', now=time.time() - 4 * delayed.INTERVAL)
     monkeypatch.setattr(missions, 'is_paused', lambda: True)
@@ -218,7 +220,7 @@ def test_old_key_reminder_waits_for_the_date_and_for_1password_to_carry_the_key(
     assert notes() == []  # too early
     day[0] = date(2026, 11, 13)
     catalog.old_key_reminder()
-    [item] = [i for i in today.collect([]) if i['key'] == 'hub-old-key']
+    [item] = [i for i in today.collect([], accounts=OWNER) if i['key'] == 'hub-old-key']
     assert item['title'] == 'Time to delete the old copy of the model key' and item['href'] == '/status'
     assert 'deploy/remove-old-model-key' in client.get('/status').text
     day[0] = date(2026, 11, 14)

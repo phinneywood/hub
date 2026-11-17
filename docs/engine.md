@@ -142,6 +142,9 @@ and tell me” the morning job does it.
 - 2026-11-15: Ask in the app may change anything in Home Assistant (docs/app.md, “Setting up the house”). For
   that its model is also given the thermostat, the locks and the names of automations as they stand, and what
   a request needs of any other device or routine; never tokens, addresses, pictures, or where people are.
+- 2026-11-16: the family brief (docs/app.md, “Today”) reuses Ask's approval: its note is written on Ask's route
+  from what the wall shows (the weather, the calendar's titles and times, the class guide's dates, the locks and
+  doors, the household's need titles), never mail or Kitchen's list, and `household.json` can switch it off.
 - Senders with AI switched off are never read for a model.
 - Agents build and test with made-up data. Real mail stays out of coding sessions.
 - Deploying, restarting, new schedules, pushing and merging to main need the owner's yes each time.

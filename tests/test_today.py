@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from hub import delayed, home, store, today
 from hub.main import app
 
+OWNER = frozenset({"default"})  # the owner's accounts (hub/people.py)
+
 
 def _only(monkeypatch, *sources):
     from hub.engine import catalog
@@ -67,7 +69,7 @@ def test_list_is_ranked_capped_and_survives_a_broken_source(monkeypatch):
         raise RuntimeError('synthetic failure')
     _only(monkeypatch, broken, lambda: [today.rec(f'k{i}', 'info', f'Item {i}', '', href='/x', cta='Open') for i in range(6)])
     tiles = [{'slug': 'network', 'tone': 'bad', 'headline': 'Internet looks down', 'detail': '', 'href': '/network', 'cta': 'Details'}]
-    items = today.needs_you(tiles)
+    items = today.needs_you(tiles, accounts=OWNER)
     assert len(items) == today.MAX_ITEMS and items[0]['title'] == 'Internet looks down'
     assert today.brief(items).splitlines()[0] == '5 things for today:'
     assert today.brief([]) == 'Nothing needs you today.'

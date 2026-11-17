@@ -1,5 +1,7 @@
 """The app's Today screen (hub/app/today.py): what needs a person, then the day. A made-up day throughout
 (tests/day_world.py); no real calendar, mailbox or service is read."""
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -9,6 +11,7 @@ from tests import day_world
 
 client = TestClient(app)
 SIGNED_IN = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
+OWNER = 'me@example.com'        # the one allowed login (tests/conftest.py), so the owner of the main Google account
 
 
 @pytest.fixture
@@ -16,8 +19,8 @@ def day(monkeypatch):
     return day_world.install(monkeypatch)
 
 
-def seen():
-    return client.get('/app/api/today').json()
+def seen(login=OWNER):
+    return client.get('/app/api/today', headers={'tailscale-user-login': login} if login else {}).json()
 
 
 def test_what_needs_a_person_is_a_short_list_the_most_pressing_first(day):
@@ -62,10 +65,39 @@ def test_the_week_at_school_is_the_reviewed_guide_for_seven_days(day):
         ('Thu', 'Garden morning', 'Cancelled', True), ('Fri', 'Family work party', '10 am, The garden', False)]
 
 
+def test_each_person_sees_their_own_mail_and_calendar_and_everyone_the_households_things(day, monkeypatch):
+    from hub import config
+    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {OWNER, 'sam@example.com'})
+    (config.DATA_DIR / 'household.json').write_text(json.dumps({'people': [
+        {'name': 'Alex', 'logins': [OWNER], 'accounts': ['default']}, {'name': 'Sam', 'logins': ['sam@example.com'], 'accounts': []}]}))
+    mine, theirs, nobody = seen(), seen('sam@example.com'), seen(None)
+    assert [n['key'] for n in mine['needs']] == ['mail:m2', 'kitchen-cart', 'mail:m1'] and mine['today'] and mine['mine'] is True
+    for other in (theirs, nobody):            # the other person, and a request without a login: the household's only
+        assert [n['key'] for n in other['needs']] == ['kitchen-cart'] and other['mine'] is False
+        assert other['today'] == other['tomorrow'] == [] and other['note'] is None and other['quiet'] == []
+        assert other['school'] == mine['school'] and other['trip'] == mine['trip']   # school and the trip are the household's
+        assert 'Sam Rivera' not in json.dumps(other) and 'Dentist' not in json.dumps(other)
+    # A need from someone else's account can't be ticked by them, nor put back.
+    sam = {**SIGNED_IN, 'tailscale-user-login': 'sam@example.com'}
+    for body in ({'key': 'mail:m2'}, {'key': 'mail:m2', 'back': True}, {'key': 'gmail-needs'}, {'key': 'ai-1'}):
+        assert client.post('/app/api/today/tick', json=body, headers=sam).status_code == 409
+    assert [n['key'] for n in seen()['needs']] == ['mail:m2', 'kitchen-cart', 'mail:m1']
+    assert client.post('/app/api/today/tick', json={'key': 'kitchen-cart'}, headers=sam).json()['said'] == 'Hidden for everyone until tomorrow'
+
+
+def test_a_login_hub_cant_place_is_told_why_its_mail_and_calendar_are_missing(day, monkeypatch):
+    from hub import config
+    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {OWNER, 'sam@example.com'})        # two logins, and nobody said whose is whose
+    found = seen()
+    assert [n['key'] for n in found['needs']] == ['kitchen-cart'] and found['today'] == []
+    assert found['quiet'] == [{'text': 'Hub doesn’t know whose mail and calendar are yours yet, so they aren’t shown. The owner '
+                                       'sets this in Hub’s settings file.', 'open': None}]
+
+
 def test_a_tick_handles_an_email_or_hides_an_item_and_can_be_put_back(day):
     assert client.post('/app/api/today/tick', json={'key': 'mail:m2'}, headers=SIGNED_IN).json() == {'ok': True, 'said': 'Marked as handled', 'key': 'mail:m2'}
     assert [n['key'] for n in seen()['needs']] == ['kitchen-cart', 'mail:m1']
-    assert client.post('/app/api/today/tick', json={'key': 'kitchen-cart'}, headers=SIGNED_IN).json()['said'] == 'Hidden until tomorrow'
+    assert client.post('/app/api/today/tick', json={'key': 'kitchen-cart'}, headers=SIGNED_IN).json()['said'] == 'Hidden for everyone until tomorrow'
     assert [n['key'] for n in seen()['needs']] == ['mail:m1']
     for key in ('mail:m2', 'kitchen-cart'):
         assert client.post('/app/api/today/tick', json={'key': key, 'back': True}, headers=SIGNED_IN).json() == {'ok': True, 'said': 'Put back'}
@@ -107,4 +139,4 @@ def test_a_quiet_day_is_empty_everywhere(day):
     day.trip['start'], day.trip['end'] = '2031-01-01', '2031-01-09'
     found = seen()
     assert (found['needs'], found['today'], found['tomorrow'], found['school'], found['trip'], found['quiet']) == ([], [], [], [], None, [])
-    assert screen.picture(day_world.NOW)['more'] == 0
+    assert screen.picture(day_world.NOW, login=OWNER)['more'] == 0

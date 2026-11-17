@@ -69,7 +69,9 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
 
     // ---- a tap that didn't take is put right, and says why ----
     await page.unroute("**/app/api/room/**");
-    await page.route("**/app/api/room/**", (route) => route.fulfill({ status: 409, contentType: "application/json", body: '{"error":"Home Assistant couldn’t be reached just now."}' }));
+    // Refused after a moment, as a real refusal would be: refused at once, the tap could be put right before it is drawn.
+    await page.route("**/app/api/room/**", async (route) => { await new Promise((r) => setTimeout(r, 300));
+      await route.fulfill({ status: 409, contentType: "application/json", body: '{"error":"Home Assistant couldn’t be reached just now."}' }); });
     quiet = true;
     await tap(room("office"));
     expect(await saysSoon("Five rooms are lit.", 400), "the tap did not show");
@@ -89,6 +91,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.waitForTimeout(600);
 
     // ---- hold a room: everything in it ----
+    await page.locator(room("kitchen")).scrollIntoViewIfNeeded();     // the page may have scrolled: hold where the room is
     const box = await page.locator(room("kitchen")).boundingBox();
     if (phone) {
       const cdp = await ctx.newCDPSession(page);
@@ -304,24 +307,35 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await stage("ask-back");
     await page.goto(base + "/app/"); await page.waitForSelector(".plan"); await page.waitForTimeout(1900);
 
-    // ---- Today: what needs you, then the day ----
+    // ---- Today: the family brief. What needs you, the rest of the evening, tomorrow and its weather, the house ----
     await stage("reset");
+    await page.evaluate(() => fetch("/app/api/today").then(() => new Promise((r) => setTimeout(r, 300))));     // the note, written as on a first look
     await tap(phone ? '.tabs .tab:text-is("Today")' : '.rail .tab:text-is("Today")');
-    expect(await saysSoon("Dinner at home is at seven. Three things need you."), "Today’s sentence: " + await says());
-    expect((await page.locator(".row.need .row-main b").allInnerTexts()).join("|") === "Email from Sam Rivera|Approve the grocery cart|Email from Maple Street Dental",
-      "what needs you, the longest wait first");
-    expect((await page.locator(".block h2").allInnerTexts()).join("|") === "Needs you|This evening|Tomorrow|This week at school|Lisbon", "Today’s sections, in order");
+    expect(await saysSoon("Dinner at home is at seven. Four things need you."), "Today’s sentence: " + await says());
+    expect(await sub() === "Tomorrow: sunny, high 56°, low 41°. Dry all day.", "Today’s weather sentence: " + await sub());
+    expect((await page.locator(".row.need .row-main b").allInnerTexts()).join("|")
+      === "Side door lock’s battery is flat|Email from Sam Rivera|Approve the grocery cart|Email from Maple Street Dental",
+      "what needs you: the flat lock first, then the longest wait");
+    expect((await page.locator(".block h2").allInnerTexts()).join("|")
+      === "Needs you|This evening|Tomorrow|Tomorrow’s weather|The house|This week at school|Lisbon", "Today’s sections, in order");
+    expect(await until(() => document.querySelector(".brief-note")?.textContent.startsWith("Alex is away tomorrow")), "the note from Ask’s model was not shown");
+    expect((await page.locator(".houserow .state").allInnerTexts()).join("|") === "Not responding|Locked|Locked|Disarmed|Closed", "the house: " +
+      (await page.locator(".houserow .state").allInnerTexts()).join("|"));
+    expect(await page.locator(".wxday").count() === 4, "the days ahead were not drawn");
     expect(await page.locator(".row.warn .row-main span").innerText() === "Overlaps Dentist at 4:00 pm", "two things at once were not marked on the day");
     expect(await page.locator(".row.struck").count() === 1, "a cancelled class date was not struck through");
     expect((await page.locator(".quiet-line").last().innerText()).startsWith("Hub filed 12 emails."), "housekeeping was not told quietly");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Today scrolls sideways");
     await page.waitForTimeout(300); await shot("10-today");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Today: " + (await small()).join(", "));
-    await page.locator(".tickbtn").first().click();
-    expect(await saysSoon("Dinner at home is at seven. Two things need you.", 3000), "a tick did not take the email off the list: " + await says());
+    await page.locator('.row.need:has-text("Email from Sam Rivera") .tickbtn').click();
+    expect(await saysSoon("Dinner at home is at seven. Three things need you.", 3000), "a tick did not take the email off the list: " + await says());
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Marked as handled"), "a tick did not say what it did");
     await page.locator(".toast button").click();
-    expect(await saysSoon("Dinner at home is at seven. Three things need you.", 3000), "Undo did not put the email back: " + await says());
+    expect(await saysSoon("Dinner at home is at seven. Four things need you.", 3000), "Undo did not put the email back: " + await says());
+    await tap('.row.need .row-act:text-is("Add to list")');
+    expect(await until(() => document.querySelector(".toast span")?.textContent.includes("AA batteries")), "Add to list did not put the batteries on the list: "
+      + await page.textContent(".toast span").catch(() => "no toast"));
     await stage("quiet-day");
     await page.reload(); await page.waitForSelector(".say");
     expect(await saysSoon("Nothing needs you.", 4000), "a quiet day: " + await says());
@@ -507,6 +521,73 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await stage("reset");
     await ctx.close();
   }
+
+  // ---- the wall: the brief on the kitchen iPad, in the morning, the evening and at night ----
+  {
+    const name = "wall";
+    const expect = (ok, what) => { if (!ok) failures.push(`${name}: ${what}`); };
+    const ctx = await browser.newContext({ viewport: { width: 1180, height: 820 }, deviceScaleFactor: 2, hasTouch: true, colorScheme: "light",
+      timezoneId: "America/Los_Angeles" });
+    const page = await ctx.newPage();
+    let quiet = false;
+    const live = [];
+    page.on("console", (m) => m.type() === "error" && !quiet && failures.push(`${name}: console: ${m.text()}`));
+    page.on("pageerror", (e) => failures.push(`${name}: page error: ${e}`));
+    page.on("request", (r) => { hosts.add(new URL(r.url()).host); if (new URL(r.url()).pathname === "/app/api/live") live.push(r.url()); });
+    page.on("response", (r) => r.status() >= 400 && !quiet && failures.push(`${name}: ${r.status()} ${new URL(r.url()).pathname}`));
+    const until = (fn, arg, ms = 6000) => page.waitForFunction(fn, arg, { timeout: ms }).then(() => true, () => false);
+    const texts = (sel) => page.locator(sel).allInnerTexts().then((all) => all.join("|"));
+    await page.goto(base + "/static/app/build.json");
+    const at = async (part) => {         // the made-up clock and this browser's, both at `part`; the note asked for first
+      const staged = await page.evaluate((w) => fetch("/demo/" + w, { method: "POST" }).then((r) => r.json()), part);
+      await page.evaluate(() => fetch("/app/api/today?wall=1").then(() => new Promise((r) => setTimeout(r, 300))));
+      return new Date(staged.at);
+    };
+    await page.clock.install({ time: await at("morning") });
+    await page.goto(base + "/app/#wall");
+    await page.waitForSelector(".wall .wblock");
+    expect((await page.textContent(".wclock")).trim() === "7:40am", "the wall’s clock: " + await page.textContent(".wclock"));
+    expect(await texts(".wall h2") === "Needs attention|The house", "the wall’s morning: " + await texts(".wall h2"));
+    expect(await texts(".wallneed .row-main b") === "Side door lock’s battery is flat|Approve the grocery cart", "the household’s needs: " + await texts(".wallneed .row-main b"));
+    const body = await page.textContent("body");       // the household's only: nobody's mail, calendar, school or note
+    for (const mine of ["Sam Rivera", "Lunch with Sam", "Photo day", "on the phone", "The rain holds off"]) expect(!body.includes(mine), `“${mine}” reached the wall`);
+    expect(await page.locator(".brief-note").count() === 0, "the written note reached the wall");
+    expect((await page.textContent(".wrain")).trim() === "Rain from 3 pm to 6 pm", "the rain line: " + await page.textContent(".wrain"));
+    expect(await texts(".wtile b") === "Not responding|Locked|Locked|Disarmed|Closed", "the house on the wall: " + await texts(".wtile b"));
+    expect(await page.evaluate(() => document.documentElement.dataset.theme) === "day", "the wall did not follow the sun up");
+    await page.waitForTimeout(300); await page.screenshot({ path: `${out}/wall-1-morning.png` });
+    await page.locator('.wallneed .row-act:text-is("Add to list")').tap();
+    expect(await until(() => document.querySelector(".toast span")?.textContent.includes("AA batteries")), "Add to list on the wall said nothing");
+    expect(live.length === 0, "the wall opened the house’s live line");
+
+    await page.clock.setSystemTime(await at("evening"));
+    await page.reload(); await page.waitForSelector(".wall .wblock");
+    expect(await texts(".wall h2") === "Needs attention|The house", "the wall’s evening: " + await texts(".wall h2"));
+    expect(!(await page.textContent("body")).includes("Alex is away"), "the calendar or the note reached the wall in the evening");
+    expect(await page.evaluate(() => document.documentElement.dataset.theme) === "dusk", "the wall did not turn to dusk after sunset");
+    await page.waitForTimeout(300); await page.screenshot({ path: `${out}/wall-2-evening.png` });
+    quiet = true;
+    await ctx.setOffline(true);
+    await page.clock.fastForward(61_000);
+    expect(await until(() => !!document.querySelector(".wstale")), "the wall did not say it can’t reach Hub");
+    expect(await page.locator(".wall .wblock").count() > 0, "the wall did not keep the day while Hub was away");
+    await ctx.setOffline(false);
+    await page.clock.fastForward(61_000);
+    expect(await until(() => !document.querySelector(".wstale")), "the wall did not come back by itself");
+    quiet = false;
+
+    await page.clock.setSystemTime(await at("night"));
+    await page.reload(); await page.waitForSelector(".wall.asleep");
+    expect((await page.textContent(".wclock")).trim() === "10:40pm", "the night clock: " + await page.textContent(".wclock"));
+    const nextDay = new Date(Date.parse((await page.evaluate(() => new Date().toISOString()))) + 86_400_000)
+      .toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Los_Angeles" });
+    expect(await texts(".wnight-line") === `${nextDay}: 56° and sunny`, "the night: " + await texts(".wnight-line"));
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor) === "rgb(0, 0, 0)", "the night is not dark");
+    await page.waitForTimeout(300); await page.screenshot({ path: `${out}/wall-3-night.png` });
+    await page.evaluate(() => fetch("/demo/reset", { method: "POST" }));
+    await ctx.close();
+  }
+
   await browser.close();
   const elsewhere = [...hosts].filter((h) => h !== new URL(base).host);
   if (elsewhere.length) failures.push("the app talked to another host: " + elsewhere.join(", "));

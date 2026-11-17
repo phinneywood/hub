@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 
 from ..tools.house import admin, control, nowplaying, read, zones
 from . import levels, model
@@ -351,10 +351,19 @@ def engine_tap(what: str, request: Request, body: dict = Body(...)):
 # ---- Today (hub/app/today.py): what needs a person, then the day ----
 
 @router.get('/api/today')
-def day():
-    """The Today screen as data. Reads what Hub already keeps; calls no model."""
+def day(request: Request, wall: bool = False):
+    """The Today screen as data, for the person asking (people.py): the household's things and their own accounts'.
+    With ?wall=1, as the kitchen wall shows it: the household's things only, whoever asks. Reads what Hub keeps and
+    the house; the brief's written note, while it is on, is Ask's model's (ask/note.py)."""
     from . import today
-    return today.picture()
+    return today.picture(wall=wall, login=_login(request))
+
+
+@router.get('/api/brief', response_class=PlainTextResponse)
+def brief_aloud(request: Request, wall: bool = False):
+    """The brief as a few sentences, for a Shortcut to read aloud: the asker's own, or with ?wall=1 the household's."""
+    from . import brief, today
+    return brief.spoken(today.picture(wall=wall, login=_login(request)))
 
 
 @router.post('/api/today/tick')
@@ -366,6 +375,8 @@ def tick(request: Request, body: dict = Body(...)):
     key = str(body.get('key') or '')
     if not key:
         return _refuse('Nothing to tick.')
+    if not today.yours(key, _login(request)):
+        return _refuse('That one isn’t yours to tick.')
     if body.get('back'):
         return {'ok': bool(today.untick(key)), 'said': 'Put back'}
     said = today.tick(key)
