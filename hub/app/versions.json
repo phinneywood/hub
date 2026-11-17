@@ -1,8 +1,21 @@
 [
  {
   "sha": null,
-  "from": "436cf142152f7a4ac6bee6479691d1efd0604c1f",
+  "from": "8b55ea70730878f30dd53a00cbb20daf82636418",
   "live": null,
+  "title": "Ask reads your own mail, and the music sheet shows every music in the house",
+  "changes": [
+   "Ask can search your own mail and read an email it found: ask “did the plumber write back?”, and the emails show under the answer, each with Open to go to it in Gmail. “Open the first one” reads it. Nothing changes your mail, and nobody else’s mail is searched.",
+   "When rooms play different things, the music sheet is now Music in the house: a card for each, with the song, the rooms it plays in, play or pause, next, and one volume for all its rooms.",
+   "Rooms on a card shows each room's own volume and takes a room out. Add a room brings in a quiet room, or moves one over from another song. Change music picks a playlist for just those rooms.",
+   "Quiet rooms sit at the bottom with Play here and Join. With two things playing, Join asks which one. With one thing playing, the sheet looks as before.",
+   "On a phone, Ask’s field stays above the music bar and the conversation scrolls smoothly under your finger, without the whole screen sliding."
+  ]
+ },
+ {
+  "sha": "8b55ea70730878f30dd53a00cbb20daf82636418",
+  "from": "436cf142152f7a4ac6bee6479691d1efd0604c1f",
+  "live": "2026-11-17T14:45:04Z",
   "title": "Hub opens on Ask, with errands ready for a tap and the family brief on each phone and the kitchen wall",
   "changes": [
    "Hub opens on Ask, and Ask is a chat: Hub speaks first, in a bubble, with the day in a sentence, what needs you with its circle and its button, and the house in a line with its scenes. Your messages are on the right in the lamp’s colour, Hub’s on the left, and the field says Message Hub.",
@@ -33,8 +46,7 @@
    "Ask “what do you remember about our conversation?” to read that summary, or say “start fresh” to have Hub set it aside. Your messages stay on screen either way. Your conversation is yours alone.",
    "There’s one place to talk to Hub now. Tell it things in Ask: “remember that …” for guidance, or “Hub should …” for something to build.",
    "Each morning, the first time you open Ask, Hub says up to three things that need you, most pressing first: the house and bills before anything else. Answer by typing “done 2”, “not this” or “Thursday”, or tap its button. Today still has everything.",
-   "Ask “what are you watching?” to see what Hub looks after for you, and “stop watching …” or “watch … again” to switch one. Say “not this” twice to a small kind of thing and Hub leaves it out for a month; bills, deadlines and the house only go when you say so.",
-   "On a phone, Ask’s field stays above the music bar and the conversation scrolls smoothly under your finger, without the whole screen sliding."
+   "Ask “what are you watching?” to see what Hub looks after for you, and “stop watching …” or “watch … again” to switch one. Say “not this” twice to a small kind of thing and Hub leaves it out for a month; bills, deadlines and the house only go when you say so."
   ]
  },
  {
