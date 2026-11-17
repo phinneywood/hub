@@ -7,8 +7,8 @@
     "record-build.mjs": "0d1ca0afe2544a3dd8c957be6a95cb5eafeed4daad8a9f68d4f315126e9537d8",
     "src/activity.tsx": "77377995178139cbc7345f3b8327dc0fe67600069fb45f0e7d4080a7207c125b",
     "src/api.ts": "5560e8374457364129af4ad01e52fa23e57be575a4e0f1b024ca265e8c7904a0",
-    "src/app.css": "7aee66d4d2e453264cac479e81b133e26ba9b1722d972156216850f6d85e6dc7",
-    "src/ask.tsx": "8615e441ad4bdae0ce5852841a618b3b815b2e1cab1bcd05a106941b5dbd48e2",
+    "src/app.css": "be2de186ec1367a5f604f0f4ad716177a4c9fe9dd4c88dd1feec2ea974051c35",
+    "src/ask.tsx": "3f70dcbdac746760fad53bcf5eb53cd0e13682b199187feff39a2c07213909ce",
     "src/asking.ts": "ddaae116368307096e741a36748e621038f3a5a58857743e3298a9899b92ec88",
     "src/changes.tsx": "2b79d17b08040a67af92a1537c05d29fc5d0f5048c3bb0ae0389b5fa290f71a2",
     "src/day.ts": "aa38aeb6d468f5f2fd1dc95c8790f1e53479a2cc684e352caee8d9de36bb0736",
@@ -18,7 +18,7 @@
     "src/mail.tsx": "0dd8f178e949aeab251480c9ac89db3f21c3000952ed1db2a66cf3fe834ff972",
     "src/mailrules.tsx": "55ef5fa538b196cb752bd4bc5e542b05fb29e4d8146e54dcdd57dbff7ba8f992",
     "src/main.tsx": "73936c92e9bb089f8867f6beb6dfb75b88b9e6df81e2718f274f67ebe57afa53",
-    "src/now.tsx": "6f6a71263fc9f105093123890bb6aa8e3388741d1397c18baf486c8c4e0dc304",
+    "src/now.tsx": "5fde44a832bc186c39c698ddb7ab6d8d378a60231f0bec8c90c2f3aa927d5b5c",
     "src/screens.tsx": "57cea952dec34f690400c48de65a366018233af56a5326d632fd650e18d6c41f",
     "src/sheets.tsx": "3bdcf8198d629bddcdf9610e2235eff6aba1fc33a83d5762493db52a6289619a",
     "src/state.ts": "abd21e94acb5d49488f128b0410692df2484b8ad62bada9903aeef727ca523f1",
@@ -31,7 +31,7 @@
     "src/words.ts": "6a45dd0552ff6684604d54ef590d10c9bcb7bee9569106adf2b111e49580e1c0"
   },
   "built": {
-    "app.css": "de3293ad86b360e7a4616b39cd8cba644c417b7be39530feeb64603e57e89c0b",
-    "app.js": "3da9ed0b4be7add21cba40caa6e203646baba10fd683999e62ae2817a9be9e7b"
+    "app.css": "a2d0765384aa9673125ad35f71878a7093dcf4770c838c64d126beed841ed868",
+    "app.js": "dbefdee97c853a7eab60d81fe51bd11a3df7f1bca49551ca08a2da3f266f135e"
   }
 }

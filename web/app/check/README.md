@@ -3,8 +3,9 @@
 Drives the real app in headless Chromium at phone width (390 px, evening and day looks) and laptop width
 (1280 px), on a made-up house that follows what it is sent. It checks that:
 
-- Hub's front door leads to the app, which opens on Ask with the day's sentence, what needs you, the house beside
-  it or on a card, the field at the bottom and a bar of Ask and House; the plan shows every room floor by floor,
+- Hub's front door leads to the app, which opens on Ask as a conversation: a header naming Hub, Hub's first bubble
+  with the day's sentence, what needs you, the house beside it or on a card, a “Message Hub” field with its send
+  button at the bottom, a bar of Ask and House, and nothing in the conversation wider than the screen; the plan shows every room floor by floor,
   and the sentences are right;
 - a tap shows within 0.4 s while Hub is still answering, holds once the house agrees, and Undo puts it back;
 - a tap that didn't take is put right and says why;
@@ -12,7 +13,7 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
 - holding a room opens it without switching it; the dimmer, a plug, scenes, All off, keeping the house as a
   scene and running it, play and pause, a room joining the music, a playlist, a quiet room playing music of its own, the list in Ask and the look
   all work;
-- Ask offers what is often asked around now, does what is typed and says so in a sentence, draws the rooms
+- Ask offers what is often asked around now as a suggested message, does what is typed and says so in a sentence, draws the rooms
   or speakers it changed, puts a change back from under the answer, shows Kitchen's reply when it arrives,
   answers a question about the day from what Hub read, and remembers and forgets;
 - Ask moves a lamp to another room and puts it back, makes an automation, leaves unlocking a door, removing a

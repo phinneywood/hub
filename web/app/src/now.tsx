@@ -1,19 +1,42 @@
-// Right now, at the top of Ask: the day in a sentence with what needs you, and the house in a line with its scenes.
-// At most three cards, so Ask stays a conversation and never becomes a feed. A feature that needs a person right
-// now (an errand due, the house unwell) takes the third place; everything else is reached by asking.
+// What Hub says first in Ask: the day in a sentence, in its own bubble, with what needs you and the house in a line
+// with its scenes under it. At most three cards, so Ask stays a conversation and never becomes a feed. A feature that
+// needs a person right now (an errand due, the house unwell) takes the third place; everything else is reached by asking.
 import { day } from "./day";
 import { inApp, NeedRow, SlotRow } from "./today";
-import { go, runScene, running, seen } from "./state";
+import { go, me, runScene, running, seen, trouble } from "./state";
 import type { Day, House, Slot } from "./types";
 import { Icon } from "./ui";
-import { daySays, daySub, houseSays } from "./words";
+import { daySays, daySub, houseSays, when } from "./words";
 
-/** The sentence Ask opens with: the day when Hub has read it, otherwise the house. */
-export function Headline() {
+/** The top of Ask, as at the top of a conversation: who you are talking to, and whether it can hear you. */
+export function ChatHead() {
+  const wrong = trouble.value === "hub" ? "Can’t reach Hub" : trouble.value === "house" ? "The house isn’t answering" : "";
+  return (
+    <div class="top chathead">
+      <span class="hubmark" aria-hidden="true" />
+      <span class="chat-who"><b>Hub</b><span>{wrong || when()}</span></span>
+      <button type="button" class={"who" + (trouble.value ? " bad" : "")} aria-label="System" onClick={() => go("system")}>{me.value.initial}</button>
+    </div>
+  );
+}
+
+function hello(at: Date): string {
+  const hour = at.getHours();
+  return hour < 5 ? "Hello." : hour < 12 ? "Good morning." : hour < 17 ? "Good afternoon." : "Good evening.";
+}
+
+/** Hub speaks first: the day in a sentence, in Hub's own bubble, with what needs you and the house under it. */
+export function Greeting() {
   const now = day.value, home = seen.value;
   const outside = home?.facts.find((fact) => fact.label === "Outside")?.value ?? "";
-  if (now) return <><h1 class="say">{daySays(now)}</h1>{daySub(now, outside) && <p class="sub">{daySub(now, outside)}</p>}</>;
-  return home ? <h1 class="say">{houseSays(home)}</h1> : <h1 class="say">Ask Hub</h1>;
+  const said = now ? daySays(now) : home ? houseSays(home) : "What would you like?";
+  const sub = now ? daySub(now, outside) : "";
+  return (
+    <div class="hub greet">
+      <p class="greet-text">{hello(now ? new Date(now.at) : new Date())} {said}</p>
+      {sub && <p class="greet-sub">{sub}</p>}
+    </div>
+  );
 }
 
 function upNext(now: Day): Slot | undefined {

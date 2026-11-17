@@ -1,7 +1,7 @@
 # The app
 
-Hub's new front: one small app instead of a page per tool. It opens on Ask: what needs you and the house right
-now, the conversation, and a field to say what you want (see “Ask at the center”). The house is one tap away, drawn
+Hub's new front: one small app instead of a page per tool. It opens on Ask, a conversation with Hub, which speaks
+first with what needs you and the house right now, over a field to say what you want (see “Ask at the center”). The house is one tap away, drawn
 as a plan of rooms that are lit when their lights are, and changes under a tap. Source: `web/app/` (Preact,
 TypeScript). Built files, committed: `hub/static/app/`. The data and taps it uses: `hub/app/`.
 
@@ -126,25 +126,33 @@ Say what you want, and Hub does it or answers. Code: `hub/app/ask/`. In the app:
 ### Ask at the center
 
 Since 2026-11-16 (owner's choice, after finding Ask hard to start on a phone) Ask is the screen Hub opens to, and the
-one way into everything else. From the top:
+one way into everything else. It reads as a chat (owner's ask, after trying it: “not obvious that you are in a chat
+interface”): a header naming Hub, Hub's words in bubbles on the left, yours in the lamp's colour on the right, and
+a message field with its send button. From the top:
 
-- **Right now** (`now.tsx`). The day's sentence (Today's, “Dinner at home is at seven. Three things need you.”),
-  then at most three cards: what needs you (Today's rows, three at most, each with its circle and its button, then
-  “Open Today”), and the house in a line with a tiny plan and its scenes (a tap opens House). The third place is
-  for a feature that needs a person now, such as an errand coming due or the house unwell. Never more than three:
-  Ask stays a conversation, not a feed. On a wide screen the house card gives way to the plan beside Ask.
-- **The conversation.** The last twelve hours of this person's requests are shown, so it is still there when the
-  app opens again. Ask opens on right now; earlier requests fold to one line each (what was asked, the start of the
-  answer, and its Undo), and a tap opens one. The newest stays open while it is less than half an hour old.
-  The model still sees only the last half hour (`brain.earlier`).
-- **The field**, pinned above the bar. It grows to a few lines, Return sends, and the keyboard's own microphone
+- **The header** (`ChatHead` in `now.tsx`): Hub, and the day and time, or that Hub or the house can't be reached.
+- **Earlier** (above, scrolled past on opening). The last twelve hours of this person's requests are kept, so they
+  are still there when the app opens again. A conversation ends at a pause of half an hour; earlier ones sit
+  above what Hub says now, each request and the start of its answer as two small bubbles (with its Undo), the
+  last two shown and the rest under “Show N earlier messages”. A tap opens one. The model still sees only the
+  last half hour (`brain.earlier`).
+- **Hub speaks first** (`Greeting` in `now.tsx`). A bubble with the day's sentence (“Good evening. Dinner at home
+  is at seven. Three things need you.”), then at most three cards under it: what needs you (Today's rows, three
+  at most, each with its circle and its button, then “Open Today”), and the house in a line with a tiny plan and
+  its scenes (a tap opens House). The third place is for a feature that needs a person now, such as an errand
+  coming due or the house unwell. Never more than three: Ask stays a conversation, not a feed. On a wide screen
+  the house card gives way to the plan beside Ask.
+- **The conversation going on now**, under it, in full. What is newest is read from its start: the last request
+  (or Hub's first bubble, on opening) stays at the top when what follows is taller than the screen.
+- **Suggested messages** over the field while no conversation is going: what this person often asks around now
+  (marked with a lamp dot), then a few questions anyone can ask. One tap sends it.
+- **The field** (“Message Hub”), pinned above the bar. It grows to a few lines, Return sends, and the keyboard's own microphone
   dictates. A request made while another is going waits under it and goes as soon as that one ends (Hub takes
   one at a time per person); while one is going, an empty field offers Stop, which stops waiting for it: what
   Hub already did stays done, with its Undo. On a phone the screen is sized to what the keyboard leaves
   (`viewport.ts`, from `visualViewport`), so the field rides on the keyboard and the bar steps aside meanwhile.
 - **A few letters** find a room, a scene, a playlist or a page (Today, Mail, Kitchen, House and System's pages)
-  at once, without the model. With nothing typed and no conversation going, a hint and what this person often
-  asks around now.
+  at once, without the model.
 
 **Answers end in something to tap.** A question about mail, the calendar, school or what needs you ends in the
 same rows Today draws, with their circles and buttons, and a link to Today or Mail. The card names only the topics

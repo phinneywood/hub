@@ -44,14 +44,19 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       await page.locator(".found .sug", { hasText: name }).first().click();
     };
 
-    // ---- opening: Ask, with what needs you and the house above the field ----
+    // ---- opening: Ask, a conversation where Hub speaks first with the day, what needs you and the house ----
     await page.goto(base + "/");
     expect(new URL(page.url()).pathname === "/app/", "Hub's front door did not lead to the app");
     await page.waitForSelector(".askpage");
     await stage("reset");
     await page.reload(); await page.waitForSelector(".askpage .now"); await page.waitForTimeout(2000);
     await shot("0-ask");
-    expect(await saysSoon("Dinner at home is at seven. Three things need you."), "Ask did not open on the day: " + await says());
+    const greets = () => page.locator(".askpage .greet-text").innerText().catch(() => "(nothing)");
+    expect(await until(() => document.querySelector(".askpage .greet-text")?.textContent.endsWith(" Dinner at home is at seven. Three things need you.")),
+      "Ask did not open with Hub saying the day: " + await greets());
+    expect(await page.locator(".askpage .chathead .chat-who b").innerText() === "Hub", "Ask did not say who you are talking to");
+    expect(await page.getAttribute("#askq", "placeholder") === "Message Hub" && await page.locator('.composer [aria-label="Send"]').count() === 1,
+      "the field does not read as a message to Hub");
     // On a phone the house card shares the screen, so two needs show and the third is a tap away in Today.
     expect((await page.locator(".askpage .now .row.need .row-main b").allInnerTexts()).join("|")
       === (phone ? "Email from Sam Rivera|Approve the grocery cart" : "Email from Sam Rivera|Approve the grocery cart|Email from Maple Street Dental"),
@@ -61,6 +66,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       : await page.locator(".side .plan").count() > 0, phone ? "the house card did not say the house" : "the house was not beside Ask");
     expect(await page.evaluate(() => { const f = document.querySelector("#askq").getBoundingClientRect(); return f.bottom <= innerHeight && f.top > innerHeight / 2; }),
       "the field was not at the bottom of the screen");
+    const sideways = () => page.evaluate(() => [...document.querySelectorAll(".ask-scroll")].some((box) => box.scrollWidth > box.clientWidth));
+    expect(!(await sideways()), "the conversation is wider than the screen");
     expect((await page.locator(phone ? ".tabs .tab" : ".rail .tab:not(.foot .tab)").allInnerTexts()).join("|") === "Ask|House", "the bar is not Ask and House");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Ask: " + (await small()).join(", "));
     await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
@@ -201,9 +208,9 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       && ![...document.querySelectorAll(".turn")].pop().querySelector(".dots"), text, ms);
     const lastAnswer = () => page.locator(".turn .answer").last().innerText().catch(() => "(nothing)");
     await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")'); await page.waitForSelector(".askpage");
-    expect(await until(() => document.querySelector(".sug")?.textContent === "Dim the living room to 30You often ask this around now"), "what is often asked around now was not offered");
+    expect(await until(() => document.querySelector(".prompts .prompt.usual")?.textContent === "Dim the living room to 30"), "what is often asked around now was not offered");
     await page.waitForTimeout(300); await shot("6a-ask-open");
-    await page.locator(".sug").first().click();
+    await page.locator(".prompts .prompt.usual").first().click();
     expect(await answered("The living room is at 30%."), "one tap on a habit did not do it: " + await lastAnswer());
 
     // ---- Ask: a few letters reach a room ----
@@ -325,6 +332,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       "a pack that covers the number asked for was not shown as one");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px in Ask: " + (await small()).join(", "));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Ask made the page scroll sideways");
+    expect(!(await sideways()), "the conversation grew wider than the screen");
     await page.fill("#askq", "");
     await tap(phone ? ".who" : ".rail .foot .tab");
     expect(await until(() => [...document.querySelectorAll(".block h2")].some((h) => h.textContent === "Hub remembers")), "System did not list what Hub remembers");

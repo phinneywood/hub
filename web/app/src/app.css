@@ -316,7 +316,7 @@ button.row { text-align: left; }
 
 /* ---------- ask ---------- */
 .ask { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-.ask-scroll { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; padding-bottom: 14px; overscroll-behavior: contain; }
+.ask-scroll { flex: 1; overflow: hidden auto; min-height: 0; display: flex; flex-direction: column; padding-bottom: 14px; overscroll-behavior: contain; }   /* up and down, never sideways */
 .ask-said { margin-top: auto; padding-top: 14px; }       /* sits on the field, and can still be scrolled back when it outgrows the sheet */
 .ask-scroll { -webkit-mask-image: linear-gradient(#0000, #000 14px); mask-image: linear-gradient(#0000, #000 14px); }   /* older words leave softly */
 .found.brief { border-top: 1px solid var(--line); padding-top: 4px; }
@@ -343,22 +343,41 @@ button.row { text-align: left; }
   height: calc(var(--vvh, 100dvh) - var(--dockh, 130px)); transform: translateY(var(--vvt, 0px)); background: var(--ground); }
 .kb .askpage { height: var(--vvh, 100dvh); padding-bottom: 8px; }
 .kb .app.asking .dock { visibility: hidden; }
-.askpage .ask-scroll { -webkit-mask-image: linear-gradient(#000 calc(100% - 16px), #0000); mask-image: linear-gradient(#000 calc(100% - 16px), #0000); padding-bottom: 16px; }   /* more below fades into the field */
-.askpage .ask-said { margin-top: 0; padding-top: 0; flex: 1; display: flex; flex-direction: column; }
-.askpage .nowtop { margin-bottom: 18px; }
-.askpage .top { padding-top: 10px; }       /* the page itself keeps clear of the clock, so what scrolls never runs under it */
-.askpage .nowtop .say { font-size: 29px; }
+.askpage .ask-scroll { padding: 0 0 14px;
+  -webkit-mask-image: linear-gradient(#0000, #000 12px, #000 calc(100% - 14px), #0000); mask-image: linear-gradient(#0000, #000 12px, #000 calc(100% - 14px), #0000); }
+.askpage .ask-said { padding-top: 12px; }      /* the newest sits on the field, as in a chat */
+.askpage .nowtop { margin-bottom: 6px; }
 .now .row.need { min-height: 50px; padding: 6px 0; }
 .now .row-main span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .now .row-main { min-width: 0; }
-.askpage .nowtop + .turn, .askpage .nowtop + .found { margin-top: auto; }
-.askpage .found:first-child { margin-top: auto; }
 .app.asking .main { padding-bottom: 0; }
 .app.asking .toast { bottom: calc(var(--dockh, 130px) + 82px); }
 .kb .app.asking .toast { bottom: auto; top: calc(var(--vvt, 0px) + max(14px, env(safe-area-inset-top))); }
 
-/* what needs you, and the house, on cards above the conversation */
-.now { background: var(--room); border-radius: 18px; padding: 4px 16px 6px; margin-top: 14px; }
+/* the top of the conversation: who you are talking to */
+.chathead { flex: none; min-height: 0; justify-content: flex-start; gap: 11px; margin: 0 calc(-1 * var(--gut)); padding: 6px var(--gut) 8px;
+  border-bottom: 1px solid var(--line); }
+.hubmark { flex: none; position: relative; width: 36px; height: 36px; border-radius: 50%; background: var(--lamp); }
+.hubmark::after { content: ""; position: absolute; inset: 0; background: var(--on-lamp);
+  clip-path: polygon(50% 24%, 76% 47%, 69% 47%, 69% 74%, 31% 74%, 31% 47%, 24% 47%); }
+.chat-who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.chat-who b { font-size: var(--t-m); font-weight: 500; }
+.chat-who span { font-size: var(--t-xs); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* bubbles: Hub's on the left, yours on the right in the lamp's colour */
+.hub { background: var(--room); border-radius: 20px 20px 20px 6px; padding: 10px 15px 11px; width: fit-content; max-width: 88%; margin-top: 10px; overflow-wrap: anywhere; }
+.hub .answer, .hub .answer.long { margin-top: 0; font-size: var(--t-m); line-height: 1.42; letter-spacing: 0; }
+.hub .dots { display: flex; margin: 7px 3px; }
+.greet { max-width: 94%; }
+.greet-text { font-size: var(--t-l); line-height: 1.3; text-wrap: pretty; }
+.greet-sub { font-size: var(--t-s); color: var(--ink-2); margin-top: 3px; }
+.turn:not(.folded) .asked { font-size: var(--t-m); line-height: 1.38; color: var(--on-lamp); background: var(--lamp); border-radius: 20px 20px 6px 20px;
+  padding: 9px 15px; width: fit-content; max-width: 82%; margin-left: auto; white-space: pre-line; overflow-wrap: anywhere; }
+.took.waits { justify-content: flex-end; }
+.chat-time { text-align: center; font-size: var(--t-xs); color: var(--ink-3); margin: 8px 0 2px; }
+
+/* what needs you, and the house, under Hub's first bubble */
+.now { background: var(--room); border-radius: 18px; padding: 4px 16px 6px; margin-top: 8px; }
 .now > h2 { font-size: var(--t-xs); letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; padding: 10px 0 2px; }
 .now .rows { border-top: 0; }
 .now .row { border-bottom: 1px solid var(--line); }
@@ -382,26 +401,35 @@ button.row { text-align: left; }
 .chip.on { background: var(--lamp); color: var(--on-lamp); }
 .chip.busy { color: var(--ink); }
 
-/* the field: a few lines at most, on a card of its own */
-.composer textarea.field { display: block; height: auto; min-height: 54px; max-height: 140px; resize: none; padding: 15px 58px 15px 16px;
+/* the field, as a chat has it: a few lines at most, with its send button inside */
+.composer textarea.field { display: block; height: auto; min-height: 54px; max-height: 140px; resize: none; padding: 15px 58px 15px 18px; border-radius: 27px;
   line-height: 1.35; background: var(--room); box-shadow: inset 0 0 0 1.5px var(--line-2); overflow-y: auto; }
-.composer textarea.field:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ink-3); }
-.send { top: auto; bottom: 5px; }
+.composer textarea.field:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ink-3); border-radius: 27px; }
+.send { top: auto; bottom: 5px; background: var(--line); }
+.send:disabled { cursor: default; }
+
+/* suggested messages over the field, until a conversation is going */
+.prompts { flex: none; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 10px; }
+.prompts::-webkit-scrollbar { display: none; }
+.prompts { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), #0000); mask-image: linear-gradient(90deg, #000 calc(100% - 22px), #0000); }   /* more to the right */
+.askpage .prompts { margin: 0 calc(-1 * var(--gut)); padding-left: var(--gut); padding-right: var(--gut); }
+.prompt { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 22px; white-space: nowrap;
+  background: var(--room); box-shadow: inset 0 0 0 1px var(--line-2); font-size: var(--t-s); }
+.prompt.usual::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--lamp); }
 .send.stop { background: var(--ink); color: var(--ground); }
 .send.stop .ic { width: 16px; height: 16px; }
 
-/* an earlier request: one line, opened by a tap */
-.turn.folded { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 0; }
-.turn.folded + .turn.folded { border-top: 1px solid var(--line); padding-top: 0; }
-.fold { display: flex; gap: 10px; align-items: center; min-height: 46px; min-width: 0; font-size: var(--t-s); }
-.fold-asked { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
-.fold-more { min-height: 44px; font-size: var(--t-xs); color: var(--ink-3); text-align: left; }
-.fold-undo { height: 44px; min-width: 44px; padding: 0 2px; font-size: var(--t-xs); font-weight: 500; }
-.fold-back { font-size: var(--t-xs); color: var(--ink-3); }
-.turn.folded.back .fold-asked { color: var(--ink-3); }
-.turn:not(.folded) .asked { align-self: flex-end; font-size: var(--t-m); color: var(--ink); background: var(--room); border-radius: 18px 18px 6px 18px;
-  padding: 8px 14px; width: fit-content; max-width: 85%; margin-left: auto; white-space: pre-line; }
-.turn + .turn:not(.folded), .turn.folded + .turn:not(.folded) { border-top: 0; padding-top: 18px; }
+/* an earlier request: both bubbles small, a line each, opened by a tap */
+.turn.folded { position: relative; padding: 3px 0; }
+.fold { display: flex; flex-direction: column; gap: 4px; width: 100%; font-size: var(--t-s); line-height: 1.3; text-align: left; }
+.fold-asked, .fold-answer { min-width: 0; max-width: 78%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 12px; border-radius: 16px; }
+.fold-asked { align-self: flex-end; background: var(--ember); border-bottom-right-radius: 5px; }
+.fold-answer { align-self: flex-start; background: var(--room); color: var(--ink-2); border-bottom-left-radius: 5px; }
+.turn.folded.undoable .fold-answer { max-width: calc(100% - 84px); }
+.fold-more { display: block; margin: 0 auto; min-height: 44px; padding: 0 14px; font-size: var(--t-xs); font-weight: 500; color: var(--ink-2); }
+.fold-undo { position: absolute; right: 0; bottom: 0; height: 44px; min-width: 64px; padding: 0 2px; font-size: var(--t-xs); font-weight: 500; text-align: right; }
+.fold-back { position: absolute; right: 2px; bottom: 13px; font-size: var(--t-xs); color: var(--ink-3); }
+.turn.folded.back .fold-answer { color: var(--ink-3); }
 .dayrows { margin-top: 12px; background: var(--room); border-radius: 16px; padding: 2px 14px 4px; }
 .dayrows .rows { border-top: 0; }
 .dayrows .row:last-child { border-bottom: 0; }
@@ -409,8 +437,7 @@ button.row { text-align: left; }
 .dayrows .rows + .rows { border-top: 1px solid var(--line); }
 
 /* a request and its answer */
-.turn { padding: 6px 0 18px; }
-.turn + .turn { border-top: 1px solid var(--line); padding-top: 16px; }
+.turn { padding: 10px 0 8px; }
 .asked { font-size: var(--t-s); color: var(--ink-3); }
 .answer { font-size: 21px; line-height: 1.28; margin-top: 8px; letter-spacing: -.005em; text-wrap: pretty; white-space: pre-line; }
 .answer.long, .says { font-size: var(--t-m); line-height: 1.42; letter-spacing: 0; }
@@ -507,7 +534,8 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
   /* Ask in the middle, the house beside it */
   .app.asking .main { overflow: hidden; padding: 0 56px; display: flex; }
   .askpage { position: static; transform: none; height: auto; flex: 1; max-width: 760px; padding: 0 0 22px; background: none; }
-  .askpage .nowtop .top { height: 40px; }
+  .askpage .chathead { height: auto; margin: 0; padding: 12px 0 10px; }
+  .askpage .prompts { margin: 0; padding-left: 0; padding-right: 0; }
   .side { grid-column: 3; grid-row: 1 / span 2; border-left: 1px solid var(--line); overflow-y: auto; padding: 4px 26px 24px; background: var(--raised); }
   .side .wrap { max-width: none; }
   .side .say { font-size: 30px; }

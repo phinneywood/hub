@@ -1,17 +1,16 @@
-// Ask, the screen Hub opens to: what needs you and the house right now, the conversation, and the field.
+// Ask, the screen Hub opens to: a conversation with Hub, which speaks first with what needs you and the house.
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, stop, talk } from "./asking";
 import type { Card, Turn } from "./asking";
 import { ErrandsCard } from "./errands";
 import { GroceriesCard, Said } from "./kitchen";
-import { DayRows, Headline, HouseCard, NeedsCard } from "./now";
-import { RoomCell, spans, Top } from "./screens";
+import { ChatHead, DayRows, Greeting, HouseCard, NeedsCard } from "./now";
+import { RoomCell, spans } from "./screens";
 import { dragVolume, go, loadPicks, picks, playPick, runScene, say, seen, setVolume, switchRoom, undo, undone } from "./state";
 import type { View } from "./state";
 import type { House, KitchenMessage, Room } from "./types";
 import { Icon, SheetFrame, Slider, Switch } from "./ui";
-import { spoken } from "./words";
 
 const LONG = 5 * 60 * 1000;     // after this Kitchen's answer is left to the Kitchen screen
 
@@ -31,27 +30,16 @@ const PAGES: [View, string, string][] = [
 ];
 
 /** What a few letters reach without asking anything: rooms, scenes, playlists and pages, worked right in the list.
- * With nothing typed and no conversation going on, a hint and what this person often asks around now. */
-function Found({ now, text, quiet }: { now: House; text: string; quiet: boolean }) {
+ * With nothing typed, nothing, except where Ask isn't set up: there, where the words will go. */
+function Found({ now, text }: { now: House; text: string }) {
   const has = (name: string) => name.toLowerCase().includes(text.toLowerCase());
   const set = able.value?.ready !== false;
-  if (!text) {
-    if (!quiet && set) return null;       // a conversation is going on; where Ask isn't set up, always say where words go
-    // Three things to say, in this house's own rooms: one for the lights, one for the day, one for the list.
-    const all = Object.values(now.rooms).filter((r) => !r.outside);
-    const lamp = all.find((r) => r.dims);
-    const examples = [lamp && `“dim ${spoken(lamp.name)}”`, "“what needs me today?”", "“add eggs to the list”"].filter((e): e is string => Boolean(e));
-    const such = examples.slice(0, -1).join(", ") + " or " + examples[examples.length - 1];
+  if (!text) {         // where Ask isn't set up, say where words go; otherwise the suggested questions say it
+    if (set) return null;
     return (
       <div class="found">
-        <p class="ask-hint">{set ? `Ask for anything, such as ${such}. A few letters find a room, a scene, a playlist or a page.`
-          : "Scenes run at once. A few letters find a room, a playlist or a page. Anything else goes to the chat."}</p>
-        {(able.value?.usual ?? []).map((words) => (
-          <button type="button" class="sug" key={words} onClick={() => void ask(words)}>
-            <span>{words}<small>You often ask this around now</small></span><span class="go"><Icon name="up" /></span>
-          </button>
-        ))}
-        {!set && <a class="sug" href="/ask"><span>Ask in the chat<small>For anything this list can’t do yet</small></span><span class="how">Open</span></a>}
+        <p class="ask-hint">Scenes run at once. A few letters find a room, a playlist or a page. Anything else goes to the chat.</p>
+        <a class="sug" href="/ask"><span>Ask in the chat<small>For anything this list can’t do yet</small></span><span class="how">Open</span></a>
       </div>
     );
   }
@@ -240,18 +228,29 @@ function CardView({ card, now }: { card: Card; now: House }) {
   return null;
 }
 
-const FRESH = 30 * 60 * 1000;      // a conversation older than this is folded away; Ask opens on now
-const SHOWN_FOLDED = 3;       // earlier requests shown as a line each; the rest gather under one
+const FRESH = 30 * 60 * 1000;      // a pause this long ends a conversation; what came before it is earlier
+const SHOWN_EARLIER = 2;      // earlier requests shown as a pair of small bubbles each; the rest gather under one line
+
+/** Where the conversation going on now starts: after its last pause of half an hour, if its last word was in the last half hour. */
+function sessionStart(turns: Turn[]): number {
+  const last = turns[turns.length - 1];
+  if (!last || !(last.busy || last.waiting || Date.now() - last.at < FRESH)) return turns.length;
+  let start = turns.length - 1;
+  while (start > 0 && turns[start]!.at - turns[start - 1]!.at < FRESH) start -= 1;
+  return start;
+}
 
 function TurnView({ turn, now, open, onOpen }: { turn: Turn; now: House; open: boolean; onOpen: () => void }) {
   // A change to the house says how long it took and can be put back. An answer needs neither.
   const batch = turn.cards.find((card) => card.batch)?.batch;
   const back = batch !== undefined && undone.value.includes(batch);
-  if (!open) {         // an earlier turn: what was asked, on one line, still with its Undo
+  if (!open) {         // an earlier turn: both bubbles, a line each, small; a tap opens it, and its Undo stays
+    const first = (turn.answer.split("\n")[0] ?? "").slice(0, 140);
     return (
-      <div class={"turn folded" + (back ? " back" : "")}>
+      <div class={"turn folded" + (back ? " back" : "") + (batch ? " undoable" : "")}>
         <button type="button" class="fold" aria-expanded="false" aria-label={`${turn.asked}. Hub: ${turn.answer}`} onClick={onOpen}>
           <span class="fold-asked">{turn.asked}</span>
+          {first && <span class="fold-answer">{first}</span>}
         </button>
         {batch && (back ? <span class="fold-back">Undone</span>
           : <button type="button" class="fold-undo" onClick={() => void undo(batch)}>Undo</button>)}
@@ -262,9 +261,9 @@ function TurnView({ turn, now, open, onOpen }: { turn: Turn; now: House; open: b
   return (
     <div class={"turn" + (back ? " back" : "")}>
       <p class="asked">{turn.asked}</p>
-      {turn.waiting ? <p class="took">Waiting for the last request to finish</p>
-        : turn.answer ? <p class={"answer" + (turn.answer.length > 160 ? " long" : "")}>{turn.answer}</p>
-        : <span class="dots" role="status" aria-label="Hub is working"><i /><i /><i /></span>}
+      {turn.waiting ? <p class="took waits">Waits for the last request to finish</p>
+        : <div class="hub">{turn.answer ? <p class={"answer" + (turn.answer.length > 160 ? " long" : "")}>{turn.answer}</p>
+          : <span class="dots" role="status" aria-label="Hub is working"><i /><i /><i /></span>}</div>}
       {turn.busy && turn.doing && <p class="took">{turn.doing}</p>}
       {turn.cards.map((card, n) => <CardView card={card} now={now} key={n} />)}
       {!turn.busy && batch && (back
@@ -289,18 +288,37 @@ function Composer() {
   return (
     <form class="composer" onSubmit={(e) => { e.preventDefault(); send(); }}>
       <textarea class="field" id="askq" ref={field} rows={1} autocomplete="off" autocapitalize="sentences" enterkeyhint="send"
-        placeholder="Ask Hub, or type a room" aria-label="Ask Hub, or type a room, a scene, a playlist or a page" value={text}
+        placeholder="Message Hub" aria-label="Message Hub, or type a room, a scene, a playlist or a page" value={text}
         onInput={(e) => (asked.value = e.currentTarget.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } }} />
       {busy && !text.trim()
         ? <button type="button" class="send stop" aria-label="Stop" onClick={stop}><Icon name="stop" /></button>
-        : <button type="submit" class={"send" + (text.trim() ? " on" : "")} aria-label="Ask Hub" disabled={!text.trim()}><Icon name="up" /></button>}
+        : <button type="submit" class={"send" + (text.trim() ? " on" : "")} aria-label="Send" disabled={!text.trim()}><Icon name="up" /></button>}
     </form>
   );
 }
 
-/** Ask. `home`: the screen Hub opens to, with now on top (and the house too when it isn't beside it).
- * Without `home`: the conversation alone, beside another screen on a wide one. */
+// Questions anyone can ask without changing anything, offered as a start beside what this person often asks.
+const STARTERS = ["What needs me today?", "What’s on tomorrow?", "What’s on the list?"];
+
+/** Suggested messages above the field, as a chat offers them, until a conversation is going. One tap sends it. */
+function Prompts({ quiet }: { quiet: boolean }) {
+  const usual = able.value?.usual ?? [];
+  if (!quiet || able.value?.ready === false || asked.value.trim()) return null;
+  const offered = [...usual, ...STARTERS.filter((words) => !usual.includes(words))].slice(0, 4);
+  return (
+    <div class="prompts" role="group" aria-label="Things to ask">
+      {offered.map((words) => (
+        <button type="button" key={words} class={"prompt" + (usual.includes(words) ? " usual" : "")}
+          title={usual.includes(words) ? "You often ask this around now" : undefined} onClick={() => void ask(words)}>{words}</button>
+      ))}
+    </div>
+  );
+}
+
+/** Ask, as a conversation with Hub. `home`: the screen Hub opens to, where Hub speaks first with the day (and the
+ * house too when it isn't beside it). Without `home`: the conversation alone, beside another screen on a wide one.
+ * Earlier conversations sit above what Hub says now, folded to small bubbles; the one going on now follows it. */
 export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
   const scroll = useRef<HTMLDivElement>(null);
   const [opened, setOpened] = useState<number[]>([]);
@@ -309,19 +327,13 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
   const now = seen.value;
   const text = asked.value.trim();
   const turns = talk.value;
-  const last = turns[turns.length - 1];
-  const live = last !== undefined && (last.busy || last.waiting || Date.now() - last.at < FRESH);
-  const open = (turn: Turn) => turn.busy || turn.waiting || opened.includes(turn.n) || (live && turn === last)
-    || (live && turns.slice(turns.indexOf(turn) + 1).every((later) => later.waiting || later.busy));
-  const pinned = useRef(!home);
-  const placed = useRef(false);
+  const start = sessionStart(turns);
+  const earlier = turns.slice(0, start), current = turns.slice(start);
+  const pinned = useRef(true);
   const asking = turns.some((turn) => turn.busy || turn.waiting);
-  useEffect(() => {           // what is asked, what a few letters find, and a conversation still going are brought into view
+  useEffect(() => {           // what is asked and what a few letters find are brought into view
     const box = scroll.current;
-    if (!box) return;
-    const going = !placed.current && turns.length > 0 && live;      // opened again in the middle of one
-    if (turns.length) placed.current = true;
-    if (asking || text || going) { pinned.current = true; box.scrollTop = box.scrollHeight; }
+    if (box && (asking || text)) { pinned.current = true; box.scrollTop = box.scrollHeight; }
   }, [turns.length, asking, text.length > 0]);
   useEffect(() => {           // and what arrives under it stays in view, unless a finger has scrolled back to read
     const box = scroll.current, said = box?.firstElementChild;
@@ -337,10 +349,11 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
     };
     const follow = () => {
       if (!pinned.current) return;
-      // An answer taller than the screen is read from its start: the request stays at the top, not its last line.
-      const bubble = [...box.querySelectorAll(".turn:not(.folded) .asked")].pop();
-      const top = bubble ? bubble.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 12 : 0;
-      if (bubble && box.scrollHeight - top > box.clientHeight) { box.scrollTop = top; pinned.current = false; last = box.scrollTop; }
+      // What is newest is read from its start: the last request, or Hub's greeting, stays at the top when what
+      // follows it is taller than the screen, instead of showing only its last lines.
+      const start = [...box.querySelectorAll(".nowtop, .turn:not(.folded) .asked")].pop();
+      const top = start ? start.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 12 : 0;
+      if (start && box.scrollHeight - top > box.clientHeight) { box.scrollTop = top; pinned.current = false; last = box.scrollTop; }
       else box.scrollTop = box.scrollHeight;
     };
     const grew = new ResizeObserver(follow);
@@ -349,32 +362,36 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
     grew.observe(box);
     return () => { box.removeEventListener("scroll", moved); grew.disconnect(); };
   }, []);
-  // Earlier requests fold to a line each; past the last few they gather under one line until it is opened.
-  const folded = turns.filter((turn) => !open(turn));
-  const hidden = all ? [] : folded.slice(0, Math.max(0, folded.length - SHOWN_FOLDED)).map((turn) => turn.n);
+  const hidden = all ? [] : earlier.slice(0, Math.max(0, earlier.length - SHOWN_EARLIER)).map((turn) => turn.n);
+  const back = (turn: Turn) => { pinned.current = false; setOpened([...opened, turn.n]); };   // read where it is
+  const today = earlier[0] && new Date(earlier[0].at).toDateString() === new Date().toDateString();
   return (
     <div class={"ask" + (home ? " askpage" : "")}>
+      {home && <ChatHead />}
       <div class="ask-scroll" ref={scroll}>
         <div class="ask-said" aria-live="polite">
+          {earlier.length > 0 && <p class="chat-time">{today ? "Earlier today" : "Earlier"}</p>}
+          {hidden.length > 0 && (
+            <button type="button" class="fold-more" onClick={() => { pinned.current = false; setAll(true); }}>
+              {hidden.length === 1 ? "Show one earlier message" : `Show ${hidden.length} earlier messages`}
+            </button>
+          )}
+          {now && earlier.filter((turn) => !hidden.includes(turn.n)).map((turn) => (
+            <TurnView turn={turn} now={now} key={turn.n} open={opened.includes(turn.n)} onOpen={() => back(turn)} />
+          ))}
           {home && (
             <div class="nowtop">
-              <Top />
-              <Headline />
+              {earlier.length > 0 && <p class="chat-time">Now</p>}
+              <Greeting />
               <NeedsCard most={house ? 2 : 3} />
               {house && now && <HouseCard now={now} />}
             </div>
           )}
-          {hidden.length > 0 && (
-            <button type="button" class="fold-more" onClick={() => setAll(true)}>
-              {hidden.length === 1 ? "One earlier request" : `${hidden.length} earlier requests`}
-            </button>
-          )}
-          {now && turns.filter((turn) => !hidden.includes(turn.n)).map((turn) => (
-            <TurnView turn={turn} now={now} key={turn.n} open={open(turn)} onOpen={() => setOpened([...opened, turn.n])} />
-          ))}
-          {now && <Found now={now} text={text} quiet={!live} />}
+          {now && current.map((turn) => <TurnView turn={turn} now={now} key={turn.n} open onOpen={() => undefined} />)}
+          {now && <Found now={now} text={text} />}
         </div>
       </div>
+      <Prompts quiet={!current.length} />
       <Composer />
     </div>
   );
