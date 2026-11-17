@@ -35,7 +35,7 @@ COVERED = {'home_control': 'home', 'play_music': 'home', 'edit_playlist': 'music
 COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'remember': 'note', 'groceries': 'kitchen', 'kitchen': 'kitchen',
                'look_up': 'read', 'find': 'read', 'details': 'read', 'arrange': 'setup', 'rooms': 'setup', 'scene_setup': 'setup',
                'routine': 'setup', 'device': 'setup', 'setting': 'setup', 'integration': 'setup', 'dashboard': 'setup',
-               'search': 'read', 'read': 'read'}
+               'search': 'read', 'read': 'read', 'archive': 'archive'}
 DRY_ID = -1                     # the message number a held-back Kitchen hand-off is given
 
 
@@ -120,8 +120,9 @@ def layer(house_writes=False, recipes=()):
     house_writes (owner's decision, 2026-11-13: light and music scenarios only, and only when the owner runs them
     with --live-writes): Home Assistant changes really go out, after the same checks, and are recorded both here
     and in Hub's own change log, so the runner can undo them right after the scenario's checks. Everything else
-    (Music Assistant edits, Kitchen, notes, recipes, playlists to make) is still held back.
+    (Music Assistant edits, Kitchen, notes, recipes, playlists to make, the archive's switches and kids) is still held back.
     `recipes`: (name, steps) pairs a scenario starts with, saved in the scratch database after the usual checks."""
+    from ..app import archive
     from ..engine import notes, recipes as recipe_book
     from ..tools.house import admin, broker, control, music
     from ..tools.kitchen import client
@@ -129,7 +130,8 @@ def layer(house_writes=False, recipes=()):
     real_exchange, real_send, real_call = broker._exchange, music._send, client.call
     saved = {'broker': real_exchange, 'music_send': real_send, 'settle': music._settle, 'kitchen': real_call,
              'control_db': control._db, 'music_db': music._db, 'notes_db': notes._db, 'admin_db': admin._db,
-             'note': notes.propose, 'playlist': music.propose, 'recipes_db': recipe_book._db, 'recipe': recipe_book.propose}
+             'note': notes.propose, 'playlist': music.propose, 'recipes_db': recipe_book._db, 'recipe': recipe_book.propose,
+             'switch': archive.switch, 'kid': archive.set_kid}
 
     def exchange(message, timeout):
         path, method = str(message.get('path', '')), message.get('method')
@@ -191,6 +193,14 @@ def layer(house_writes=False, recipes=()):
         ledger.add('proposal', 'playlist', {'name': name, 'songs': list(songs or ())})
         return found
 
+    def switch(name, on, login):
+        ledger.add('archive', 'switch', {'name': name, 'on': bool(on)})
+        return 'Held back: what Ask may read stays as it is.'
+
+    def kid(name, kid, login):
+        ledger.add('archive', 'kid', {'name': str(name or '')[:80], 'kid': bool(kid)})
+        return 'Held back: who counts as one of the kids stays as it is.'
+
     def recipe(name, steps, said, *, login):
         found = saved['recipe'](name, steps, said, login=login)
         ledger.add('proposal', 'recipe', {'name': found['name'], 'steps': found['steps']})
@@ -206,6 +216,7 @@ def layer(house_writes=False, recipes=()):
         notes._db = _with_schema(_scratch_db(Path(folder)), notes.SCHEMA)
         recipe_book._db = _with_schema(_scratch_db(Path(folder)), recipe_book.SCHEMA)
         notes.propose, music.propose, recipe_book.propose = note, playlist, recipe
+        archive.switch, archive.set_kid = switch, kid
         try:
             for name, steps in recipes:
                 recipe_book.keep(name, steps)
@@ -217,6 +228,7 @@ def layer(house_writes=False, recipes=()):
             admin.forget()
             notes.propose, music.propose = saved['note'], saved['playlist']
             recipe_book._db, recipe_book.propose = saved['recipes_db'], saved['recipe']
+            archive.switch, archive.set_kid = saved['switch'], saved['kid']
 
 
 def _with_schema(db, schema):

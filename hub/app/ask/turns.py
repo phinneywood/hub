@@ -1,7 +1,8 @@
 """What was asked and answered, and what Hub remembers. In Hub's own database, never in Git.
 
 A turn's words are kept for 30 days, as chat text always was. A turn Luna answered (`private.py`, on a Hub
-without Ask's own model) is marked so.
+without Ask's own model) is marked so. `answer` is what later requests are told of a turn; `shown` is what the
+person saw, kept for their own history when the two differ (a sentence Hub wrote from photos is told to no model).
 
 What Hub remembers is the engine's one list of standing notes (`hub/engine/state.py`), the same list the older
 chat saved to with a tap, so there is one memory: a note saved either way reaches Ask, steers the morning
@@ -22,7 +23,7 @@ SCHEMA = """
 create table if not exists app_ask(
   id integer primary key autoincrement, ts real not null, login text, asked text not null, answer text not null,
   cards text not null default '[]', private integer not null default 0, ms integer not null default 0,
-  status text not null default 'ok');
+  status text not null default 'ok', shown text);
 create index if not exists app_ask_login on app_ask(login, ts);
 """
 
@@ -30,21 +31,25 @@ create index if not exists app_ask_login on app_ask(login, ts);
 def _db():
     conn = store.db()
     conn.executescript(SCHEMA)
+    if 'shown' not in {r['name'] for r in conn.execute('pragma table_info(app_ask)')}:     # kept before turns had it
+        conn.execute('alter table app_ask add column shown text')
     return conn
 
 
 def _turn(row):
-    return {'id': row['id'], 'at': row['ts'], 'asked': row['asked'], 'answer': row['answer'], 'cards': json.loads(row['cards']),
-            'private': bool(row['private']), 'ms': row['ms'], 'status': row['status']}
+    return {'id': row['id'], 'at': row['ts'], 'asked': row['asked'], 'answer': row['answer'], 'shown': row['shown'] or row['answer'],
+            'cards': json.loads(row['cards']), 'private': bool(row['private']), 'ms': row['ms'], 'status': row['status']}
 
 
-def save(login, asked, answer, cards=(), private=False, ms=0, status='ok', at=None):
-    """Keep one turn; returns its number. Older than a month goes. `at`: when it was asked, for tests."""
+def save(login, asked, answer, cards=(), private=False, ms=0, status='ok', at=None, shown=None):
+    """Keep one turn; returns its number. Older than a month goes. `shown`: the answer as the person saw it, when
+    that is more than later requests may be told. `at`: when it was asked, for tests."""
+    seen = shown[:4000] if shown and shown != answer else None
     with _db() as conn:
         conn.execute('delete from app_ask where ts < ?', (time.time() - TEXT_DAYS * 86400,))
-        return conn.execute('insert into app_ask(ts, login, asked, answer, cards, private, ms, status) values (?,?,?,?,?,?,?,?)',
+        return conn.execute('insert into app_ask(ts, login, asked, answer, cards, private, ms, status, shown) values (?,?,?,?,?,?,?,?,?)',
                             (at or time.time(), login, asked[:2000], answer[:4000], json.dumps(list(cards)), int(private), int(ms),
-                             status)).lastrowid
+                             status, seen)).lastrowid
 
 
 def usual(login, now=None):

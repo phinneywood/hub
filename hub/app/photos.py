@@ -78,15 +78,16 @@ def picture(month='', login=None):
     picks = [_photo(e, marks, applied) for e in chosen.get('picks', []) if ID.fullmatch(str(e.get('id', ''))) and _seen(login, e)]
     more = [_photo(e, marks, applied) for e in chosen.get('more', []) if ID.fullmatch(str(e.get('id', ''))) and _seen(login, e)]
     every = picks + more
-    return {'ok': True, 'ready': True, 'months': [{'month': m, 'name': _name(m)} for m in found],
-            'month': month, 'name': chosen.get('album') or _name(month), 'looked_at': chosen.get('looked_at', 0),
+    return {'ok': True, 'ready': True, 'months': [{'month': m, 'name': month_name(m)} for m in found],
+            'month': month, 'name': chosen.get('album') or month_name(month), 'looked_at': chosen.get('looked_at', 0),
             'made': chosen.get('made', ''), 'picks': picks, 'more': more,
             'counts': {m: sum(p['mark'] == m for p in every) for m in MARKS},
             'waiting': sum((p['mark'] in ('keep', 'print') and not p['in_album']) or (p['mark'] == 'print' and not p['saved'])
                            for p in every)}
 
 
-def _name(month):
+def month_name(month):
+    """"October 2026" for 2026-10."""
     return datetime.date(int(month[:4]), int(month[5:]), 1).strftime('%B %Y')
 
 

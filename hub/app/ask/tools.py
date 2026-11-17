@@ -10,7 +10,7 @@ A tool says what it did in a plain sentence (`turn.said`), so a request that was
 second trip to the model; a tool that needs the model again (nothing matched, a name it couldn't place, something
 it read) sets `turn.again`.
 
-The family archive (`search`, `read`; owner decision, 2026-11-16): the model is given mail and calendar results,
+The family archive (`search`, `read`, `archive`; owner decision, 2026-11-16): the model is given mail and calendar results,
 and the passages of documents and ChatGPT history that match what was asked, with card, account and ID-like numbers
 masked, unless the owner switched those off on the Archive screen. Photos are shown by Hub on a card it writes
 itself; the model is told nothing about them, not even whether any were found, and it never decides whether the
@@ -817,7 +817,7 @@ def search(ctx: RunContext[Turn], searches: list[str], sources: list[Literal['ph
         told['calendar'] = [{'ref': f'e{n}', 'title': e['title'], 'date': e['day'], 'where': e['location'] or None}
                             for n, e in enumerate(events, 1)] or 'Nothing matched.'
         turn.strangers = turn.strangers or bool(events)
-    asked = 'photos' in archive.understand(turn.text)['sources'] or wanted == ['photos']
+    asked = wanted == ['photos'] or archive.wants_photos(turn.text, kids or bool(meaning['people']))
     hub_says = None
     if 'archive' in told and not lines:
         hub_says = told['archive']
@@ -883,5 +883,87 @@ def read_found(ctx: RunContext[Turn], ref: str) -> dict:
 read_found.__name__ = 'read'      # what the model calls it: in this module `read` is the house's reader
 
 
+MONTH_NAMES = ('january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october',
+               'november', 'december')
+NO_BEST = 'There is no month of best photos yet: the Mac chooses them on the 1st.'
+
+
+def _month(said):
+    """The month the owner named ("October", "last month", "October 2025", "2026-10") as YYYY-MM, or '' for the
+    newest one chosen ("this month's best" is that one: a month is chosen once it is over)."""
+    from datetime import timedelta
+
+    from ... import home
+    words = ' '.join(str(said or '').lower().split())
+    today = home.today()
+    if re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', words):
+        return words
+    if re.search(r'\blast month\b', words):
+        return (today.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
+    number = next((n for n, name in enumerate(MONTH_NAMES, 1) if re.search(rf'\b({name}|{name[:3]})\b', words)), None)
+    if number is None:
+        return ''
+    year = re.search(r'\b(20\d\d)\b', words)        # with no year, the last such month that is over
+    return f'{int(year.group(1)) if year else today.year - (number >= today.month)}-{number:02d}'
+
+
+def archive_tool(ctx: RunContext[Turn], do: Literal['best', 'on_this_day', 'read', 'kid'], month: str | None = None,
+                 what: Literal['documents', 'chats'] | None = None, on: bool | None = None, name: str | None = None) -> dict:
+    """The family archive's own pictures and settings, as the owner asks. Hub answers them itself; you are told only
+    that it did. best: the month's best photos, chosen on the Mac, on a card to keep, print or skip (`month`: one the
+    owner named, such as "October" or "last month"; else the newest). on_this_day: photos from this day in earlier
+    years, on a card. read: whether you may read documents or ChatGPT history (`what`), `on` true or false; the owner
+    only. kid: whether the person `name` counts as one of the kids (`on`, false to take them out), for "the kids" in
+    a search."""
+    from .. import archive, photos
+    turn = ctx.deps
+    told, card = '', None
+    try:
+        if turn.login is None:                    # a program on the Mac with no login gets nothing of the archive
+            told = 'Open the archive on your phone or laptop.'
+        elif do == 'best':
+            wanted = _month(month)
+            if wanted and wanted not in photos.months():
+                told = f'The Mac hasn’t chosen the best of {photos.month_name(wanted)}.'
+            else:
+                picture = photos.picture(wanted, turn.login)
+                if picture['ready'] and picture['picks']:
+                    told = f'The best of {picture["name"]}: {archive.counted(len(picture["picks"]), "photo")} to keep, print or skip.'
+                    card = {'kind': 'best', 'month': picture['month']}
+                else:
+                    told = f'The best of {picture["name"]}: no photos.' if picture['ready'] else NO_BEST
+        elif do == 'on_this_day':
+            years = archive.on_this_day(turn.login)
+            if years:
+                told = f'On this day: photos from {archive.counted(len(years), "earlier year")}.'
+                card = {'kind': 'onthisday', 'years': [{'year': y['year'], 'items': [{'id': i['id'], 'kind': i['kind'], 'day': i['day']}
+                                                                                      for i in y['items']]} for y in years]}
+            else:
+                told = 'No photos from this day in earlier years.'
+        elif do == 'read':
+            if what not in archive.SWITCHES or on is None:
+                told = 'Say documents or ChatGPT history, and on or off.'
+            elif on and turn.strangers:   # what others wrote must never be what widened what Ask reads
+                told = 'Hub changes what Ask may read in a request of its own, never alongside mail, the calendar, school or the archive.'
+            else:
+                told = archive.switch(what, on, turn.login)
+        else:
+            told = archive.set_kid(name, on is not False, turn.login) if name else 'Say who.'
+    except archive.Refused as error:
+        told = str(error) if do != 'kid' else f'Photos knows nobody called {" ".join(str(name or "").split())[:60]}.'
+    except archive.Away as away:
+        told = str(away)
+    # Whatever Hub said, the model's record is one fixed line: it learns nothing about photos, the people Photos
+    # knows, or counts, now or in a later request. Another tool of the same request decides whether it goes again.
+    turn.withheld[len(turn.said)] = ARCHIVE_KEPT
+    turn.said.append(told)
+    if card:
+        turn.cards.append(card)
+    return {'done': ARCHIVE_KEPT}
+
+
+archive_tool.__name__ = 'archive'
+
+
 ALL = (lights, scene, music, remember, groceries, kitchen, look_up, find, details, arrange, rooms, scene_setup, routine, device, setting,
-       integration, dashboard, search, read_found)
+       integration, dashboard, search, read_found, archive_tool)

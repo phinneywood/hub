@@ -160,6 +160,24 @@ def _archive(words):
     return call('search', searches=searches, **args)
 
 
+def _archive_settings(words):
+    """The archive's own pictures and settings, as a model would ask for them, or None."""
+    if re.search(r"\b(best photos|month.?s best|best of the month)\b", words):
+        month = next((m for m in ('january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september',
+                                  'october', 'november', 'december', 'last month') if m in words), None)
+        return call('archive', do='best', **({'month': month} if month else {}))
+    if re.search(r"\bon this day\b", words):
+        return call('archive', do='on_this_day')
+    found = re.search(r"\b(stop|don.?t|start|you can|you may)\b.*\bread(ing)?\b.*\b(chatgpt|chats|documents)\b", words)
+    if found:
+        return call('archive', do='read', what='documents' if found.group(3) == 'documents' else 'chats',
+                    on=found.group(1) in ('start', 'you can', 'you may'))
+    found = re.search(r"\b(\w+) (is|isn.?t|is not) one of the kids\b", words)
+    if found:
+        return call('archive', do='kid', name=found.group(1).capitalize(), on=found.group(2) == 'is')
+    return None
+
+
 def _from_archive(found):
     """An answer from what search returned, saying where it came from."""
     if isinstance(found.get('mail'), list) and found['mail']:
@@ -234,6 +252,8 @@ async def scripted(messages, info):
     elif words.startswith('remember'):
         note = re.sub(r'^remember( to| that)?\s*', '', spoken.strip(), flags=re.I)
         yield call('remember', note=note[:1].upper() + note[1:], **({'together': places} if len(places) > 1 else {}))
+    elif _archive_settings(words):
+        yield _archive_settings(words)
     elif ARCHIVE.search(words):
         yield _archive(words)
     elif NOT_HERE.search(words):

@@ -384,7 +384,9 @@ def ask_status(request: Request):
     """Whether Ask can run, this person's last few turns, what they tend to ask around now, and what Hub remembers."""
     from .ask import brain, turns
     why, login = brain.warm() or brain.limits(), _login(request)
-    return {'ready': why is None, 'why': why, 'recent': turns.recent(login), 'usual': turns.usual(login) if why is None else [],
+    recent = [{**{k: v for k, v in turn.items() if k != 'shown'}, 'answer': turn['shown']}   # each answer as this person saw it
+              for turn in turns.recent(login)]
+    return {'ready': why is None, 'why': why, 'recent': recent, 'usual': turns.usual(login) if why is None else [],
             'remembers': turns.remembered()}
 
 
