@@ -104,7 +104,7 @@ patch.setattr(activity.apple, 'events', _claw_events)
 
 # The Engine screen: a made-up instruction, something to build and a note waiting for a tap.
 from hub.engine import notes as engine_notes, state as engine_state  # noqa: E402
-engine_state.add_instruction('Always tell me about school mail with a deadline.')
+engine_state.add_instruction('Always tell me about school mail with a deadline.', 'me@example.com')
 engine_state.add_request('A button that warms the house before we wake')
 # Mail settings: one made-up sender in the plan, and Gmail changes not paused.
 from hub import store as mail_plan, worker as mail_worker  # noqa: E402
@@ -228,8 +228,8 @@ def stage(what: str):
         levels.forget()
         for scene in scenes.kept():
             scenes.forget(scene['id'])
-        for note in turns.remembered():
-            turns.forget(note['id'])
+        for note in turns.remembered('me@example.com'):
+            turns.forget(note['id'], 'me@example.com')
         fresh = day_world.Day(EVENING)
         day.events, day.school, day.mail, day.filed, day.cart, day.faults = fresh.events, fresh.school, fresh.mail, fresh.filed, True, []
         day.sorted, day.asked = fresh.sorted, fresh.asked
