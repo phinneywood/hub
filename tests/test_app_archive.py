@@ -19,9 +19,6 @@ TODAY = dt.date(2026, 11, 16)
 
 @pytest.fixture
 def served(monkeypatch, tmp_path):
-    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {'me@example.com', 'sam@example.com'})
-    monkeypatch.setattr(archive, '_tailscale_login', lambda: 'me@example.com')
-    archive._owner.update(at=float('-inf'), login=None)
     return archive_standin.install(monkeypatch, tmp_path)
 
 
@@ -163,6 +160,39 @@ def test_the_landing(served):
     assert landing['onthisday'][0]['year'] == 2023
     assert landing['switches'] == {'documents': True, 'chats': True}           # the owner's decision, 2026-11-16
     assert {p['name']: p['kid'] for p in landing['people']} == {'Sam': True, 'Alex': False}
+    assert landing['google'] is True and [t['say'] for t in landing['trouble']] == ['Full-size photos come after your OK on the Mac.']
+
+
+def test_the_landing_says_what_is_wrong_in_fixed_sentences(served):
+    me, other = 'me@example.com', 'sam@example.com'
+    shut = {'photos': {'ok': None, 'finished': 20.0, 'errors': {'NoAccess': 1}},          # the library couldn't be opened at all
+            'documents': {'ok': 20.0, 'finished': 20.0, 'errors': {'NoAccess': 2}},       # two of its folders couldn't
+            'chats': {'ok': 5.0, 'finished': 20.0, 'errors': {'OSError': 1}}}             # read before; last night's run stopped
+    said = archive.troubles(shut, 'waiting', me)
+    assert [t['say'] for t in said] == ['Photos and documents can’t be read yet.', 'The last reading of ChatGPT history didn’t finish.']
+    assert said[0]['how'] == archive.NEEDS_ACCESS and 'Full Disk Access' in said[0]['how'] and all(t['loud'] for t in said)
+    fine = {s: {'ok': 20.0, 'finished': 19.9, 'errors': {'ValueError': 3}} for s in ('photos', 'documents', 'chats')}
+    waiting, off = archive.troubles(fine, 'waiting', me), archive.troubles(fine, 'not allowed', me)   # a few odd files are no trouble
+    assert [(t['say'], t['loud']) for t in waiting] == [('Full-size photos come after your OK on the Mac.', False)]
+    assert [t['say'] for t in off] == ['Full-size photos are switched off on the Mac.'] and 'Automation' in off[0]['how']
+    assert archive.troubles(fine, 'allowed', me) == [] and archive.troubles({}, 'unknown', me) == []
+    assert archive.troubles(shut, 'waiting', other) == [] and archive.troubles(shut, 'waiting', None) == []    # the owner's to fix
+    for trouble in said + waiting + off:                                           # never a path, a login or an error's own words
+        assert not any(mark in trouble['say'] + trouble['how'] for mark in ('/', '@', 'Error', 'NoAccess'))
+
+
+def test_until_hub_is_told_whose_archive_it_is_everyone_sees_shared_photos_and_the_landing_says_so(served, mail):
+    archive_standin.household(people=None)             # two logins may sign in and the private settings name nobody yet
+    for headers in (OWNER, OTHER):
+        landing = client.get('/app/api/archive', headers=headers).json()
+        assert landing['owner'] is False and landing['google'] is False and landing['sources'] == ['photos']
+        assert landing['counts']['photos']['items'] == 2 and set(landing['counts']) == {'photos'} and landing['switches'] == {}
+        assert landing['trouble'] == [archive.UNOWNED]             # not "once your Google account is added": wrong for the owner
+        found = client.post('/app/api/archive/search', json={'q': 'furnace beach'}, headers=headers).json()
+        assert found['sources'] == ['photos'] and 'documents' not in found and 'chats' not in found and found['mail'] is False
+        assert client.get(f'/app/api/archive/item/{archive_standin.DOCUMENTS[0]["id"]}', headers=headers).status_code == 404
+    assert not [a for a in mail.asked if a[0].startswith('/gmail')]
+    assert [t['loud'] for t in archive.troubles({'photos': {'errors': {'NoAccess': 1}}}, 'waiting', 'me@example.com')] == [True]   # said to someone
 
 
 def test_without_the_archive_the_screen_says_so(monkeypatch, tmp_path):
@@ -242,13 +272,7 @@ def event(key, day, title, where=''):
     return {'id': key, 'status': 'confirmed', 'summary': title, 'location': where, 'start': {'date': day}, 'end': {'date': day}}
 
 
-@pytest.fixture
-def me(monkeypatch):
-    """The owner's login is the one this Mac's Tailscale is signed in with."""
-    monkeypatch.setattr(archive, '_tailscale_login', lambda: 'me@example.com')
-
-
-def test_calendar_history_goes_back_until_the_calendar_runs_out(monkeypatch, me):
+def test_calendar_history_goes_back_until_the_calendar_runs_out(monkeypatch):
     events = {'2026-10': [event('a1', '2026-10-03', 'Furnace service', 'Home')],
               '2025-10': [event('b1', '2025-10-03', 'Furnace service')], '2024-06': [event('c1', '2024-06-20', 'Dentist')]}
     fake = Bridge(events)
@@ -269,7 +293,7 @@ def test_calendar_history_goes_back_until_the_calendar_runs_out(monkeypatch, me)
     assert [e['day'] for e in archive.calendar(archive.understand('furnace'), 'me@example.com')] == ['2025-10-03']
 
 
-def test_calendar_searches_by_date_alone_and_never_lists_everything(monkeypatch, me):
+def test_calendar_searches_by_date_alone_and_never_lists_everything(monkeypatch):
     fake = Bridge({'2026-10': [event('a1', '2026-10-03', 'Furnace service')]})
     monkeypatch.setattr(bridge, 'get', fake.get)
     archive.calendar_collect(dt.datetime(2026, 11, 16, 9, tzinfo=archive.home.PACIFIC), pause=0)
@@ -290,7 +314,8 @@ def test_another_login_sees_shared_library_photos_alone(served):
     landing = client.get('/app/api/archive', headers=OTHER).json()
     assert set(landing['counts']) == {'photos'} and landing['counts']['photos']['items'] == 2
     assert landing['calendar'] is None and landing['switches'] == {} and landing['onthisday'] == []
-    assert landing['trouble'] == ['Your mail and calendar come here once your Google account is added.']
+    assert [t['say'] for t in landing['trouble']] == ['Your mail and calendar aren’t here yet.']
+    assert landing['google'] is False and landing['owner'] is False
 
 
 def test_another_login_gets_not_there_for_anything_else(served, mail):
@@ -305,7 +330,7 @@ def test_another_login_gets_not_there_for_anything_else(served, mail):
     assert not [a for a in mail.asked if a[0].startswith('/gmail')]                       # Gmail was never asked for them
 
 
-def test_another_logins_calendar_is_its_own(monkeypatch, me):
+def test_another_logins_calendar_is_its_own(monkeypatch):
     fake = Bridge({'2026-10': [event('a1', '2026-10-03', 'Furnace service')]})
     monkeypatch.setattr(bridge, 'get', fake.get)
     archive.calendar_collect(dt.datetime(2026, 11, 16, 9, tzinfo=archive.home.PACIFIC), pause=0)

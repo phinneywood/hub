@@ -12,31 +12,29 @@
 A search is read here, with no model (`understand`): years, months, seasons, "last summer", the people Photos knows
 by name, "the kids", and words that name a source ("pdf", "email", "chat"). The rest are the words to look for.
 
-Who sees what: every signed-in login sees photos, documents, mail and calendar, as with the rest of Hub. ChatGPT
-history is only for the owner's own login. What Ask's model may be given is decided in hub/app/ask/tools.py
-(`search`, `read`) and set out in "Archive" in docs/app.md: never anything about a photo.
+Who sees what (owner decisions, 2026-11-16; `may_see`, hub/people.py): the owner sees everything in the archive. Any
+other signed-in login sees the photos in the iCloud Shared Library and nothing else of it: not the owner's own
+library, documents or ChatGPT history. Mail and the calendar are each person's own Google account's, and a program
+on the Mac with no login sees nothing. What Ask's model may be given is decided in hub/app/ask/tools.py (`search`,
+`read`, `archive`) and set out in "Archive" in docs/app.md: never anything about a photo.
 """
 import datetime as dt
 import email.utils
-import json
 import os
 import re
-import shutil
-import subprocess
 import threading
 import time
 from pathlib import Path
 
 import httpx
 
-from .. import bridge, home, household, store
+from .. import bridge, config, home, household, people as household_people, store
 
 QUICK = 4                   # seconds Hub waits on the archive for a search or an item
 DRAWING = 20                # and for a picture it makes
 MAIL_MOST = 10
 CALENDAR_MOST = 20
 PAGE = 48
-OWNER_SECONDS = 600
 MONTHS = {'january': 1, 'jan': 1, 'february': 2, 'feb': 2, 'march': 3, 'mar': 3, 'april': 4, 'apr': 4, 'may': 5,
           'june': 6, 'jun': 6, 'july': 7, 'jul': 7, 'august': 8, 'aug': 8, 'september': 9, 'sep': 9, 'sept': 9,
           'october': 10, 'oct': 10, 'november': 11, 'nov': 11, 'december': 12, 'dec': 12}
@@ -57,7 +55,6 @@ OLDEST = re.compile(r"\b(first time|earliest|oldest|first)\b", re.I)
 FILLER = set("""a an the of at in on from with for to about me my our we us i you your all any some that those these this there
 ever time times did do does was were is are be been have has had can could would get got show find search look it its
 by during around when where what which who and or but then please like""".split())
-_owner = {'at': float('-inf'), 'login': None}
 _calendar_lock = threading.Lock()
 _started = False
 
@@ -127,68 +124,25 @@ MAIL_ID = re.compile(r'm:[0-9a-f]{6,40}')
 EVENT_ID = re.compile(r'e:[0-9]{1,12}')
 
 
-def _people():
-    """hub/people.py, the household's identities: who a login is and which Google accounts it sees. Until it is part
-    of Hub, the owner's login sees the bridge's own account and no other login sees any."""
-    try:
-        from .. import people
-    except ImportError:
-        return None
-    return people
-
-
 def owner(login):
-    """Whether this login is the owner's: as people.py says when it can, else the one named in the private settings
-    file ("archive": {"owner": ...}), else the Tailscale login this Mac is signed in with."""
-    if not login:
-        return False
-    known = _people()
-    if known is not None and callable(getattr(known, 'owner', None)):
-        return bool(known.owner(login))
-    named = settings().get('owner')
-    if named:
-        return str(named).lower() == login.lower()
-    if time.monotonic() - _owner['at'] > OWNER_SECONDS:
-        _owner.update(at=time.monotonic(), login=_tailscale_login())
-    return bool(_owner['login']) and _owner['login'].lower() == login.lower()
+    """Whether this login is the owner's: the person whose Google account is the bridge's main one (hub/people.py)."""
+    return household_people.owner(login)
 
 
-TAILSCALE = ('/Applications/Tailscale.app/Contents/MacOS/tailscale', '/usr/local/bin/tailscale', '/opt/homebrew/bin/tailscale')
-
-
-def _tailscale_login():
-    """The login this Mac's Tailscale is signed in with. The Mac app's own binary answers as a command only when it
-    sees a terminal, so it is told it has one (TERM); without it, from Hub's LaunchAgent, it tries to open its window."""
-    for command in [shutil.which('tailscale'), *TAILSCALE]:
-        if not command or not os.path.exists(command):
-            continue
-        try:
-            done = subprocess.run([command, 'status', '--json'], capture_output=True, timeout=5,
-                                  env={**os.environ, 'TERM': os.environ.get('TERM') or 'dumb'})
-            status = json.loads(done.stdout)
-            me = str((status.get('Self') or {}).get('UserID'))
-            return ((status.get('User') or {}).get(me) or {}).get('LoginName')
-        except (OSError, ValueError, subprocess.SubprocessError, AttributeError):
-            continue
-    return None
+def unowned():
+    """Whether Hub hasn't been told yet whose archive this is: more than one login may sign in and the private
+    settings file names nobody as the owner. Until it does, every login sees Shared Library photos only."""
+    return not any(household_people.owner(login) for login in config.ALLOWED_LOGINS)
 
 
 def accounts(login):
-    """The Google accounts whose mail and calendar this login may see: only its own (owner rule, 2026-11-16: "only I
-    see my own Google account stuff, and same for my wife once she adds hers")."""
-    if not login:
-        return []
-    known = _people()
-    if known is not None:
-        return [a for a in known.accounts(login) if a]
-    return ['default'] if owner(login) else []
+    """The Google accounts whose mail and calendar this login may see: only its own (owner rule, 2026-11-16: each
+    person sees their own Google account's mail and calendar and no one else's)."""
+    return sorted(household_people.accounts(login))
 
 
-def sees(login, account='default'):
-    known = _people()
-    if known is not None:
-        return bool(login) and bool(known.sees(login, account))
-    return account in accounts(login)
+def sees(login, account=household_people.DEFAULT):
+    return household_people.sees(login, account)
 
 
 def may_see(login, item):
@@ -336,6 +290,15 @@ def understand(text, people=(), kids=(), today=None):
     words = [w for w in re.findall(r"[\w’'-]+|\"[^\"]+\"", low) if w.strip("'’-").lower() not in FILLER]
     out['terms'] = ' '.join(words)
     return out
+
+
+SHOW = re.compile(r"^\s*(please\s+)?(can (you|i)\s+)?(show|let me see|see|look at|pull up)\b", re.I)
+
+
+def wants_photos(text, about_people=False):
+    """Whether the words ask for photos: they name photos, pictures or videos, or ask to be shown people ("show me
+    the kids at the beach")."""
+    return 'photos' in understand(text)['sources'] or bool(about_people and SHOW.search(str(text or '')))
 
 
 def counted(n, one, many=None):
@@ -830,29 +793,56 @@ def switch(name, on, login):
     return f'Ask may read {what} now.' if on else f'Ask won’t read {what}.'
 
 
-NEEDS_ACCESS = ('The archive can’t read {what} yet: HubArchive needs Full Disk Access on the Mac. In System Settings, '
-                'Privacy & Security, Full Disk Access, add HubArchive from the HubArchive folder and switch it on; the next '
-                'reading starts tonight, or at once from Termius.')
-WHAT = {'photos': 'the photos', 'documents': 'the documents', 'chats': 'the ChatGPT history'}
-NO_ACCOUNT = 'Your mail and calendar come here once your Google account is added.'
-NO_SHARP = 'Photos open sharp once HubArchive may work Photos: it asks on the Mac’s screen, the first time, for your OK.'
+# What can be wrong, in fixed sentences for the owner: what it is (`say`) and what to do (`how`). Never a path or an
+# error's own words. `loud`: something of the archive can't be read at all.
+NEEDS_ACCESS = ('HubArchive needs Full Disk Access on the Mac. In System Settings, open Privacy & Security, then Full Disk '
+                'Access, add HubArchive and switch it on. The next reading starts tonight.')
+WHAT = {'photos': 'photos', 'documents': 'documents', 'chats': 'ChatGPT history'}
+NOT_FINISHED = 'It is tried again tonight.'
+SHARP = {'waiting': ('Full-size photos come after your OK on the Mac.',
+                     'The first time, HubArchive asks on the Mac’s screen whether it may use Photos.'),
+         'not allowed': ('Full-size photos are switched off on the Mac.',
+                         'In System Settings, open Privacy & Security, then Automation, and switch on Photos under HubArchive.')}
+NO_ACCOUNT = {'say': 'Your mail and calendar aren’t here yet.', 'how': 'They come once your Google account is added to Hub.', 'loud': False}
+UNOWNED = {'say': 'Hub doesn’t know yet whose archive this is.',
+           'how': 'It is set once on the Mac. Until then everyone sees the Shared Library’s photos only.', 'loud': True}
+
+
+def _listed(names):
+    names = list(names)
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
 
 
 def troubles(runs, sharp, login):
-    """What is wrong, in fixed sentences: a source the last reading couldn't open, and sharp photos not yet allowed.
-    Never a path or an error's own words."""
-    out = []
+    """What is wrong with the archive, for the owner (and, while Hub doesn't know who that is, for anyone signed in,
+    so that it is never said to nobody): a source the last reading couldn't open or didn't finish, and full-size
+    photos not yet allowed. Each is {'say', 'how', 'loud'}."""
+    if not login or not (owner(login) or unowned()):
+        return []
+    out, shut, failed = [], [], []
     for source in ('photos', 'documents', 'chats'):
-        if source not in sources_for(login):
-            continue
-        errors = (runs.get(source) or {}).get('errors') or {}
+        run = runs.get(source) or {}
+        errors = run.get('errors') or {}
         if 'NoAccess' in errors:
-            out.append(NEEDS_ACCESS.format(what=WHAT[source]))
-        elif errors and not (runs.get(source) or {}).get('ok'):
-            out.append(f'The last reading of {WHAT[source]} didn’t finish. It is tried again tonight.')
-    if sharp == 'not allowed':
-        out.append(NO_SHARP)
+            shut.append(WHAT[source])
+        elif errors and (run.get('finished') or 0) > (run.get('ok') or 0):      # its last run stopped on an error
+            failed.append(WHAT[source])
+    if shut:
+        said = _listed(shut)
+        out.append({'say': f'{said[:1].upper()}{said[1:]} can’t be read yet.', 'how': NEEDS_ACCESS, 'loud': True})
+    if failed:
+        out.append({'say': f'The last reading of {_listed(failed)} didn’t finish.', 'how': NOT_FINISHED, 'loud': True})
+    if sharp in SHARP and 'photos' not in shut:
+        out.append({'say': SHARP[sharp][0], 'how': SHARP[sharp][1], 'loud': False})
     return out
+
+
+def on_this_day(login):
+    """Photos from this day in earlier years that this login may see, newest year first. Raises Away."""
+    if not login:
+        return []
+    today = home.today()
+    return (fetch('/onthisday', [('day', today.strftime('%m-%d')), ('year', str(today.year))] + scope(login)) or {}).get('years', [])
 
 
 def landing(login):
@@ -860,15 +850,15 @@ def landing(login):
     what is wrong. Cut to what this login may see: another login's landing shows nothing of the owner's."""
     mine = owner(login)
     out = {'ready': True, 'owner': mine, 'switches': switches() if mine else {}, 'calendar': calendar_status(login),
-           'sources': list(sources_for(login)), 'google': sees(login), 'trouble': [] if sees(login) else [NO_ACCOUNT]}
+           'sources': list(sources_for(login)), 'google': sees(login),
+           'trouble': [UNOWNED] if unowned() else [] if sees(login) else [NO_ACCOUNT]}
     try:
         status = fetch('/status', scope(login)) or {}
         out['counts'] = {k: v for k, v in status.get('counts', {}).items() if k in sources_for(login)}
         runs = status.get('runs', {})
         out['indexed_at'] = max((r.get('ok') or 0 for r in runs.values()), default=0) or None
         out['trouble'] = troubles(runs, status.get('sharp'), login) + out['trouble']
-        out['onthisday'] = (fetch('/onthisday', [('day', home.today().strftime('%m-%d')), ('year', str(home.today().year))] + scope(login))
-                            or {}).get('years', [])
+        out['onthisday'] = on_this_day(login)
         out['people'] = people(login)
     except Away as away:
         out.update(ready=False, away=str(away), counts={}, onthisday=[], people=[])

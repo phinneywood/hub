@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from hub import config
 from hub.main import app
+from tests import archive_standin
 
 client = TestClient(app)
 OWNER = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
@@ -22,7 +23,7 @@ def curator_folder(tmp_path):
             'picks': [{'id': p, 'taken': '2026-10-03T12:00:00-07:00', 'people': ['Alex'], 'favorite': True}
                       for p in picks], 'more': [{'id': B, 'taken': '2026-10-04T09:00:00-07:00'}] * (month == '2026-10')}))
     (here / 'thumbs' / f'{A}.jpg').write_bytes(b'\xff\xd8 a fictional preview')
-    (config.DATA_DIR / 'household.json').write_text(json.dumps({'photos': {'dir': str(here)}, 'archive': {'owner': 'me@example.com'}}))
+    archive_standin.household(photos={'dir': str(here)})
     return here
 
 

@@ -6,6 +6,7 @@ alike.
 
 Everyone and everything here is invented (Alex and Sam, as in tests/archive_world.py).
 """
+import json
 import re
 import time
 import urllib.parse
@@ -16,6 +17,24 @@ import httpx
 from tests.archive_world import INVOICE, pdf, swatch
 
 STOP = {'the', 'a', 'an', 'of', 'at', 'in', 'on', 'and', 'or', 'to', 'for', 'with', 'from'}
+OWNER, OTHER = 'me@example.com', 'sam@example.com'
+HOUSEHOLD = [{'name': 'Alex', 'logins': [OWNER], 'accounts': ['default']}, {'name': 'Sam', 'logins': [OTHER], 'accounts': []}]
+
+
+def household(**sections):
+    """Write these sections into the test's household.json beside what it holds, with who is who (hub/people.py):
+    the owner's login with the main Google account, the other login with none. `people=None` leaves nobody named."""
+    from hub import config
+    path = config.DATA_DIR / 'household.json'
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, ValueError):
+        value = {}
+    value.setdefault('people', HOUSEHOLD)
+    value.update(sections)
+    if value.get('people') is None:
+        value.pop('people', None)
+    path.write_text(json.dumps(value))
 
 
 def _photo(n, day, people=(), words='', place='', kind='photo', young=False, score=.5, shared=False):
@@ -190,7 +209,7 @@ def respond(path, query):
                                      'last': '2026-04-20'},
                        'chats': {'items': 2, 'kinds': {'chat': 2}, 'previews': 0, 'first': '2026-03-02', 'last': '2026-03-03'}},
             'runs': {s: {'ok': 1763280000.0, 'items': 1, 'seconds': 1.0, 'errors': {}} for s in ('photos', 'documents', 'chats')},
-            'people': 2, 'kids': 1, 'bytes': 4096}, {}
+            'people': 2, 'kids': 1, 'bytes': 4096, 'sharp': 'waiting'}, {}
     if route in ('thumb', 'photo') and len(parts) == 2 and parts[1] in known and (route == 'thumb' or parts[1][0] == 'p'):
         return 200, 'image/png', swatch(len(parts[1]) / 9), {'X-Width': '64', 'X-Height': '48'}
     if route == 'page' and len(parts) == 3 and parts[1] in known and parts[1][0] == 'd' and parts[2] == '1':
@@ -219,8 +238,11 @@ class StandIn:
 
 
 def install(monkeypatch, folder):
-    """Hub's archive client, answered by the stand-in. Returns it."""
+    """Hub's archive client, answered by the stand-in, in a household of two logins. Returns the stand-in."""
+    from hub import config
     from hub.app import archive
+    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {OWNER, OTHER})
+    household()
     stand_in = StandIn()
     marker = Path(folder) / 'archive.sock'
     marker.touch()                                   # Hub looks for the socket before it asks

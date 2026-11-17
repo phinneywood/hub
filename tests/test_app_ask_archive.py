@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from hub import bridge, config, store
+from hub import bridge, store
 from hub.app import archive
 from tests import archive_standin
 from tests.ask_script import SEEN
@@ -19,9 +19,6 @@ OTHER = {'origin': 'http://testserver', 'tailscale-user-login': 'sam@example.com
 
 @pytest.fixture
 def archived(house, monkeypatch, tmp_path):  # noqa: F811
-    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {'me@example.com', 'sam@example.com'})
-    monkeypatch.setattr(archive, '_tailscale_login', lambda: 'me@example.com')
-    archive._owner.update(at=float('-inf'), login=None)
     archive_standin.install(monkeypatch, tmp_path)
     monkeypatch.setattr(bridge, 'get', Bridge().get)
     return house
@@ -127,7 +124,6 @@ def test_chatgpt_history_is_searched_for_the_owner_only(archived):
 
 
 def test_without_the_archive_ask_still_answers_from_mail(house, monkeypatch, tmp_path):  # noqa: F811
-    monkeypatch.setattr(archive, '_tailscale_login', lambda: 'me@example.com')
     monkeypatch.setenv('HUB_ARCHIVE_SOCKET', str(tmp_path / 'none.sock'))
     monkeypatch.setattr(bridge, 'get', Bridge().get)
     answer, _, _ = ask('when did we last service the furnace?')
