@@ -65,6 +65,17 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.locator(".askpage .now .row.need").count() === 0, "what needs you was said twice: as rows and in the morning message");
     expect((await page.locator(".askpage .now-more").first().innerText()).trim() === "Open Today",
       "the rest of what needs you was not a tap away");
+    if (phone) {      // the conversation sits whole above the bar, and stays there when an iPhone reports the visible area moved
+      const fits = () => page.evaluate(() => {
+        const ask = document.querySelector(".askpage").getBoundingClientRect(), field = document.querySelector(".composer").getBoundingClientRect();
+        return ask.top === 0 && field.bottom <= document.querySelector(".dock").getBoundingClientRect().top
+          && document.scrollingElement.scrollHeight <= innerHeight;
+      });
+      expect(await fits(), "Ask's field was not above the bar, or the page under Ask could scroll");
+      await page.evaluate(() => document.documentElement.style.setProperty("--vvt", "108px"));     // what iOS left behind in the bug
+      expect(await fits(), "Ask moved under the bar when the visible area was reported moved without a keyboard");
+      await page.evaluate(() => document.documentElement.style.removeProperty("--vvt"));
+    }
     expect(phone ? (await page.locator(".askpage .house-now .house-words b").innerText()) === "Four rooms are lit."
       : await page.locator(".side .plan").count() > 0, phone ? "the house card did not say the house" : "the house was not beside Ask");
     expect(await page.evaluate(() => { const f = document.querySelector("#askq").getBoundingClientRect(); return f.bottom <= innerHeight && f.top > innerHeight / 2; }),
