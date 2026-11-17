@@ -15,7 +15,9 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   all work;
 - Ask offers what is often asked around now as a suggested message, does what is typed and says so in a sentence, draws the rooms
   or speakers it changed, puts a change back from under the answer, shows Kitchen's reply when it arrives,
-  answers a question about the day from what Hub read, and remembers and forgets;
+  answers a question about the day from what Hub read, searches the owner's mail and draws the emails found
+  under the answer (each opening in Gmail), reads the first when told "open the first one" and marks it, and
+  remembers and forgets;
 - Ask moves a lamp to another room and puts it back, makes an automation, leaves unlocking a door, removing a
   room and disabling a thing on a card until it is tapped, does nothing when the card is put away, reloads an
   integration, and asks which one when a name fits several lamps;
@@ -33,7 +35,8 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   "I paid the power bill", draws it so under the answer and puts it back with Undo; and the other person at home,
   whose mail Hub doesn't read, sees only the class guide's two on Errands and Today, is told on Mail and Mail
   settings that their mail isn't connected yet with none of the owner's shown, isn't offered the older Gmail and
-  Calendar pages, and finds the older Gmail page saying it isn't theirs;
+  Calendar pages, finds the older Gmail page saying it isn't theirs, and is told in Ask that the owner's mail
+  isn't theirs to search;
 - Today, Mail and Kitchen open from Ask by a few letters of their name;
 - the wall (the brief on a kitchen iPad, at iPad size) shows the household's needs and only counts the rest,
   keeps mail off, follows the sun from the day look to dusk, never opens the house's live line, keeps the day

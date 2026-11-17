@@ -114,6 +114,10 @@ from hub.tools.gmail import missions as mail_missions  # noqa: E402
 mail_plan.set_decision('news@example.com', 'archive', 120, True)
 patch.setattr(mail_missions, 'pause_state', lambda: 'ok')
 patch.setattr(mail_worker, 'start', lambda: None)
+# Ask's mail search and read: a made-up mailbox where the bridge would answer, with one sender AI is off for.
+from tests import mail_world  # noqa: E402
+mail_world.install(patch)
+mail_plan.set_ai_blocked(mail_world.OFF, True)
 engine_notes.propose('The porch light goes off at midnight', 'remember that the porch light goes off at midnight', login='me@example.com')
 patch.setattr(control, 'CHECK_WAIT', 0.2)
 

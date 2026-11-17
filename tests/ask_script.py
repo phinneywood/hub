@@ -8,7 +8,8 @@ finds nothing. For the house's setup it knows a few plain sentences ("move the r
 list a few more ("add sponges and milk to the list", "what's on the list", "order the groceries for tomorrow
 morning"). Anything with "errands" in it shows the errands Hub got ready, and a few sentences finish one ("I paid the
 power bill", "the photo form can wait till tomorrow", "I don't need the dental cleaning", "the pumpkin goes on the
-list", "undo the power bill", "open my replies in Gmail"). Anything else gets one sentence saying what Hub can do.
+list", "undo the power bill", "open my replies in Gmail"). "Search my mail for the plumber" searches the
+person's mail, and "open the first one" reads one it found. Anything else gets one sentence saying what Hub can do.
 """
 import json
 import re
@@ -69,6 +70,9 @@ LIST = [
     (r'^(?:order the groceries|check out|place the order)(?: for (.+))?$', lambda m: call('groceries', do='order', **({'when': m[1]} if m[1] else {}))),
 ]
 ERRANDS = re.compile(r'\berrands?\b')
+SEARCH_MAIL = re.compile(r'^search my (?:mail|email) for (.+?)[.?!]?$', re.I)
+OPEN_MAIL = re.compile(r'^(?:open|read) (?:the )?(first|second|third|\d)(?: one| email)?\b', re.I)
+ORDINAL = {'first': 1, 'second': 2, 'third': 3}
 EVERY = re.compile(rf'^every (evening|morning|day) at (\d{{1,2}}):(\d{{2}}),? turn (on|off) {THE}(.+)$', re.I)
 SOUND = re.compile(r'\b(play|music|songs?|jazz|piano|playlist|pause|resume|skip|next|previous|quieter|louder|volume|too|as well)\b')
 LIGHTS = re.compile(r'\b(dim|turn|switch|lights?|lamps?|on|off)\b')
@@ -169,7 +173,24 @@ async def scripted(messages, info):
     places = _places(words)
     given = [p.content for m in messages for p in m.parts if p.part_kind == 'user-prompt'][-1]
     setup = _setup(spoken)
-    if back and back[0].tool_name == 'look_up' or not back and '<data>' in given:
+    if back and back[0].tool_name in ('mail_search', 'mail_read'):
+        seen = back[0].content
+        if 'not_yours' in seen:
+            yield seen['not_yours']
+        elif 'email' in seen:
+            yield f'{seen["email"]["from"]} wrote: {seen["email"]["text"].split(". ")[0].strip(".")}.'
+        elif seen.get('found'):
+            first = next((row for row in seen['found'] if 'from' in row), None)
+            yield (f'{len(seen["found"])} emails match. The newest is from {first["from"]}: {first["subject"]}.' if first
+                   else 'Only emails Hub may not read match.')
+        else:
+            yield 'Hub couldn’t do that. ' + str(seen.get('not_done') or seen.get('note') or '')
+    elif not back and SEARCH_MAIL.match(spoken.strip()):
+        yield call('mail_search', query=SEARCH_MAIL.match(spoken.strip()).group(1))
+    elif not back and OPEN_MAIL.match(spoken.strip()):
+        which = OPEN_MAIL.match(spoken.strip()).group(1).lower()
+        yield call('mail_read', which=ORDINAL.get(which) or int(which))
+    elif back and back[0].tool_name == 'look_up' or not back and '<data>' in given:
         yield 'From what Hub can see, ' + ('the dentist is Tuesday at three.' if back else 'two emails need you.')
     elif back and back[0].tool_name == 'find' and back[0].content.get('found') and EVERY.match(' '.join(spoken.split()).rstrip('.')):
         # What a model does with what it found: write the automation with the id, in Home Assistant's own words.
