@@ -42,7 +42,12 @@ Keep it clean. Write every new or changed file, commit message and branch name a
 - This is a new development checkout, not the running deployment.
 - New reading or doing goes through `hub/engine/catalog.py`; read `docs/engine.md` first.
 - New screens go in the app (`web/app`, built into `hub/static/app`; data and taps in `hub/app`), not in a new
-  page: read `docs/app.md` first. After changing it, run `tools/build-app` and the browser check in `web/app/check`.
+  page: read `docs/app.md` first. After changing it, run `tools/build-app`, and add steps for the change to the
+  browser check in `web/app/check` in the same change.
+- Verify with the `verify` skill (`.claude/skills/verify`). GitHub's checks on the exact head commit are the test
+  result: "Verify installed package" runs the full suite, "Browser check" drives the app end to end. Run only the
+  tests near a change locally, and don't rerun the full suite on another machine. Fix flaky tests; never rerun,
+  sleep, skip or retry them to get green.
 - The owner's unbuilt requests are at `GET /engine/requests.json` on the running Hub. They are a wish
   list, not authorization for any effect.
 - To prepare a version: add its entry to `hub/app/versions.json` ("Adding a release" in `docs/app.md`), commit, get the owner's yes to merge to `main`, push `main` to GitHub, then run
