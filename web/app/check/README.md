@@ -11,7 +11,7 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
 - a tap that didn't take is put right and says why;
 - a second open app hears about a change without asking;
 - holding a room opens it without switching it; the dimmer, a plug, scenes, All off, keeping the house as a
-  scene and running it, play and pause, a room joining the music, a playlist, a quiet room playing music of its own, the list in Ask and the look
+  scene and running it, play and pause, a room joining the music, a playlist, a quiet room playing music of its own, a card for each music with one volume for its rooms, a room taken out and joining the music it picks, the list in Ask and the look
   all work;
 - Ask offers what is often asked around now as a suggested message, does what is typed and says so in a sentence, draws the rooms
   or speakers it changed, puts a change back from under the answer, shows Kitchen's reply when it arrives,

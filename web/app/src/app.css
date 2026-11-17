@@ -307,6 +307,30 @@ button.row { text-align: left; }
 [data-theme="day"] .switch.snd.on::after { background: #fff; }
 
 /* playing */
+/* the music sheet: one card for each music playing in the house */
+.tune { margin-top: 16px; padding: 14px 14px 12px; border-radius: 18px; background: var(--raised); }
+[data-theme="day"] .tune { background: var(--ground); }
+.tune.paused .tune-head .sleeve, .tune.paused .tune-text b { opacity: .6; }
+.tune-head { display: flex; align-items: center; gap: 12px; }
+.tune-text { flex: 1; min-width: 0; }
+.tune-text b { display: block; font-size: var(--t-m); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tune-text span { display: block; font-size: var(--t-xs); color: var(--ink-2); }
+.tune-text .tune-where { color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+.tune .ctl { min-height: 52px; }
+.tune .ctl.vol { grid-template-columns: 1fr minmax(120px, 52%); }
+.tune:not(.bare) .ctl:last-of-type { border-bottom: 0; }
+.tune-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.tune .pill { background: var(--line); }
+.mini.bare { background: none; }
+.pill.bare { background: none; color: var(--ink-2); }
+.pills.wrap { flex-wrap: wrap; justify-content: flex-end; }
+.ctl.choose { grid-template-columns: 1fr; gap: 8px; padding: 10px 0; }
+.ctl.choose .pills { justify-self: start; justify-content: flex-start; }
+.tune-text .eq { display: inline-flex; }
+.tune:not(.bare) { border: 1px solid var(--line); }
+.tune.bare { margin-top: 0; padding: 0; background: none; border-radius: 0; }
+.tune.bare .ctl:last-of-type { border-bottom: 1px solid var(--line); }
+.tune-where .eq { color: var(--sound); height: 11px; flex: none; }
 .transport { display: flex; justify-content: center; align-items: center; gap: 34px; margin-top: 18px; }
 .transport button { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 50%; }
 .transport .ic { width: 30px; height: 30px; }

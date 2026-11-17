@@ -120,7 +120,8 @@ def _music(found, homes):
             'speakers': [{'id': s['id'], 'name': homes.get(s['id']) or s['name'], 'in': s['in'], 'leads': s['leads'],
                           'volume': s['volume'], 'offline': s['offline'], 'other': s['id'] in elsewhere}
                          for s in now['speakers'] if homes.get(s['id']) or not s['offline'] or s['in']],
-            'also': [{'speaker': g['leader'], 'title': g['title'], 'artist': g['artist'],
+            'also': [{'speaker': g['leader'], 'title': g['title'], 'artist': g['artist'], 'album': g['album'],
+                      'playing': g['playing'], 'volume': g['volume'],
                       'speakers': [s['id'] for s in g['speakers'] if s['in']],
                       'rooms': [homes.get(s['id']) or s['name'] for s in g['speakers'] if s['in']]} for g in others]}
 

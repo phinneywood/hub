@@ -163,7 +163,8 @@ def test_music_plays_what_was_found_where_asked_softly(house):
     # The kitchen and living room go on with their own music, and the picture says both are playing.
     music = picture()['music']
     assert music['title'] == 'Paper Lanterns' and music['also'] == [
-        {'speaker': 'media_player.bedroom', 'title': 'First track', 'artist': '', 'speakers': ['media_player.bedroom'], 'rooms': ['Bedroom']}]
+        {'speaker': 'media_player.bedroom', 'title': 'First track', 'artist': '', 'album': 'Evening Jazz', 'playing': True, 'volume': 15,
+         'speakers': ['media_player.bedroom'], 'rooms': ['Bedroom']}]
     assert [s['name'] for s in music['speakers'] if s['other']] == ['Bedroom'] and picture()['rooms']['bedroom']['sounding'] is True
     assert ('music_assistant/play_media', {'entity_id': 'media_player.bedroom', 'media_id': 'library://playlist/1',
                                            'media_type': 'playlist', 'enqueue': 'replace'}) in house.sent

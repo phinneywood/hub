@@ -17,7 +17,7 @@ import { Changes } from "./changes";
 import { ItemSheet, Kitchen, shop, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
 import { ErrandSheet, Errands, watchErrands } from "./errands";
-import { HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
+import { ChangeSheet, HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { go, seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
 import { watchDock, watchViewport } from "./viewport";
@@ -54,6 +54,7 @@ function Sheets() {
     const speaker = now.music?.speakers.find((s) => s.id === open.speaker);
     return now.music && speaker ? <HereSheet speaker={speaker} music={now.music} /> : null;
   }
+  if (open.kind === "change") return now.music ? <ChangeSheet leader={open.speaker} music={now.music} /> : null;
   if (open.kind === "keep") return <KeepSheet now={now} />;
   return null;
 }

@@ -15,7 +15,7 @@ const ALL_OFF = "all-off";
 const SILENCE = 12000;            // Hub sends a beat every 5 s; this long without one and the line is taken for dead
 
 export type Look = "auto" | "dusk" | "day";
-export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "keep" }
+export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "change"; speaker: string } | { kind: "keep" }
   | { kind: "item"; id: number } | { kind: "card"; card: Card } | { kind: "errand"; id: number; way?: number } | null;
 export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
@@ -134,6 +134,10 @@ function settle(now: House) {
       agrees = !device || (device.on === (h.on ?? device.on) && (!device.on || !("level" in device) || near(device.level, h.level, 3)));
     } else if (kind === "play") {
       agrees = !now.music || now.music.playing === h.on;
+    } else if (kind === "sp" || kind === "gv") {      // another music's play or pause, or a whole music's volume
+      const music = now.music;
+      const stream = music?.speaker === id ? { playing: music.playing, volume: music.volume } : music?.also?.find((a) => a.speaker === id);
+      agrees = !stream || (kind === "sp" ? stream.playing === h.on : near(stream.volume, h.value, 2));
     } else if (kind === "own") {
       const speaker = now.music?.speakers.find((s) => s.id === id);
       agrees = !speaker || speaker.other || (speaker.in && now.music!.playing);
@@ -181,12 +185,26 @@ function overlay(now: House, holds: Record<string, Held>): House {
   }
   let music = now.music;
   if (music) {
+    // A whole music's volume moves every room in it by the same step, so the rooms' own sliders follow at once.
+    const step: Record<string, number> = {};
+    const groups = [{ speaker: music.speaker, volume: music.volume, speakers: music.speakers.filter((s) => s.in && !s.other).map((s) => s.id) },
+      ...(music.also ?? [])];
+    for (const g of groups) {
+      const h = holds["gv:" + g.speaker];
+      if (h?.value !== undefined && typeof g.volume === "number") for (const id of g.speakers) step[id] = h.value - g.volume;
+    }
     const speakers = music.speakers.map((s) => {
       const volume = holds["vol:" + s.id], member = holds["in:" + s.id], own = holds["own:" + s.id];
       if (own && !s.other && !(s.in && music!.playing)) return { ...s, in: false, other: true };     // its own music, starting
-      return volume || member ? { ...s, volume: volume?.value ?? s.volume, in: member?.on ?? s.in } : s;
+      const by = step[s.id];
+      const level = volume?.value ?? (by !== undefined && s.volume !== null ? Math.max(0, Math.min(100, s.volume + by)) : s.volume);
+      return volume || member || by !== undefined ? { ...s, volume: level, in: member?.on ?? s.in } : s;
     });
-    music = { ...music, playing: holds["play"]?.on ?? music.playing, speakers };
+    const also = (music.also ?? []).map((a) => {
+      const playing = holds["sp:" + a.speaker], volume = holds["gv:" + a.speaker];
+      return playing || volume ? { ...a, playing: playing?.on ?? a.playing, volume: volume?.value ?? a.volume } : a;
+    });
+    music = { ...music, playing: holds["play"]?.on ?? music.playing, volume: holds["gv:" + music.speaker]?.value ?? music.volume, speakers, also };
     const sounding = new Set(speakers.filter((s) => (s.in && music!.playing) || s.other).map((s) => s.id));
     for (const [id, room] of Object.entries(rooms)) {
       const sounds = room.speaker !== null && sounding.has(room.speaker);
@@ -302,6 +320,52 @@ export async function play(on: boolean) {
 /** Pause music that is playing somewhere else in the house, apart from the main one. */
 export async function pauseStream(speaker: string) {
   answered(await api.post(`music/${encodeURIComponent(speaker)}`, { action: "pause" }), [], "Paused");
+}
+
+// ---- any one music in the house, by the speaker that leads it: the main one or one playing apart ----
+
+const isMain = (leader: string) => seen.value?.music?.speaker === leader;
+
+export async function streamPlay(leader: string, on: boolean) {
+  if (isMain(leader)) return play(on);
+  hold("sp:" + leader, { on }, SOUND_HOLD);
+  answered(await api.post(`music/${encodeURIComponent(leader)}`, { action: on ? "play" : "pause" }), ["sp:" + leader], "");
+}
+
+export async function streamSkip(leader: string, to: "next" | "previous") {
+  answered(await api.post(`music/${encodeURIComponent(leader)}`, { action: to }), [], "");
+}
+
+export function dragGroupVolume(leader: string, value: number) {
+  hold("gv:" + leader, { value }, DRAG_HOLD);
+}
+
+/** Every room in that music up or down by the same step, so their balance stays. */
+export async function setGroupVolume(leader: string, value: number) {
+  hold("gv:" + leader, { value }, SOUND_HOLD);
+  answered(await api.post(`music/${encodeURIComponent(leader)}`, { action: "group_volume", value }), ["gv:" + leader], "");
+}
+
+/** Bring a room into that music: a quiet one, or one playing something else, which then leaves it. */
+export async function joinStream(leader: string, id: string, name: string, title: string) {
+  if (isMain(leader)) hold("in:" + id, { on: true }, SOUND_HOLD);
+  const answer = await api.post(`music/${encodeURIComponent(leader)}`, { action: "add", target: id });
+  answered(answer, ["in:" + id], `${name} is playing ${title ? `“${title}”` : "it"} too`);
+}
+
+/** Take a room out of that music; it goes quiet and the rest play on. */
+export async function takeOut(leader: string, id: string, name: string) {
+  if (isMain(leader)) hold("in:" + id, { on: false }, SOUND_HOLD);
+  const answer = await api.post(`music/${encodeURIComponent(leader)}`, { action: "remove", target: id });
+  answered(answer, ["in:" + id], `${name} stopped`);
+}
+
+/** Play a pick in place of that music, in every room it plays in. */
+export async function playOn(leader: string, pick: Pick) {
+  sheet.value = { kind: "playing" };
+  if (isMain(leader)) return playPick(pick);
+  hold("sp:" + leader, { on: true }, SOUND_HOLD);
+  answered(await api.post(`play/${encodeURIComponent(leader)}`, { uri: pick.uri, kind: pick.kind, name: pick.name }), ["sp:" + leader], `Playing ${pick.name}`);
 }
 
 export async function skip(to: "next" | "previous") {
