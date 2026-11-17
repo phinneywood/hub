@@ -9,7 +9,8 @@
    "A tap opens the place where it gets finished, already filled in: a reply in your mail app or Gmail, the event in Google Calendar, the sender’s own page to pay or renew, or a call. Things to buy go on the shopping list. Hub never sends, pays, books or orders anything itself.",
    "Hub closes an errand by itself when it sees it done: your reply in sent mail, the event on your calendar, a receipt from the same site. Done, Tomorrow and Not this are one tap, each with Undo.",
    "Today shows the errands ready for your tap and leads to the rest, and Ask can say what’s waiting.",
-   "Your errands are yours: each person sees only those from their own mail, plus the class guide’s, which are everyone’s at home. When one of you finishes a class to-do, it’s done for both."
+   "Your errands are yours: each person sees only those from their own mail, plus the class guide’s, which are everyone’s at home. When one of you finishes a class to-do, it’s done for both.",
+   "Tell Ask “I paid the power bill”, “the photo form can wait till tomorrow”, “I don’t need the dental cleaning” or “put the pumpkin on the list”, and it does what the tap would, with Undo under the answer. It only acts on what your own words ask for."
   ]
  },
  {

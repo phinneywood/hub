@@ -144,7 +144,8 @@ restores each lamp's last brightness), `scene` (by its name, or by the words tha
 pause, resume, next, previous, volume, a room joining or leaving), `remember`, `groceries` (the shopping list and
 the cart; see “Kitchen”), `kitchen` (passes the owner's words to the kitchen assistant, whose answer appears
 under the request), `look_up` (reads mail, the calendar, the class guide or today's list; read-only), `errands`
-(the asker's errands Hub got ready, drawn as cards under the answer; read-only), and the
+(the asker's errands Hub got ready, drawn as cards under the answer; read-only), `errand` (Done, Tomorrow, Not this,
+the list, Undo and where replies open, only as the person's own words ask; see “Errands”), and the
 tools that change how the house is set up and work every other device (next section). Lights, scenes and music go
 through `hub/tools/house/control.py` like a tap: the same allowlist, the same record and Undo, counted against
 Ask's 30 changes a minute. Ask changes nothing for a program without a login, or while the owner has that kind
@@ -196,7 +197,8 @@ what the card said, does nothing. A card waits an hour. Locking, closing and arm
 
 **What a model never moves.** On a turn that has mail, the calendar or school in view (`<data>`, or a `look_up`),
 Ask changes nothing about the setup and unlocks nothing: words written by strangers are in the model's view on
-those turns. Lights and music still work, as before.
+those turns. Lights and music still work, as before. Errands are changed on such turns only as the guard in
+`hub/app/errands/asked.py` lets the person's own typed words decide.
 
 **What stays in Home Assistant.** The setup door names what may leave Hub (`SETUP_WRITES`, `CONFIGS`,
 `SERVICE_DOMAINS`, and `setup_reload` for an integration). Not in it, so refused whoever asks: tokens and users,
@@ -356,6 +358,15 @@ class guide's to-dos, which are the household's.
   asker's own and the class guide. Mail comes only to `"default"` today, but nothing assumes it is the only account.
   The class guide's errands are drafted in their own call to Luna, without anyone's calendar, and a class to-do is
   never closed by one person's mail; Luna's limits stay the household's.
+
+**Asked for in Ask** (`asked.py`, Ask's `errand` tool). "I paid the power bill", "the photo form can wait till
+tomorrow", "I don't need the dental cleaning", "the pumpkin goes on the list", "undo the dental cleaning" and "open my
+replies in Gmail" do what the same taps do, with Undo under the answer and the errand's card drawn as it now is.
+Sending, paying, booking and the calendar stay buttons on the card. An errand's title comes from mail, so the person's
+own words decide, checked in code: one sentence of what they typed must both ask for the tap and name the errand in
+its own words and order; a question, an "if" or a "not yet" asks for nothing; a name is matched only against the
+errand's title, kind and sender (and its things, for the list) and fits one errand at most; if any name fits none or
+several, nothing changes. Only the asker's own errands and the household's can be named.
 
 **Closing by itself** (`watch.py`): Hub looks for proof, as little as it takes: something the owner sent to that
 address since the email came (sent mail through the bridge, dates only), an event that day on the calendar at the

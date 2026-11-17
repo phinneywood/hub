@@ -435,8 +435,16 @@ def forget_note(note: int, request: Request):
 
 @router.post('/api/undo/{batch}')
 def undo(batch: str, request: Request):
+    from .errands import asked as errand_asked
     if batch.startswith('s'):       # a change to how the house is set up (hub/tools/house/admin.py)
         return _change(request, lambda login: admin.undo(batch, login=login, via='app'))
+    if batch.startswith(errand_asked.BATCH):      # errands Ask changed, or where replies open (hub/app/errands/asked.py)
+        if _login(request) is None:
+            return _signed_out()
+        try:
+            return {'ok': True, 'said': errand_asked.undo(batch, _login(request))}
+        except errand_asked.taps.Refused as error:
+            return _refuse(error)
     return _change(request, lambda login: control.undo(batch, login=login, via='app', at_once=True))
 
 

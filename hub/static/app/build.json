@@ -13,7 +13,7 @@
     "src/changes.tsx": "2b79d17b08040a67af92a1537c05d29fc5d0f5048c3bb0ae0389b5fa290f71a2",
     "src/day.ts": "dc1a1bf92187bde50d54b2dffe6490421b8bc0e8ec0251599a90b30f00d78ce4",
     "src/engine.tsx": "73e02de7a0502401c9ffa1f7287078495da7389732de093b59ddd7b4f22b9a7d",
-    "src/errands.tsx": "5c1729f1535adb0c5ae0e59a71d30e06aee8d28033af128d63a14bfc2d24fc8f",
+    "src/errands.tsx": "9bcd2888ab66c5eee137f90b821e262cd235e34a0d7fc173764ee75616d14bb5",
     "src/kitchen.tsx": "9117b5b03deadf5115f2bab062055fcc8071ae533abaec8c2b64ecd6408ace51",
     "src/mail.tsx": "fa9e5d328cc151dcec5a095d7737c36466c83942be110c4e424ce072cb69a208",
     "src/mailrules.tsx": "05d6c96620db2074636d23836776ef01c893ee1138087f62be923ce635fb51b8",
@@ -30,6 +30,6 @@
   },
   "built": {
     "app.css": "db67cec30cae191e053de2fa65119f5559b68868212e07571aa656075cb1b82c",
-    "app.js": "5b263cec987c8f49c1a00217005ea888c735af008c39c0073a3dfbd350036eff"
+    "app.js": "2cacd973a8b776c9da98d3e6b96c791d467eb22592cef86a9243c4b9d16125bf"
   }
 }

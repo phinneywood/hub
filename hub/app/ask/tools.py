@@ -1,5 +1,5 @@
 """What Ask can do: lights, scenes, music, how the house is set up, any other device, remembering, passing a
-message to Kitchen, reading mail, the calendar and school, and showing the errands Hub got ready.
+message to Kitchen, reading mail, the calendar and school, and showing and finishing the errands Hub got ready.
 
 Few tools, each doing a whole job. Lights, scenes and music go through hub/tools/house/control.py, like a tap in
 the app: the same allowlist, record and Undo, counted against Ask's own per-minute limit. Everything else in
@@ -498,6 +498,28 @@ def errands(ctx: RunContext[Turn], show: Literal['ready', 'done'] = 'ready') -> 
     return found
 
 
+def errand(ctx: RunContext[Turn], do: Literal['done', 'later', 'not', 'list', 'back', 'replies'], which: list[str] | None = None,
+           replies_in: Literal['mail', 'gmail'] | None = None) -> dict:
+    """Do to errands what a tap on their cards does, when the person's message asks for it: done (they finished it:
+    "I paid the power bill"), later (set it aside until tomorrow morning), not (they don't need it), list (put its
+    things on the shopping list), back (undo the last of these on it). `which`: each errand as the person named it,
+    in the words of their message ("the power bill"), one name per errand. replies, with `replies_in` mail or gmail:
+    where their drafted replies open from now on. Sending a reply, paying, booking and adding to the calendar can't be
+    done from here: those stay buttons on the errand's card, for the person's own tap."""
+    from ..errands import asked as errand_asked
+    turn = ctx.deps
+    if turn.login is None:
+        return _say(turn, 'Finish errands from your phone or laptop.')
+    try:
+        done = errand_asked.asked(do, which or [], turn.text, turn.login, replies_in)
+    except errand_asked.Unclear as error:
+        turn.strangers = True                 # the titles that fit are words from mail
+        return {**_again(turn, error), 'errands': error.found[:8]}
+    except errand_asked.taps.Refused as error:
+        return _again(turn, error)
+    return _say(turn, done['told'], {'kind': 'errands', 'ids': done['ids'], **({'batch': done['batch']} if done['batch'] else {})})
+
+
 # ---- how the house is set up, and every other device (hub/tools/house/admin.py) ----
 
 SECURITY = ('lock', 'alarm_control_panel')
@@ -712,5 +734,5 @@ def setting(ctx: RunContext[Turn], do: Literal['add', 'change', 'remove'],
     return _setup(ctx.deps, 'helper', {'do': do, 'kind': kind, 'name': name or '', 'fields': fields, 'new_name': new_name})
 
 
-ALL = (lights, scene, music, remember, groceries, kitchen, look_up, errands, find, details, arrange, rooms, scene_setup, routine, device,
-       setting, integration, dashboard)
+ALL = (lights, scene, music, remember, groceries, kitchen, look_up, errands, errand, find, details, arrange, rooms, scene_setup, routine,
+       device, setting, integration, dashboard)

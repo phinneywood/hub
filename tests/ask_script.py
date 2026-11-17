@@ -6,8 +6,9 @@ It knows the made-up rooms, floors and scenes, a handful of verbs, and one band 
 finds nothing. For the house's setup it knows a few plain sentences ("move the reading lamp to the bedroom",
 "remove the dining room", "unlock the front door", "every evening at 6:45 turn on the hall light"), and for the
 list a few more ("add sponges and milk to the list", "what's on the list", "order the groceries for tomorrow
-morning"). Anything with "errands" in it shows the errands Hub got ready. Anything else gets one sentence saying what
-Hub can do.
+morning"). Anything with "errands" in it shows the errands Hub got ready, and a few sentences finish one ("I paid the
+power bill", "the photo form can wait till tomorrow", "I don't need the dental cleaning", "the pumpkin goes on the
+list", "undo the power bill", "open my replies in Gmail"). Anything else gets one sentence saying what Hub can do.
 """
 import json
 import re
@@ -46,6 +47,15 @@ SETUP = [
     (rf'^save {THE}(.+?) as a scene called (.+)$', lambda m: call('scene_setup', do='save', name=m[2], as_now=[m[1]])),
     (r'^restart home assistant$', lambda m: call('device', action='homeassistant.restart')),
     (rf'^every (?:evening|morning|day) at (\d{{1,2}}):(\d{{2}}),? turn (on|off) {THE}(.+?)(?: lights?)?$', lambda m: call('find', words=m[4], kind='light')),
+]
+# Errands, as a few plain sentences: what the owner did, or wants done with one, naming it in their own words.
+ERRAND = [
+    (r'^i (?:paid|finished|sent|signed|returned|renewed|booked) (.+)$', lambda m: call('errand', do='done', which=[m[1]])),
+    (r'^(.+?) can wait (?:until|till) tomorrow$', lambda m: call('errand', do='later', which=[m[1]])),
+    (r"^(?:i|we) don.t need (.+)$", lambda m: call('errand', do='not', which=[m[1]])),
+    (r'^(.+?) goes on the (?:shopping )?list$', lambda m: call('errand', do='list', which=[m[1]])),
+    (r'^undo (.+)$', lambda m: call('errand', do='back', which=[m[1]])),
+    (r'^open (?:my )?replies in gmail$', lambda m: call('errand', do='replies', replies_in='gmail')),
 ]
 # The list and the cart, as a few plain sentences.
 THINGS = lambda said: [t.strip() for t in re.split(r',| and ', said) if t.strip()]      # noqa: E731
@@ -144,7 +154,7 @@ def _lights(words, places):
 def _setup(spoken):
     """The setup tool one of the few plain sentences means, or None."""
     plain = ' '.join(spoken.split()).rstrip('.?!')
-    for pattern, make in SETUP + LIST:
+    for pattern, make in ERRAND + SETUP + LIST:
         found = re.match(pattern, plain, re.I)
         if found:
             return make(found)

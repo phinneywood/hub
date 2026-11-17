@@ -226,6 +226,18 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       "Ask did not say how many errands are ready: " + await lastAnswer());
     expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelectorAll(".er-list.in-ask .errand").length === 4),
       "the errands were not drawn under the answer");
+    // an errand finished in words: Hub marks it done, draws it so under the answer, and Undo puts it back
+    const billReady = () => fetch("/app/api/errands").then((r) => r.json()).then((e) => e.ready.some((x) => x.title.includes("Lakeside Power")));
+    await askFor("I paid the power bill");
+    expect(await answered("Marked done."), "Ask did not finish the errand: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelector(".er-list.in-ask .errand .took")?.textContent.startsWith("Done")),
+      "the errand was not drawn as done under the answer");
+    expect(!(await page.evaluate(billReady)), "the bill was still waiting after Ask marked it done");
+    await page.waitForTimeout(300); await shot("6e-ask-errand");
+    await page.locator(".turn .took button").last().click();
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.matches(".back") && [...document.querySelectorAll(".turn .took")].pop()?.textContent === "Put back as it was"),
+      "the answer did not say the errand was put back");
+    expect(await until(billReady), "Undo under the answer did not put the errand back");
     await askFor("remember to start music softly");
     expect(await answered("Hub will remember that."), "Ask did not remember: " + await lastAnswer());
     await page.waitForTimeout(300); await shot("6d-ask-talk");

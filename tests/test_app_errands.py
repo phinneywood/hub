@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from hub import config, home, luna, people, store as hub_store
 from hub.app import today as screen
 from hub.app.ask import private, route
-from hub.app.errands import draft, links, picture, read, store, taps, watch
+from hub.app.errands import asked, draft, links, picture, read, store, taps, watch
 from hub.engine import catalog, overnight, state
 from hub.golden import dryrun
 from hub.main import app
@@ -643,6 +643,72 @@ def test_proof_is_looked_for_only_in_mail_someone_at_home_owns(ready, monkeypatc
     assert watch.run() == 0 and len(ready.searches) == searched
     monkeypatch.setattr(config, 'ALLOWED_LOGINS', {ME})
     assert watch.run() == 1
+
+
+# ---- asked for in Ask ----
+
+def test_ask_finishes_sets_aside_and_puts_back_an_errand_named_in_the_message(two, ready, scripted):
+    bill, form, dentist, pumpkin = by_title('Lakeside'), by_title('photo order'), by_title('dental'), by_title('pumpkin')
+    said, cards = ask('I paid the power bill')
+    assert (said, cards) == ('Marked done.', [{'kind': 'errands', 'ids': [bill['id']], 'batch': f'r{bill["id"]}'}])
+    assert store.get(bill['id'])['state'] == 'done'
+    assert client.post(f'/app/api/undo/r{bill["id"]}', headers=SIGNED_IN).json() == {'ok': True, 'said': 'Put back'}
+    assert store.get(bill['id'])['state'] == 'ready'
+    assert ask('the photo form can wait till tomorrow')[0] == 'Set aside until tomorrow morning.'
+    assert ask('I don’t need the dental cleaning')[0] == 'Gone from your errands.'
+    assert ask('the pumpkin goes on the list')[0] == 'Its things are on the shopping list.'
+    assert [store.get(e['id'])['state'] for e in (form, dentist, pumpkin)] == ['later', 'dismissed', 'done']
+    assert 'small pumpkin' in [item['name'] for item in scripted.items]
+    assert ask('undo the dental cleaning')[0] == 'Put back as it was.' and store.get(dentist['id'])['state'] == 'ready'
+    said, cards = ask('open my replies in Gmail')
+    assert (said, cards) == ('Replies open in Gmail.', [{'kind': 'errands', 'ids': [], 'batch': 'rcmail'}])
+    assert store.compose(store.MAIN) == 'gmail'
+    client.post('/app/api/undo/rcmail', headers=SIGNED_IN)
+    assert store.compose(store.MAIN) == 'mail'
+
+
+def test_ask_cant_reach_someone_elses_errand_or_setting(two, ready, scripted):
+    bill = by_title('Lakeside')
+    said, cards = ask('I paid the power bill', AS_PARTNER)
+    assert said == 'Hub couldn’t do that. None of your errands fits “the power bill”.' and cards == []
+    assert ask('open my replies in Gmail', AS_PARTNER)[0].startswith('Hub couldn’t do that. Hub doesn’t read')
+    assert client.post(f'/app/api/undo/r{bill["id"]}', headers=AS_PARTNER).json() == {'error': 'There is nothing left to undo there.'}
+    assert store.get(bill['id'])['state'] == 'ready' and store.compose(store.MAIN) == 'mail'
+
+
+@pytest.mark.parametrize('said, which', [
+    ('did I pay the power bill?', ['power bill']),                       # a question
+    ('I haven’t paid the power bill yet', ['power bill']),               # not yet
+    ('if I paid the power bill, what is left?', ['power bill']),
+    ('the power bill is due on Friday', ['power bill']),                 # asks for nothing
+    ('I paid the power bill', ['electricity bill']),                     # not the person's words
+    ('I paid the power bill', ['bill power']),                           # nor in their order
+    ('I paid the power bill, and the party sounds fun', ['power bill', 'party']),      # the party's part asks nothing
+    ('I paid the power bill', ['all errands']),                          # words from mail, not the message
+])
+def test_ask_changes_nothing_unless_the_persons_own_words_ask_for_it(ready, said, which):
+    before = [(e['id'], e['state']) for e in store.rows()]
+    with pytest.raises(taps.Refused):
+        asked.asked('done', which, said, ME)
+    assert [(e['id'], e['state']) for e in store.rows()] == before
+
+
+def test_a_name_that_fits_several_errands_or_none_changes_nothing(ready):
+    store.add('mail:e-made-up', 'mail', {'kind': 'book', 'title': 'Book the Lakeside Power meter check'}, account=store.MAIN)
+    with pytest.raises(asked.Unclear) as several:
+        asked.asked('done', ['lakeside power'], 'I paid lakeside power', ME)
+    assert len(several.value.found) == 2
+    with pytest.raises(asked.Unclear):
+        asked.asked('done', ['power bill', 'gym'], 'I paid the power bill and the gym', ME)
+    assert by_title('Lakeside Power bill')['state'] == 'ready'
+    assert asked.asked('done', ['power bill'], 'Can you mark the power bill done?', ME)['told'] == 'Marked done.'
+
+
+def test_where_replies_open_changes_only_when_the_person_says_where(ready):
+    for said in ('what’s in my gmail?', 'don’t open replies in gmail', 'I like gmail'):
+        with pytest.raises(taps.Refused):
+            asked.asked('replies', [], said, ME, 'gmail')
+    assert store.compose(store.MAIN) == 'mail'
 
 
 # ---- keeping ----

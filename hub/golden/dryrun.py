@@ -6,6 +6,8 @@ Every way Ask can change something leaves Hub through one of three doors, and th
                    the setup door, after broker.setup_write, setup_save, setup_call and setup_reload have run theirs
   Music Assistant  music._send, after music._call has checked the command against READS and WRITES
   Kitchen          kitchen client.call, for anything but a read
+  Errands          errands taps.tap and picture.set_compose (hub/app/errands/), after asked.asked has checked the
+                   owner's words and picked the errands they named
 
 Reads go through untouched, so a golden run sees the real house, library and lists. A change that passes
 Hub's checks is recorded in `Ledger.changes` and answered as if it had worked; one that fails them is
@@ -33,9 +35,9 @@ COVERED = {'home_control': 'home', 'play_music': 'home', 'edit_playlist': 'music
            'propose_recipe': 'proposal', 'run_recipe': 'home', 'kitchen': 'kitchen'}
 # Ask in the app: each tool, and the door its changes leave by ('read' for one that changes nothing).
 COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'remember': 'note', 'groceries': 'kitchen', 'kitchen': 'kitchen',
-               'look_up': 'read', 'errands': 'read', 'find': 'read', 'details': 'read', 'arrange': 'setup', 'rooms': 'setup',
-               'scene_setup': 'setup', 'routine': 'setup', 'device': 'setup', 'setting': 'setup', 'integration': 'setup',
-               'dashboard': 'setup'}
+               'look_up': 'read', 'errands': 'read', 'errand': 'errands', 'find': 'read', 'details': 'read', 'arrange': 'setup',
+               'rooms': 'setup', 'scene_setup': 'setup', 'routine': 'setup', 'device': 'setup', 'setting': 'setup',
+               'integration': 'setup', 'dashboard': 'setup'}
 DRY_ID = -1                     # the message number a held-back Kitchen hand-off is given
 
 
@@ -122,6 +124,7 @@ def layer(house_writes=False, recipes=()):
     and in Hub's own change log, so the runner can undo them right after the scenario's checks. Everything else
     (Music Assistant edits, Kitchen, notes, recipes, playlists to make) is still held back.
     `recipes`: (name, steps) pairs a scenario starts with, saved in the scratch database after the usual checks."""
+    from ..app.errands import picture as errand_picture, taps as errand_taps
     from ..engine import notes, recipes as recipe_book
     from ..tools.house import admin, broker, control, music
     from ..tools.kitchen import client
@@ -129,7 +132,8 @@ def layer(house_writes=False, recipes=()):
     real_exchange, real_send, real_call = broker._exchange, music._send, client.call
     saved = {'broker': real_exchange, 'music_send': real_send, 'settle': music._settle, 'kitchen': real_call,
              'control_db': control._db, 'music_db': music._db, 'notes_db': notes._db, 'admin_db': admin._db,
-             'note': notes.propose, 'playlist': music.propose, 'recipes_db': recipe_book._db, 'recipe': recipe_book.propose}
+             'note': notes.propose, 'playlist': music.propose, 'recipes_db': recipe_book._db, 'recipe': recipe_book.propose,
+             'errand_tap': errand_taps.tap, 'compose': errand_picture.set_compose}
 
     def exchange(message, timeout):
         path, method = str(message.get('path', '')), message.get('method')
@@ -196,6 +200,14 @@ def layer(house_writes=False, recipes=()):
         ledger.add('proposal', 'recipe', {'name': found['name'], 'steps': found['steps']})
         return found
 
+    def errand_tap(errand_id, do, body, login, now=None):
+        ledger.add('errands', do, {'id': errand_id, **(body or {})})
+        return 'Done', {}
+
+    def compose(login, writes):
+        ledger.add('errands', 'replies', {'in': writes})
+        return 'Replies open in Gmail' if writes == 'gmail' else 'Replies open in your mail app'
+
     with tempfile.TemporaryDirectory(prefix='hub-golden-') as folder:
         broker._exchange, music._send, client.call = exchange, send, kitchen
         music._settle = lambda playlist_id, want: 'done'     # nothing was sent, so there is nothing to read back
@@ -206,6 +218,7 @@ def layer(house_writes=False, recipes=()):
         notes._db = _with_schema(_scratch_db(Path(folder)), notes.SCHEMA)
         recipe_book._db = _with_schema(_scratch_db(Path(folder)), recipe_book.SCHEMA)
         notes.propose, music.propose, recipe_book.propose = note, playlist, recipe
+        errand_taps.tap, errand_picture.set_compose = errand_tap, compose
         try:
             for name, steps in recipes:
                 recipe_book.keep(name, steps)
@@ -217,6 +230,7 @@ def layer(house_writes=False, recipes=()):
             admin.forget()
             notes.propose, music.propose = saved['note'], saved['playlist']
             recipe_book._db, recipe_book.propose = saved['recipes_db'], saved['recipe']
+            errand_taps.tap, errand_picture.set_compose = saved['errand_tap'], saved['compose']
 
 
 def _with_schema(db, schema):

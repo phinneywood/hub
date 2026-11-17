@@ -7,7 +7,7 @@ import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { loadDay } from "./day";
 import { Top } from "./screens";
-import { go, say, sheet, view } from "./state";
+import { go, say, sheet, undone, view } from "./state";
 import type { Errand, Errands as ErrandsData, Step, Way } from "./types";
 import { Icon, SheetFrame } from "./ui";
 
@@ -319,11 +319,12 @@ export function TodayErrands({ cards, more }: { cards: Errand[]; more: number })
   );
 }
 
-/** Under an answer in Ask: the errands it was about, as cards. */
+/** Under an answer in Ask: the errands it was about, as cards, as they are now (an answer that finished or set one
+ * aside shows it so, and its Undo puts it back). */
 export function ErrandsCard({ ids }: { ids: number[] }) {
-  useEffect(() => { if (!errands.value) void loadErrands(); }, []);
+  useEffect(() => { void loadErrands(); }, [ids.join("."), undone.value.length]);
   const now = errands.value;
-  if (!now) return null;
+  if (!now || !ids.length) return null;           // where replies open changed: no errand to draw, only its Undo
   const cards = ids.map((id) => known.value[id]).filter((e): e is Errand => e !== undefined).slice(0, 4);
   if (!cards.length) return <p class="took">Those errands are finished.</p>;
   return (
