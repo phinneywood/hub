@@ -390,14 +390,26 @@ _asking, _asking_lock = set(), __import__('threading').Lock()
 
 
 @router.get('/api/ask')
-def ask_status(request: Request):
-    """Whether Ask can run, this person's turns from the last twelve hours, what they tend to ask around now, and
-    what Hub remembers. (The model is given far fewer: `brain.earlier`.)"""
-    from .ask import brain, turns
+def ask_status(request: Request, before: int | None = None):
+    """Whether Ask can run, this person's one conversation (its last turns, or the turns before turn `before` when
+    the app scrolls back), what they tend to ask around now, and what Hub remembers. (The model is given less:
+    `brain.earlier`.)"""
+    from .ask import brain, thread, turns
     why, login = brain.warm() or brain.limits(), _login(request)
-    return {'ready': why is None, 'why': why, 'recent': turns.recent(login, turns.SHOWN_SECONDS, turns.SHOWN_TURNS),
-            'usual': turns.usual(login) if why is None else [],
-            'remembers': turns.remembered(login)}
+    shown = thread.history(login, before, turns.SHOWN_TURNS)
+    return {'ready': why is None, 'why': why, 'recent': shown, 'more': len(shown) == turns.SHOWN_TURNS,
+            'usual': turns.usual(login) if why is None else [], 'remembers': turns.remembered(login)}
+
+
+@router.post('/api/ask/fresh')
+def ask_fresh(request: Request):
+    """Start this person's conversation over: what the model is given starts from now. The messages stay."""
+    from .ask import thread
+    login = _login(request)
+    if login is None:
+        return _signed_out()
+    thread.start_fresh(login)
+    return {'ok': True, 'said': 'Starting fresh'}
 
 
 @router.post('/api/ask')

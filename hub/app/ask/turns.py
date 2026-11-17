@@ -1,6 +1,6 @@
 """What was asked and answered, and what Hub remembers. In Hub's own database, never in Git.
 
-A turn's words are kept for 30 days, as chat text always was. A turn Luna answered (`private.py`, on a Hub
+A turn's words are kept for 90 days, so a person can scroll back through their one conversation (`thread.py`). A turn Luna answered (`private.py`, on a Hub
 without Ask's own model) is marked so.
 
 What Hub remembers is the engine's one list of standing notes (`hub/engine/state.py`), the same list the older
@@ -12,11 +12,10 @@ import time
 
 from ... import store
 
-TEXT_DAYS = 30
+TEXT_DAYS = 90                  # turns stay readable this long; the running summary carries the conversation past it (thread.py)
 RECENT_SECONDS = 30 * 60        # how far back a follow-up ("there too") can reach
 RECENT_TURNS = 6
-SHOWN_SECONDS = 12 * 3600       # what the app shows when it opens again: the day's conversation, folded
-SHOWN_TURNS = 30
+SHOWN_TURNS = 40                # what the app shows of the one conversation when it opens, and each time it scrolls back
 USUAL_WINDOW = 90               # minutes either side of now that count as "around this time"
 USUAL_DAYS = 2                  # asked on at least this many days to be offered
 USUAL_MOST = 3

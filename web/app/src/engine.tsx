@@ -26,7 +26,6 @@ function Runs({ runs, what }: { runs: EngineRun[]; what: (r: EngineRun) => strin
 export function Engine() {
   const [found, setFound] = useState<EngineData | null>(null);
   const [failed, setFailed] = useState(false);
-  const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [sources, setSources] = useState(false);
   const [actions, setActions] = useState(false);
@@ -38,16 +37,6 @@ export function Engine() {
     const answer = await api.post("engine/" + what, { key: String(key), value });
     setBusy(false);
     say(answer.error ?? answer.said ?? "Done");
-    await load();
-  }
-  async function tell(e: Event) {
-    e.preventDefault();
-    if (!text.trim()) return;
-    setBusy(true);
-    const answer = await api.post("engine/tell", { text });
-    setBusy(false);
-    say(answer.error ?? answer.said ?? "Saved");
-    if (!answer.error) setText("");
     await load();
   }
 
@@ -89,14 +78,11 @@ export function Engine() {
             </section>
           )}
 
-          <form class="block" onSubmit={(e) => void tell(e)}>
+          <section class="block">
             <h2>Tell Hub</h2>
-            <input class="field raised" name="tell" maxLength={300} value={text} disabled={locked} aria-label="Tell Hub"
-              placeholder="What to watch for, or what you wish it did" onInput={(e) => setText(e.currentTarget.value)} />
-            <p class="quiet">{now.sorting ? "Hub keeps it as guidance it can follow tonight, or as something that needs building."
-              : "Sorting is off right now, so it is kept as something to build."} It can’t give Hub a new ability by itself.</p>
-            <div class="btns"><button type="submit" class="btn go" disabled={locked || !text.trim()}>Send</button></div>
-          </form>
+            <p class="quiet">Tell Hub in Ask, in your one conversation with it: “Remember that …” keeps guidance it follows for you,
+              and “Hub should …” or “I wish Hub …” becomes something to build, offered back as a fix card.</p>
+          </section>
 
           <section class="block">
             <h2>What Hub follows</h2>
