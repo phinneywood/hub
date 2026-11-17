@@ -6,7 +6,9 @@ import { say } from "./state";
 // What the app draws under an answer. `setup`: changes to how the house is set up; `confirm`: one that waits for a tap.
 export interface Card { kind: string; rooms?: string[]; speakers?: string[]; batch?: string; after?: number; id?: number; note?: string;
   lines?: string[]; missed?: string[]; title?: string; why?: string; do?: string; items?: number[]; all?: boolean; cart?: boolean; since?: number;
-  ids?: number[]; show?: string[]; things?: Thing[]; hint?: string }
+  ids?: number[]; show?: string[]; things?: Thing[]; hint?: string; rows?: MailRow[]; opened?: number[] }
+// One email a mail search found (hub/app/ask/mailbox.py): its number for "open the second one", and where it opens.
+export interface MailRow { n: number; who: string; subject: string; when: string; href: string; off: boolean }
 // One line of Hub's morning message (hub/app/ask/morning.py): its number, the sentence, and the one button it has.
 export interface Thing { n: number; key: string; text: string; open: { href: string; label: string } | null }
 // `waiting`: asked while another request was still going; it goes as soon as that one ends. `at`: when it was asked (ms).
@@ -21,7 +23,7 @@ type Event = { t: "say"; text: string } | { t: "doing"; what: string } | { t: "c
 
 const SAY = "hub.say";      // the chat page reads this once and sends it (web/ask): only Hub's own pages can set it
 const DOING: Record<string, string> = { lights: "Switching the lights", scene: "Setting the scene", music: "Finding the music",
-  kitchen: "Asking Kitchen", groceries: "Working the list", look_up: "Looking", errands: "Looking at your errands", remember: "Noting that", find: "Looking around the house", details: "Reading it",
+  kitchen: "Asking Kitchen", groceries: "Working the list", look_up: "Looking", mail_search: "Searching your mail", mail_read: "Reading the email", errands: "Looking at your errands", remember: "Noting that", find: "Looking around the house", details: "Reading it",
   arrange: "Moving things", rooms: "Changing the rooms", scene_setup: "Changing the scene", routine: "Writing it into Home Assistant",
   device: "Working on it", setting: "Changing the settings", integration: "Reloading it", dashboard: "Making the dashboard" };
 
@@ -107,6 +109,16 @@ async function next() {
   void next();
 }
 
+// A request has one mail card, which a later step can add to (an email read): it takes the earlier one's place, and
+// the day's mail rows give way to it.
+function placed(cards: Card[], card: Card): Card[] {
+  if (card.kind !== "mail") return [...cards, card];
+  const rest = cards.filter((c) => c.kind !== "mail")
+    .map((c) => (c.kind === "day" ? { ...c, show: (c.show ?? []).filter((t) => t !== "mail") } : c))
+    .filter((c) => c.kind !== "day" || (c.show ?? []).length > 0);
+  return [...rest, card];
+}
+
 async function send(n: number, text: string, signal: AbortSignal) {
   const change = (make: (turn: Turn) => Partial<Turn>) => {
     talk.value = talk.value.map((turn) => (turn.n === n ? { ...turn, ...make(turn) } : turn));
@@ -115,7 +127,7 @@ async function send(n: number, text: string, signal: AbortSignal) {
   const take = (event: Event) => {
     if (event.t === "say") change((turn) => ({ answer: turn.answer + event.text, doing: "" }));
     else if (event.t === "doing") change(() => ({ doing: DOING[event.what] ?? "Working" }));
-    else if (event.t === "card") change((turn) => ({ cards: [...turn.cards, event.card] }));
+    else if (event.t === "card") change((turn) => ({ cards: placed(turn.cards, event.card) }));
     else change(() => ({ busy: false, doing: "", ms: event.ms, status: event.status, id: event.id ?? undefined }));
   };
   try {

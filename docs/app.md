@@ -242,7 +242,8 @@ couldn't place, something it read with `look_up`) does the model get its answer 
 restores each lamp's last brightness), `scene` (by its name, or by the words that single it out), `music` (play,
 pause, resume, next, previous, volume, a room joining or leaving), `remember`, `groceries` (the shopping list and
 the cart; see “Kitchen”), `kitchen` (passes the owner's words to the kitchen assistant, whose answer appears
-under the request), `look_up` (reads mail, the calendar, the class guide or today's list; read-only), `errands`
+under the request), `look_up` (reads mail, the calendar, the class guide or today's list; read-only), `mail_search` and `mail_read`
+(see “Ask reads mail”), `errands`
 (the asker's errands Hub got ready, drawn as cards under the answer; read-only), `errand` (Done, Tomorrow, Not this,
 the list, Undo and where replies open, only as the person's own words ask; see “Errands”), and the
 tools that change how the house is set up and work every other device (next section). Lights, scenes and music go
@@ -293,6 +294,19 @@ Ask then answers “That one waits for your tap.” with a card: the question, w
 Only the button, from a signed-in device, makes the change; typing “yes” does nothing, and no tool of Ask's
 can press it. On the tap Hub plans the change again from the house as it is now and, if it would no longer do
 what the card said, does nothing. A card waits an hour. Locking, closing and arming happen at once.
+
+**Ask reads mail** (`mailbox.py`; owner's choice 2026-11-17, week 1 of “one pattern for every category”). `look_up`
+gives only what the last sort found; for a question about particular mail the model searches the person's own Gmail
+with `mail_search` (Gmail's search words; never spam or the bin; up to 8 emails, newest first, twice a request at
+most) and reads one with `mail_read` (by its number, from this request's search or the person's mail card of the
+last half hour; up to 3,000 characters, three a request at most). The model never sees Gmail's ids or anyone's
+address, and nothing from a sender with AI switched off: the From (and for sent mail the To and Cc) of the message
+itself is checked again before its text goes. The emails found are drawn under the answer as one mail card (who,
+the subject, when, and Open, which opens it in Gmail in the right account), kept with the turn so it draws without
+reading Gmail again; it takes the day's mail rows' place. Only a login that may see the bridge's main Google account
+(`hub/people.py`) is read for: anyone else is told it isn't theirs and nothing is read. The answer is private, so it
+isn't carried into later requests; only that N emails were shown, by number. Nothing here changes Gmail, and a
+request that read mail changes nothing in the house or on the list either (`tools.READ_MAIL`): ask for that by itself.
 
 **What a model never moves.** On a turn that has mail, the calendar or school in view (`<data>`, or a `look_up`),
 Ask changes nothing about the setup and unlocks nothing: words written by strangers are in the model's view on

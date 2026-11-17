@@ -65,6 +65,9 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   what Hub remembers, and, since the owner reversed the earlier rule on 2026-11-15, the bounded mail, calendar,
   school and today lookups in `hub/app/ask/private.py`. Not Kitchen's replies, and not senders with AI switched
   off. Read "Ask" in `docs/app.md` first.
+  Owner-approved (2026-11-17, "Mail week 1"): Ask may also search the person's own mail and read up to three emails
+  it found in full (`hub/app/ask/mailbox.py`), read-only, for the person whose account it is. A request that read
+  mail changes nothing in the house or on the list. Changing mail from Ask comes later and waits for the owner's tap.
   Owner-approved (2026-11-15): Ask may change anything in Home Assistant, through `hub/tools/house/admin.py` and
   the setup door in `broker.py` only. Keep its rule for what waits for a tap in code, its record and Undo, and
   what the door keeps shut; read "Setting up the house" in `docs/app.md` first. The same day Kitchen became part

@@ -303,6 +303,22 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.waitForTimeout(300); await shot("6c-ask-kitchen");
     await askFor("what needs me today?");
     expect(await answered("From what Hub can see, two emails need you."), "a question about the day was not answered from what Hub read: " + await lastAnswer());
+    // Ask searches the person's own mail and reads one email it found; the emails are drawn under the answer, each
+    // opening in Gmail, and "open the first one" reads the first of them
+    const lastTurn = (sel) => page.evaluate((s) => [...[...document.querySelectorAll(".turn")].pop().querySelectorAll(s)]
+      .map((el) => el.getAttribute("href") ?? el.textContent.trim()), sel);
+    await askFor("Search my mail for sink");
+    expect(await answered("2 emails match. The newest is from Riverside Plumbing: Re: Kitchen sink estimate."), "Ask did not search the mail: " + await lastAnswer());
+    expect((await lastTurn(".mailrows .row-main b")).join("|") === "Riverside Plumbing|Alex", "the emails found were not drawn under the answer: " + (await lastTurn(".mailrows .row-main b")).join("|"));
+    expect((await lastTurn(".mailrows a.row-act")).every((href) => href.startsWith("https://mail.google.com/mail/") && href.includes("#all/t-plumb")),
+      "an email found did not open in Gmail");
+    expect((await lastTurn(".dayrows")).length === 0, "the day’s mail rows were drawn beside the emails found");
+    await askFor("Open the first one");
+    expect(await answered("Riverside Plumbing wrote: Hi Alex, we can come Thursday at 10"), "Ask did not read the email: " + await lastAnswer());
+    expect((await lastTurn(".mailrows .row.now .row-main b")).join("|") === "Riverside Plumbing", "the email read was not marked under the answer");
+    expect(!(await sideways()), "the emails found are wider than the screen");
+    await page.waitForTimeout(300); await shot("6c2-ask-mail");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px under the emails found: " + (await small()).join(", "));
     await askFor("what errands are ready?");
     expect(await until(() => [...document.querySelectorAll(".turn .answer")].pop()?.textContent.startsWith("6 errands are ready for your tap.")),
       "Ask did not say how many errands are ready: " + await lastAnswer());
@@ -521,6 +537,16 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(!olderPages.includes("/gmail") && !olderPages.includes("/calendar"), "the partner was offered the owner’s Gmail or Calendar: " + olderPages.join(" "));
     const olderGmail = await partner.goto(base + "/gmail");
     expect(olderGmail.status() === 200 && (await partner.textContent("main h1")).trim() === "Not yours to open", "the older Gmail page opened for the partner");
+    // ... and Ask searches none of it for the partner
+    await partner.goto(base + "/app/");
+    await partner.waitForSelector(".askpage #askq");
+    await partner.fill("#askq", "Search my mail for sink");
+    await partner.waitForFunction(() => document.querySelector("#askq")?.parentElement?.querySelector(".send.on") !== null, null, { timeout: 6000 }).catch(() => {});
+    await partner.keyboard.press("Enter");
+    expect(await partner.waitForFunction(() => [...document.querySelectorAll(".turn .answer")].pop()?.textContent.startsWith("Hub shows mail and calendars only to the person"),
+      null, { timeout: 8000 }).then(() => true, () => false), "Ask searched the owner’s mail for the partner: " + await partner.locator(".turn .answer").last().innerText().catch(() => "(nothing)"));
+    expect(await partner.locator(".mailrows").count() === 0 && !(await partner.textContent("body")).includes("Riverside"), "the partner saw the owner’s emails in Ask");
+    await partner.waitForTimeout(300); await partner.screenshot({ path: `${out}/${name}-6c3-ask-mail-partner.png` });
     await partnerCtx.close();
 
     // ---- Mail: what needs you, who never answered, what Hub sorted ----

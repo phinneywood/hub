@@ -3,7 +3,7 @@ import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, loadOlder, older, stop, talk } from "./asking";
-import type { Card, Thing, Turn } from "./asking";
+import type { Card, MailRow, Thing, Turn } from "./asking";
 import { ErrandsCard } from "./errands";
 import { GroceriesCard, KitchenReply } from "./kitchen";
 import { ChatHead, DayRows, Greeting, HouseCard, NeedsCard } from "./now";
@@ -150,6 +150,23 @@ function MorningCard({ things, hint }: { things: Thing[]; hint: string }) {
   );
 }
 
+// The emails a mail search found, newest first: who and the subject, when, and a link that opens each in Gmail. The one
+// Hub read is marked. Read-only: nothing here changes the mail.
+function MailRows({ rows, opened }: { rows: MailRow[]; opened: number[] }) {
+  if (!rows.length) return null;
+  return (
+    <div class="rows mailrows">
+      {rows.map((row) => (
+        <div class={"row" + (opened.includes(row.n) ? " now" : "")} key={row.n}>
+          <span class="row-t day">{row.when}</span>
+          <div class="row-main"><b>{row.who}</b><span>{row.subject || "(no subject)"}{row.off && <small class="off"> · AI off</small>}</span></div>
+          <a class="row-act" href={row.href} target="_blank" rel="noopener noreferrer" aria-label={`Open ${row.who}: ${row.subject} in Gmail`}>Open</a>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CardView({ card, now }: { card: Card; now: House }) {
   if (card.kind === "morning" && card.things) return <MorningCard things={card.things} hint={card.hint ?? ""} />;
   if (card.kind === "confirm" && card.id !== undefined) return <ConfirmCard card={card} />;
@@ -184,6 +201,7 @@ function CardView({ card, now }: { card: Card; now: House }) {
   if (card.kind === "day") return <DayRows show={card.show ?? []} />;
   if (card.kind === "groceries") return <GroceriesCard ids={card.items} all={card.all} cart={card.cart} since={card.since} />;
   if (card.kind === "errands" && card.ids) return <ErrandsCard ids={card.ids} />;
+  if (card.kind === "mail" && card.rows) return <MailRows rows={card.rows} opened={card.opened ?? []} />;
   if (card.kind === "memory" && card.id !== undefined) {
     const id = card.id;
     const kept = !able.value || able.value.remembers.some((note) => note.id === id);
