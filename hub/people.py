@@ -77,3 +77,15 @@ def sees(login, account):
 def owner(login):
     """Whether this login is the household's owner: the person whose Google account is the bridge's main one."""
     return sees(login, DEFAULT)
+
+
+def same(login, other):
+    """Whether two logins are the same person: the same login, or two logins "people" gives one member. Two
+    requests with no login are nobody, so never the same person."""
+    login, other = _login(login), _login(other)
+    if login is None or other is None:
+        return False
+    if login == other:
+        return True
+    person = who(login)
+    return person is not None and other in person['logins']

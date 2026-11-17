@@ -302,7 +302,7 @@ def engine_page(request: Request, ran: str = "", asked: str = "", deploy: str = 
     version = {"on": release.folder() is not None, "running": release.running(), "pending": release.pending(),
                "last": release.last(), "requested": release.requested()}
     return render(request, "engine.html", active="engine", sources=catalog.SOURCES, acts=acts, words=registry.TRUST_WORDS,
-                  instructions=state.instructions(), requests=state.requests(), improvements=improve.requests(), version=version,
+                  instructions=state.instructions(request.headers.get("tailscale-user-login")), requests=state.requests(), improvements=improve.requests(), version=version,
                   runs=state.runs(overnight.KIND), used=state.used(day, overnight.KIND), limits=limits, said=said,
                   sort_runs=state.runs(triage.KIND, limit=7), sort_used=state.used(day, triage.KIND),
                   said_ok=ran in ("ok", "already") or asked in ("instruction", "request", "unsorted") or deploy == "asked",
@@ -325,10 +325,11 @@ DEPLOY_WORDS = {"asked": "Updating. This takes about a minute; reload to see the
 
 
 @app.post("/engine/ask")
-def engine_ask(text: str = Form("")):
-    """File one line the owner typed: guidance for the review, or a note of something to build."""
+def engine_ask(request: Request, text: str = Form("")):
+    """File one line someone typed: guidance for the review, or a note of something to build. A standing note is the
+    typing person's own; with no login (this Mac itself) nothing becomes a note."""
     from .engine import ask
-    result = ask.submit(text)
+    result = ask.submit(text, login=request.headers.get("tailscale-user-login"))
     store_log("engine_ask", result)
     return RedirectResponse("/engine?asked=" + result, status_code=303)
 
@@ -381,9 +382,9 @@ def engine_trust(request: Request, action: str = Form(...), level: str = Form(..
 
 
 @app.post("/engine/instructions/remove")
-def engine_forget(instruction_id: int = Form(...)):
+def engine_forget(request: Request, instruction_id: int = Form(...)):
     from .engine import state
-    state.remove_instruction(instruction_id)
+    state.remove_instruction(instruction_id, request.headers.get("tailscale-user-login"))
     store_log("engine_instruction", "removed")
     return RedirectResponse("/engine", status_code=303)
 
@@ -408,8 +409,9 @@ NOTE_WORDS = {"saved": "Saved. Ask Hub and the overnight review follow it from n
 
 @app.get("/engine/notes", response_class=HTMLResponse)
 def engine_notes(request: Request, done: str = "", problem: str = ""):
-    """Notes Ask Hub proposed, waiting for the owner's tap, and the notes already saved."""
+    """Notes Ask Hub proposed, waiting for this person's tap, and the notes they already saved."""
     from .engine import notes, state
+    login = request.headers.get("tailscale-user-login")
     from .tools.house import zones
     names = {}
     try:
@@ -418,8 +420,8 @@ def engine_notes(request: Request, done: str = "", problem: str = ""):
     except Exception:  # noqa: BLE001 - speaker names are a nicety; the notes stand without them
         pass
     by_note = zones.by_note()
-    saved = [{**i, "zone": [names.get(e, e.partition(".")[2]) for e in by_note.get(i["id"], ())]} for i in state.instructions()]
-    waiting = [{**p, "zone": [names.get(e, e.partition(".")[2]) for e in p["zone"]]} for p in notes.waiting()]
+    saved = [{**i, "zone": [names.get(e, e.partition(".")[2]) for e in by_note.get(i["id"], ())]} for i in state.instructions(login)]
+    waiting = [{**p, "zone": [names.get(e, e.partition(".")[2]) for e in p["zone"]]} for p in notes.waiting(login)]
     return render(request, "notes.html", active="engine", waiting=waiting, saved=saved,
                   said=NOTE_WORDS.get(done, ""), problem=problem[:200], full=len(saved) >= state.MAX_INSTRUCTIONS)
 
@@ -439,7 +441,7 @@ def engine_note_save(proposal_id: str, request: Request):
     if request.headers.get("tailscale-user-login") is None:
         return _signed_out(request, "Save notes from your phone or laptop.")
     try:
-        notes.save(proposal_id)
+        notes.save(proposal_id, request.headers.get("tailscale-user-login"))
     except notes.Refused as error:
         return taps.refused(request, error, lambda: RedirectResponse("/engine/notes?problem=" + quote(str(error)), status_code=303))
     return taps.done(request, "/engine/notes?done=saved", NOTE_WORDS["saved"])
@@ -449,7 +451,7 @@ def engine_note_save(proposal_id: str, request: Request):
 def engine_note_skip(proposal_id: str, request: Request):
     from . import taps
     from .engine import notes
-    notes.skip(proposal_id)
+    notes.skip(proposal_id, request.headers.get("tailscale-user-login"))
     return taps.done(request, "/engine/notes?done=skipped", NOTE_WORDS["skipped"])
 
 
@@ -476,9 +478,9 @@ def engine_improvement_remove(request_id: str = Form(...)):
 
 
 @app.post("/engine/notes/remove")
-def engine_note_remove(instruction_id: int = Form(...)):
+def engine_note_remove(request: Request, instruction_id: int = Form(...)):
     from .engine import state
-    state.remove_instruction(instruction_id)
+    state.remove_instruction(instruction_id, request.headers.get("tailscale-user-login"))
     store_log("engine_instruction", "removed")
     return RedirectResponse("/engine/notes", status_code=303)
 

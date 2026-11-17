@@ -70,7 +70,7 @@ def _for_model(evidence):
 def build_request(evidence, listed, day):
     data = {'today': day, 'evidence': _for_model(evidence), 'already_listed': [luna.clip(r['title'], 120) for r in listed],
             'suggested_this_week': state.recent_suggestions(day)}
-    owner = '\n'.join('- ' + i['text'] for i in state.instructions()) or '(none)'
+    owner = '\n'.join('- ' + i['text'] for i in state.owners_instructions()) or '(none)'
     return {'model': luna.MODEL, 'max_completion_tokens': OUTPUT_TOKENS, 'reasoning': {'effort': 'none'},
             'provider': luna.PROVIDER, 'stream': False,
             'messages': [{'role': 'system', 'content': SYSTEM},

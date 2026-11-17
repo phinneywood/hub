@@ -43,13 +43,14 @@ def _sort(text, day, transport):
     return reply.get('drawer') if reply.get('drawer') in ('instruction', 'request') else None
 
 
-def submit(text, transport=None):
-    """File one line. Returns 'instruction', 'request', 'unsorted', 'full' or 'empty'; never raises."""
+def submit(text, transport=None, *, login):
+    """File one line `login` typed. Returns 'instruction', 'request', 'unsorted', 'full' or 'empty'; never raises.
+    An instruction is that person's own standing note."""
     text = ' '.join(str(text).split())[:state.INSTRUCTION_LENGTH]
     if not text:
         return 'empty'
     drawer = _sort(text, home.today().isoformat(), transport)
-    if drawer == 'instruction' and state.add_instruction(text):
+    if drawer == 'instruction' and state.add_instruction(text, login):
         return 'instruction'
     if not state.add_request(text):
         return 'full'

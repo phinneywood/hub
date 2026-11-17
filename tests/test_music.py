@@ -529,7 +529,7 @@ def _zone(house):
     proposed = notes.propose('Living room and Kitchen are one space: play music there together',
                              'Remember from now on that the living room and the kitchen are one space, play music in sync',
                              login='me@example.com', zone=['media_player.living_room', 'media_player.kitchen'])
-    notes.save(proposed['id'])
+    notes.save(proposed['id'], 'me@example.com')
 
 
 def test_as_well_joins_the_playing_room_in_sync_instead_of_a_second_stream(house):
@@ -623,7 +623,7 @@ def test_removing_the_note_removes_the_zone_and_a_household_setting_makes_one(ho
     _zone(house)
     speakers = {e: {'name': s['name']} for e, s in house.items() if e.startswith('media_player.')}
     assert zones.mates('media_player.kitchen', speakers) == ['media_player.living_room']
-    state.remove_instruction(state.instructions()[0]['id'])
+    state.remove_instruction(state.instructions('me@example.com')[0]['id'], 'me@example.com')
     assert zones.mates('media_player.kitchen', speakers) == []
     (config.DATA_DIR / 'household.json').write_text(json.dumps({'home': {
         'music_url': 'https://music.example:8095', 'speaker_zones': [['Living room', 'media_player.kitchen'], ['nowhere']]}}))

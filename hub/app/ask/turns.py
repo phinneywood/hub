@@ -90,7 +90,7 @@ class NotKept(Exception):
         self.again = again
 
 
-def remember(note, said, zone=()):
+def remember(note, said, zone=(), *, login):
     """Keep one thing the owner asked Hub to remember, at once; returns its number. Raises NotKept.
 
     Only ever the owner's own words: their latest message must ask for something to be remembered, and the note
@@ -109,7 +109,7 @@ def remember(note, said, zone=()):
         raise NotKept('The owner’s latest message doesn’t ask Hub to remember anything, so nothing was kept.')
     if not notes.grounded(text, said):
         raise NotKept('A note must say what the owner said, in their own words.', again=True)
-    number = state.add_instruction(text)
+    number = state.add_instruction(text, login)
     if not number:
         raise NotKept(f'Hub remembers {state.MAX_INSTRUCTIONS} things at most. Forget one under System first.')
     if len(set(zone)) > 1:
@@ -118,12 +118,13 @@ def remember(note, said, zone=()):
     return number
 
 
-def remembered():
+def remembered(login):
+    """What this person asked Hub to remember. Each person's notes are their own."""
     from ...engine import state
-    return [{'id': i['id'], 'note': i['text']} for i in state.instructions()]
+    return [{'id': i['id'], 'note': i['text']} for i in state.instructions(login)]
 
 
-def forget(note_id):
-    """Forget one note. A zone kept beside it goes with it."""
+def forget(note_id, login):
+    """Forget one of this person's notes; False when it isn't theirs. A zone kept beside it goes with it."""
     from ...engine import state
-    state.remove_instruction(int(note_id))
+    return state.remove_instruction(int(note_id), login)

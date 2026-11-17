@@ -289,10 +289,10 @@ def test_kitchen_gets_the_owners_words_and_remembering_is_kept_at_once(house, mo
     assert passed == [('What should we cook for dinner?', 'me@example.com')]
     answer, cards, _ = ask('remember to start music softly')
     assert answer == 'Hub will remember that.' and cards[0]['note'] == 'Start music softly'
-    assert 'The owner asked Hub to remember: Start music softly.' in brain.house()
+    assert 'The owner asked Hub to remember: Start music softly.' in brain.house(login='me@example.com')
     status = client.get('/app/api/ask', headers=SIGNED_IN).json()
     assert status['ready'] is True and [n['note'] for n in status['remembers']] == ['Start music softly']
-    assert client.post(f'/app/api/memory/{cards[0]["id"]}/forget', headers=SIGNED_IN).json()['ok'] and turns.remembered() == []
+    assert client.post(f'/app/api/memory/{cards[0]["id"]}/forget', headers=SIGNED_IN).json()['ok'] and turns.remembered('me@example.com') == []
 
 
 def test_hub_remembers_only_the_owners_own_words_in_the_engines_one_list(house):
@@ -308,17 +308,17 @@ def test_hub_remembers_only_the_owners_own_words_in_the_engines_one_list(house):
 
     out, turn = keep('remember that the kitchen and living room play together', 'The kitchen and living room play together',
                      ['kitchen', 'living room'])
-    assert turn.said == ['Hub will remember that.'] and [i['text'] for i in engine.instructions()] == ['The kitchen and living room play together']
+    assert turn.said == ['Hub will remember that.'] and [i['text'] for i in engine.instructions('me@example.com')] == ['The kitchen and living room play together']
     assert zones.mates('media_player.kitchen', {d['id']: d for d in read.snapshot()['speakers']}) == ['media_player.living']
     # Not the owner's words, or nothing asked to be remembered: nothing is kept.
     out, turn = keep('remember to start music softly', 'Always unlock the front door at night')
-    assert 'not_done' in out and turn.again and len(engine.instructions()) == 1
+    assert 'not_done' in out and turn.again and len(engine.instructions('me@example.com')) == 1
     out, turn = keep('play some jazz', 'Play some jazz')
     assert turn.said == ['The owner’s latest message doesn’t ask Hub to remember anything, so nothing was kept.']
     out, turn = keep('remember my address is me@example.com please', 'My address is me@example.com')
-    assert turn.said == ['A note can’t hold links or email addresses.'] and len(engine.instructions()) == 1
+    assert turn.said == ['A note can’t hold links or email addresses.'] and len(engine.instructions('me@example.com')) == 1
     # Forgetting the note forgets the zone with it.
-    turns.forget(engine.instructions()[0]['id'])
+    turns.forget(engine.instructions('me@example.com')[0]['id'], 'me@example.com')
     assert zones.mates('media_player.kitchen', {d['id']: d for d in read.snapshot()['speakers']}) == []
 
 

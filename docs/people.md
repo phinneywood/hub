@@ -30,6 +30,8 @@ login a request carries:
   are the asker's. The kitchen wall (`?wall=1`) is no one's: the household's things only.
 - One exception: `/today/brief` without a login, which the morning job on this Mac reads to send the owner's
   phone its count, is the owner's list (`"default"`'s). Through Tailscale it is the asker's.
+- **Standing notes** (what someone asked Hub to remember) are each person's own, by login: they steer that person's
+  Ask only, and only they see, save or remove them (`hub/engine/state.py`). Notes from before are the owner's.
 - **Mail and Mail settings** in the app read only for a login that may see `"default"`. Anyone else gets
   `{"ok": true, "connected": false}` from `/app/api/mail` and `/app/api/mail-settings`, and a calm screen saying their
   mail isn't connected yet; their taps there are refused (403) and change nothing. `/app/api/home` says `"mail"`, and

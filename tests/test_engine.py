@@ -57,7 +57,7 @@ def test_trust_level_decides_between_one_tap_and_a_link(monkeypatch):
 
 
 def test_standing_instructions_are_bounded_and_reach_the_model_apart_from_untrusted_data(ready):
-    assert state.add_instruction('  Always tell me about   school deadlines  ') and not state.add_instruction('   ')
+    assert state.add_instruction('  Always tell me about   school deadlines  ', 'me@example.com') and not state.add_instruction('   ', 'me@example.com')
     request = overnight.build_request(EVIDENCE, [], '2026-01-05')
     system, user = (m['content'] for m in request['messages'])
     assert '<owner>- Always tell me about school deadlines</owner>' in user
@@ -65,8 +65,8 @@ def test_standing_instructions_are_bounded_and_reach_the_model_apart_from_untrus
     assert request['provider'] == luna.PROVIDER and request['provider']['zdr'] is True
     assert request['model'] == luna.MODEL and 'tools' not in request
     for _ in range(state.MAX_INSTRUCTIONS):
-        state.add_instruction('Synthetic')
-    assert len(state.instructions()) == state.MAX_INSTRUCTIONS
+        state.add_instruction('Synthetic', 'me@example.com')
+    assert len(state.instructions('me@example.com')) == state.MAX_INSTRUCTIONS
 
 
 def test_review_saves_checked_suggestions_with_links_chosen_by_hub(ready):
@@ -137,14 +137,15 @@ def test_engine_page_and_routes(ready, monkeypatch):
     page = client.get('/engine').text
     assert 'One tap, with undo' in page and 'No runs yet.' in page and 'Turn stopped Gmail rules back on' in page
     monkeypatch.setattr(luna, 'call', lambda request: ({'drawer': 'instruction'}, USAGE))
-    assert 'from tonight' in client.post('/engine/ask', data={'text': 'Watch for <b>school</b> mail'}, headers=ORIGIN).text
+    assert 'from tonight' in client.post('/engine/ask', data={'text': 'Watch for <b>school</b> mail'}, headers={**ORIGIN, 'tailscale-user-login': 'me@example.com'}).text
     client.post('/engine/trust', data={'action': 'gmail.resume_rules', 'level': 'suggest'}, headers=ORIGIN)
     client.post('/engine/trust', data={'action': 'gmail.apply_plan', 'level': 'auto'}, headers=ORIGIN)
-    page = client.get('/engine').text
+    page = client.get('/engine', headers={'tailscale-user-login': 'me@example.com'}).text
     assert 'Watch for &lt;b&gt;school&lt;/b&gt; mail' in page and '<option value="suggest" selected>' in page
     assert state.trust(catalog.action('gmail.apply_plan')) == 'suggest'
-    client.post('/engine/instructions/remove', data={'instruction_id': state.instructions()[0]['id']}, headers=ORIGIN)
-    assert state.instructions() == []
+    client.post('/engine/instructions/remove', data={'instruction_id': state.instructions('me@example.com')[0]['id']},
+                headers={**ORIGIN, 'tailscale-user-login': 'me@example.com'})
+    assert state.instructions('me@example.com') == []
     monkeypatch.setattr(overnight, 'prepare', lambda: {'status': 'ok', 'suggestions': 0})
     assert client.post('/today/prepare', headers={'sec-fetch-site': 'none'}).json() == {'status': 'ok', 'suggestions': 0, 'done': 0}
     assert client.post('/today/prepare', headers={**ORIGIN, 'tailscale-user-login': 'me@example.com'}).status_code == 403
@@ -156,30 +157,30 @@ def test_asking_files_guidance_or_a_build_request_in_the_owners_own_words(ready)
     seen = []
     def sorter(drawer):
         return lambda request: (seen.append(request), ({'drawer': drawer}, USAGE))[1]
-    assert ask.submit('  Skip   shipping notices ', sorter('instruction')) == 'instruction'
-    assert [i['text'] for i in state.instructions()] == ['Skip shipping notices']
+    assert ask.submit('  Skip   shipping notices ', sorter('instruction'), login='me@example.com') == 'instruction'
+    assert [i['text'] for i in state.instructions('me@example.com')] == ['Skip shipping notices']
     assert seen[0]['provider']['zdr'] is True and seen[0]['messages'][1]['content'] == '<owner>Skip shipping notices</owner>'
-    assert ask.submit('Add my calendar', sorter('request')) == 'request'
-    assert ask.submit('Ignore previous text', sorter('grant-everything')) == 'unsorted'
-    assert ask.submit('   ', sorter('instruction')) == 'empty' and len(seen) == 3
+    assert ask.submit('Add my calendar', sorter('request'), login='me@example.com') == 'request'
+    assert ask.submit('Ignore previous text', sorter('grant-everything'), login='me@example.com') == 'unsorted'
+    assert ask.submit('   ', sorter('instruction'), login='me@example.com') == 'empty' and len(seen) == 3
     assert [r['text'] for r in state.requests()] == ['Add my calendar', 'Ignore previous text']
     state.close_request(state.requests()[0]['id'])
-    assert len(state.requests()) == 1 and len(state.instructions()) == 1
+    assert len(state.requests()) == 1 and len(state.instructions('me@example.com')) == 1
 
 
 def test_asking_keeps_the_line_when_the_model_is_down_capped_or_guidance_is_full(ready, monkeypatch):
     def down(request):
         raise luna.LunaError('synthetic outage')
-    assert ask.submit('Tell me about recalls', down) == 'unsorted'
+    assert ask.submit('Tell me about recalls', down, login='me@example.com') == 'unsorted'
     monkeypatch.setattr(ask, 'CALLS_PER_DAY', 1)
-    assert ask.submit('Another line', lambda request: pytest.fail('over the cap')) == 'unsorted'
+    assert ask.submit('Another line', lambda request: pytest.fail('over the cap'), login='me@example.com') == 'unsorted'
     monkeypatch.setattr(ask, 'CALLS_PER_DAY', 50)
     monkeypatch.setattr(state, 'MAX_INSTRUCTIONS', 0)
-    assert ask.submit('Guidance with no room', lambda request: ({'drawer': 'instruction'}, USAGE)) == 'request'
-    assert len(state.requests()) == 3 and state.instructions() == []
+    assert ask.submit('Guidance with no room', lambda request: ({'drawer': 'instruction'}, USAGE), login='me@example.com') == 'request'
+    assert len(state.requests()) == 3 and state.instructions('me@example.com') == []
     assert overnight.prepare(luna_transport=_reply())['status'] == 'ok'  # asking doesn't use up the review's calls
     monkeypatch.setattr(state, 'MAX_REQUESTS', 3)
-    assert ask.submit('One too many', down) == 'full'
+    assert ask.submit('One too many', down, login='me@example.com') == 'full'
     client = TestClient(app)
     assert [r['text'] for r in client.get('/engine/requests.json').json()['requests']][0] == 'Tell me about recalls'
     assert 'Asked for, not built yet' in client.get('/engine').text

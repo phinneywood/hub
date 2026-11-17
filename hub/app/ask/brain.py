@@ -133,7 +133,7 @@ def _beyond(found):
     return lines
 
 
-def house(now=None):
+def house(now=None, login=None):
     """The house right now, as the few plain lines the model is given with each request."""
     try:
         found = read.snapshot()
@@ -156,7 +156,7 @@ def house(now=None):
             lines.append('Nothing is playing.')
     lines.append('Scenes: ' + ', '.join(s['name'] for s in seen['scenes']) + '.')
     lines += _beyond(found)
-    notes = turns.remembered()
+    notes = turns.remembered(login)
     if notes:
         lines.append('The owner asked Hub to remember: ' + ' | '.join(n['note'] for n in notes) + '.')
     return '\n'.join(lines)
@@ -276,7 +276,7 @@ async def run(text, login, build=None):
     if known:
         tools.shown(turn, topics)
     # Names, titles and mail are other people's text. None of it can close a section and start one of its own.
-    prompt = (f'<house>\n{_inside(await run_in_threadpool(house))}\n</house>\n' + (f'<earlier>\n{_inside(before)}\n</earlier>\n' if before else '')
+    prompt = (f'<house>\n{_inside(await run_in_threadpool(house, None, login))}\n</house>\n' + (f'<earlier>\n{_inside(before)}\n</earlier>\n' if before else '')
               + (f'<data>\n{_inside(known)}\n</data>\n' if known else '') + f'<said>{_inside(text)}</said>')
     words, shown, drawn, usage = [], 0, 0, None
     try:
