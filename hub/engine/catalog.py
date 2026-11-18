@@ -13,7 +13,7 @@ UNANSWERED = 3
 PRESCHOOL_DAYS = 14
 
 # Where a suggestion may point. The model names a source; Hub picks the page.
-PAGES = {'gmail': ('/gmail', 'Open Gmail'), 'calendar': ('/app/#board/calendar', 'Open calendar'), 'preschool': ('/preschool/', 'Class guide'), 'trip': ('/trip', 'Open trip'),
+PAGES = {'gmail': ('/gmail', 'Open Gmail'), 'calendar': ('/app/#board/calendar', 'Open calendar'), 'preschool': ('/app/#board/school', 'School'), 'trip': ('/app/#board/trip', 'Open trip'),
          'network': ('/network', 'Details'), 'house': ('/house/changes', 'Home changes'), 'hub': ('/engine', 'Open')}
 
 
@@ -1027,7 +1027,7 @@ SOURCES = [
     Source('trip', 'Trip', 'The trip plan saved in Hub.', 'Trip dates and whether flights are chosen.',
            items=(today.trip,), evidence=trip_evidence,
            lookups=(Lookup('trip_status', 'Trip', 'The trip plan saved in Hub.', 'Trip dates and whether flights are chosen.',
-                           '/trip', 'Open trip', trip_lookup),)),
+                           '/app/#board/trip', 'Open trip', trip_lookup),)),
     Source('network', 'Network', 'Internet and device readings from Home Assistant.',
            'The one-line status, how many devices are online, and the names of up to 5 you expect online that aren’t. '
            'To Ask Hub when you ask: device names, their status, band, Deco and speed. Never MAC addresses.',

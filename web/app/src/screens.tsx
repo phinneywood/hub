@@ -246,7 +246,7 @@ export function Rail() {
 
 const MAILBOX = ["/gmail"];     // one person's Google account: listed only for them
 const OLDER = [["Ask, the chat", "/ask"], ["Today, the cards", "/today"], ["Kitchen, the older page", "/kitchen"], ["Mail, the older page", "/gmail"],
-  ["Preschool", "/preschool/"], ["Trip", "/trip"], ["Bike + bus", "/mobility"],
+  ["Class guide, review", "/preschool/"], ["Trip workspace", "/trip"], ["Bike + bus", "/mobility"],
   ["Settings and checks", "/settings"]] as const;
 const LOOKS: [Look, string][] = [["auto", "Automatic"], ["dusk", "Evening"], ["day", "Day"]];
 

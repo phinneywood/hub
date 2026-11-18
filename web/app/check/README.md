@@ -25,7 +25,7 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   from its own page, and changes a number when a thing is said again;
 - on a Hub where Ask isn't set up, what is typed still reaches the older chat;
 - the dashboards open, are arranged by each person, and the older Calendar and Insights addresses open the Calendar
-  and AI spend boards;
+  and AI spend boards, and the Trip and School boards lead to the trip workspace and the class guide;
 - Today says the right sentence and the weather in words, lists what needs you (a flat lock battery first,
   then the longest wait), shows the evening, tomorrow and its weather drawn, the house's locks, the week at
   school and the trip, shows the note from a stand-in for Ask's model, marks two things at once, takes a tick

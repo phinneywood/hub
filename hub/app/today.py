@@ -192,11 +192,11 @@ def _trip(day):
     title = data.get('title', 'Trip').split(' · ')[0]
     if day >= start:
         return {'title': title, 'when': f'Day {(day - start).days + 1} of {(end - start).days + 1}', 'note': '',
-                'open': {'href': '/trip', 'label': 'Itinerary'}}
+                'open': {'href': '/app/#board/trip', 'label': 'Itinerary'}}
     days = (start - day).days
     chosen = bool(data.get('selected_flight'))
     return {'title': title, 'when': f'In {days} day{"s" * (days != 1)}', 'note': '' if chosen else 'Flights aren’t chosen yet',
-            'open': {'href': '/trip', 'label': 'Open' if chosen else 'Compare'}}
+            'open': {'href': '/app/#board/trip', 'label': 'Open'} if chosen else {'href': '/trip', 'label': 'Compare'}}
 
 
 def _soft(part, otherwise):

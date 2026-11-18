@@ -627,7 +627,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await stage("reset");
     await openPage("Dashboards");
     expect(await saysSoon("Dashboards"), "the Dashboards page: " + await says());
-    expect(await until(() => document.querySelectorAll(".wrap .rows .row b").length === 5), "the owner did not get five dashboards");
+    expect(await until(() => document.querySelectorAll(".wrap .rows .row b").length === 7), "the owner did not get seven dashboards");
     await page.locator(".wrap .rows .row", { hasText: "Pregnancy" }).first().click();
     expect(await saysSoon("Week 15: about the size of an apple"), "the pregnancy board: " + await says());
     expect(new URL(page.url()).hash === "#board/pregnancy", "a board has no address of its own: " + page.url());
@@ -654,7 +654,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     if (phone) await page.goto(base + "/app/#board/network");
     else {          // on a wide screen the rail lists each dashboard under Ask and House: one click opens it
       const listed = await page.locator(".rail .railboards .rlink:not(.head)").allInnerTexts();
-      expect(listed.join("|") === "Pregnancy|Calendar|Network|Mail|AI spend", "the rail's dashboards: " + listed.join("|"));
+      expect(listed.join("|") === "Pregnancy|Calendar|School|Trip|Network|Mail|AI spend", "the rail's dashboards: " + listed.join("|"));
       await page.locator('.rail .railboards .rlink:text-is("Network")').click();
     }
     expect(await saysSoon("Internet is up"), "the network board: " + await says());
@@ -676,11 +676,21 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.querySelector(".say")?.textContent.startsWith("Within limits in")), "the AI spend board: " + await says());
     expect(await page.locator('[data-block="month"] .btile').count() === 2, "the AI spend board did not show both limits");
     await page.waitForTimeout(300); await shot("16g-board-spend");
+    // The trip and the class guide have boards; their own pages stay as the places to change them.
+    await page.goto(base + "/app/#board/trip");
+    expect(await until(() => / in \d+ days$|tomorrow$|on now$/.test(document.querySelector(".say")?.textContent ?? "")), "the trip board: " + await says());
+    expect(await page.locator('[data-block="edit"] a[href="/trip"]').count() === 1, "the trip board did not lead to the trip workspace");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the trip board scrolls sideways");
+    await page.waitForTimeout(300); await shot("16h-board-trip");
+    await page.goto(base + "/app/#board/school");
+    expect(await until(() => document.querySelector('[data-block="more"] a[href="/preschool/"]') !== null), "the school board did not lead to the class guide: " + await says());
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the school board scrolls sideways");
+    await page.waitForTimeout(300); await shot("16i-board-school");
     quiet = true;       // the mail board is the owner's: the partner is told no
     const partnerBoard = await page.evaluate(() => fetch("/app/api/board/mail", { headers: { "tailscale-user-login": "casey@example.com" } }).then((r) => r.status));
     const partnerList = await page.evaluate(() => fetch("/app/api/boards", { headers: { "tailscale-user-login": "casey@example.com" } }).then((r) => r.json()).then((b) => b.boards.map((x) => x.id).join("|")));
     quiet = false;
-    expect(partnerBoard === 404 && partnerList === "pregnancy|network|spend", `the partner's dashboards: ${partnerList}, mail ${partnerBoard}`);
+    expect(partnerBoard === 404 && partnerList === "pregnancy|school|trip|network|spend", `the partner's dashboards: ${partnerList}, mail ${partnerBoard}`);
     await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")');
     await page.fill("#askq", "how far along are we?");
     await page.keyboard.press("Enter");
