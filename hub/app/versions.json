@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "1c4579c07cbe4903b5a421e890aa0f15a852353e",
+  "from": "7dabee7e22735b0df7857b7175e25bb356200a6c",
   "live": null,
+  "title": "Hub’s builds leave less behind",
+  "changes": [
+   "Checking a new version of Hub no longer leaves a few hundred megabytes behind on the Mac each time."
+  ]
+ },
+ {
+  "sha": "7dabee7e22735b0df7857b7175e25bb356200a6c",
+  "from": "1c4579c07cbe4903b5a421e890aa0f15a852353e",
+  "live": "2026-11-18T20:14:19Z",
   "title": "Dashboards on the phone",
   "changes": [
    "On a phone, the bar at the bottom now has Dashboards beside Ask and House: one tap lists them, one more opens one."
