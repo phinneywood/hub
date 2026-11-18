@@ -27,7 +27,7 @@
     "src/today.tsx": "6cddfac51f957a966d11cdb7c8e11ff23ec9c953e9daab826e3f18ac4c907777",
     "src/types.ts": "d726f6827feb425c11ded77c6b070a5532c1835ec5010d373627c08d46824f78",
     "src/ui.tsx": "a6c5c999328a70ed56c2f821e9801e573b383160a588af8c4a938f79ddc216e9",
-    "src/versions.tsx": "5fd602bb182bad9b4cac7acef9c407d10fdbcfba97493bfca6887f06be6e329e",
+    "src/versions.tsx": "70dc7d7c31e46568eec6eee9d0b87b6d58b8260c39e6dc5068f23eb01593cefe",
     "src/viewport.ts": "63bba57ca9fa83d5e1b9db81eb97f8c402fba4eb67558735d481a51af039a2c5",
     "src/vite-env.d.ts": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
     "src/wall.tsx": "e21467220902ea0103e30ff103525ba9307af6a3fd5c49b850169334eabf51e2",
@@ -35,6 +35,6 @@
   },
   "built": {
     "app.css": "279df8a2a30190ab1cf8720da507f499cbb001414c995742e43f9f25dbddd281",
-    "app.js": "bc630925ade3781aa1e3e3b1e313568b37062141cc66de18f24542d3dac184f9"
+    "app.js": "653eaef8f6c2670312ea695232dd6e1c1182bd9757490c286a40e403888b6baa"
   }
 }

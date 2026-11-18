@@ -81,19 +81,20 @@ function Ready({ deploy, from, again }: { deploy: Deploy; from: string | null; a
 }
 
 // The last update, while Undo can still put the version from before it back: when it went live, and Undo.
-function Undoing({ undo, from, again }: { undo: Undo; from: string | null; again: () => Promise<Releases | null> }) {
+function Undoing({ undo, asked, from, again }: { undo: Undo; asked: boolean; from: string | null; again: () => Promise<Releases | null> }) {
   const [busy, setBusy] = useState(false);
   const { said, going, ask } = useFollow(from, again, false, "The version from before didn’t pass its checks, so this one is still running.");
   return (
     <section class="block release undo">
       <h2>{going ? "Going back" : undo.auto ? "Hub updated itself" : "Hub was updated"}</h2>
       <p class="release-when">{going ? "Backing up, switching back, then checking. About a minute." : `Live ${DAY.format(new Date(undo.at))} · ${undo.short}`}</p>
-      {!going && (
+      {!going && !asked && (
         <div class="btns">
           <button type="button" class="btn" disabled={busy || !me.value.signed_in} onClick={() => void ask("deploy/undo", setBusy)}>Undo</button>
         </div>
       )}
       <p class="quiet">{said || (going ? "This screen reloads by itself when the version from before is running."
+        : asked ? "Hub is updating. Undo once it is done."
         : me.value.signed_in ? `Undo puts back the version from before (${undo.previous}), until ${DAY.format(new Date(undo.until * 1000))}.`
         : "Undo from your phone or laptop.")}</p>
     </section>
@@ -117,7 +118,7 @@ export function Versions() {
         <p class="quiet">The last update ({found.deploy.put_back}) didn’t pass its checks, so Hub put the earlier version back.</p>
       )}
       {found?.deploy?.ready && <Ready deploy={found.deploy} from={found.running} again={again} />}
-      {found?.deploy?.undo && <Undoing undo={found.deploy.undo} from={found.running} again={again} />}
+      {found?.deploy?.undo && <Undoing undo={found.deploy.undo} asked={found.deploy.asked} from={found.running} again={again} />}
       {found?.versions.map((release) => <Entry release={release} key={release.sha ?? "next"} />)}
     </div>
   );
