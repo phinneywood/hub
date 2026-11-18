@@ -29,6 +29,7 @@ fails if Hub would refuse what comes back.
 | `mail.read` | read | the mail helper answers, Gmail is signed in, and the helper still reports it can't send |
 | `calendar.read` | read | the calendar week can be read |
 | `kitchen.answers` | read | the Kitchen service answers |
+| `caretaker.alive` | read | the house's caretaker looked at the house in the last five minutes (skipped where it isn't set up) |
 | `house.light` | undo | one named light switches and holds for 3 s, and is put back as it was |
 | `model.route` | spend | one call with invented data comes back over the pinned private route, in the right form |
 | `ask.golden` | spend | a few golden scenarios pass through the real Ask with the real model, as a dry run |

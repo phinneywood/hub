@@ -17,6 +17,10 @@ HA_BROKER_SOCKET = Path(os.environ.get(
 
 DATA_DIR = Path(os.environ.get("HUB_DATA_DIR", Path(__file__).resolve().parent.parent / "var"))
 
+# The house's caretaker (home-ops) keeps its status and journal here; Hub reads them and leaves request notes.
+CARETAKER_DIR = Path(os.environ.get(
+    "HUB_CARETAKER_DIR", Path.home() / "Library" / "Application Support" / "HomeOps" / "caretaker"))
+
 
 def background_jobs_enabled(value):
     if value not in {"enabled", "disabled"}:

@@ -46,8 +46,8 @@ it should refuse or leave alone.
 - **Checks** (`hub/golden/checks.py`) read the trace: `Called`, `NotCalled`, `NoChanges`, `ReadOnly`,
   `ChangesOnly`, `Changed`, `Proposed`, `ConcretePick`, `Plays`, `ShortSearch`, `QuietFirst`, `SaysPick`, `Joined`, `HandedOff`,
   `ReplySays`, `ReplyNot`, `PlainReply`. Each returns one plain sentence when it fails.
-- **The dry-run layer** (`hub/golden/dryrun.py`) stands in the three doors through which Ask can change
-  anything. Reads go through. A change that passes Hub's checks is recorded and answered as if it worked;
+- **The dry-run layer** (`hub/golden/dryrun.py`) stands in each door through which Ask can change
+  anything: Home Assistant, Music Assistant, Kitchen, errands, the morning message and the caretaker's queue. Reads go through. A change that passes Hub's checks is recorded and answered as if it worked;
   one that fails them is refused as it would be live. Later reads see the recorded changes laid over the
   real state, so a second turn knows what the first one started. Undo records, and proposals that wait
   for the owner's tap (a note to save, a playlist to make), go to a scratch database, so a dry run leaves

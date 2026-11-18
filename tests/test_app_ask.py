@@ -593,7 +593,7 @@ def test_the_real_route_thinks_acts_once_and_stops(world, monkeypatch):
     assert body['thinking'] == {'type': 'adaptive'} and body['output_config'] == {'effort': 'high'}
     assert [tool['name'] for tool in body['tools']] == ['lights', 'scene', 'music', 'music_library', 'playlist', 'hub_info', 'remember', 'conversation', 'groceries', 'kitchen', 'look_up', 'mail_search', 'mail_read', 'errands',
                                                        'errand', 'find', 'details', 'arrange', 'rooms', 'scene_setup', 'routine', 'device',
-                                                       'setting', 'integration', 'dashboard']
+                                                       'setting', 'integration', 'dashboard', 'house_health', 'caretaker']
     assert body['system'][-1]['cache_control']['type'] == 'ephemeral' and 'cache_control' in body['tools'][-1]
     [message] = body['messages']
     assert message['role'] == 'user' and message['content'][-1]['text'].endswith('<said>dim the kitchen to 40</said>')

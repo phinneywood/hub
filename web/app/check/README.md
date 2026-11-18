@@ -43,6 +43,13 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   and says so when Hub can't be reached and comes back by itself, and at night is a dim clock and how
   tomorrow starts;
 - System opens Versions, which lists the releases and leads back;
+- Ask answers "how's the house?" from House health with Open House health under it, plays the Hub drill under its
+  answer until it finishes, and leaves "restart Home Assistant" on the caretaker's card, which Not now puts away
+  without asking for anything;
+- the top button turns amber while the caretaker hands you something; House health shows what needs you with
+  Restart Home Assistant where it is asked for, every system with seven days of history, the last seven days, the
+  drill Ask ran, a line saying Ask steers the caretaker, one Pause button and no drill controls, and the top button
+  going back once the last thing is sorted;
 - Mail leads with the emails that need you and the unanswered question, takes a tick and puts it back, and
   files a kind; Kitchen shows the list with each thing's product and where it stands, what needs a pick, a cart
   plan and ideas, opens a thing and sets how many, adds what is typed, takes a pick, fills the cart, reads it,

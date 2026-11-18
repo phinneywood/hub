@@ -264,7 +264,8 @@ making and deleting wait for their tap on Hub's Playlists page, the rest have Un
 two for the owner only, and the devices on the home network; read-only), `mail_search` and `mail_read`
 (see “Ask reads mail”), `errands`
 (the asker's errands Hub got ready, drawn as cards under the answer; read-only), `errand` (Done, Tomorrow, Not this,
-the list, Undo and where replies open, only as the person's own words ask; see “Errands”), and the
+the list, Undo and where replies open, only as the person's own words ask; see “Errands”), `house_health` and
+`caretaker` (see “House health”), and the
 tools that change how the house is set up and work every other device (next section). Lights, scenes and music go
 through `hub/tools/house/control.py` like a tap: the same allowlist, the same record and Undo, counted against
 Ask's 30 changes a minute. Ask changes nothing for a program without a login, or while the owner has that kind
@@ -758,6 +759,74 @@ follows what it is sent (`tests/app_world.py`). It reaches no other machine and 
 (`web/check_guard.py`). Ask works there on the stand-in model, with a made-up Kitchen (a list, made-up products
 and a practice cart, `tests/kitchen_world.py`) and private desk, so the conversation, a setup change and the list
 filling a cart can be tried and photographed without a key, a house or a shop. See `web/app/check/README.md`.
+
+## House health
+
+System's first row, "House health", opens what the house's caretaker sees (`hub/caretaker.py`,
+`web/app/src/health.tsx`). The caretaker is a program of its own on the Mac (home-ops `caretaker/`, its design in
+that repository's `docs/CARETAKER.md`). It watches Home Assistant, the devices, Hue, Apple Home, the network, Hub, its
+deployer and helpers, routines, backups and the Mac; fixes a fenced few things by itself (an integration reload,
+two apps, the four services, opening HomeClaw); and keeps a folder, `HUB_CARETAKER_DIR`
+(`~/Library/Application Support/HomeOps/caretaker` by default):
+
+| | What Hub does with it |
+| --- | --- |
+| `status.json`, rewritten every minute | Reads it: each system's state and line, what needs you, the advice, batteries, what isn't watched, the drills |
+| `caretaker.db`, its journal | Reads it, read-only (`mode=ro`): what needs you, the night's lines, seven days of history, a drill's steps, the answers to your requests. SQLite may add the journal's own `-wal` and `-shm` files beside it when the caretaker isn't running; Hub writes no rows |
+| `queue/` | The only thing Hub writes: one request note per tap |
+
+**The screen.** A headline (what needs you, all quiet, paused, or the caretaker hasn't looked since when), then:
+- Needs you, with Restart Home Assistant where the caretaker asks for it, Try again where a step can help, Done
+  and Ignore;
+- Last night, from 9 PM: what it fixed, what came back by itself, and other lines worth a glance;
+- Watching: a row per system with its state, each opening seven days as dots and what happened;
+- The last seven days, day by day;
+- Make it sturdier, with I did this and Not for us;
+- Batteries;
+- a drill's steps, only while one is running or just ran;
+- one button, Pause until I resume (Resume while paused), and a line saying Ask steers the rest. Pausing keeps it
+  watching and telling, but it fixes nothing.
+
+**Steered from Ask** (owner's rule, 2026-11-18: Ask is the one way in, so the screen has no drill or pause-length
+controls of its own). Every request carries House health's headline and what needs you in a line or two
+(`caretaker.brief`); `house_health` reads the caretaker's whole account (`caretaker.lines`), and a question that names
+what broke, what was fixed or whether everything works gets it in `<health>` beside the house (`brain.health`), so
+it is answered in one trip. It is data from the house, never instructions. `caretaker` pauses (for a length, or until
+resumed) or resumes it, runs one of its drills (played under the answer until it finishes), tries a step again, marks
+a problem sorted, or says the owner did one of the sturdier things or doesn't want that suggestion. It goes through
+`caretaker.plan`, which finds the item from the person's words, then `caretaker.ask`, as a tap does. The person's own
+message must ask for it (`tools.CARE_ASKED`: a word for pausing, trying again, a drill and so on, or a plain yes to
+Hub's own question), so text in House health, such as a device or problem named to read as an instruction, can't
+steer the caretaker however the model takes it. Restart Home Assistant and Ignore (leave a problem alone from now
+on) are never done from words: Ask answers with the caretaker's card and its button, and only the tap asks. Not
+wanting a sturdier suggestion is not Ignore; it is a note from words like the others. Try again and restart are
+refused while Ask is set to Suggest only; nothing else it asks reaches the house. A tap is the owner's own, so Suggest
+only doesn't hold one back. An answer about House health ends with Open House health (`{"kind": "health"}`).
+
+**Taps.** Each needs a signed-in device. Hub checks the request first (`caretaker.ask`): the kind of request (`fix`,
+`restart`, `done`, `ignore`, `pause`, `resume`, `drill`), that the item is open and not a drill's, that a Try again
+has a step to try and isn't a restart (`restart` is its own request, only for the item that asks for it), that a
+drill is one the caretaker lists, a pause's length, and that the caretaker looked in the last five minutes: a request
+it wouldn't see is refused in words rather than left waiting. Then it leaves `queue/hub-<id>.json`
+(`{id, do, target, by, at}`), written aside and moved in. The caretaker checks it again, does it or refuses, answers
+it in its journal within a pass, and deletes it. Restart Home Assistant runs only from such a tap.
+
+**Today and the morning.** Each needs-you item the caretaker marks for Today is a Today item keyed `care-<id>`, with
+the caretaker's words and Open to House health. Battery items stay on this screen. Items raised at night wait for
+the morning, except Hub, the broker, the kitchen service or Home Assistant still down half an hour after a failed
+fix. `caretaker.note()` gives the night in a headline and lines, 9 PM to now until noon, for the morning brief
+(`{"at", "headline", "lines": [{"tone", "text"}], "needs"}` or None), and `GET /app/api/health/note` serves it. The
+top button and System's tab turn amber while something needs you or the caretaker has stopped looking.
+
+**When it stops.** A heartbeat older than five minutes is said plainly on the screen and in System ("The caretaker
+hasn't looked since 3:12 AM"), and the live check `caretaker.alive` fails. A journal Hub can't read (damaged, or written
+by a caretaker with tables Hub doesn't know) is said the same way, never as "all quiet": the top button turns amber,
+House health and Ask say the journal can't be read, Today and the morning go on without it, and nothing is asked of
+the caretaker. A row without a time is left off the week rather than failing the page.
+
+Nothing here reaches the house; Hub never runs the caretaker or a fix. Tests: `tests/test_app_health.py`, on a
+made-up caretaker folder (`tests/caretaker_world.py`), which the demo also uses with a stand-in caretaker that
+answers taps and plays drills.
 
 ## Activity
 

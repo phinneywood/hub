@@ -21,7 +21,7 @@ export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
 // "home" is Ask, the screen Hub opens to; "house" is the plan of rooms; "wall" is the brief on the kitchen iPad.
 export type View = "home" | "house" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity"
-  | "errands" | "wall" | "boards" | "board";
+  | "errands" | "wall" | "boards" | "board" | "health";
 
 function kept(): House | null {
   try {
@@ -47,7 +47,7 @@ export const trouble = signal<Trouble>("");   // "hub": can't reach Hub; "house"
 export const why = signal("");
 export const me = signal<Me>({ signed_in: true, initial: "", versions: { js: "", css: "" }, links: { ha: null, music: null } });
 export const sheet = signal<Sheet>(null);
-const VIEWS: View[] = ["house", "today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "errands", "wall", "boards"];
+const VIEWS: View[] = ["house", "today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "errands", "wall", "boards", "health"];
 // One dashboard is "#board/<id>" (hub/app/boards/): the view is "board", and which one is boardId.
 const BOARD = /^#board\/([a-z0-9-]{1,60})$/;
 const here = (): View => (BOARD.test(location.hash) ? "board" : VIEWS.find((v) => location.hash === "#" + v) ?? "home");
@@ -86,6 +86,7 @@ export function go(where: View, board = "") {
   sheet.value = null;
   history.replaceState(null, "", where === "home" ? location.pathname : where === "board" ? "#board/" + board : "#" + where);
   window.scrollTo(0, 0);
+  if (where === "system" || where === "today" || where === "health") void lookAtCare();     // the caretaker's count, fresh
 }
 window.addEventListener("hashchange", () => {
   boardId.value = BOARD.exec(location.hash)?.[1] ?? boardId.value;
@@ -492,16 +493,27 @@ async function look_now() {
   try {
     const first = await api.home();
     me.value = { signed_in: first.signed_in, initial: first.initial, versions: first.versions, links: first.links, update: first.update,
-      mail: first.mail };
+      mail: first.mail, care: first.care };
     accept(first);
   } catch {
     trouble.value = "hub";
   }
 }
 
+/** The caretaker's count for the top button and System, read again now and then (the house's own feed doesn't carry it). */
+export async function lookAtCare() {
+  try {
+    const care = await api.careTop();
+    me.value = { ...me.value, care };
+  } catch {
+    /* Hub away: the banner says so */
+  }
+}
+
 export function start() {
   connect();
   void look_now();
+  window.setInterval(() => { if (document.visibilityState === "visible") void lookAtCare(); }, 60000);
   window.setInterval(() => {
     // A phone that leaves the home network is told nothing: the line just goes silent. So listen for silence.
     if (document.visibilityState !== "visible") return;

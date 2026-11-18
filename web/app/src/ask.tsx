@@ -1,18 +1,19 @@
 // Ask, the screen Hub opens to: a conversation with Hub, which speaks first with what needs you and the house.
 import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import { post } from "./api";
+import { health, healthAsk, post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, loadOlder, older, stop, talk } from "./asking";
 import type { Card, MailRow, Thing, Turn } from "./asking";
 import { BoardCard, boards } from "./boards";
 import { ErrandsCard } from "./errands";
+import { DrillProgress } from "./health";
 import { GroceriesCard, KitchenReply } from "./kitchen";
 import { ChatHead, DayRows, Greeting, HouseCard, NeedsCard } from "./now";
 import { RoomCell, spans } from "./screens";
 import { inApp } from "./today";
-import { dragVolume, go, loadPicks, picks, playPick, runScene, say, seen, setVolume, switchRoom, undo, undone } from "./state";
+import { dragVolume, go, lookAtCare, loadPicks, picks, playPick, runScene, say, seen, setVolume, switchRoom, undo, undone } from "./state";
 import type { View } from "./state";
-import type { House, Room } from "./types";
+import type { CareDrill, House, Room } from "./types";
 import { Icon, SheetFrame, Slider, Switch } from "./ui";
 
 
@@ -175,9 +176,76 @@ function MailRows({ rows, opened }: { rows: MailRow[]; opened: number[] }) {
   );
 }
 
+/** A request for the house's caretaker that waits for a tap: restarting Home Assistant, or leaving a problem alone.
+ * Typing "yes" does nothing; only this button, on a signed-in device, leaves the request, which Hub and then the
+ * caretaker check again. */
+function CareCard({ card }: { card: Card }) {
+  const [state, setState] = useState<"waiting" | "working" | "asked" | "refused" | "dismissed">("waiting");
+  const [said, setSaid] = useState("");
+  const tap = async () => {
+    setState("working");
+    const answer = await healthAsk(card.do ?? "", card.target ?? "");
+    setSaid(answer.error ?? answer.said ?? "Asked the caretaker.");
+    setState(answer.error ? "refused" : "asked");
+    if (!answer.error) void lookAtCare();
+  };
+  const open = state === "waiting" || state === "working";
+  return (
+    <div class={"wait" + (open ? "" : " settled")}>
+      <b class="wait-t">{card.title}</b>
+      <p class="wait-cap">{open ? "After your tap" : state === "asked" ? "Asked" : "Not asked"}</p>
+      <ul class="wait-lines">{(card.lines ?? []).map((line) => <li key={line}>{line}</li>)}</ul>
+      {open && (
+        <>
+          <p class="wait-why">{card.why}</p>
+          <div class="kacts">
+            <button type="button" class={"btn " + (card.do === "ignore" ? "risk" : "go")} disabled={state === "working"}
+              onClick={() => void tap()}>{card.button ?? "Do it"}</button>
+            <button type="button" class="btn ghost" disabled={state === "working"} onClick={() => setState("dismissed")}>Not now</button>
+          </div>
+        </>
+      )}
+      {(state === "asked" || state === "refused") && <p class="took"><span>{said}</span></p>}
+      {state === "dismissed" && <p class="took"><span>Left as it was.</span></p>}
+      <p class="took"><button type="button" onClick={() => go("health")}>Open House health</button></p>
+    </div>
+  );
+}
+
+/** Under an answer about the house's health: the way to House health and, after "run the hub drill", the drill
+ * itself, followed as the caretaker plays it on its made-up house. */
+function HealthCard({ card }: { card: Card }) {
+  const [drill, setDrill] = useState<CareDrill | null>(null);
+  useEffect(() => {
+    const name = card.drill;
+    if (!name) return undefined;
+    let stopped = false, timer = 0, looks = 0;
+    const look = async () => {
+      try {
+        const found = (await health()).drill;
+        if (stopped) return;
+        const mine = found && found.scenario === name ? found : null;
+        setDrill(mine);
+        if (mine?.done) return;
+      } catch { /* looked at again below */ }
+      if (!stopped && ++looks < 90) timer = window.setTimeout(() => void look(), 2000);     // the caretaker starts it within a minute
+    };
+    void look();
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [card.drill]);
+  return (
+    <div class="care-under">
+      {card.drill && (drill ? <DrillProgress drill={drill} /> : <p class="took"><span class="work" />The caretaker starts the drill within a minute.</p>)}
+      <button type="button" class="row-act" onClick={() => go("health")}>Open House health</button>
+    </div>
+  );
+}
+
 function CardView({ card, now }: { card: Card; now: House }) {
   if (card.kind === "morning" && card.things) return <MorningCard things={card.things} hint={card.hint ?? ""} />;
   if (card.kind === "confirm" && card.id !== undefined) return <ConfirmCard card={card} />;
+  if (card.kind === "care") return <CareCard card={card} />;
+  if (card.kind === "health") return <HealthCard card={card} />;
   if (card.kind === "setup") {      // several changes from one request: each on its own line, under one Undo
     const lines = card.lines ?? [], missed = card.missed ?? [];
     return lines.length + missed.length ? (

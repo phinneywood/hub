@@ -78,11 +78,25 @@ function Plan({ now }: { now: House }) {
   return <div class="floors">{now.floors.map(floor)}</div>;
 }
 
+/** Something the house's caretaker hands the owner, or the caretaker itself has stopped looking. */
+export function careCalls() {
+  const care = me.value.care;
+  return !!care && care.set_up && (care.needs > 0 || !care.alive);
+}
+
+function careWords() {
+  const care = me.value.care;
+  if (!care || !care.set_up) return "The caretaker isn’t set up on this Mac yet";
+  if (!care.alive) return care.looked;
+  if (care.needs) return care.needs === 1 ? "One thing needs you" : `${care.needs} things need you`;
+  return "All quiet. " + care.looked;
+}
+
 export function Top() {
   return (
     <div class="top">
       <span class="when">{when()}</span>
-      <button type="button" class={"who" + (trouble.value ? " bad" : "")} aria-label="System" onClick={() => go("system")}>{me.value.initial}</button>
+      <button type="button" class={"who" + (trouble.value ? " bad" : careCalls() ? " care" : "")} aria-label="System" onClick={() => go("system")}>{me.value.initial}</button>
     </div>
   );
 }
@@ -223,7 +237,7 @@ export function Rail() {
       <Tabs page={PAGES[view.value] !== "System" && PAGES[view.value] !== "Dashboards"} />
       <RailBoards />
       <div class="foot">
-        <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" || view.value === "changes" || view.value === "activity" ? " on" : "")} onClick={() => go("system")}>System</button>
+        <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" || view.value === "changes" || view.value === "activity" || view.value === "health" ? " on" : "") + (careCalls() ? " care" : "")} onClick={() => go("system")}>System</button>
         <p class="ok">{fine ? "The house is answering." : trouble.value === "hub" ? "Can’t reach Hub." : "The house isn’t answering."}</p>
       </div>
     </nav>
@@ -250,6 +264,7 @@ export function System() {
       <section class="block">
         <h2>Under the hood</h2>
         <div class="rows">
+          <button type="button" class={"row free" + (careCalls() ? " lit care" : "")} onClick={() => go("health")}><div class="row-main"><b>House health</b><span>{careWords()}</span></div></button>
           {me.value.update && <button type="button" class="row free lit" onClick={() => go("versions")}><div class="row-main"><b>A new version is ready</b><span>Open it to deploy</span></div></button>}
           <button type="button" class="row free" onClick={() => go("boards")}><div class="row-main"><b>Dashboards</b><span>A page for each part of the household, arranged your way</span></div></button>
           <button type="button" class="row free" onClick={() => go("activity")}><div class="row-main"><b>Activity</b><span>What happened in the house, from Home Assistant, Apple Home and Hub</span></div></button>

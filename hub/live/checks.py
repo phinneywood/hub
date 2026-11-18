@@ -286,6 +286,17 @@ def calendar():
     return 'The calendar week was read.'
 
 
+def caretaker_alive():
+    """The caretaker's status file says it looked at the house in the last five minutes."""
+    from .. import caretaker
+    if not caretaker.set_up():
+        raise Skipped('The caretaker isn’t set up on this Mac.')
+    watching, words = caretaker.alive()
+    if not watching:
+        raise Failed(words)
+    return words
+
+
 def kitchen():
     from ..tools.kitchen import client
     if not config.KITCHEN_SOCKET.exists():
@@ -497,6 +508,8 @@ CHECKS = (
     Check('mail.read', 'Gmail', 'The mail helper answers, Gmail is signed in, and sending is still impossible.', 'read', mail),
     Check('calendar.read', 'Calendar', 'The calendar week can be read.', 'read', calendar),
     Check('kitchen.answers', 'Kitchen', 'The Kitchen service answers.', 'read', kitchen),
+    Check('caretaker.alive', 'Caretaker', 'The house’s caretaker looked at the house in the last five minutes.', 'read',
+          caretaker_alive),
     # Before the checks that call the model: the Ask check stands a dry-run layer in front of the house while it runs.
     Check('house.light', 'A real change, undone', 'One named light is switched, holds, and is put back as it was.', 'undo', light, 60,
           seed='The test lamp had an automation that switched it straight back, and the check passed on what Home Assistant accepted.'),
