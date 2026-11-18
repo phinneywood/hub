@@ -91,5 +91,9 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   nothing of a member who switched "Ask may use my money" off. The other member sees a private account only as its
   month-start total rounded to $100. Each member's SimpleFIN access address is a secret kept in an owner-only file
   in Hub's private folder, never in Git or a model: the owner's exception to the 1Password rule (2026-11-18).
+  Owner-asked (2026-11-18, "Bring money, career and archive into Ask"): each person's career desk (`hub/app/career/`)
+  is theirs alone. Ask's model may read it only while that person's switch "Hub's model may read my desk" is on;
+  words they list as theirs alone are masked first and `ip.md` is never sent. Research and drafts run on Ask's
+  route with web search, within $5 a month and 6 a day. Hub never publishes, posts, applies or contacts anyone.
   Who sees what (2026-11-16): each person only their own accounts' things, by Tailscale login (`hub/people.py`,
   `docs/people.md`); the kitchen wall is the household's only. Read "Today" in `docs/app.md` first.
