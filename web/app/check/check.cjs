@@ -910,6 +910,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.clock.setSystemTime(await at("night"));
     await page.reload(); await page.waitForSelector(".wall.asleep");
     expect((await page.textContent(".wclock")).trim() === "10:40pm", "the night clock: " + await page.textContent(".wclock"));
+    // The clock is drawn at once; the night line only once the day has loaded.
+    expect(await until(() => !!document.querySelector(".wnight-line")), "the night line never came");
     const nextDay = new Date(Date.parse((await page.evaluate(() => new Date().toISOString()))) + 86_400_000)
       .toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Los_Angeles" });
     expect(await texts(".wnight-line") === `${nextDay}: 56° and sunny`, "the night: " + await texts(".wnight-line"));
