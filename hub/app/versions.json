@@ -1,8 +1,19 @@
 [
  {
   "sha": null,
-  "from": "8f70857e56c3c50d2509c2c1c5c122b1395154ca",
+  "from": "8064dea9fbafa53fe31d7ff37fa51ba567f1e77a",
   "live": null,
+  "title": "Money, read and never moved",
+  "changes": [
+   "Money is a dashboard: the month against the budget, spending by category, bills and paydays, goals, accounts and net worth.",
+   "Ask answers money questions (how the month is going, what was spent on something, can we afford it) and changes Hub’s own budgets, categories, goals and bills, each with Undo. Hub reads the banks and can never pay, transfer or trade.",
+   "Each of you connects your own banks on the Money dashboard, chooses which accounts are private, and whether Ask may use your money."
+  ]
+ },
+ {
+  "sha": "8064dea9fbafa53fe31d7ff37fa51ba567f1e77a",
+  "from": "8f70857e56c3c50d2509c2c1c5c122b1395154ca",
+  "live": "2026-11-18T19:11:43Z",
   "title": "Ask tidies mail, after your tap",
   "changes": [
    "Ask can archive an email, put it back in the inbox, label it or mark it read or unread: it shows a card naming each email, and nothing changes until you tap it. Undo is on the card for a day."
