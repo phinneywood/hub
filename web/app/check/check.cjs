@@ -656,7 +656,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await stage("reset");
     await openPage("Dashboards");
     expect(await saysSoon("Dashboards"), "the Dashboards page: " + await says());
-    expect(await until(() => document.querySelectorAll(".wrap .rows .row b").length === 8), "the owner did not get eight dashboards");
+    expect(await until(() => document.querySelectorAll(".wrap .rows .row b").length === 9), "the owner did not get nine dashboards");
     await page.locator(".wrap .rows .row", { hasText: "Pregnancy" }).first().click();
     expect(await saysSoon("Week 15: about the size of an apple"), "the pregnancy board: " + await says());
     expect(new URL(page.url()).hash === "#board/pregnancy", "a board has no address of its own: " + page.url());
@@ -687,7 +687,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       await page.locator(".wrap .rows .row", { hasText: "Network" }).first().tap();
     } else {          // on a wide screen the rail lists each dashboard under Ask and House: one click opens it
       const listed = await page.locator(".rail .railboards .rlink:not(.head)").allInnerTexts();
-      expect(listed.join("|") === "Pregnancy|Money|Calendar|School|Trip|Network|Mail|AI spend", "the rail's dashboards: " + listed.join("|"));
+      expect(listed.join("|") === "Pregnancy|Money|Career|Calendar|School|Trip|Network|Mail|AI spend", "the rail's dashboards: " + listed.join("|"));
       await page.locator('.rail .railboards .rlink:text-is("Network")').click();
     }
     expect(await saysSoon("Internet is up"), "the network board: " + await says());
@@ -736,6 +736,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.querySelector('.bset [role="switch"][aria-label^="Ask may use"]')?.getAttribute("aria-checked") === "true"),
       "the Money in Ask switch did not turn back on");
     await page.locator('.btns .btn:text-is("Done")').click();
+    await page.goto(base + "/app/#board/career");     // the owner's career desk: theirs alone, ticked from the board
+    expect(await saysSoon("4 steps of your plan open", 3000), "the career board: " + await says());
+    await page.locator('.board .b-checks .row:not(.on) .tickbtn').first().click();
+    expect(await saysSoon("3 steps of your plan open", 3000), "a tick on the career plan did not take: " + await says());
+    await page.waitForTimeout(300); await shot("16h-board-career");
+    await page.locator('.board .b-checks .row.on .tickbtn').first().click();
+    expect(await saysSoon("4 steps of your plan open", 3000), "a second tick did not open the step again: " + await says());
     quiet = true;       // the mail board is the owner's: the partner is told no
     const partnerBoard = await page.evaluate(() => fetch("/app/api/board/mail", { headers: { "tailscale-user-login": "casey@example.com" } }).then((r) => r.status));
     const partnerList = await page.evaluate(() => fetch("/app/api/boards", { headers: { "tailscale-user-login": "casey@example.com" } }).then((r) => r.json()).then((b) => b.boards.map((x) => x.id).join("|")));

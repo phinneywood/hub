@@ -1,6 +1,9 @@
 """Mail, the calendar, school, today's list, the errands Hub got ready, the family brief and the dashboards' pregnancy
 and network facts: what Ask may read about them, and when it reads it.
 
+The career desk is recognised the same way: a question about the person's career has their desk's thesis, plan
+and the passages it needs beside it (hub/app/career/desk.py `for_model`), while their switch lets the model read it.
+
 Owner decision (2026-11-15, reversing 2026-11-14): Ask's model (Claude Sonnet on the owner's own key, `route.py`)
 may be given these. A question plainly about one of them is recognised by its words (`about`) and its bounded
 lookups (`data`, the same ones the older chat used) go with the question, so the model answers in one trip. One
@@ -30,6 +33,9 @@ TOPICS = {
     'school': re.compile(r"\b(school|pre-?school|class|classroom|teacher|field trip|snack (day|duty)|parent duty)\b", re.I),
     'today': re.compile(r"\b(needs? (me|us|my attention)|need to (do|know)|to-?do|what should i (do|know)|brief me|catch me up"
                         r"|my day|morning brief)\b", re.I),
+    'career': re.compile(r"\b(careers?|résumé|cv|portfolio|next (role|job)|job (search|hunt|offers?|market|postings?)|interview(s|ing)?"
+                         r"|side (business|project|hustle)|thesis|field notes?|essays?|blog( posts?)?|linkedin|case stud(y|ies)"
+                         r"|promotion|my (career )?desk|the desk|my writing|hiring market|tpm roles?)\b", re.I),
     # The dashboards' own (hub/app/boards/): where the pregnancy is, and whether the internet is working.
     'pregnancy': re.compile(r"\b(pregnan\w*|due date|trimester|weeks? along|how far along|prenatal|anatomy scan|ultrasound|midwife"
                            r"|baby(’|')?s? (size|due|born|arriv\w*)|how big is the baby|when is the baby)\b", re.I),
@@ -87,6 +93,9 @@ def data(text, topics, login=None):
     aren't theirs; the errands only theirs and the household's."""
     from ...engine import catalog
     data = {'today': home.today().isoformat(), 'weekday': home.today().strftime('%A')}
+    if 'career' in topics:      # one person's desk: only with their own login (hub/app/career/desk.py), never to Luna
+        from ..career import desk
+        data['career_desk'] = desk.for_model(login, text)
     theirs = people.sees(login, people.DEFAULT)
     if 'mail' in topics and not theirs:
         data['mail'] = dict(catalog.NOT_YOURS)

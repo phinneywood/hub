@@ -508,6 +508,58 @@ def undo(batch: str, request: Request):
     return _change(request, lambda login: control.undo(batch, login=login, via='app', at_once=True))
 
 
+# ---- Career desk (hub/app/career): one person's plan, field notes, writing and evidence ----
+
+@router.get('/api/career')
+def career_picture(request: Request):
+    """The Career screen as data, for the person signed in only. Reads their desk's files; calls no model."""
+    from .career import desk
+    return desk.picture(_login(request))
+
+
+@router.get('/api/career/piece/{kind}/{name}')
+def career_piece(kind: str, name: str, request: Request):
+    """One field note, piece, evidence sheet or the market, to read."""
+    from .career import desk
+    try:
+        return desk.piece(_login(request), kind[:20], name[:130])
+    except desk.NoDesk as error:
+        return _refuse(error, 404)
+
+
+@router.get('/api/career/job/{number}')
+def career_job(number: int, request: Request):
+    """What became of one job of the desk's, for the card that follows it."""
+    from .career import desk, worker
+    try:
+        return worker.job(_login(request), number)
+    except desk.NoDesk as error:
+        return _refuse(error, 404)
+
+
+@router.post('/api/career/{do}')
+def career_tap(do: str, request: Request, body: dict = Body(default={})):
+    """A tap on the desk: tick a step {"key", "back"?}, set a piece's status {"id", "status"}, or let Hub's model read
+    the desk or not {"on"}. Asking the desk to research or draft is Ask's (hub/app/ask/tools.py `career`)."""
+    from .career import desk
+    login = _login(request)
+    if login is None:
+        return _refuse('Change your desk from your phone or laptop.', 403)
+    try:
+        if do == 'tick':
+            back = bool(body.get('back'))
+            desk.tick(login, str(body.get('key') or '')[:20], not back)
+            return {'ok': True, 'said': 'Opened again' if back else 'Done'}
+        if do == 'status':
+            title = desk.set_status(login, str(body.get('id') or '')[:130], str(body.get('status') or ''))
+            return {'ok': True, 'said': f'{title}: {body.get("status")}'[:200]}
+        if do == 'model':
+            return {'ok': True, 'said': desk.set_model_reads(login, bool(body.get('on')))}
+    except (desk.NoDesk, desk.Refused) as error:
+        return _refuse(error)
+    return _refuse('Hub couldn’t read that request.', 404)
+
+
 # ---- Cards that wait for a tap (hub/tools/house/admin.py): removing something, unlocking, the whole house ----
 
 @router.get('/api/setup/{number}')

@@ -1123,8 +1123,78 @@ CARE_WORDS = {'pause': 'pause', 'resume': 'start fixing again', 'try_again': 'tr
 AGREED = re.compile(r"\s*(yes|yeah|yep|yup|sure|ok|okay|please do|do it|go ahead|go for it)\b", re.I)
 
 
+# ---- the career desk (hub/app/career) ----
+
+CAREER_SHOWN = 3
+
+
+def career(ctx: RunContext[Turn], do: Literal['show', 'read', 'note', 'tick', 'research', 'draft', 'status'], words: str | None = None,
+           piece: str | None = None, status: Literal['idea', 'draft', 'ready', 'published'] | None = None) -> dict:
+    """The owner's career desk: their thesis, their plan for the next role and a side business (steps to tick),
+    field notes on their field, the pieces they are writing, evidence from their own work, and their notes.
+    show: what is on the desk, as a card. read: read the desk to answer a question about it; `words`: what to
+    look for. note: keep `words` in their notes, in their own words, when they ask to note or log something
+    about their work or career. tick: mark the step of the plan that `words` names as done. research: the desk
+    looks `words` up on the web and files a field note with sources (a few minutes, within its own budget).
+    draft: the desk writes a first draft of a piece about `words` from their own notes and evidence, for them to
+    rewrite. status: set the piece titled `piece` to `status`. Hub never publishes, posts, applies or sends
+    anything from the desk: say so if asked."""
+    from ...engine import notes
+    from ..career import desk, worker
+    turn = ctx.deps
+    if turn.login is None:
+        return _say(turn, 'Open your career desk from your phone or laptop.')
+    try:
+        key, root = desk.desk(turn.login)
+        if do == 'show':
+            found = desk.picture(turn.login)
+            told = ('Your desk is empty so far.' if found['empty'] else
+                    f'{counted(found["open"], "step")} of your plan {"is" if found["open"] == 1 else "are"} open.' if found['open']
+                    else 'Every step of your plan is done.')
+            return _say(turn, told, {'kind': 'career'})
+        if do == 'read':
+            turn.again = turn.strangers = True          # field notes hold what pages on the web said
+            return {'data': desk.for_model(turn.login, words or turn.text)}
+        if do == 'note':
+            said = ' '.join(str(words or '').split())
+            if not notes.grounded(said, turn.text):
+                return _again(turn, 'A note keeps what the owner said, in their own words: use the words of their message.')
+            kept = desk.note(turn.login, said)
+            return _say(turn, 'Noted on your desk.', {'kind': 'career-note', 'note': kept['text'], 'at': kept['at']})
+        if do == 'tick':
+            step = desk.step_named(turn.login, words or '')
+            if step is None or not (desk._words(words or '') & desk._words(turn.text)):
+                return _again(turn, 'No one open step of the plan matches that. Ask the owner which step, by its words.')
+            desk.tick(turn.login, step['key'], True)
+            return _say(turn, f'Ticked: {step["plain"]}', {'kind': 'career'})
+        if do in ('research', 'draft'):
+            topic = ' '.join(str(words or '').split())
+            asked = desk._words(topic)
+            if not asked or not (asked <= desk._words(turn.text) or notes.grounded(topic, turn.text)):
+                return _again(turn, 'The desk takes a topic in the owner’s own words: use the words of their message.')
+            job = worker.queue(turn.login, do, topic)
+            return _say(turn, 'The desk is looking into it. The field note will be on your desk in a few minutes.' if do == 'research'
+                        else 'The desk is writing a first draft. It will be on your desk in a few minutes.',
+                        {'kind': 'career-job', 'id': job['id']})
+        if do == 'status':
+            if status is None or not piece:
+                return _again(turn, 'Say which piece and what it is now: an idea, a draft, ready or published.')
+            named = [e for e in desk.shelf(root, 'writing') if desk._words(piece) and desk._words(piece) <= desk._words(e['title'])]
+            if len(named) != 1:
+                return _again(turn, 'No one piece on the desk has that title.' if not named else 'Which piece? Several match.')
+            title = desk.set_status(turn.login, named[0]['id'], status)
+            told = f'{title} is marked published. Hub didn’t publish it: that was you.' if status == 'published' else f'{title} is marked {status}.'
+            return _say(turn, told, {'kind': 'career'})
+    except desk.NoDesk as error:
+        return _say(turn, str(error))
+    except (desk.Refused, worker.Refused) as error:
+        return _say(turn, str(error))
+    return _again(turn, 'The desk can show, read, note, tick, research, draft or set a piece’s status.')
+
+
+
 ALL = (lights, scene, music, music_library, playlist, hub_info, bike_bus, remember, conversation, groceries, kitchen, look_up, mail_search, mail_read, mail_change, errands, errand, find, details, arrange, rooms, scene_setup, routine,
-       device, setting, integration, dashboard, house_health, caretaker)
+       device, setting, integration, dashboard, house_health, caretaker, career)
 # Money (hub/app/money/ask.py): reading the household's accounts, and the changes a member can make to Hub's record of them.
 from ..money.ask import TOOLS as MONEY  # noqa: E402
 

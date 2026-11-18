@@ -308,6 +308,11 @@ patch.setattr(money_store, 'now', lambda: EVENING.timestamp())
 money_sync.connect(money_world.token('alex'), 'me@example.com')
 money_sync.connect(money_world.token('sam'), 'casey@example.com')
 
+# The career desk (hub/app/career/): the tests' made-up desk, the owner's. The partner has no account, so no desk.
+from tests import career_world  # noqa: E402
+
+career_world.make()
+
 # For the browser check only: put the made-up house back as it started, make it stop answering, or take Ask
 # away as on a Hub where it isn't set up yet.
 @app.post('/demo/{what}')
