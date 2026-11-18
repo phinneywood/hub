@@ -190,6 +190,10 @@ async def scripted(messages, info):
     elif not back and OPEN_MAIL.match(spoken.strip()):
         which = OPEN_MAIL.match(spoken.strip()).group(1).lower()
         yield call('mail_read', which=ORDINAL.get(which) or int(which))
+    elif not back and '"pregnancy": {' in given:
+        yield 'Week 15: fourteen weeks and six days, in the second trimester, with 176 days to go.'
+    elif not back and '"network": {' in given:
+        yield 'The internet is up: 14 ms ping, and one short drop overnight.'
     elif back and back[0].tool_name == 'look_up' or not back and '<data>' in given:
         yield 'From what Hub can see, ' + ('the dentist is Tuesday at three.' if back else 'two emails need you.')
     elif back and back[0].tool_name == 'find' and back[0].content.get('found') and EVERY.match(' '.join(spoken.split()).rstrip('.')):

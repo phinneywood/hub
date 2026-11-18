@@ -240,7 +240,14 @@ def picture(now=None, wall=False, login=None):
                                                          'overnight': None}) if jobs else
                  {'part': brief.part(now), 'weather': None, 'weather_says': '', 'house': None, 'overnight': None})
     found['note'] = brief.note(found) if theirs else None
+    # A line for each dashboard this person may open (hub/app/boards/). Never on the wall: a dashboard is a person's.
+    found['boards'] = [] if wall else _soft(lambda: _boards(login, now.date()), [])
     return brief.family(found) if wall else found
+
+
+def _boards(login, day):
+    from . import boards
+    return boards.lines(login, day)
 
 
 def yours(key, login):

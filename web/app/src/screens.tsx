@@ -176,7 +176,7 @@ function Playing() {
 // third word while it is open, so the bar always says where you are and the way back is one tap.
 const TABS = [["home", "Ask"], ["house", "House"]] as const;
 const PAGES: Partial<Record<View, string>> = { today: "Today", mail: "Mail", mailsettings: "Mail", kitchen: "Kitchen", system: "System",
-  errands: "Today", versions: "System", engine: "System", changes: "System", activity: "System" };
+  errands: "Today", versions: "System", engine: "System", changes: "System", activity: "System", boards: "Dashboards", board: "Dashboards" };
 
 function Tabs({ page }: { page?: boolean }) {
   const open = PAGES[view.value];
@@ -234,6 +234,7 @@ export function System() {
         <h2>Under the hood</h2>
         <div class="rows">
           {me.value.update && <button type="button" class="row free lit" onClick={() => go("versions")}><div class="row-main"><b>A new version is ready</b><span>Open it to deploy</span></div></button>}
+          <button type="button" class="row free" onClick={() => go("boards")}><div class="row-main"><b>Dashboards</b><span>A page for each part of the household, arranged your way</span></div></button>
           <button type="button" class="row free" onClick={() => go("activity")}><div class="row-main"><b>Activity</b><span>What happened in the house, from Home Assistant, Apple Home and Hub</span></div></button>
           <a class="row free" href="#wall"><div class="row-main"><b>The wall</b><span>Today for the kitchen iPad, with a clock that dims at night. Open it there and add it to the Home Screen</span></div></a>
           {links.ha && <a class="row free" href={links.ha}><div class="row-main"><b>Home Assistant</b><span>Devices, rooms and automations</span></div></a>}

@@ -604,6 +604,42 @@ Every tap needs a signed-in device. Tests: `tests/test_app_mail.py`, on made-up 
 anyone else, Mail and Mail settings answer `{"ok": true, "connected": false}` and draw a calm screen saying their
 mail isn't connected yet, and their taps change nothing; see “What follows the rule” in `docs/people.md`.
 
+## Dashboards
+
+Owner's rule (2026-11-17): every category in Hub works the same way. Ask knows it and answers about it; what needs a
+person shows in Ask or Today; and the category has one page of its own that the person can arrange. A dashboard is
+that page, written once for every category. Code: `hub/app/boards/` (one module per board), in the app
+`web/app/src/boards.tsx`. Address: `/app/#board/<id>`; `/app/#boards` lists the ones this person may open. They are
+found by a few letters in Ask, listed in System, and Today ends with one line for each.
+
+- **Blocks.** A board is a list of blocks of a few kinds the app draws: `hero` (a big line, with an optional progress
+  bar), `tiles` (numbers), `rows`, `checks` (a checklist), `line` (a chart, points in a 720 by 180 box), `bars` and
+  `note`. A kind the app doesn't know is left out.
+- **Arrange** puts the blocks in the person's order and hides the ones they don't want: kept by login in Hub's
+  database (`app_board_layout`), theirs alone. A block a board adds later comes last. A checklist's ticks and a
+  board's settings (such as the due date) are the household's (`app_board_ticks`, `app_board_settings`).
+- **Ask.** A question in a board's words (`private.TOPICS`: `pregnancy`, `network`) is answered with the board's
+  `facts` beside it, and the board's headline and first numbers drawn under the answer (`{"kind": "board"}`), read
+  from Hub for whoever is looking. Mail's questions keep Mail's own lookups.
+- **Who sees which.** Each board says (`sees`): pregnancy and network, the household's members; mail, the mailbox
+  owner. Never on the wall. The morning message's pool is unchanged during the assistant's 14-day test.
+
+| Board | Reads | Shows |
+| --- | --- | --- |
+| Pregnancy | the due date (`"pregnancy": {"due": "YYYY-MM-DD"}` in `household.json`, or set on the board) | the week, size, trimester bar, days to go, what usually comes next (US schedule of visits, screenings, vaccines), a shared getting-ready list, visit cadence, month by month |
+| Network | the older Network page's overview (`hub/tools/network/pages.overview`), at most once a minute | up or down, speed and ping now, the day's uptime and drops, download and ping charts, what needs a look, busiest devices |
+| Mail | Hub's own sorting tables, the daily inbox size, the plan of inbox changes | counts, what needs you, the inbox over 30 days, by kind, Hub's cleanup, changes that need a check |
+
+| Address | What |
+| --- | --- |
+| `GET /app/api/boards` | The dashboards this person may open, with their line for today |
+| `GET /app/api/board/{id}` | One, in this person's order; 404 when it isn't theirs |
+| `POST /app/api/board/{id}/layout`, `/tick`, `/set` | `{"order", "hidden"}`; `{"item", "done"}`; `{"key", "value"}` |
+
+A new board: a module in `hub/app/boards/` with `ID`, `NAME`, `WHAT`, `sees`, `picture`, `line` and `facts`, added to
+`_boards()`; a topic in `private.TOPICS` if Ask should hear it; tests and browser-check steps. Tests:
+`tests/test_app_boards.py`.
+
 ## Kitchen
 
 The household's shopping list on its way into the shop's cart. Data and taps: `hub/app/kitchen.py`. In the app:

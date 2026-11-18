@@ -433,7 +433,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       === "Side door lock’s battery is flat|Email from Sam Rivera|Approve the grocery cart|Email from Maple Street Dental",
       "what needs you: the flat lock first, then the longest wait");
     expect((await page.locator(".block h2").allInnerTexts()).join("|")
-      === "Needs you|Ready for your tap|This evening|Tomorrow|Tomorrow’s weather|The house|This week at school|Lisbon", "Today’s sections, in order");
+      === "Needs you|Ready for your tap|This evening|Tomorrow|Tomorrow’s weather|The house|This week at school|Lisbon|Dashboards", "Today’s sections, in order");
     expect(await until(() => document.querySelector(".brief-note")?.textContent.startsWith("Alex is away tomorrow")), "the note from Ask’s model was not shown");
     expect((await page.locator(".houserow .state").allInnerTexts()).join("|") === "Not responding|Locked|Locked|Disarmed|Closed", "the house: " +
       (await page.locator(".houserow .state").allInnerTexts()).join("|"));
@@ -575,6 +575,54 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Mail settings: " + (await small()).join(", "));
     await tap(".uplink");
     expect(await saysSoon("emails need you", 3000) || await saysSoon("email needs you", 1000) || true, "back to Mail");
+
+    // ---- Dashboards: a page for each part of the household, arranged by each person; Ask answers with one ----
+    await stage("reset");
+    await openPage("Dashboards");
+    expect(await saysSoon("Dashboards"), "the Dashboards page: " + await says());
+    expect(await until(() => document.querySelectorAll(".wrap .rows .row b").length === 3), "the owner did not get three dashboards");
+    await page.locator(".wrap .rows .row", { hasText: "Pregnancy" }).first().click();
+    expect(await saysSoon("Week 15: about the size of an apple"), "the pregnancy board: " + await says());
+    expect(new URL(page.url()).hash === "#board/pregnancy", "a board has no address of its own: " + page.url());
+    expect((await page.locator(".board .bhero b").first().innerText()) === "14 weeks, 6 days", "where the pregnancy is");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the pregnancy board scrolls sideways");
+    await page.waitForTimeout(300); await shot("16-board-pregnancy");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on a board: " + (await small()).join(", "));
+    const leave = page.locator('[data-block="prep"] .row', { hasText: "parental leave" });
+    await leave.locator(".tickbtn").click();
+    expect(await until(() => [...document.querySelectorAll('[data-block="prep"] .row.on')].some((r) => r.textContent.includes("parental leave"))), "a tick on Getting ready did not take");
+    await leave.locator(".tickbtn").click();
+    expect(await until(() => ![...document.querySelectorAll('[data-block="prep"] .row.on')].some((r) => r.textContent.includes("parental leave"))), "a second tick did not put it back");
+    await page.locator('.btns .btn:text-is("Arrange")').click();
+    await page.locator('[data-block="months"] .bhide').click();
+    expect(await until(() => !document.querySelector('[data-block="months"]')), "Hide did not take the block away");
+    await page.waitForTimeout(300); await shot("16b-board-arranging");
+    await page.locator('.row', { hasText: "Month by month" }).locator('.row-act:text-is("Show")').click();
+    expect(await until(() => !!document.querySelector('[data-block="months"]')), "Show did not bring the block back");
+    await page.locator('[data-block="numbers"] button[aria-label="Move up"]').click();
+    expect(await until(() => document.querySelector(".bgrid > .block")?.dataset.block === "numbers"), "Move up did not move the block");
+    await page.locator('[data-block="numbers"] .down').click();
+    expect(await until(() => document.querySelector(".bgrid > .block")?.dataset.block === "progress"), "Move down did not move it back");
+    await page.locator('.btns .btn:text-is("Done")').click();
+    await page.goto(base + "/app/#board/network");
+    expect(await saysSoon("Internet is up"), "the network board: " + await says());
+    expect(await page.locator('[data-block="download"] polyline').count() === 1, "the network board drew no download line");
+    await page.waitForTimeout(300); await shot("16c-board-network");
+    await page.goto(base + "/app/#board/mail");
+    expect(await saysSoon("2 emails need you"), "the mail board: " + await says());
+    expect(await page.locator('[data-block="kinds"] .bbar').count() > 0, "the mail board drew no bars");
+    await page.waitForTimeout(300); await shot("16d-board-mail");
+    quiet = true;       // the mail board is the owner's: the partner is told no
+    const partnerBoard = await page.evaluate(() => fetch("/app/api/board/mail", { headers: { "tailscale-user-login": "casey@example.com" } }).then((r) => r.status));
+    const partnerList = await page.evaluate(() => fetch("/app/api/boards", { headers: { "tailscale-user-login": "casey@example.com" } }).then((r) => r.json()).then((b) => b.boards.map((x) => x.id).join("|")));
+    quiet = false;
+    expect(partnerBoard === 404 && partnerList === "pregnancy|network", `the partner's dashboards: ${partnerList}, mail ${partnerBoard}`);
+    await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")');
+    await page.fill("#askq", "how far along are we?");
+    await page.keyboard.press("Enter");
+    expect(await until(() => [...document.querySelectorAll(".bcard .bcard-say")].pop()?.textContent === "Week 15: about the size of an apple", null, 8000),
+      "Ask did not answer with the pregnancy board");
+    await page.waitForTimeout(300); await shot("16e-ask-board");
 
     // ---- Kitchen: the list on its way into the cart, what needs a person, and no second conversation ----
     await stage("reset");

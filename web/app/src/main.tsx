@@ -17,6 +17,7 @@ import { Changes } from "./changes";
 import { ItemSheet, Kitchen, shop, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
 import { ErrandSheet, Errands, watchErrands } from "./errands";
+import { BoardScreen, BoardsScreen, watchBoards } from "./boards";
 import { ChangeSheet, HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { go, seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
@@ -61,7 +62,7 @@ function Sheets() {
 
 function Screen() {
   const where = view.value;
-  return where === "home" ? <Ask home house={!wide.value} /> : where === "house" ? <Home /> : where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "today" ? <Today /> : where === "errands" ? <Errands /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : <Home />;
+  return where === "home" ? <Ask home house={!wide.value} /> : where === "house" ? <Home /> : where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "today" ? <Today /> : where === "errands" ? <Errands /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : where === "boards" ? <BoardsScreen /> : where === "board" ? <BoardScreen /> : <Home />;
 }
 
 /** Beside the screen on a wide one: the house while Ask is in the middle, and Ask beside everything else. */
@@ -126,6 +127,7 @@ if (root) {
   watchMail();
   watchErrands();
   watchKitchen();
+  watchBoards();
   void loadDay();         // Ask opens on the day, so it is read at once wherever the app opens
   void keepOnDevice().catch(() => undefined);     // without it the app still works; it just needs Hub to open
 }

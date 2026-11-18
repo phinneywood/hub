@@ -504,6 +504,9 @@ def kitchen(ctx: RunContext[Turn]) -> dict:
 def shown(turn, topics):
     """Under an answer about the day, mail, the calendar or school: the same rows Today draws, to act on.
     The card names only the topics; the app reads the rows from Hub for whoever is looking, never from the model."""
+    for board in sorted(set(topics) & BOARD_TOPICS):          # a dashboard's own card, drawn by the app from Hub
+        if not any(c.get('kind') == 'board' and c.get('board') == board for c in turn.cards):
+            turn.cards.append({'kind': 'board', 'board': board})
     wanted = sorted(set(topics) & {'mail', 'calendar', 'school', 'today'})
     if not wanted:
         return
@@ -514,9 +517,13 @@ def shown(turn, topics):
     turn.cards.append({'kind': 'day', 'show': wanted})
 
 
-def look_up(ctx: RunContext[Turn], topics: list[Literal['mail', 'calendar', 'school', 'today']]) -> dict:
-    """Read the owner's mail, their calendar, their child's school (the class guide) or what needs them today, to
-    answer a question about them. Read-only: Hub can't send, file, delete or book anything from here. Mail and the
+BOARD_TOPICS = {'pregnancy', 'network'}
+
+
+def look_up(ctx: RunContext[Turn], topics: list[Literal['mail', 'calendar', 'school', 'today', 'pregnancy', 'network']]) -> dict:
+    """Read the owner's mail, their calendar, their child's school (the class guide), what needs them today, where the
+    pregnancy is (week, due date, what usually comes next, what's left to get ready) or how the home network is doing,
+    to answer a question about them. Read-only: Hub can't send, file, delete or book anything from here. Mail and the
     calendar are read only for the person they belong to; anyone else is told so."""
     turn = ctx.deps
     turn.again = turn.strangers = True

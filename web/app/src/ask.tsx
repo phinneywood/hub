@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, loadOlder, older, stop, talk } from "./asking";
 import type { Card, MailRow, Thing, Turn } from "./asking";
+import { BoardCard, boards } from "./boards";
 import { ErrandsCard } from "./errands";
 import { GroceriesCard, KitchenReply } from "./kitchen";
 import { ChatHead, DayRows, Greeting, HouseCard, NeedsCard } from "./now";
@@ -28,6 +29,7 @@ const PAGES: [View, string, string][] = [
   ["system", "System", "How Hub is doing, the look and older pages"], ["activity", "Activity", "What happened in the house"],
   ["changes", "Changes", "Everything Hub changed, with Undo"], ["versions", "Versions", "Each version of Hub"],
   ["engine", "Engine", "What Hub learned and what was asked of it"], ["mailsettings", "Mail settings", "How Hub sorts mail"],
+  ["boards", "Dashboards", "One page for each part of the household"],
 ];
 
 /** What a few letters reach without asking anything: rooms, scenes, playlists and pages, worked right in the list.
@@ -48,12 +50,18 @@ function Found({ now, text }: { now: House; text: string }) {
   const scenes = now.scenes.filter((s) => has(s.name));
   const lists = (picks.value ?? []).filter((p) => has(p.name)).slice(0, 3);
   const pages = text.length > 1 ? PAGES.filter(([, name]) => name.toLowerCase().startsWith(text.toLowerCase())).slice(0, 2) : [];
-  if (!rooms.length && !scenes.length && !lists.length && !pages.length) return null;
+  const dashboards = text.length > 1 ? (boards.value ?? []).filter((b) => b.name.toLowerCase().startsWith(text.toLowerCase())).slice(0, 2) : [];
+  if (!rooms.length && !scenes.length && !lists.length && !pages.length && !dashboards.length) return null;
   return (
     <div class="found brief">
       {pages.map(([where, name, what]) => (
         <button type="button" class="sug" key={where} onClick={() => { asked.value = ""; go(where); }}>
           <span>{marked(name, text)}<small>{what}</small></span><span class="go"><Icon name="right" /></span>
+        </button>
+      ))}
+      {dashboards.map((b) => (
+        <button type="button" class="sug" key={"board-" + b.id} onClick={() => { asked.value = ""; go("board", b.id); }}>
+          <span>{marked(b.name, text)}<small>Dashboard. {b.line?.text ?? b.what}</small></span><span class="go"><Icon name="right" /></span>
         </button>
       ))}
       {rooms.map((r) => (
@@ -201,6 +209,7 @@ function CardView({ card, now }: { card: Card; now: House }) {
   if (card.kind === "day") return <DayRows show={card.show ?? []} />;
   if (card.kind === "groceries") return <GroceriesCard ids={card.items} all={card.all} cart={card.cart} since={card.since} />;
   if (card.kind === "errands" && card.ids) return <ErrandsCard ids={card.ids} />;
+  if (card.kind === "board" && card.board) return <BoardCard id={card.board} />;
   if (card.kind === "mail" && card.rows) return <MailRows rows={card.rows} opened={card.opened ?? []} />;
   if (card.kind === "memory" && card.id !== undefined) {
     const id = card.id;

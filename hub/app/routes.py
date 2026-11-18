@@ -628,6 +628,47 @@ def mail_tap(do: str, request: Request, body: dict = Body(default={})):
     return {'ok': True, 'said': said} if ok else _refuse(said)
 
 
+# ---- Dashboards (hub/app/boards/): one page per category, arranged by each person ----
+
+@router.get('/api/boards')
+def boards_list(request: Request):
+    """The dashboards this person may open, each with its line for today."""
+    from . import boards
+    return {'ok': True, 'boards': boards.listing(_login(request))}
+
+
+@router.get('/api/board/{board_id}')
+def board_picture(board_id: str, request: Request):
+    """One dashboard, in this person's order, with the blocks they hid listed apart."""
+    from . import boards
+    found = boards.picture(board_id, _login(request))
+    if found is None:
+        return JSONResponse({'ok': False, 'error': 'That dashboard isn’t here, or isn’t yours.'}, status_code=404)
+    return found
+
+
+@router.post('/api/board/{board_id}/{do}')
+def board_tap(board_id: str, do: str, request: Request, body: dict = Body(default={})):
+    """A tap on a dashboard: `layout` ({"order", "hidden"}), `tick` ({"item", "done"}) or `set` ({"key", "value"})."""
+    from . import boards
+    login = _login(request)
+    if login is None:
+        return _refuse('Change it from your phone or laptop.', 403)
+    try:
+        if do == 'layout':
+            boards.arrange(login, board_id, body.get('order'), body.get('hidden'))
+            return {'ok': True, 'said': 'Kept'}
+        if do == 'tick':
+            return {'ok': True, 'said': boards.tick(login, board_id, body.get('item'), bool(body.get('done')))}
+        if do == 'set':
+            return {'ok': True, 'said': boards.change(login, board_id, body.get('key'), body.get('value'))}
+    except boards.Refused as error:
+        return _refuse(error, 403 if 'yours' in str(error) else 409)
+    except (ValueError, TypeError):
+        return _refuse('Hub couldn’t read that request.', 400)
+    return _refuse('Hub couldn’t read that request.', 400)
+
+
 # ---- Errands (hub/app/errands/): what Hub got ready for the owner's tap ----
 
 from .errands.routes import router as errands_router  # noqa: E402
