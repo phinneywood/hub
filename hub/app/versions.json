@@ -1,8 +1,18 @@
 [
  {
   "sha": null,
-  "from": "176c76a9caed00032ee389610e914cd14ec65d7e",
+  "from": "dda3c01ec1777fa0565385947138f627e4bd4dbb",
   "live": null,
+  "title": "Quiet your loudest senders, in Mail settings",
+  "changes": [
+   "Mail settings lets you quiet your loudest senders one at a time: how many are in the inbox and how many unread, the last few subjects, and whether a filter already skips the inbox. Nothing changes in Gmail until the plan is applied.",
+   "The older Mail overview and labels pages open the Mail dashboard."
+  ]
+ },
+ {
+  "sha": "dda3c01ec1777fa0565385947138f627e4bd4dbb",
+  "from": "176c76a9caed00032ee389610e914cd14ec65d7e",
+  "live": "2026-11-18T23:13:04Z",
   "title": "Touch a chart to read it",
   "changes": [
    "Touch either pregnancy chart to read it: the chance at any week, or a day’s chance of labour and the share by then."
