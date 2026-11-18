@@ -10,7 +10,8 @@
    "Ask answers the question instead of a stock line, may give a short list when you ask for one, and when it can’t do something it says so and names the closest thing it can.",
    "Hub keeps a record of every Ask turn: what it used and whether it answered, got stuck or failed, so bad answers show up instead of passing as fine. When the model is busy, Ask says so.",
    "After each deploy, Hub now checks this Ask itself: it lists your playlists, plays one, turns a room’s lights off and answers a weather question.",
-   "Kitchen: each thing on the list goes to Fred Meyer or Costco. Costco things say so on the list, and one tap on a thing’s Store row moves it. Your carts has a link to each store’s cart, and what went into the Costco cart stays as it went in."
+   "Kitchen: each thing on the list goes to Fred Meyer or Costco. Costco things say so on the list, and one tap on a thing’s Store row moves it. Your carts has a link to each store’s cart, and what went into the Costco cart stays as it went in.",
+   "On a laptop or iPad, the column on the left lists Dashboards and each dashboard under Ask and House, so one click opens Pregnancy, Network or Mail."
   ]
  },
  {

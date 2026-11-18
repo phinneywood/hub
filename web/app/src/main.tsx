@@ -17,7 +17,7 @@ import { Changes } from "./changes";
 import { ItemSheet, Kitchen, shop, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
 import { ErrandSheet, Errands, watchErrands } from "./errands";
-import { BoardScreen, BoardsScreen, watchBoards } from "./boards";
+import { BoardScreen, BoardsScreen, loadBoards, watchBoards } from "./boards";
 import { ChangeSheet, HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { go, seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
@@ -128,6 +128,7 @@ if (root) {
   watchErrands();
   watchKitchen();
   watchBoards();
+  void loadBoards();      // the rail lists them on a wide screen, and Ask finds them by a few letters
   void loadDay();         // Ask opens on the day, so it is read at once wherever the app opens
   void keepOnDevice().catch(() => undefined);     // without it the app still works; it just needs Hub to open
 }

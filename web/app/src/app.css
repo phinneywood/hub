@@ -545,6 +545,12 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
   .mark i { width: 22px; height: 22px; border-radius: 6px; background: var(--lamp); }
   .rail .tab { font-size: 20px; padding: 0; height: 46px; width: 100%; }
   .rail .foot { margin-top: auto; display: grid; gap: 2px; }
+  .railboards { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; }
+  .railboards .rlink { display: flex; align-items: center; gap: 7px; width: 100%; height: 40px; padding-left: 14px; font-size: var(--t-m); font-weight: 500; color: var(--ink-2); }
+  .railboards .rlink.head { height: 46px; padding-left: 0; font-size: 20px; color: var(--ink-3); }
+  .railboards .rlink::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: transparent; flex: none; }
+  .railboards .rlink.on { color: var(--ink); }
+  .railboards .rlink.on::before { background: var(--lamp); }
   .rail .foot .tab { font-size: var(--t-m); height: 40px; }
   .rail .ok { font-size: var(--t-xs); color: var(--ink-3); margin-top: 10px; line-height: 1.35; }
   .main { grid-column: 2; grid-row: 1; overflow-y: auto; max-width: none; margin: 0; padding: 22px 56px 60px; }
