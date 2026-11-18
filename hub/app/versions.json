@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "1beb7f3d4b35844a03c743159a32a06a0637f213",
+  "from": "2fec93260833fa86dca9ee87592a6791965da1a6",
   "live": null,
+  "title": "The chance of a live birth, and when babies come",
+  "changes": [
+   "The pregnancy dashboard shows the average chance of a live birth from here and how it rises week by week, when babies are usually born by date, and a day-by-day curve around the due date, each with its sources."
+  ]
+ },
+ {
+  "sha": "2fec93260833fa86dca9ee87592a6791965da1a6",
+  "from": "1beb7f3d4b35844a03c743159a32a06a0637f213",
+  "live": "2026-11-18T22:23:17Z",
   "title": "The pregnancy dashboard, clearer",
   "changes": [
    "The pregnancy dashboard calls its due date an estimate until the dating ultrasound, and its Settings button changes it in one tap."
