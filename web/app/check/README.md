@@ -60,6 +60,12 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
   back for a tap that places the order, shows a recipe's cart plan under the recipe once Kitchen has made it,
   says so under the recipe and offers its button again when Kitchen couldn't answer, and says so when the
   kitchen service is away or an older version;
+- the Archive is steered from Ask: a photo search draws Hub's card and sentence, the month's best is drawn under the
+  answer, reading ChatGPT history is switched off and on again, and "See all" opens the Archive on that search,
+  which reads people, "the kids" and years without a model; photos open full screen and step with the arrow keys
+  without the frame moving, a document opens with Get the file, an email opens, a conversation opens at what
+  matched; System opens the Archive too, with on this day and the month's best, and it has no tab or button of
+  its own;
 - everything meant to be tapped is at least 44 px on its short side;
 - the app says so when the house stops answering and when Hub can't be reached, still opens without Hub,
   and reconnects by itself;
@@ -86,6 +92,11 @@ screenshots with the run for 14 days. Run it here when you change the app, and a
    “what should we cook this week?”, “what needs me today?” and “what errands are ready?”. It shows how Ask
    looks and feels, not how well the real model understands. Errands there show a made-up week of mail and two
    class to-dos (`tests/errands_world.py`), read by Hub's real reading and drafting on a stand-in for its model.
+   The Archive there is a made-up family archive (`tests/archive_world.py`) indexed by the archive program's
+   real code and answered by its real service on the demo's own socket, with colour washes for pictures; mail
+   and calendar history come from a stand-in bridge. Ask there: “show me the kids at the beach in 2024”, “when did
+   we last service the furnace?”, “show me this month's best photos”, “photos from on this day”, “stop reading my
+   chatgpt history”, “Alex is one of the kids”. Its “See all” opens the Archive, as does System.
 
 2. In another shell, with Playwright available to Node:
 

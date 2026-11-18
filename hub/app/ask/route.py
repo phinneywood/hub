@@ -5,6 +5,9 @@ reasoning. What goes there: what the owner typed, the state of the lights and sp
 (owner decision, 2026-11-15) the bounded mail, calendar, school and today lookups in `private.py`, and (owner
 decision, 2026-11-17) a search of the person's own mail and up to three emails read in full (`mailbox.py`). What
 never does: Kitchen's replies, and anything from a sender with AI switched off. The key is read from 1Password by reference and is never logged or returned.
+The family archive (owner's decision, 2026-11-16): what `search` and `read` in `tools.py` find, mail and calendar
+results and masked passages of documents and ChatGPT history, unless the owner switched those off; never anything
+about a photo.
 
 The request guard below looks at every request on its way out and refuses any that isn't this model at this
 address, so no setting, library update or mistake elsewhere can send Ask's words another way.

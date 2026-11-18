@@ -47,7 +47,8 @@ COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'music_librar
                'integration': 'setup', 'dashboard': 'setup',
                'house_health': 'read', 'caretaker': 'caretaker',
                'money': 'read', 'what_if': 'read', 'money_budget': 'money', 'money_sort': 'money', 'money_goal': 'money',
-               'money_bill': 'money', 'money_account': 'money', 'money_plan': 'money', 'career': 'career'}
+               'money_bill': 'money', 'money_account': 'money', 'money_plan': 'money', 'career': 'career',
+               'search': 'read', 'read': 'read', 'archive': 'archive'}
 DRY_ID = -1                     # the message number a held-back Kitchen hand-off is given
 
 
@@ -136,13 +137,14 @@ def layer(house_writes=False, recipes=()):
     house_writes (owner's decision, 2026-11-13: light and music scenarios only, and only when the owner runs them
     with --live-writes): Home Assistant changes really go out, after the same checks, and are recorded both here
     and in Hub's own change log, so the runner can undo them right after the scenario's checks. Everything else
-    (Music Assistant edits, Kitchen, notes, recipes, playlists to make) is still held back.
+    (Music Assistant edits, Kitchen, notes, recipes, playlists to make, the archive's switches and kids) is still held back.
     `recipes`: (name, steps) pairs a scenario starts with, saved in the scratch database after the usual checks."""
     from ..app.ask import mailchange, morning, thread
     from ..app.errands import picture as errand_picture, taps as errand_taps
     from .. import caretaker
     from ..app.money import store as money
     from ..app.career import desk, worker
+    from ..app import archive
     from ..engine import notes, recipes as recipe_book
     from ..tools.house import admin, broker, control, music
     from ..tools.kitchen import client
@@ -155,7 +157,8 @@ def layer(house_writes=False, recipes=()):
              'morning_act': morning.act, 'morning_switch': morning.switch,
              'care': caretaker._leave, 'mail_db': mailchange._db,
              'mail_change': mailchange.propose,
-             'desk_write': desk._write, 'desk_job': worker.queue}
+             'desk_write': desk._write, 'desk_job': worker.queue,
+             'switch': archive.switch, 'kid': archive.set_kid}
 
     def exchange(message, timeout):
         path, method = str(message.get('path', '')), message.get('method')
@@ -220,6 +223,14 @@ def layer(house_writes=False, recipes=()):
         ledger.add('proposal', 'playlist', {'name': name, 'songs': list(songs or ())})
         return found
 
+    def switch(name, on, login):
+        ledger.add('archive', 'switch', {'name': name, 'on': bool(on)})
+        return 'Held back: what Ask may read stays as it is.'
+
+    def kid(name, kid, login):
+        ledger.add('archive', 'kid', {'name': str(name or '')[:80], 'kid': bool(kid)})
+        return 'Held back: who counts as one of the kids stays as it is.'
+
     def recipe(name, steps, said, *, login):
         found = saved['recipe'](name, steps, said, login=login)
         ledger.add('proposal', 'recipe', {'name': found['name'], 'steps': found['steps']})
@@ -271,6 +282,7 @@ def layer(house_writes=False, recipes=()):
         morning.act, morning.switch = morning_act, morning_switch
         mailchange._db = _with_schema(_scratch_db(Path(folder)), mailchange.SCHEMA)
         mailchange.propose = mail_change
+        archive.switch, archive.set_kid = switch, kid
         try:
             for name, steps in recipes:
                 recipe_book.keep(name, steps)
@@ -289,6 +301,7 @@ def layer(house_writes=False, recipes=()):
             mailchange._db, mailchange.propose = saved['mail_db'], saved['mail_change']
             money._db = saved.get('money_db', money._db)
             desk._write, worker.queue = saved['desk_write'], saved['desk_job']
+            archive.switch, archive.set_kid = saved['switch'], saved['kid']
 
 
 def _with_schema(db, schema):

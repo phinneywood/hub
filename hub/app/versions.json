@@ -1,8 +1,19 @@
 [
  {
   "sha": null,
-  "from": "0dfe9231e680985d4ea2d92a4b8ccaac16106e37",
+  "from": "0a299a2da64b7884ed9d5bdabea387bde9eb2e48",
   "live": null,
+  "title": "Ask searches the family archive",
+  "changes": [
+   "Ask can search the family’s photos, documents, mail, calendar history and ChatGPT history, and says where each answer came from.",
+   "It shows the month’s best photos and photos from this day in earlier years on a card Hub draws itself; nothing about a photo reaches the model.",
+   "The archive needs its helper installed on the Mac, with Full Disk Access and Photos access; until then Ask says it isn’t set up."
+  ]
+ },
+ {
+  "sha": "0a299a2da64b7884ed9d5bdabea387bde9eb2e48",
+  "from": "0dfe9231e680985d4ea2d92a4b8ccaac16106e37",
+  "live": "2026-11-18T21:33:25Z",
   "title": "More room for asking",
   "changes": [
    "Ask’s monthly budget is $100 now, up from $10."

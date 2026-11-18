@@ -5,12 +5,14 @@ to Ask. A change needs a signed-in device; a program on this Mac has no Tailscal
 """
 import asyncio
 import json
+import re
 import time
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
 
+from .. import bridge
 from ..tools.house import admin, control, nowplaying, read, zones
 from . import levels, model
 from . import scenes as kept_scenes
@@ -415,7 +417,8 @@ def ask_status(request: Request, before: int | None = None):
     why, login = brain.warm() or brain.limits(), _login(request)
     if before is None:          # the day's morning message is the first thing in the conversation (no model)
         morning.message(login)
-    shown = thread.history(login, before, turns.SHOWN_TURNS)
+    shown = [{**{k: v for k, v in turn.items() if k != 'shown'}, 'answer': turn.get('shown') or turn['answer']}   # as this person saw it
+             for turn in thread.history(login, before, turns.SHOWN_TURNS)]
     return {'ready': why is None, 'why': why, 'recent': shown, 'more': len(shown) == turns.SHOWN_TURNS,
             'usual': turns.usual(login) if why is None else [], 'remembers': turns.remembered(login),
             'morning': morning.made(login)}
@@ -826,3 +829,164 @@ router.include_router(errands_router)
 from .money.routes import router as money_router  # noqa: E402
 
 router.include_router(money_router)
+
+
+# ---- Photos (hub/app/photos.py): each month's best photos, chosen on this Mac by the photo curator ----
+
+@router.get('/api/photos')
+def photos_picture(request: Request, month: str = ''):
+    """The Photos screen as data, from the curator's folder. Photos are private: a signed-in device only."""
+    from . import photos
+    if _login(request) is None:
+        return _refuse('Open Photos on your phone or laptop.', 403)
+    return photos.picture(month, _login(request))
+
+
+@router.get('/api/photos/thumb/{photo}')
+def photos_thumb(photo: str, request: Request):
+    """One chosen photo's preview (Hub's no-store rule keeps it off the device)."""
+    from . import photos
+    if _login(request) is None:
+        return _refuse('Open Photos on your phone or laptop.', 403)
+    path = photos.thumb(photo, _login(request))
+    if path is None:
+        return _refuse('No such photo.', 404)
+    with path.open('rb') as head:
+        png = head.read(4) == b'\x89PNG'
+    return FileResponse(path, media_type='image/png' if png else 'image/jpeg')
+
+
+@router.post('/api/photos/{do}')
+def photos_tap(do: str, request: Request, body: dict = Body(default={})):
+    """Mark a chosen photo, {"key": photo}: keep, skip, print or clear."""
+    from . import photos
+    login = _login(request)
+    if login is None:
+        return _refuse('Mark photos from your phone or laptop.', 403)
+    try:
+        return {'ok': True, 'said': photos.mark(body.get('key'), do, login)}
+    except photos.Refused as error:
+        return _refuse(error)
+
+
+# ---- Archive (hub/app/archive.py): photos, documents, ChatGPT history, mail and calendar history, in one search ----
+
+def _archive(request, work):
+    """Run one archive read for a signed-in device: the archive is private, like Photos."""
+    from . import archive
+    login = _login(request)
+    if login is None:
+        return _refuse('Open the archive on your phone or laptop.', 403)
+    try:
+        return work(archive, login)
+    except archive.Away as away:
+        return _refuse(away, 503)
+    except archive.Refused as error:
+        return _refuse(error)
+    except bridge.BridgeError:
+        return _refuse('Mail isn’t answering right now.', 503)
+
+
+ACTIVE = re.compile(r'html|xhtml|svg|xml|javascript|ecmascript', re.I)
+ACTIVE_NAMES = re.compile(r'\.(html?|xhtml|svg|xml|m?js)(["\';]|$)', re.I)
+
+
+def _bytes(found, name=None):
+    """A picture or a file from the archive, kept off the device by Hub's no-store rule. Nothing from the archive
+    can run as a page of Hub's: every answer is sandboxed, and a document that a browser would run (a web page, an
+    SVG, XML, a script) is sent as plain bytes, to be saved."""
+    if found is None:
+        return _refuse('Not in the archive.', 404)
+    data, kind, disposition, sharp = found
+    headers = {'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': 'sandbox'}
+    if sharp:
+        headers['X-Sharp'] = sharp
+    if name == 'file':
+        if disposition:
+            headers['Content-Disposition'] = disposition
+        if ACTIVE.search(kind or '') or ACTIVE_NAMES.search(disposition or ''):
+            kind = 'application/octet-stream'
+    else:
+        kind = 'image/png' if data[:4] == b'\x89PNG' else 'image/jpeg'
+    return Response(data, media_type=kind, headers=headers)
+
+
+@router.get('/api/archive')
+def archive_landing(request: Request):
+    """The Archive screen before a search: what it holds, on this day, the people, and what Ask may read."""
+    return _archive(request, lambda archive, login: archive.landing(login))
+
+
+@router.post('/api/archive/search')
+def archive_search(request: Request, body: dict = Body(default={})):
+    """What matched, source by source, read without a model: {"q", "source", "offset"}. Mail comes from
+    /api/archive/mail. Both are asked with POST so the words searched for are never in Hub's request log."""
+    q, source, offset = str(body.get('q') or '')[:300], str(body.get('source') or ''), body.get('offset') or 0
+    offset = max(0, min(int(offset), 20000)) if isinstance(offset, int) else 0
+    return _archive(request, lambda archive, login: archive.search(q, login, source or None, offset))
+
+
+@router.post('/api/archive/mail')
+def archive_mail(request: Request, body: dict = Body(default={})):
+    """Mail that matches, newest first, ten at most, searched live in Gmail through the bridge: {"q"}."""
+    return _archive(request, lambda archive, login: {'mail': archive.mail_search(str(body.get('q') or '')[:300], login)})
+
+
+@router.get('/api/archive/item/{ident}')
+def archive_item(ident: str, request: Request):
+    """One result in full: a photo's facts, a document's text, a conversation, an event or an email."""
+    def work(archive, login):
+        found = archive.item(ident, login)
+        return found if found is not None else _refuse('Not in the archive.', 404)
+    return _archive(request, work)
+
+
+@router.get('/api/archive/attachment/{ident}/{part}')
+def archive_attachment(ident: str, part: str, request: Request):
+    """The text of a PDF or text file attached to an email, read by the bridge's isolated parser."""
+    def work(archive, login):
+        found = archive.mail_attachment(ident, part, login)
+        return found if found is not None else _refuse('Not in the archive.', 404)
+    return _archive(request, work)
+
+
+@router.get('/api/archive/thumb/{ident}')
+def archive_thumb(ident: str, request: Request):
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/thumb/{ident}', archive.scope(login))
+                                                           if archive.ITEM.fullmatch(ident) and ident[0] in 'pd' else None))
+
+
+@router.get('/api/archive/photo/{ident}')
+def archive_photo(ident: str, request: Request, size: int = 1600, sharp: int = 0):
+    """A photo for the full-screen viewer: the Mac's best picture of it, or with sharp=1 a 2048-pixel one from
+    iCloud when the archive may ask Photos for it (it says which in X-Sharp)."""
+    asked = [('size', str(max(200, min(size, 2400))))] + ([('sharp', '1')] if sharp else [])
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/photo/{ident}', asked + archive.scope(login))
+                                                           if archive.ITEM.fullmatch(ident) and ident[0] == 'p' else None))
+
+
+@router.get('/api/archive/page/{ident}/{number}')
+def archive_page(ident: str, number: int, request: Request, size: int = 1600):
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/page/{ident}/{max(1, min(number, 10000))}',
+                                                                           [('size', str(max(200, min(size, 2400))))] + archive.scope(login))
+                                                           if archive.ITEM.fullmatch(ident) and ident[0] == 'd' else None))
+
+
+@router.get('/api/archive/file/{ident}')
+def archive_file(ident: str, request: Request):
+    """A document's own bytes, to keep: documents only, never a photo's original."""
+    return _archive(request, lambda archive, login: _bytes(archive.picture(f'/file/{ident}', archive.scope(login))
+                                                           if archive.ITEM.fullmatch(ident) and ident[0] == 'd' else None, 'file'))
+
+
+@router.post('/api/archive/kid')
+def archive_kid(request: Request, body: dict = Body(default={})):
+    """{"name": ..., "kid": true or false}: whether someone is one of the kids, for "the kids" in a search."""
+    return _archive(request, lambda archive, login: {'ok': True, 'said': archive.set_kid(body.get('name'), bool(body.get('kid')), login)})
+
+
+@router.post('/api/archive/switch')
+def archive_switch(request: Request, body: dict = Body(default={})):
+    """{"name": "documents" or "chats", "on": true or false}: what Ask's model may read. The owner's login only."""
+    return _archive(request, lambda archive, login: {'ok': True, 'said': archive.switch(body.get('name'), bool(body.get('on')), login),
+                                                      'switches': archive.switches()})

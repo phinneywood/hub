@@ -15,6 +15,7 @@ import { MailSettings } from "./mailrules";
 import { Activity } from "./activity";
 import { Health } from "./health";
 import { Changes } from "./changes";
+import { Archive, FoundSheet, Viewer } from "./archive";
 import { ItemSheet, Kitchen, shop, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
 import { ErrandSheet, Errands, watchErrands } from "./errands";
@@ -39,6 +40,8 @@ function toAsk() {
 
 function Sheets() {
   const open = sheet.value, now = seen.value;
+  if (open?.kind === "found") return <FoundSheet key={open.id} id={open.id} source={open.source} page={open.page} title={open.title} />;
+  if (open?.kind === "viewer") return <Viewer photos={open.photos} at={open.at} />;
   if (open?.kind === "card") return <CardSheet card={open.card} />;
   if (open?.kind === "item") {        // one thing on the shopping list: it needs Kitchen's picture, not the house's
     const list = shop.value;
@@ -63,7 +66,7 @@ function Sheets() {
 
 function Screen() {
   const where = view.value;
-  return where === "home" ? <Ask home house={!wide.value} /> : where === "house" ? <Home /> : where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "health" ? <Health /> : where === "today" ? <Today /> : where === "errands" ? <Errands /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : where === "boards" ? <BoardsScreen /> : where === "board" ? <BoardScreen /> : <Home />;
+  return where === "home" ? <Ask home house={!wide.value} /> : where === "house" ? <Home /> : where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "health" ? <Health /> : where === "archive" ? <Archive /> : where === "today" ? <Today /> : where === "errands" ? <Errands /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : where === "boards" ? <BoardsScreen /> : where === "board" ? <BoardScreen /> : <Home />;
 }
 
 /** Beside the screen on a wide one: the house while Ask is in the middle, and Ask beside everything else. */
