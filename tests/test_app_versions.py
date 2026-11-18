@@ -155,10 +155,11 @@ def test_hub_says_what_it_did_by_itself_on_today_and_on_the_phone(tmp_path, monk
     assert release.notice()[0] == 'A Hub update didn’t hold' and catalog.hub_release() == []    # its own item, from last.json
 
 
-def test_the_deployer_starts_the_notice_as_a_module(tmp_path):
-    import os
-    import subprocess
+def test_the_deployer_starts_the_notice_as_a_module(tmp_path, monkeypatch, capsys):
+    import runpy
     import sys
-    done = subprocess.run([sys.executable, '-m', 'hub.engine.release', 'tell'], capture_output=True, text=True, timeout=60,
-                          env={**os.environ, 'HUB_DATA_DIR': str(config.DATA_DIR), 'HUB_RELEASES_DIR': str(tmp_path)})
-    assert (done.returncode, done.stdout.strip()) == (0, 'Nothing to tell.')
+    monkeypatch.setenv('HUB_RELEASES_DIR', str(tmp_path))
+    monkeypatch.setattr(sys, 'argv', ['release', 'tell'])
+    monkeypatch.delitem(sys.modules, 'hub.engine.release', raising=False)    # run fresh, as python -m does
+    runpy.run_module('hub.engine.release', run_name='__main__')
+    assert capsys.readouterr().out.strip() == 'Nothing to tell.'
