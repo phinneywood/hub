@@ -32,7 +32,7 @@ from . import morning, private, route, thread, tools, turns
 
 log = logging.getLogger('hub.ask')
 KIND = 'chat'                   # these runs in the engine's record, with the chat's own monthly limit
-MONTH_COST_CAP = 10.0
+MONTH_COST_CAP = 100.0          # dollars a calendar month; the owner raised it from 10 (2026-11-18)
 CALLS_PER_DAY = 300
 REQUESTS_PER_TURN = 6           # trips to the model one request may take: looking, reading, changing, and a try again
 MESSAGE_LENGTH = 2000

@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "5d7988721c00f51ac905795ea87b4b0fa0bd14e9",
+  "from": "0dfe9231e680985d4ea2d92a4b8ccaac16106e37",
   "live": null,
+  "title": "More room for asking",
+  "changes": [
+   "Ask’s monthly budget is $100 now, up from $10."
+  ]
+ },
+ {
+  "sha": "0dfe9231e680985d4ea2d92a4b8ccaac16106e37",
+  "from": "5d7988721c00f51ac905795ea87b4b0fa0bd14e9",
+  "live": "2026-11-18T21:08:57Z",
   "title": "Your career desk, in Ask",
   "changes": [
    "Career is a dashboard of your own: your thesis, your plan’s steps to tick, what you are writing, field notes and evidence. Nobody else sees it.",

@@ -396,7 +396,7 @@ client refuses any request that isn't this model at `https://api.anthropic.com/v
 can send Ask's words another way. This route is not zero-retention; the owner chose it for mail, the calendar and
 school too, knowing that (2026-11-15).
 Instructions and tool definitions are cached between requests. Each turn's tokens and cost go in the engine's
-record under the chat's own $10 a month limit; the words do not.
+record under the chat's own $100 a month limit; the words do not.
 
 **What reaches which model.**
 
