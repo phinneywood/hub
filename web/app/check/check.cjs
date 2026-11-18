@@ -60,7 +60,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     // Hub's morning message is the first turn of the day: three numbered things, the house and money first, each with
     // one button; under the greeting only the day's next thing and Open Today stay, and Today has the rest.
     // The morning message is made when Ask first opens, so it can arrive a moment after the greeting: wait for it.
-    await until(() => document.querySelectorAll(".askpage .morning .row-main b").length === 3);
+    // On a busy CI runner that moment once passed six seconds, so it is given fifteen.
+    await until(() => document.querySelectorAll(".askpage .morning .row-main b").length === 3, null, 15000);
     const morning = await page.locator(".askpage .morning .row-main b").allInnerTexts();
     expect(morning.length === 3 && morning[0].startsWith("Side door lock’s battery is flat.") && morning[1].startsWith("Pay the Lakeside Power bill.")
       && morning[2].startsWith("Email from Sam Rivera."), "Ask did not open on the morning message: " + morning.join("|"));
