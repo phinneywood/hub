@@ -45,7 +45,9 @@ COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'music_librar
                'look_up': 'read', 'mail_search': 'read', 'mail_read': 'read', 'mail_change': 'proposal', 'errands': 'read', 'errand': 'errands', 'find': 'read', 'details': 'read', 'arrange': 'setup',
                'rooms': 'setup', 'scene_setup': 'setup', 'routine': 'setup', 'device': 'setup', 'setting': 'setup',
                'integration': 'setup', 'dashboard': 'setup',
-               'house_health': 'read', 'caretaker': 'caretaker'}
+               'house_health': 'read', 'caretaker': 'caretaker',
+               'money': 'read', 'what_if': 'read', 'money_budget': 'money', 'money_sort': 'money', 'money_goal': 'money',
+               'money_bill': 'money', 'money_account': 'money', 'money_plan': 'money'}
 DRY_ID = -1                     # the message number a held-back Kitchen hand-off is given
 
 
@@ -139,6 +141,7 @@ def layer(house_writes=False, recipes=()):
     from ..app.ask import mailchange, morning, thread
     from ..app.errands import picture as errand_picture, taps as errand_taps
     from .. import caretaker
+    from ..app.money import store as money
     from ..engine import notes, recipes as recipe_book
     from ..tools.house import admin, broker, control, music
     from ..tools.kitchen import client
@@ -251,6 +254,7 @@ def layer(house_writes=False, recipes=()):
         music._db = _with_schema(_scratch_db(Path(folder)), music.SCHEMA)
         notes._db = _with_schema(_scratch_db(Path(folder)), notes.SCHEMA)
         recipe_book._db = _with_schema(_scratch_db(Path(folder)), recipe_book.SCHEMA)
+        saved['money_db'], money._db = money._db, money.scratch(Path(folder))      # Money's changes stay in a copy
         notes.propose, music.propose, recipe_book.propose = note, playlist, recipe
         errand_taps.tap, errand_picture.set_compose = errand_tap, compose
         thread.start_fresh = fresh
@@ -273,6 +277,7 @@ def layer(house_writes=False, recipes=()):
             thread.start_fresh = saved['fresh']
             morning.act, morning.switch = saved['morning_act'], saved['morning_switch']
             mailchange._db, mailchange.propose = saved['mail_db'], saved['mail_change']
+            money._db = saved.get('money_db', money._db)
 
 
 def _with_schema(db, schema):

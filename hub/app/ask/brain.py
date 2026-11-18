@@ -27,6 +27,7 @@ from ... import caretaker, home
 from ...engine import state
 from ...tools.house import broker, read
 from .. import model as picture
+from ..money import ask as money_ask
 from . import morning, private, route, thread, tools, turns
 
 log = logging.getLogger('hub.ask')
@@ -132,12 +133,14 @@ thing as they said it; take things off; show the list; get checkout ready. Hub p
 household buys, so never ask which brand or size. Cooking, recipes, meal ideas and questions about food, prices or past \
 orders go to the kitchen tool, word for word; it takes a minute or two, and its answer appears under the request.
 
+{money}
+
 When you can't. If no tool can do or find what they asked, say so plainly in one sentence and name the closest \
 thing Hub can do. Never answer with a sentence about the conversation or the summary unless that is what they asked.
 
 Speaking. One or two plain sentences. When they ask for a list (their playlists, a playlist's songs, devices), give it \
 as short plain lines, at most 12, and say how many more there are. No Markdown, no links. If you are unsure which room \
-or what music they mean, ask one short question."""
+or what music they mean, ask one short question.""".replace('{money}', money_ask.INSTRUCTIONS)
 
 
 def limits():
@@ -454,13 +457,16 @@ async def run(text, login, build=None):
     before = await run_in_threadpool(earlier, login)
     known = await run_in_threadpool(_known, text, topics, login) if topics else None
     seen = await run_in_threadpool(health, text, topics)
-    turn = tools.Turn(text=text, login=login, strangers=bool(known), health=bool(seen))
+    money = await run_in_threadpool(money_ask.prefill, text, login)    # a plain money question: what it needs, beside it
+    turn = tools.Turn(text=text, login=login, strangers=bool(known or money), health=bool(seen))
     if known:
         tools.shown(turn, topics)
     # Names, titles and mail are other people's text. None of it can close a section and start one of its own.
     prompt = (f'<house>\n{_inside(await run_in_threadpool(house, None, login))}\n</house>\n' + (f'<earlier>\n{_inside(before)}\n</earlier>\n' if before else '')
               + (f'<health>\n{_inside(seen)}\n</health>\n' if seen else '')
-              + (f'<data>\n{_inside(known)}\n</data>\n' if known else '') + f'<said>{_inside(text)}</said>')
+              + (f'<data>\n{_inside(known)}\n</data>\n' if known else '')
+              + (f'<money>\n{_inside(json.dumps(money, ensure_ascii=False, default=str))}\n</money>\n' if money else '')
+              + f'<said>{_inside(text)}</said>')
     words, shown, usage, sent = [], 0, None, {}
 
     def drawn():

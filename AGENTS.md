@@ -85,5 +85,11 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   permission to read those sources") goes through Ask's route and key too, and is given only the weather, the
   owner's calendar titles and times, the class guide's dates, the locks and doors, and the house's and the trip's
   need titles. Never mail, never Kitchen's. It is the owner's, on the owner's phone, never on the wall.
+  Owner-approved (2026-11-16 and 2026-11-18, "Money in Ask"): Hub reads the household's banks read-only through
+  SimpleFIN Bridge (`hub/app/money/simplefin.py`: the claim and `GET /accounts` only, so it can never move money), and
+  Ask's model may be given an allow-list of money facts (`hub/app/money/ask.py`): never account or card numbers, and
+  nothing of a member who switched "Ask may use my money" off. The other member sees a private account only as its
+  month-start total rounded to $100. Each member's SimpleFIN access address is a secret kept in an owner-only file
+  in Hub's private folder, never in Git or a model: the owner's exception to the 1Password rule (2026-11-18).
   Who sees what (2026-11-16): each person only their own accounts' things, by Tailscale login (`hub/people.py`,
   `docs/people.md`); the kitchen wall is the household's only. Read "Today" in `docs/app.md` first.

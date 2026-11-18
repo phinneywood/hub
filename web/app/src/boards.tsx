@@ -22,7 +22,7 @@ interface Block {
   tiles?: Tile[]; rows?: Row[]; items?: Check[]; sub?: string; empty?: string; text?: string; view?: string;
   segments?: string[]; start?: string; end?: string; now?: string; top?: string; bars?: { label: string; value: number; text: string }[];
 }
-interface Setting { key: string; label: string; type: "date"; value: string }
+interface Setting { key: string; label: string; type: "date" | "text" | "switch"; value: string }
 interface Board { ok: true; id: string; name: string; say: string; sub: string; blocks: Block[]; hidden: { id: string; title: string }[];
   settings: Setting[] }
 
@@ -211,20 +211,27 @@ function Mover({ board, at }: { board: Board; at: number }) {
 function Settings({ board }: { board: Board }) {
   const [values, setValues] = useState<Record<string, string>>({});
   if (!board.settings.length) return null;
-  const save = async (s: Setting) => {
-    const answer = await post(`board/${board.id}/set`, { key: s.key, value: values[s.key] ?? s.value });
+  const save = async (s: Setting, value?: string) => {
+    const answer = await post(`board/${board.id}/set`, { key: s.key, value: value ?? values[s.key] ?? s.value });
     say(answer.error ?? answer.said ?? "Kept");
+    setValues({ ...values, [s.key]: s.type === "text" ? "" : values[s.key] ?? "" });
     void loadBoard(board.id);
   };
   return (
     <section class="block">
       <h2>Settings</h2>
       <div class="rows">
-        {board.settings.map((s) => (
+        {board.settings.map((s) => s.type === "switch" ? (
+          <div class="row free bset" key={s.key}>
+            <div class="row-main"><b>{s.label}</b></div>
+            <button type="button" class={"row-act" + (s.value ? " on" : "")} role="switch" aria-checked={!!s.value} aria-label={s.label}
+              onClick={() => void save(s, s.value ? "" : "on")}>{s.value ? "On" : "Off"}</button>
+          </div>
+        ) : (
           <label class="row free bset" key={s.key}>
             <div class="row-main"><b>{s.label}</b></div>
             <span class="bfield">
-              <input type={s.type} value={values[s.key] ?? s.value} onInput={(e) => setValues({ ...values, [s.key]: (e.target as HTMLInputElement).value })} />
+              <input type={s.type} autocomplete="off" value={values[s.key] ?? s.value} onInput={(e) => setValues({ ...values, [s.key]: (e.target as HTMLInputElement).value })} />
               <button type="button" class="row-act" disabled={(values[s.key] ?? s.value) === s.value} onClick={() => void save(s)}>Save</button>
             </span>
           </label>
@@ -329,9 +336,9 @@ export function BoardLines({ lines }: { lines: BoardLine[] }) {
 }
 
 /** Under an answer in Ask: the board's headline and its first numbers, read from Hub for whoever is looking. */
-export function BoardCard({ id }: { id: string }) {
+export function BoardCard({ id, fresh = false }: { id: string; fresh?: boolean }) {
   const board = shown.value[id];
-  useEffect(() => { if (!board) void loadBoard(id); }, [id]);
+  useEffect(() => { if (!board || fresh) void loadBoard(id); }, [id]);
   if (!board) return null;
   const first = board.blocks.find((b) => b.kind === "tiles") ?? board.blocks.find((b) => b.kind === "hero");
   return (

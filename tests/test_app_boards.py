@@ -119,14 +119,14 @@ def test_without_a_due_date_it_asks_for_one(household):
 def test_no_pregnancy_section_means_no_board(household):
     (config.DATA_DIR / 'household.json').write_text(json.dumps({'people': [
         {'name': 'Alex', 'logins': ['me@example.com'], 'accounts': ['default']}]}))
-    assert [b['id'] for b in boards.listing('me@example.com')] == ['calendar', 'school', 'trip', 'network', 'mail', 'spend']
+    assert [b['id'] for b in boards.listing('me@example.com')] == ['money', 'calendar', 'school', 'trip', 'network', 'mail', 'spend']
 
 
 # ---- who sees which ----
 
 def test_who_sees_which_board(household):
-    assert [b['id'] for b in boards.listing('me@example.com')] == ['pregnancy', 'calendar', 'school', 'trip', 'network', 'mail', 'spend']
-    assert [b['id'] for b in boards.listing('casey@example.com')] == ['pregnancy', 'school', 'trip', 'network', 'spend']        # mail and calendar are Alex's
+    assert [b['id'] for b in boards.listing('me@example.com')] == ['pregnancy', 'money', 'calendar', 'school', 'trip', 'network', 'mail', 'spend']
+    assert [b['id'] for b in boards.listing('casey@example.com')] == ['pregnancy', 'money', 'school', 'trip', 'network', 'spend']        # mail and calendar are Alex's; money is both members'
     assert boards.listing('someone@example.com') == [] and boards.listing(None) == []
     assert client.get('/app/api/board/mail', headers=CASEY).status_code == 404
     assert client.get('/app/api/board/pregnancy', headers=STRANGER).status_code in (403, 404)    # Hub lets them in at all?

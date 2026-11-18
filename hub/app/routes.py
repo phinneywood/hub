@@ -493,6 +493,9 @@ def forget_note(note: int, request: Request):
 @router.post('/api/undo/{batch}')
 def undo(batch: str, request: Request):
     from .errands import asked as errand_asked
+    if batch.startswith('m'):       # a change to Hub's own record of the household's money (hub/app/money/changes.py)
+        from .money.routes import money_undo
+        return money_undo(batch, request)
     if batch.startswith('s'):       # a change to how the house is set up (hub/tools/house/admin.py)
         return _change(request, lambda login: admin.undo(batch, login=login, via='app'))
     if batch.startswith(errand_asked.BATCH):      # errands Ask changed, or where replies open (hub/app/errands/asked.py)
@@ -764,3 +767,10 @@ def board_tap(board_id: str, do: str, request: Request, body: dict = Body(defaul
 from .errands.routes import router as errands_router  # noqa: E402
 
 router.include_router(errands_router)
+
+
+# ---- Money (hub/app/money/): the household's accounts, read and never moved; members only ----
+
+from .money.routes import router as money_router  # noqa: E402
+
+router.include_router(money_router)

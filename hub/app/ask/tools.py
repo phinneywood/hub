@@ -1,6 +1,6 @@
 """What Ask can do: lights, scenes, music, how the house is set up, any other device, remembering, passing a
-message to Kitchen, reading mail, the calendar and school, showing and finishing the errands Hub got ready, and
-reading House health and asking the house's caretaker.
+message to Kitchen, reading mail, the calendar and school, showing and finishing the errands Hub got ready,
+reading House health and asking the house's caretaker, and the household's money (hub/app/money/ask.py).
 
 Few tools, each doing a whole job. Lights, scenes and music go through hub/tools/house/control.py, like a tap in
 the app: the same allowlist, record and Undo, counted against Ask's own per-minute limit. Everything else in
@@ -1125,3 +1125,7 @@ AGREED = re.compile(r"\s*(yes|yeah|yep|yup|sure|ok|okay|please do|do it|go ahead
 
 ALL = (lights, scene, music, music_library, playlist, hub_info, bike_bus, remember, conversation, groceries, kitchen, look_up, mail_search, mail_read, mail_change, errands, errand, find, details, arrange, rooms, scene_setup, routine,
        device, setting, integration, dashboard, house_health, caretaker)
+# Money (hub/app/money/ask.py): reading the household's accounts, and the changes a member can make to Hub's record of them.
+from ..money.ask import TOOLS as MONEY  # noqa: E402
+
+ALL += MONEY

@@ -51,8 +51,8 @@ def _db():
 
 
 def _boards():
-    from . import calendar, mail, network, pregnancy, school, spend, trip
-    return {b.ID: b for b in (pregnancy, calendar, school, trip, network, mail, spend)}
+    from . import calendar, mail, money, network, pregnancy, school, spend, trip
+    return {b.ID: b for b in (pregnancy, money, calendar, school, trip, network, mail, spend)}
 
 
 def board(board_id):
@@ -189,6 +189,11 @@ def change(login, board_id, key, value):
     if not login:
         raise Refused('Change it from your phone or laptop.')
     module = board(board_id)
+    if module is not None and _sees(module, login) and hasattr(module, 'set_for'):     # a member's own setting, kept by the board
+        try:
+            return module.set_for(login, str(key or '')[:ID_CHARS], value)
+        except module.Refused as error:
+            raise Refused(str(error)) from error
     if module is None or not _sees(module, login) or not hasattr(module, 'set_value'):
         raise Refused('That dashboard isn’t yours to change.')
     kept, said = module.set_value(str(key or '')[:ID_CHARS], value)       # raises Refused
