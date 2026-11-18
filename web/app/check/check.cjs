@@ -693,6 +693,15 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.locator('[data-block="born"] .row').count() === 5, "when babies are born is not five stretches of dates");
     expect((await page.locator('[data-block="odds-about"] .bnote').innerText()).includes("Tong et al."), "the numbers have no sources");
     await page.locator('[data-block="odds"]').scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await shot("16k-board-odds");
+    // both charts read out where a finger touches them
+    const plot = page.locator('[data-block="labour-curve"] .bplot');
+    await plot.scrollIntoViewIfNeeded();
+    const plotBox = await plot.boundingBox();
+    await page.mouse.move(plotBox.x + plotBox.width * 2 / 3, plotBox.y + plotBox.height / 2);
+    await page.mouse.down(); await page.mouse.up();
+    expect(await until(() => /: 4\.2%$/.test(document.querySelector('[data-block="labour-curve"] figcaption.held b')?.textContent ?? "")),
+      "touching the labour curve at the due date did not read it");
+    await page.waitForTimeout(300); await shot("16l-board-labour-read");
     if (phone) {    // on a phone the bar has Dashboards: one tap lists them, one more opens one
       await tap('.tabs .tab:text-is("Dashboards")');
       expect(await saysSoon("Dashboards"), "the Dashboards tab did not open the list: " + await says());

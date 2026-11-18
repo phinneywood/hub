@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "2fec93260833fa86dca9ee87592a6791965da1a6",
+  "from": "176c76a9caed00032ee389610e914cd14ec65d7e",
   "live": null,
+  "title": "Touch a chart to read it",
+  "changes": [
+   "Touch either pregnancy chart to read it: the chance at any week, or a day’s chance of labour and the share by then."
+  ]
+ },
+ {
+  "sha": "176c76a9caed00032ee389610e914cd14ec65d7e",
+  "from": "2fec93260833fa86dca9ee87592a6791965da1a6",
+  "live": "2026-11-18T22:47:52Z",
   "title": "The chance of a live birth, and when babies come",
   "changes": [
    "The pregnancy dashboard shows the average chance of a live birth from here and how it rises week by week, when babies are usually born by date, and a day-by-day curve around the due date, each with its sources."

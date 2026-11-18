@@ -121,9 +121,12 @@ def in_words(chance):
 
 def _odds_curve(day):
     """The live-birth chance from week 4 to 40, as points in a 720 by 180 box from 70% (bottom) to 100% (top)."""
-    point = lambda w: f'{2 + 716 * (w - 4) / 36:.1f},{170 - 160 * (live_chance(w * 7) - .7) / .3:.1f}'
+    y = lambda w: 170 - 160 * (live_chance(w * 7) - .7) / .3
+    point = lambda w: f'{2 + 716 * (w - 4) / 36:.1f},{y(w):.1f}'
     marks = [w / 2 for w in range(8, 81)]
-    return [' '.join(point(w) for w in marks)], min(max((max(day, 0) / 7 - 4) / 36, 0), 1)
+    reads = [{'at': round((w - 4) / 36, 4), 'y': round(y(w) / 180, 4), 'big': in_words(live_chance(w * 7)),
+              'small': f'At {int(w)} weeks{", 3 days" if w % 1 else ""}: {live_chance(w * 7) * 100:.1f}% on average'} for w in marks]
+    return [' '.join(point(w) for w in marks)], min(max((max(day, 0) / 7 - 4) / 36, 0), 1), reads
 
 
 def _births(start, today):
@@ -151,8 +154,15 @@ def _labour_curve(due_date):
     import math
     days = range(-28, 15)
     peak = 1 / (SPREAD * math.sqrt(2 * math.pi))
-    point = lambda d: f'{2 + 716 * (d + 28) / 42:.1f},{170 - 160 * math.exp(-d * d / (2 * SPREAD * SPREAD)):.1f}'
-    return [' '.join(point(d) for d in days)], 28 / 42, peak
+    y = lambda d: 170 - 160 * math.exp(-d * d / (2 * SPREAD * SPREAD))
+    point = lambda d: f'{2 + 716 * (d + 28) / 42:.1f},{y(d):.1f}'
+    by = lambda d: .5 * (1 + math.erf((d + .5) / (SPREAD * math.sqrt(2))))      # labour by the end of that day
+    def said(d):
+        that = by(d) - by(d - 1)
+        when = 'the due date' if d == 0 else f'{-d} day{"s" * (d != -1)} before' if d < 0 else f'{d} day{"s" * (d != 1)} after'
+        return {'at': round((d + 28) / 42, 4), 'y': round(y(d) / 180, 4), 'big': f'{_short(due_date + timedelta(days=d))}: {that * 100:.1f}%',
+                'small': f'{when[0].upper() + when[1:]}. About {round(by(d) * 100)}% by the end of that day'}
+    return [' '.join(point(d) for d in days)], 28 / 42, peak, [said(d) for d in days]
 
 
 # Getting ready, the household's list: (key, by week, title, why). Ticks are shared by everyone who sees the board.
@@ -359,8 +369,8 @@ def picture(login, today):
 def _odds_blocks(at, due_date, today, start):
     """The chance of a live birth from here, how it changes week by week, and when babies are usually born."""
     chance = live_chance(at['day'])
-    segments, here = _odds_curve(at['day'])
-    labour, due_at, peak = _labour_curve(due_date)
+    segments, here, odds_reads = _odds_curve(at['day'])
+    labour, due_at, peak, labour_reads = _labour_curve(due_date)
     early = at['day'] < 7 * 7
     return [
         {'id': 'odds', 'title': 'Chance of a live birth', 'kind': 'hero', 'big': in_words(chance),
@@ -369,13 +379,13 @@ def _odds_blocks(at, due_date, today, start):
          'progress': chance},
         {'id': 'odds-curve', 'title': 'How the chance changes, week 4 to 40', 'kind': 'line', 'segments': segments, 'view': [720, 180],
          'start': 'Week 4', 'end': 'Week 40', 'now': f'{chance * 100:.0f}%', 'top': 'From 70% at the bottom to 100% at the top',
-         'mark': {'at': here, 'label': 'You are here'}},
+         'mark': {'at': here, 'label': 'You are here'}, 'reads': odds_reads},
         {'id': 'born', 'title': 'When babies are born', 'kind': 'rows', 'rows': _births(start, today),
          'sub': f'US single births in 2023, by the dates for a due date of {a_short(due_date)}.'},
         {'id': 'labour-curve', 'title': 'Labour on its own, day by day', 'kind': 'line', 'segments': labour, 'view': [720, 180],
          'start': a_short(due_date - timedelta(days=28)), 'end': a_short(due_date + timedelta(days=14)),
          'now': f'About {round(peak * 100)}% on the day', 'top': 'About 70% within ten days of it',
-         'mark': {'at': due_at, 'label': f'Due {a_short(due_date)}'}},
+         'mark': {'at': due_at, 'label': f'Due {a_short(due_date)}'}, 'reads': labour_reads},
         {'id': 'odds-about', 'title': 'About these numbers', 'kind': 'note',
          'text': ('These are averages over many pregnancies, not a prediction for this one: age, health, history and '
                   'what the scans show all change them, and your doctor or midwife can say more. Chance of a live birth: '
