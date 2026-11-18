@@ -34,7 +34,9 @@ Set unused fields to false, null or []."""
 
 
 class LunaError(Exception):
-    pass
+    def __init__(self, message='', status=None):
+        super().__init__(message)
+        self.status = status    # the HTTP status the route answered with, when it answered
 
 
 
@@ -83,7 +85,8 @@ def call(request):
             reason = clip(response.json().get("error", {}).get("message", ""), 200)
         except (ValueError, AttributeError):
             reason = ""
-        raise LunaError(f"Luna is unavailable right now (status {response.status_code}){': ' + reason if reason else ''}")
+        raise LunaError(f"Luna is unavailable right now (status {response.status_code}){': ' + reason if reason else ''}",
+                        status=response.status_code)
     try:
         choice = response.json()["choices"][0]
         if choice.get("finish_reason") == "length":

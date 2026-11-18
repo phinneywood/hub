@@ -33,7 +33,8 @@ FILE = 'ask-trial.json'         # the setup set's record; the core set's is ask-
 KINDS = ('setup', 'core')
 SPACING = 2.0                   # seconds between requests, so a trial doesn't run into the model's rate limit itself
 BUSY = ('rate_limit', 'overloaded', 'timeout', 'connection')    # failures of the model's service, not of Ask
-COOL_OFF = 20.0                 # after a request the rate limit stopped, wait this long before the next
+BACKOFF = (20.0, 60.0, 120.0)   # a request the model's service turned away is asked again after each of these waits
+TURN = 30.0                     # the least time worth starting a request in; each is cut off where the trial must end
 
 
 class Stopped(Exception):
@@ -237,7 +238,31 @@ def _spent():
     return state.spent(home.today().isoformat(), KIND)['month_cost']
 
 
-async def _all(asked, who, ledger, started, kept):
+async def _once(text, ledger, kept):
+    """Ask once: what Ask said and did, the changes it wrote down, the tools it used and the problem that ended it."""
+    before, saved = len(ledger.changes), len(kept)
+    seen = await _ask(text)
+    seen['changes'] = ledger.changes[before:]
+    record = kept[saved] if len(kept) > saved else {}
+    seen['used'], seen['problem'] = list(record.get('tools') or ()), record.get('problem') or ''
+    return seen
+
+
+async def _bounded(text, ledger, kept, until):
+    """_once, cut off where the trial must end (`until`, a time.monotonic() value, or None): a turn may take the model
+    six trips of a minute each. Cut off, it is a timeout, which says nothing about Ask. None when no time is left."""
+    left = None if until is None else until - time.monotonic()
+    if left is not None and left < TURN:
+        return None
+    try:
+        return await asyncio.wait_for(_once(text, ledger, kept), left)
+    except asyncio.TimeoutError:
+        return {'tools': [], 'said': '', 'cards': [], 'status': 'failed', 'changes': [], 'used': [], 'problem': 'timeout'}
+
+
+async def _all(asked, who, ledger, started, kept, until=None):
+    """Each request in turn, the whole trial done by `until` (a time.monotonic() value, or None): a busy model is waited
+    for only while another try still fits, and a try still going then is cut off."""
     out = []
     for at, (name, text, check) in enumerate(asked):
         if _spent() - started >= CAP:
@@ -245,14 +270,18 @@ async def _all(asked, who, ledger, started, kept):
             continue
         if at:
             await asyncio.sleep(SPACING)
-        before, saved = len(ledger.changes), len(kept)
-        seen = await _ask(text)
-        seen['changes'] = ledger.changes[before:]
-        record = kept[saved] if len(kept) > saved else {}
-        seen['used'], seen['problem'] = list(record.get('tools') or ()), record.get('problem') or ''
-        if seen['problem'] in BUSY:     # the model was busy or out of reach: this says nothing about Ask
+        seen = await _bounded(text, ledger, kept, until)
+        for wait in BACKOFF:            # turned away by the model's service: wait, longer each time, and ask again
+            if not seen or seen['problem'] not in BUSY or (until is not None and time.monotonic() + wait + TURN > until) \
+                    or _spent() - started >= CAP:
+                break
+            await asyncio.sleep(wait)
+            seen = await _bounded(text, ledger, kept, until) or seen
+        if not seen:
+            out.append({'id': name, 'asked': text, 'ok': None, 'why': 'Left out: the trial ran out of time.', 'problem': 'timeout'})
+            continue
+        if seen['problem'] in BUSY:     # busy every time it was asked: this says nothing about Ask, either way
             out.append({'id': name, 'asked': text, 'ok': None, 'why': 'Left out: the model was busy or out of reach.', **seen})
-            await asyncio.sleep(COOL_OFF)
             continue
         why = (f'Ask couldn’t finish the request ({seen["status"]}).' if seen['status'] != 'ok' else check(seen, who))
         out.append({'id': name, 'asked': text, 'ok': not why, 'why': why, **seen})
@@ -270,9 +299,11 @@ def _keep(rows, cost, kind='setup'):
         pass
 
 
-def run(kind='setup'):
+def run(kind='setup', within=None):
     """Put one set of requests (`KINDS`) to Ask with the real model, nothing sent. Returns {'ran', 'failed': [names],
-    'left_out': [names], 'busy': [names the rate limit stopped], 'cost'}. Raises Stopped when it can't run here."""
+    'left_out': [names], 'busy': [names the rate limit stopped], 'cost'}. Raises Stopped when it can't run here.
+    `within`: seconds the whole trial may take, waits for a busy model included."""
+    until = time.monotonic() + within if within else None
     from ...golden import dryrun
     try:
         route.build()
@@ -289,7 +320,7 @@ def run(kind='setup'):
         brain.KIND = KIND                           # counted apart from the owner's own asking, and against no budget of theirs
         turns.save = lambda *args, **more: kept.append(more) or 0     # no line in anyone's history of asking
         with dryrun.layer() as ledger:
-            rows = asyncio.run(_all(asked, who, ledger, _spent(), kept))
+            rows = asyncio.run(_all(asked, who, ledger, _spent(), kept, until))
     finally:
         brain.KIND, turns.save = keep, save
     cost = max(0.0, _spent() - started)

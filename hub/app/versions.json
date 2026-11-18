@@ -1,8 +1,19 @@
 [
  {
   "sha": null,
-  "from": "c6cf88e89e84bd8212191f80ad979518f9236f9d",
+  "from": "b23b33ca141b6422a760e49f69d449a3a108d425",
   "live": null,
+  "title": "Hub checks itself more carefully after each update",
+  "changes": [
+   "After each update, the test light is read back a few seconds after it is switched and again after it is put back, so a light that an automation switches straight back no longer passes, and one that isn’t back as it was is set back.",
+   "When the AI model is busy, Hub’s checks wait and ask again, and a model that stays busy no longer counts as a failure.",
+   "The check of Ask no longer trips over a room with two or more lamps on."
+  ]
+ },
+ {
+  "sha": "b23b33ca141b6422a760e49f69d449a3a108d425",
+  "from": "c6cf88e89e84bd8212191f80ad979518f9236f9d",
+  "live": "2026-11-18T16:10:32Z",
   "title": "Dashboards in the side column",
   "changes": [
    "On a laptop or iPad, the column on the left lists Dashboards and each dashboard under Ask and House, so one click opens Pregnancy, Network or Mail."

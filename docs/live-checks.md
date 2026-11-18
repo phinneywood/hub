@@ -29,7 +29,7 @@ fails if Hub would refuse what comes back.
 | `mail.read` | read | the mail helper answers, Gmail is signed in, and the helper still reports it can't send |
 | `calendar.read` | read | the calendar week can be read |
 | `kitchen.answers` | read | the Kitchen service answers |
-| `house.light` | undo | one named light switches, and is put straight back |
+| `house.light` | undo | one named light switches and holds for 3 s, and is put back as it was |
 | `model.route` | spend | one call with invented data comes back over the pinned private route, in the right form |
 | `ask.golden` | spend | a few golden scenarios pass through the real Ask with the real model, as a dry run |
 
@@ -40,6 +40,12 @@ fails if Hub would refuse what comes back.
   `control.change` (the same allowlist, limit, record and Undo as a typed request), and undoes it at once. Home
   changes shows both rows as a test's (`via` = `check`). It never runs from 9 PM to 8 AM, never from the page's
   button, and not at all until the owner switches it on. No check ever plays anything on a speaker.
+  Each step is read back 3 s later: a light that something switches straight back (an automation fighting it) fails,
+  and a light that isn't back as it was is set back and fails. Name a light no automation or scene switches by day.
+
+A model that is rate-limited or overloaded (429, 503, 529) says nothing about Hub. `model.route`, `ask.golden` and
+`ask.setup` ask again after 20, 60 and 120 s while their time limit allows; busy every time, the result is
+"Inconclusive" and recorded as skipped, so it never stops or undoes a deploy.
 
 A sentence a check returns holds counts and times only: no names, mail or song titles. A check that breaks is
 recorded by its exception type, never its message.
