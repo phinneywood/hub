@@ -52,7 +52,8 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   list, not authorization for any effect.
 - To prepare a version: add its entry to `hub/app/versions.json` ("Adding a release" in `docs/app.md`), commit, get the owner's yes to merge to `main`, push `main` to GitHub, then run
   `/usr/bin/python3 -B ~/Developer/projects/home-ops/hub-deployer/hub_release.py stage`. Staging refuses
-  a `main` that GitHub doesn't have, so live Hub never runs ahead of it. Going live is the owner's tap on Deploy. Never write to `~/Developer/hub/releases` by hand.
+  a `main` that GitHub doesn't have, so live Hub never runs ahead of it. Going live is the owner's tap on Deploy or, once the owner has switched automatic deploys on, the deployer by itself
+  when `main`'s checks on GitHub are green (home-ops `docs/HUB-DEPLOYER.md`). Never write to `~/Developer/hub/releases` by hand.
   Model calls on personal data use only the zero-retention routes in `hub/luna.py` and `preschool/jev.py`.
   Owner-approved exception (2026-11-10): the Kitchen tab relays household messages to the separate
   kitchen service, whose assistant is Claude Code on the owner's Claude plan (it alone can drive the

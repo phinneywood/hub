@@ -43,7 +43,8 @@ export interface Release {
   running: boolean; commit: string | null; compare: string | null;
 }
 export interface Ready { sha: string; short: string; subjects: string[] }
-export interface Deploy { ready: Ready | null; asked: boolean; put_back: string | null }
+export interface Undo { short: string; previous: string; at: string; auto: boolean; until: number }
+export interface Deploy { ready: Ready | null; asked: boolean; put_back: string | null; undo: Undo | null }
 export interface Releases { versions: Release[]; running: string | null; repo: string | null; deploy: Deploy | null }
 // The Engine screen, as Hub sends it (hub/app/engine.py).
 export interface EngineRun { at: number; ok: boolean; calls: number; checks: number; cost: number }

@@ -62,7 +62,7 @@ def test_deploy_from_the_app_needs_a_signed_in_owner_and_a_checked_version(tmp_p
     monkeypatch.setenv('HUB_RELEASES_DIR', str(root))
     monkeypatch.setattr(config, 'ALLOWED_LOGINS', {'me@example.com'})
     owner = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
-    assert client.get('/app/api/versions').json()['deploy'] == {'ready': None, 'asked': False, 'put_back': None}
+    assert client.get('/app/api/versions').json()['deploy'] == {'ready': None, 'asked': False, 'put_back': None, 'undo': None}
     assert client.post('/app/api/deploy', headers=owner).status_code == 409
     (root / 'pending.json').write_text(json.dumps({'sha': 'b' * 40, 'subjects': ['Synthetic change']}))
     assert routes._update_ready() is True                              # System says a version is waiting
@@ -74,3 +74,87 @@ def test_deploy_from_the_app_needs_a_signed_in_owner_and_a_checked_version(tmp_p
     assert client.get('/app/api/versions').json()['deploy']['asked'] is True
     (root / 'last.json').write_text(json.dumps({'sha': 'b' * 40, 'status': 'rolled_back'}))
     assert client.get('/app/api/versions').json()['deploy']['put_back'] == 'bbbbbbb'
+
+
+# ---- Undo, and what Hub says about an update it made by itself (the deployer's `auto`, home-ops) ----
+
+def _deployed(root, how='auto', ago=600, previous='a' * 40):
+    """A made-up release history: `previous` ran, then 'b' * 40 went live `ago` seconds ago, `how` as the deployer says."""
+    from datetime import datetime, timezone
+    (root / previous / 'venv').mkdir(parents=True, exist_ok=True)
+    (root / ('b' * 40) / 'venv').mkdir(parents=True, exist_ok=True)
+    (root / 'queue').mkdir(exist_ok=True)
+    (root / 'current').unlink(missing_ok=True)
+    (root / 'current').symlink_to('b' * 40)
+    at = datetime.fromtimestamp(__import__('time').time() - ago, timezone.utc).isoformat()
+    (root / 'last.json').write_text(json.dumps({'sha': 'b' * 40, 'previous': previous, 'status': 'accepted', 'how': how, 'at': at}))
+    return at
+
+
+def test_undo_asks_the_deployer_for_the_version_from_before_for_a_day(tmp_path, monkeypatch):
+    root = tmp_path / 'releases'
+    monkeypatch.setenv('HUB_RELEASES_DIR', str(root))
+    at = _deployed(root)
+    owner = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
+    undo = client.get('/app/api/versions').json()['deploy']['undo']
+    assert {k: undo[k] for k in ('short', 'previous', 'at', 'auto')} == {'short': 'bbbbbbb', 'previous': 'aaaaaaa', 'at': at, 'auto': True}
+    assert 23 * 3600 < undo['until'] - __import__('time').time() < 24 * 3600
+    assert client.post('/app/api/deploy/undo', headers={'origin': 'http://testserver'}).status_code == 403
+    assert client.post('/app/api/deploy/undo', headers=owner).json()['ok'] is True
+    asked = json.loads((root / 'queue' / 'request.json').read_text())
+    assert (asked['sha'], asked['undo'], asked['by']) == ('a' * 40, True, 'me@example.com')
+    assert 'already updating' in client.post('/app/api/deploy/undo', headers=owner).json()['error']
+    (root / 'queue' / 'request.json').unlink()
+    for how, ago, previous in (('undo', 600, 'a' * 40), ('tap', 2 * 86400, 'a' * 40), ('tap', 600, 'c' * 40)):
+        _deployed(root, how, ago, previous)
+        if previous == 'c' * 40:
+            (root / previous / 'venv').rmdir()                      # the version from before is gone
+        assert release.undoable() is None, (how, ago)
+        assert client.post('/app/api/deploy/undo', headers=owner).status_code == 409
+    _deployed(root, 'tap')
+    assert release.undoable()['auto'] is False                      # an update the owner tapped can be undone too
+
+
+def test_hub_says_what_it_did_by_itself_on_today_and_on_the_phone(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from hub.engine import catalog
+    from hub.tools.house import broker
+    root = tmp_path / 'releases'
+    monkeypatch.setenv('HUB_RELEASES_DIR', str(root))
+    monkeypatch.setattr(release, 'running', lambda: 'b' * 40)
+    _deployed(root)
+    note = lambda status, error=None: (root / 'auto.json').write_text(json.dumps(  # noqa: E731
+        {'sha': 'b' * 40, 'status': status, 'error': error, 'at': datetime.now(timezone.utc).isoformat()}))
+    assert release.notice() is None and catalog.hub_release() == [] and release.tell() == 'Nothing to tell.'
+    note('started')
+    assert release.notice() is None                                 # under way: nothing to say yet
+    note('accepted')
+    title, words = release.notice()
+    assert title == 'Hub updated itself' and words.startswith(versions.entries()[0]['title'])
+    [item] = catalog.hub_release()
+    assert (item['key'], item['tone'], item['cta'], item['href']) == ('hub-release-auto', 'info', 'Undo', catalog.VERSIONS)
+    assert release.tell() == 'Shown on Today; no phone is named in Hub’s settings.'
+    sent = []
+    monkeypatch.setattr(broker, '_exchange', lambda message, timeout: sent.append(message) or [])
+    (config.DATA_DIR / 'household.json').write_text(json.dumps({'deploy': {'notify': 'mobile_app_test_phone'}}))
+    assert release.tell() == 'Told the owner on their phone and on Today.'
+    assert sent == [{'op': 'request', 'method': 'POST', 'path': '/api/services/notify/mobile_app_test_phone',
+                     'body': {'title': title, 'message': words}}]
+    _deployed(root, 'undo')
+    assert catalog.hub_release() == []                              # undone: nothing more to undo
+    note('checks_failed', 'its checks on GitHub did not all pass')
+    [item] = catalog.hub_release()
+    assert (item['tone'], item['title']) == ('warn', 'A Hub update wasn’t deployed')
+    note('refused', 'the build check failed:\nmany lines of output')
+    assert release.notice()[1] == 'the build check failed. Nothing changed.'
+    note('rolled_back', 'a check after the switch passed before and fails now: ask.golden')
+    assert release.notice()[0] == 'A Hub update didn’t hold' and catalog.hub_release() == []    # its own item, from last.json
+
+
+def test_the_deployer_starts_the_notice_as_a_module(tmp_path):
+    import os
+    import subprocess
+    import sys
+    done = subprocess.run([sys.executable, '-m', 'hub.engine.release', 'tell'], capture_output=True, text=True, timeout=60,
+                          env={**os.environ, 'HUB_DATA_DIR': str(config.DATA_DIR), 'HUB_RELEASES_DIR': str(tmp_path)})
+    assert (done.returncode, done.stdout.strip()) == (0, 'Nothing to tell.')

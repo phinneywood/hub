@@ -67,3 +67,111 @@ def request(login):
     scratch.write_text(json.dumps({'sha': ready['sha'], 'requested_at': time.time(), 'by': login}))
     os.replace(scratch, target)
     return True
+
+
+# ---- Automatic deploys and Undo (the deployer's `auto`, home-ops docs/HUB-DEPLOYER.md) ----
+
+UNDO_HOURS = 24             # the deployer honours an Undo this long after a deploy
+
+
+def _current():
+    """The version the releases folder's `current` points at, or None."""
+    try:
+        name = os.readlink(folder() / 'current')
+    except (OSError, TypeError):
+        return None
+    return name if SHA.fullmatch(name) else None
+
+
+def _age(note):
+    """Seconds since a note's `at` (an ISO time), or None."""
+    from datetime import datetime
+    try:
+        return time.time() - datetime.fromisoformat(note['at']).timestamp()
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def undoable():
+    """The last deploy while Undo can still put back the version from before it: {'sha', 'previous', 'at', 'auto'}.
+    None unless it was accepted less than UNDO_HOURS ago, is still running, wasn't itself an Undo, and the version
+    from before is still here. The deployer checks all of it again."""
+    note = _note('last.json')
+    previous = note and note.get('previous')
+    if not note or note.get('status') != 'accepted' or note.get('how') == 'undo' or _current() != note['sha'] \
+            or not isinstance(previous, str) or not SHA.fullmatch(previous) or not (folder() / previous / 'venv').is_dir():
+        return None
+    age = _age(note)
+    if age is None or not 0 <= age < UNDO_HOURS * 3600:
+        return None
+    return {'sha': note['sha'], 'previous': previous, 'at': note['at'], 'auto': note.get('how') == 'auto',
+            'until': time.time() - age + UNDO_HOURS * 3600}
+
+
+def undo(login):
+    """Ask the deployer for the version from before the last deploy. False when there is none to go back to, no deployer
+    is listening, or a request is already waiting."""
+    found = undoable()
+    if not found or not (folder() / 'queue').is_dir() or requested():
+        return False
+    target = folder() / 'queue' / 'request.json'
+    scratch = folder() / 'request.tmp'
+    scratch.write_text(json.dumps({'sha': found['previous'], 'undo': True, 'requested_at': time.time(), 'by': login}))
+    os.replace(scratch, target)
+    return True
+
+
+def tried():
+    """What the deployer's last automatic try did, within a day: {'sha', 'status', 'error', 'at'}, or None."""
+    note = _note('auto.json')
+    age = _age(note) if note else None
+    if not note or note.get('status') in (None, 'started') or age is None or age > UNDO_HOURS * 3600:
+        return None
+    error = str(note.get('error') or '').strip().splitlines()
+    return {'sha': note['sha'], 'status': str(note['status']), 'error': error[0].rstrip(':. ')[:160] if error else '', 'at': note['at']}
+
+
+def notice():
+    """What to tell the owner about the last automatic deploy: (title, words), or None when there is nothing to say."""
+    note = tried()
+    if not note:
+        return None
+    if note['status'] == 'accepted':
+        from ..app import versions
+        title = (versions.entries() or [{}])[0].get('title') or 'a new version'
+        return 'Hub updated itself', f'{title}. If something is off, Undo is on Versions for a day.'
+    if note['status'] == 'rolled_back':
+        return 'A Hub update didn’t hold', 'A check failed after the switch, so the version from before is running again.'
+    if note['status'] == 'recovery_needed':
+        return 'Hub may be down after an update', 'Going back to the version from before didn’t finish. Look at Hub.'
+    if note['status'] == 'checks_failed':
+        return 'A Hub update wasn’t deployed', 'Its checks on GitHub failed, so nothing changed.'
+    return 'A Hub update is waiting for you', (note['error'] or 'It couldn’t be staged') + '. Nothing changed.'
+
+
+def tell():
+    """Started by the deployer after an automatic deploy: the notice on the owner's phone, through Home Assistant's
+    notify to the phone named in the private settings (`"deploy": {"notify": "mobile_app_..."}`). Today shows the
+    same from the deployer's notes by itself. Returns what happened, in words for the deployer's log."""
+    said = notice()
+    if not said:
+        return 'Nothing to tell.'
+    from .. import household
+    from ..tools.house import broker
+    try:
+        phone = household.section('deploy').get('notify')
+    except ValueError:
+        phone = None
+    if not isinstance(phone, str) or not phone.startswith('mobile_app_'):
+        return 'Shown on Today; no phone is named in Hub’s settings.'
+    try:
+        broker.setup_call('notify', phone, {'title': said[0], 'message': said[1]})
+    except (ValueError, broker.HomeDown, broker.NotSent, broker.Rejected) as error:
+        return f'Shown on Today; the phone notice failed ({type(error).__name__}).'
+    return 'Told the owner on their phone and on Today.'
+
+
+if __name__ == '__main__':      # python -m hub.engine.release tell
+    if sys.argv[1:] != ['tell']:
+        sys.exit('usage: python -m hub.engine.release tell')
+    print(tell())

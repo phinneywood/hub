@@ -70,6 +70,11 @@ _ready = Path(scratch) / 'releases'
 (_ready / ('d' * 40) / 'venv').mkdir(parents=True)
 (_ready / 'queue').mkdir()
 (_ready / 'pending.json').write_text(json.dumps({'sha': 'd' * 40, 'subjects': ['Home: a made-up change, ready to deploy']}))
+# ...and a made-up update Hub made by itself an hour ago, which Undo can still put back.
+(_ready / ('f' * 40) / 'venv').mkdir(parents=True)
+(_ready / 'current').symlink_to('e' * 40)
+(_ready / 'last.json').write_text(json.dumps({'sha': 'e' * 40, 'previous': 'f' * 40, 'status': 'accepted', 'how': 'auto',
+                                              'at': time.strftime('%Y-%m-%dT%H:%M:%S+00:00', time.gmtime(time.time() - 3600))}))
 # Two made-up people: the owner, whose Google account is the bridge's main one, and a partner Hub reads no mail of yet.
 (Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'}, 'people': [
     {'name': 'Alex', 'logins': ['me@example.com'], 'accounts': ['default']}, {'name': 'Casey', 'logins': ['casey@example.com'], 'accounts': []}]}))

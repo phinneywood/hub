@@ -793,6 +793,10 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       await tap('.release.ready .btn.go');
     }
     expect(await until(() => document.querySelector(".release.ready h2")?.textContent === "Updating Hub"), "Deploy didn't say it is updating");
+    expect(await page.locator('.release.undo h2:text-is("Hub updated itself")').count() === 1, "Versions didn't offer Undo for the update Hub made by itself");
+    await tap(".release.undo .btn");
+    expect(await until(() => (document.querySelector(".release.undo .quiet")?.textContent ?? "").startsWith("Hub is already updating")),
+      "Undo during an update wasn't turned down: " + await page.locator(".release.undo").innerText());
     await page.waitForTimeout(300); await shot("7b-versions");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Versions: " + (await small()).join(", "));
     await tap(".uplink");

@@ -52,6 +52,7 @@ sets this in the private settings file (`household.json`):
 | `GET /app/api/brief` | The brief in words, as plain text, for a Shortcut or a speaker to read out: the asker's own; `?wall=1` the household's |
 | `GET /app/api/versions` | Each release of Hub, newest first, in plain words, and which one is running (see “Versions”) |
 | `POST /app/api/deploy` | Ask the deployer for the checked version waiting, from a signed-in device (see “Versions”) |
+| `POST /app/api/deploy/undo` | Ask the deployer for the version from before the last update, within a day of it (see “Versions”) |
 | `GET /app/api/activity` | What happened in the house, newest first; `kinds`, `sources` (comma lists) and `before` (a time, for more) (see “Activity”) |
 | `GET /app/api/changes`, `POST /app/api/playlist/{do}` | Everything Hub changed, and playlist taps: `make`, `skip`, `undo` (see “Changes”) |
 | `GET /app/api/engine`, `POST /app/api/engine/{do}` | The Engine screen, and its taps: `tell`, `forget`, `request-done`, `improvement-done`, `note-save`, `note-skip`, `recipe-save`, `recipe-skip`, `recipe-remove`, `trust`, `run` (see “Engine”) |
@@ -834,6 +835,15 @@ the older Engine page. Only a signed-in device can ask. The card then says Hub i
 few seconds; when a different version answers it reloads, so the new app is what opens. If the deployer put the
 earlier version back, it says so. System shows "A new version is ready" while one waits, and Today's "A new
 version of Hub is ready" opens Versions too. The older Engine page's Deploy now lands on Versions as well.
+
+**Automatic deploys and Undo** (2026-11-18). Once the owner switches it on, the deployer deploys `main` by itself when
+its checks on GitHub are green, and goes back if a check after the switch breaks (home-ops `docs/HUB-DEPLOYER.md`).
+Then it runs `python -m hub.engine.release tell` with the newest code: a notice to the owner's phone through Home
+Assistant (`notify.<phone>` named in the private settings as `"deploy": {"notify": "mobile_app_..."}`; without it,
+none). Today shows the same for a day from the deployer's `auto.json` ("Hub updated itself", with Undo, or why
+nothing went live). For a day after any update that wasn't itself an Undo, Versions shows it with **Undo**, which
+posts `/app/api/deploy/undo` and leaves a request note with `"undo": true` for the version from before; the card
+follows the restart as Deploy does. Undo waits while another request is queued.
 
 ### Adding a release
 

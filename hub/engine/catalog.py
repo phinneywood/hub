@@ -941,11 +941,12 @@ VERSIONS = '/app/#versions'  # the app's Versions screen deploys and follows the
 
 
 def hub_release():
-    """A checked version waiting for the owner, or an update that didn’t take."""
+    """A checked version waiting for the owner, an update that didn’t take, or one Hub made by itself (for a day,
+    with Undo on Versions)."""
     from . import release
     ready, last = release.pending(), release.last()
     if not ready:
-        return []
+        return _hub_auto(release)
     if last and last['sha'] == ready['sha'] and last['status'] != 'accepted' and not release.requested():
         return [today.rec('hub-release-failed', 'warn', 'The Hub update didn’t take',
                           'The version from before is running again. Nothing was lost.', href=VERSIONS, cta='Details')]
@@ -956,6 +957,20 @@ def hub_release():
     why = ready['subjects'][0] + (f' and {count - 1} more' if count > 1 else '') if count else 'Built and checked.'
     return [today.rec('hub-release', 'info', 'A new version of Hub is ready', why, href=VERSIONS, cta='Deploy',
                       action='hub.deploy')]
+
+
+def _hub_auto(release):
+    """The deployer's last automatic try, for a day: what went live, with Undo while it can still be undone, or why
+    nothing did. A version that went back is the item above, from its own note."""
+    said, tried = release.notice(), release.tried()
+    if not said or not tried or tried['status'] in ('rolled_back', 'recovery_needed'):
+        return []
+    if tried['status'] == 'accepted':
+        undo = release.undoable()
+        if not undo or undo['sha'] != tried['sha']:
+            return []
+        return [today.rec('hub-release-auto', 'info', said[0], said[1], href=VERSIONS, cta='Undo')]
+    return [today.rec('hub-release-auto', 'warn', said[0], said[1], href=VERSIONS, cta='Details')]
 
 
 SOURCES = [
