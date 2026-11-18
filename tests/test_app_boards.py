@@ -149,7 +149,7 @@ def test_each_person_arranges_their_own(household):
     assert said['ok']
     theirs = client.get('/app/api/board/pregnancy', headers=CASEY).json()
     ids = [b['id'] for b in theirs['blocks']]
-    assert ids == ['prep', 'progress', 'numbers', 'week', 'coming', 'visits', 'about']     # the rest where the board puts them
+    assert ids == ['prep', 'progress', 'numbers', 'odds', 'odds-curve', 'born', 'labour-curve', 'odds-about', 'week', 'coming', 'visits', 'about']     # the rest where the board puts them
     assert theirs['hidden'] == [{'id': 'months', 'title': 'Month by month'}]
     alex = client.get('/app/api/board/pregnancy', headers=ALEX).json()
     assert [b['id'] for b in alex['blocks']][:2] == ['progress', 'numbers'] and alex['hidden'] == []
@@ -189,7 +189,7 @@ def test_a_due_date_is_an_estimate_until_the_dating_ultrasound(household):
     found = pregnancy.picture('me@example.com', early)
     assert ', an estimate.' in found['sub'] and _block(found, 'dating')['kind'] == 'note'
     assert _block(found, 'numbers')['tiles'][1]['label'] == 'due date, estimated'
-    assert pregnancy.picture('me@example.com', ON)['blocks'][2]['id'] == 'week'       # week 15: the note has had its say
+    assert not any(b['id'] == 'dating' for b in pregnancy.picture('me@example.com', ON)['blocks'])       # week 15: the note has had its say
     assert boards.facts('pregnancy', 'me@example.com')['due_date_is'].startswith('an estimate')
     said = client.post('/app/api/board/pregnancy/set', headers=CASEY, json={'key': 'scan', 'value': 'on'}).json()
     assert said['said'] == 'Marked as the date from the dating ultrasound.' and pregnancy.scanned()
@@ -206,6 +206,27 @@ def test_the_settings_file_can_say_a_scan_set_it(household):
     assert pregnancy.scanned()
     client.post('/app/api/board/pregnancy/set', headers=ALEX, json={'key': 'scan', 'value': ''})
     assert not pregnancy.scanned()                         # the dashboard's word wins
+
+
+def test_the_chance_of_a_live_birth_and_when_babies_come(household):
+    assert pregnancy.in_words(pregnancy.live_chance(28)) == 'About 75 in 100'          # a positive test at 4 weeks
+    assert pregnancy.in_words(pregnancy.live_chance(42)) == 'About 90 in 100'          # 6 weeks
+    assert pregnancy.in_words(pregnancy.live_chance(30 * 7)) == 'More than 99 in 100'
+    chances = [pregnancy.live_chance(d) for d in range(0, 290)]
+    assert chances == sorted(chances)                                                  # it never falls as the weeks pass
+    found = pregnancy.picture('me@example.com', ON)                                    # 14 weeks 6 days
+    odds = _block(found, 'odds')
+    assert odds['big'] == 'About 99 in 100' and odds['small'].startswith('On average, for a pregnancy still going at 14 weeks, 6 days.')
+    curve = _block(found, 'odds-curve')
+    assert len(curve['segments']) == 1 and 0.29 < curve['mark']['at'] < 0.31 and curve['mark']['label'] == 'You are here'
+    born = _block(found, 'born')['rows']
+    assert [r['title'] for r in born] == ['Before Feb 11', 'Feb 11 to Feb 17', 'Feb 18 to Feb 24', 'Feb 25 to Mar 10', 'Mar 11 or later']
+    assert born[3]['right'] == '57% · 95% by then' and born[0]['right'] == '9%' and born[4]['right'] == '5%'
+    labour = _block(found, 'labour-curve')
+    assert labour['now'] == 'About 4% on the day' and labour['mark']['label'] == 'Due Mar 4'
+    assert 'Tong et al., Obstet Gynecol 2008' in _block(found, 'odds-about')['text']
+    facts = boards.facts('pregnancy', 'me@example.com')
+    assert facts['chance_of_a_live_birth_on_average'].startswith('About 99 in 100') and len(facts['when_babies_are_born']) == 5
 
 
 # ---- the network and mail boards ----

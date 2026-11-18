@@ -687,6 +687,12 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.locator('.bsettings [role="switch"][aria-label="Dated by ultrasound"]').count() === 1, "no Dated by ultrasound switch");
     await page.waitForTimeout(400); await shot("16j-board-settings");
     await page.locator('.btns .btn:text-is("Done")').click();
+    // the chance of a live birth, how it changes, and when babies are born, each with its sources
+    expect((await page.locator('[data-block="odds"] .bhero b').innerText()) === "About 99 in 100", "the chance of a live birth");
+    expect(await page.locator('[data-block="odds-curve"] .bmark').innerText() === "You are here", "the curve does not say where we are");
+    expect(await page.locator('[data-block="born"] .row').count() === 5, "when babies are born is not five stretches of dates");
+    expect((await page.locator('[data-block="odds-about"] .bnote').innerText()).includes("Tong et al."), "the numbers have no sources");
+    await page.locator('[data-block="odds"]').scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await shot("16k-board-odds");
     if (phone) {    // on a phone the bar has Dashboards: one tap lists them, one more opens one
       await tap('.tabs .tab:text-is("Dashboards")');
       expect(await saysSoon("Dashboards"), "the Dashboards tab did not open the list: " + await says());

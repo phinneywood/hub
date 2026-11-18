@@ -681,7 +681,7 @@ once the person has one, and it opens the list.
 
 | Board | Reads | Shows |
 | --- | --- | --- |
-| Pregnancy | the due date (`"pregnancy": {"due": "YYYY-MM-DD", "scan": false}` in `household.json`, or set on the board; called an estimate until a dating ultrasound sets it, the board's "Dated by ultrasound" switch or `"scan": true`) | the week, size, trimester bar, days to go, what usually comes next (US schedule of visits, screenings, vaccines), a shared getting-ready list, visit cadence, month by month |
+| Pregnancy | the due date (`"pregnancy": {"due": "YYYY-MM-DD", "scan": false}` in `household.json`, or set on the board; called an estimate until a dating ultrasound sets it, the board's "Dated by ultrasound" switch or `"scan": true`) | the week, size, trimester bar, days to go, the average chance of a live birth from here and its curve from week 4 to 40 (sources in `pregnancy.LIVE`), when babies are born by date (CDC 2023 single births) and a day-by-day bell for labour around the due date, what usually comes next (US schedule of visits, screenings, vaccines), a shared getting-ready list, visit cadence, month by month |
 | Network | the older Network page's overview (`hub/tools/network/pages.overview`), at most once a minute | up or down, speed and ping now, the day's uptime and drops, download and ping charts, what needs a look, busiest devices |
 | Mail | Hub's own sorting tables, the daily inbox size, the plan of inbox changes | counts, what needs you, the inbox over 30 days, by kind, Hub's cleanup, changes that need a check |
 | Calendar | the older Calendar page's reader (`hub/tools/calendar/read.week`, through the helper) | what is on today, the week's counts and clashes, the next seven days. Replaces that page: `/calendar` opens it |

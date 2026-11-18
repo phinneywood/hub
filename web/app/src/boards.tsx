@@ -21,6 +21,7 @@ interface Block {
   big?: string; small?: string; tone?: string; progress?: number; marks?: { at: number; label: string }[];
   tiles?: Tile[]; rows?: Row[]; items?: Check[]; sub?: string; empty?: string; text?: string; view?: string;
   segments?: string[]; start?: string; end?: string; now?: string; top?: string; bars?: { label: string; value: number; text: string }[];
+  mark?: { at: number; label: string };
 }
 interface Setting { key: string; label: string; type: "date" | "text" | "switch"; value: string }
 interface Board { ok: true; id: string; name: string; say: string; sub: string; blocks: Block[]; hidden: { id: string; title: string }[];
@@ -106,7 +107,12 @@ function RowView({ row }: { row: Row }) {
 function Rows({ block }: { block: Block }) {
   const rows = block.rows ?? [];
   if (!rows.length) return <p class="quiet-line">{block.empty ?? "Nothing here."}</p>;
-  return <div class="rows">{rows.map((row, n) => <RowView row={row} key={n} />)}</div>;
+  return (
+    <>
+      {block.sub && <p class="sub bsub">{block.sub}</p>}
+      <div class="rows">{rows.map((row, n) => <RowView row={row} key={n} />)}</div>
+    </>
+  );
 }
 
 function Checks({ block, board }: { block: Block; board: string }) {
@@ -148,9 +154,14 @@ function Line({ block }: { block: Block }) {
   return (
     <figure class="bline">
       {(block.now || block.top) && <figcaption><b>{block.now}</b><span>{block.top}</span></figcaption>}
-      <svg viewBox="0 0 720 180" preserveAspectRatio="none" role="img" aria-label={block.title}>
-        {segments.map((points, n) => <polyline points={points} key={n} vector-effect="non-scaling-stroke" />)}
-      </svg>
+      <div class="bplot">
+        <svg viewBox="0 0 720 180" preserveAspectRatio="none" role="img" aria-label={block.title + (block.mark ? `. ${block.mark.label}` : "")}>
+          {segments.map((points, n) => <polyline points={points} key={n} vector-effect="non-scaling-stroke" />)}
+        </svg>
+        {block.mark && (     // a place on the line, such as "You are here": its label stays on the side with room
+          <i class={"bmark" + (block.mark.at > 0.6 ? " left" : "")} style={{ left: `${block.mark.at * 100}%` }}><small>{block.mark.label}</small></i>
+        )}
+      </div>
       <div class="baxis"><span>{block.start}</span><span>{block.end}</span></div>
     </figure>
   );

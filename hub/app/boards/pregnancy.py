@@ -79,6 +79,82 @@ MILESTONES = [
     (TERM, TERM, 'due', 'Due date', ''),
 ]
 
+# The chance a pregnancy still going at a given week ends in a live birth, on average: (completed weeks, chance).
+# Population averages, read from published studies, never a prediction for one pregnancy:
+#   week 4 (a positive test): about a quarter of pregnancies found by a test end early (Wilcox et al., NEJM 1988);
+#   week 5: miscarriage risk from week 5 to 20 is 11 to 22 in 100 (Ammon Avalos et al., Birth Defects Res A 2012);
+#   weeks 6 to 10, after a normal visit with a heartbeat seen: 9.4, 4.2, 1.5, 0.5 and 0.7 in 100 (Tong et al.,
+#   Obstet Gynecol 2008); from week 20, stillbirth is about 6 in 1,000, and about 3 in 1,000 from week 28 (CDC, NCHS
+#   fetal death data). Weeks between two of these are drawn as a straight line.
+LIVE = [(4, .75), (5, .83), (6, .90), (7, .952), (8, .979), (9, .989), (10, .989), (12, .991), (14, .992), (20, .994),
+        (28, .997), (37, .998), (40, .999)]
+LIVE_SOURCES = ('Wilcox et al., N Engl J Med 1988; Ammon Avalos et al., Birth Defects Res A 2012; '
+                'Tong et al., Obstet Gynecol 2008; CDC/NCHS fetal death statistics')
+
+# When babies are born, single births in the US in 2023 (CDC, NCHS Health E-Stat 104): (first day, last day, share).
+# Days counted from week 1, day 1, so 259 is 37 weeks 0 days and the due date is 280.
+BORN = [(None, 258, 8.71, 'Before 37 weeks', 'Preterm'), (259, 265, 12.05, 'At 37 weeks', 'Early term'),
+        (266, 272, 17.58, 'At 38 weeks', 'Early term'), (273, 286, 56.68, 'At 39 or 40 weeks', 'Full term, around the due date'),
+        (287, None, 4.97, 'At 41 weeks or later', 'Late term')]
+BORN_SOURCE = 'CDC, NCHS Health E-Stat 104 (US single births, 2023)'
+SPREAD = 9.5        # days: labour that starts by itself, spread around the due date (about 4 in 100 on the day itself,
+                    # about 70 in 100 within ten days of it; Jukic et al., Hum Reprod 2013, and ESHRE's summary)
+
+
+def live_chance(day):
+    """The average chance of a live birth for a pregnancy still going `day` days from week 1, day 1."""
+    weeks = max(day, 0) / 7
+    if weeks <= LIVE[0][0]:
+        return LIVE[0][1]
+    for (w1, p1), (w2, p2) in zip(LIVE, LIVE[1:]):
+        if weeks <= w2:
+            return p1 + (p2 - p1) * (weeks - w1) / (w2 - w1)
+    return LIVE[-1][1]
+
+
+def in_words(chance):
+    """A chance the way a person says it: about 90 in 100, more than 99 in 100."""
+    if chance >= .995:
+        return 'More than 99 in 100'
+    return f'About {int(chance * 100 + .5)} in 100'
+
+
+def _odds_curve(day):
+    """The live-birth chance from week 4 to 40, as points in a 720 by 180 box from 70% (bottom) to 100% (top)."""
+    point = lambda w: f'{2 + 716 * (w - 4) / 36:.1f},{170 - 160 * (live_chance(w * 7) - .7) / .3:.1f}'
+    marks = [w / 2 for w in range(8, 81)]
+    return [' '.join(point(w) for w in marks)], min(max((max(day, 0) / 7 - 4) / 36, 0), 1)
+
+
+def _births(start, today):
+    """When babies are born, as rows of dates: the share each stretch has and the share born by its end."""
+    rows, by = [], 0.0
+    for first, last, share, title, what in BORN:
+        by += share
+        a = start + timedelta(days=first) if first is not None else None
+        b = start + timedelta(days=last) if last is not None else None
+        when = (f'Before {a_short(start + timedelta(days=259))}' if a is None else f'{a_short(a)} or later' if b is None
+                else f'{a_short(a)} to {a_short(b)}')
+        now = (a is None or a <= today) and (b is None or today <= b) and today >= start + timedelta(days=154)
+        rows.append({'title': when, 'sub': f'{title}. {what}.', 'right': f'{round(share)}%' + ('' if a is None or b is None else f' · {round(by)}% by then'),
+                     'tone': 'lit' if now else ''})
+    return rows
+
+
+def a_short(d):
+    return f'{d:%b} {d.day}'
+
+
+def _labour_curve(due_date):
+    """Labour that starts by itself, day by day from four weeks before the due date to two after: a bell around the
+    due date, in a 720 by 180 box. Returns the points, where the due date sits (0 to 1) and the most likely week."""
+    import math
+    days = range(-28, 15)
+    peak = 1 / (SPREAD * math.sqrt(2 * math.pi))
+    point = lambda d: f'{2 + 716 * (d + 28) / 42:.1f},{170 - 160 * math.exp(-d * d / (2 * SPREAD * SPREAD)):.1f}'
+    return [' '.join(point(d) for d in days)], 28 / 42, peak
+
+
 # Getting ready, the household's list: (key, by week, title, why). Ticks are shared by everyone who sees the board.
 PREP = [
     ('vitamins', 4, 'Take a prenatal vitamin with folic acid', 'It matters most in the first weeks.'),
@@ -265,6 +341,7 @@ def picture(login, today):
             'text': 'This due date is worked out from the cycle, so it can move by a week or so. The dating ultrasound, '
                     'usually between weeks 8 and 13, gives the date to keep: open Settings, put its date in and turn on '
                     'Dated by ultrasound.'}]),
+        *_odds_blocks(at, due_date, today, start),
         {'id': 'week', 'title': f"This week, week {at['week']}", 'kind': 'note', 'text': at['this_week']},
         {'id': 'coming', 'title': 'Coming up', 'kind': 'rows', 'rows': _coming(start, today),
          'empty': 'Nothing left on the usual schedule.'},
@@ -277,6 +354,34 @@ def picture(login, today):
                  'Your own doctor or midwife sets the real plan.'},
     ]
     return {'say': say, 'sub': sub, 'blocks': blocks, 'settings': settings}
+
+
+def _odds_blocks(at, due_date, today, start):
+    """The chance of a live birth from here, how it changes week by week, and when babies are usually born."""
+    chance = live_chance(at['day'])
+    segments, here = _odds_curve(at['day'])
+    labour, due_at, peak = _labour_curve(due_date)
+    early = at['day'] < 7 * 7
+    return [
+        {'id': 'odds', 'title': 'Chance of a live birth', 'kind': 'hero', 'big': in_words(chance),
+         'small': (f"On average, for a pregnancy still going at {_along(at).lower()}. "
+                   + ('It rises quickly once a heartbeat is seen on a scan.' if early else 'It keeps rising a little each week.')),
+         'progress': chance},
+        {'id': 'odds-curve', 'title': 'How the chance changes, week 4 to 40', 'kind': 'line', 'segments': segments, 'view': [720, 180],
+         'start': 'Week 4', 'end': 'Week 40', 'now': f'{chance * 100:.0f}%', 'top': 'From 70% at the bottom to 100% at the top',
+         'mark': {'at': here, 'label': 'You are here'}},
+        {'id': 'born', 'title': 'When babies are born', 'kind': 'rows', 'rows': _births(start, today),
+         'sub': f'US single births in 2023, by the dates for a due date of {a_short(due_date)}.'},
+        {'id': 'labour-curve', 'title': 'Labour on its own, day by day', 'kind': 'line', 'segments': labour, 'view': [720, 180],
+         'start': a_short(due_date - timedelta(days=28)), 'end': a_short(due_date + timedelta(days=14)),
+         'now': f'About {round(peak * 100)}% on the day', 'top': 'About 70% within ten days of it',
+         'mark': {'at': due_at, 'label': f'Due {a_short(due_date)}'}},
+        {'id': 'odds-about', 'title': 'About these numbers', 'kind': 'note',
+         'text': ('These are averages over many pregnancies, not a prediction for this one: age, health, history and '
+                  'what the scans show all change them, and your doctor or midwife can say more. Chance of a live birth: '
+                  f'{LIVE_SOURCES}. When babies are born: {BORN_SOURCE}. Labour on its own: a bell with a spread of '
+                  f'{SPREAD:g} days around the due date, after Jukic et al., Hum Reprod 2013.')},
+    ]
 
 
 def line(login, today):
@@ -304,6 +409,10 @@ def facts(login, today):
             'due_date_is': 'set by the dating ultrasound' if scanned() else 'an estimate from the cycle, until the dating ultrasound',
             'along': _along(at), 'week': at['week'],
             'trimester': at['trimester'], 'days_to_go': at['left'], 'size_this_week': at['size'], 'this_week': at['this_week'],
+            'chance_of_a_live_birth_on_average': f"{in_words(live_chance(at['day']))} ({live_chance(at['day']) * 100:.1f}%), "
+                                                 'an average for a pregnancy still going at this point, not a prediction',
+            'when_babies_are_born': [f"{r['title']}: {r['right']}" for r in _births(at['start'], today)],
+            'numbers_from': f'{LIVE_SOURCES}; {BORN_SOURCE}',
             'coming_up_on_the_usual_schedule': [f"{c['title']}: {c['sub']} ({c['right']})" for c in _coming(at['start'], today)],
             'getting_ready_not_done': [f"{i['title']} ({i['sub'].split('.')[0]})" for i in prep if not i['done']][:6],
             'note': 'Dates are the usual schedule worked out from the due date; the household’s doctor or midwife sets the real plan.'}
