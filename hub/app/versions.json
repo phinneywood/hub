@@ -1,8 +1,20 @@
 [
  {
   "sha": null,
-  "from": "dda3c01ec1777fa0565385947138f627e4bd4dbb",
+  "from": "3c5a6955f6dbf28845f8a2c29726f756148f430e",
   "live": null,
+  "title": "Ask, easier to read and to get around",
+  "changes": [
+   "Ask draws a model’s lists and bold words instead of showing their marks.",
+   "When Kitchen is asked two things at once, each answer lands under its own question.",
+   "Today and Kitchen are one tap from Ask’s start, the greeting has Open Today, and Return on a page’s first letters opens it.",
+   "A question about bills brings only bills, and with no bank connected Ask looks in mail for them first."
+  ]
+ },
+ {
+  "sha": "3c5a6955f6dbf28845f8a2c29726f756148f430e",
+  "from": "dda3c01ec1777fa0565385947138f627e4bd4dbb",
+  "live": "2026-11-18T23:41:47Z",
   "title": "Quiet your loudest senders, in Mail settings",
   "changes": [
    "Mail settings lets you quiet your loudest senders one at a time: how many are in the inbox and how many unread, the last few subjects, and whether a filter already skips the inbox. Nothing changes in Gmail until the plan is applied.",
