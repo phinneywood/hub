@@ -116,6 +116,8 @@ export interface Day {
   /** Whether this person's own calendar (and the note written from it) is part of their Today. */
   mine?: boolean;
   ready?: { cards: Errand[]; more: number };
+  /** One line for each dashboard this person may open (hub/app/boards/); never on the wall. */
+  boards?: { id: string; name: string; text: string; next: string; tone: string }[];
 }
 
 // Errands, as Hub sends them (hub/app/errands/picture.py). Titles, drafts and names come from mail: data to show.

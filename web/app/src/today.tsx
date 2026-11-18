@@ -1,9 +1,10 @@
 // Today, the family brief on the phone: a sentence and the weather, the line Ask's model wrote, the night, then
 // what needs you, the errands ready for a tap, the day, school, the house, tomorrow and a trip when one is near. In
 // the evening tomorrow comes up.
-import type { ComponentChildren } from "preact";
+import type { ComponentChildren, JSX } from "preact";
 import { HouseBlock, NoteLine, OvernightBlock, WeatherBlock, addToList, adding, aboutTomorrow } from "./brief";
 import { day, dayAway, tickNeed, ticked } from "./day";
+import { BoardLines } from "./boards";
 import { TodayErrands } from "./errands";
 import { Top } from "./screens";
 import { me, seen } from "./state";
@@ -107,9 +108,10 @@ function Sections({ now }: { now: Day }) {
   const first = [<Needs now={now} key="needs" />,
     now.ready && <TodayErrands cards={now.ready.cards} more={now.ready.more} key="ready" />];
   const left = later ? [...first, today, tomorrow] : [...first, today, weather];
-  const right = later
+  const right: JSX.Element[] = later
     ? [weather, <HouseBlock day={now} key="house" />, <School now={now} key="school" />, <TripBlock now={now} key="trip" />]
     : [<School now={now} key="school" />, <HouseBlock day={now} key="house" />, tomorrow, <TripBlock now={now} key="trip" />];
+  right.push(<BoardLines lines={now.boards ?? []} key="boards" />);
   return <div class="cols"><div>{left}</div><div>{right}</div></div>;
 }
 
@@ -127,7 +129,7 @@ export function Today() {
   }
   const outside = seen.value?.facts.find((fact) => fact.label === "Outside")?.value ?? "";
   const bare = !now.needs.length && !now.today.length && !now.tomorrow.length && !now.school.length && !now.trip
-    && !now.weather && !now.house?.rows.length && !now.ready?.cards.length;
+    && !now.weather && !now.house?.rows.length && !now.ready?.cards.length && !now.boards?.length;
   return (
     <div class={"wrap day" + (dayAway.value ? " offline" : "") + (bare ? " bare" : "")}>
       <Top />

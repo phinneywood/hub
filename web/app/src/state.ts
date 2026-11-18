@@ -21,7 +21,7 @@ export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
 // "home" is Ask, the screen Hub opens to; "house" is the plan of rooms; "wall" is the brief on the kitchen iPad.
 export type View = "home" | "house" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity"
-  | "errands" | "wall";
+  | "errands" | "wall" | "boards" | "board";
 
 function kept(): House | null {
   try {
@@ -47,8 +47,11 @@ export const trouble = signal<Trouble>("");   // "hub": can't reach Hub; "house"
 export const why = signal("");
 export const me = signal<Me>({ signed_in: true, initial: "", versions: { js: "", css: "" }, links: { ha: null, music: null } });
 export const sheet = signal<Sheet>(null);
-const VIEWS: View[] = ["house", "today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "errands", "wall"];
-const here = (): View => VIEWS.find((v) => location.hash === "#" + v) ?? "home";
+const VIEWS: View[] = ["house", "today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "errands", "wall", "boards"];
+// One dashboard is "#board/<id>" (hub/app/boards/): the view is "board", and which one is boardId.
+const BOARD = /^#board\/([a-z0-9-]{1,60})$/;
+const here = (): View => (BOARD.test(location.hash) ? "board" : VIEWS.find((v) => location.hash === "#" + v) ?? "home");
+export const boardId = signal(BOARD.exec(location.hash)?.[1] ?? "");
 export const view = signal<View>(here());
 export const toast = signal<Toast | null>(null);
 export const look = signal<Look>(keptLook());
@@ -77,13 +80,17 @@ effect(() => {
   sheetOpen = open;
 });
 
-export function go(where: View) {
+export function go(where: View, board = "") {
+  if (where === "board") boardId.value = board;
   view.value = where;
   sheet.value = null;
-  history.replaceState(null, "", where === "home" ? location.pathname : "#" + where);
+  history.replaceState(null, "", where === "home" ? location.pathname : where === "board" ? "#board/" + board : "#" + where);
   window.scrollTo(0, 0);
 }
-window.addEventListener("hashchange", () => (view.value = here()));
+window.addEventListener("hashchange", () => {
+  boardId.value = BOARD.exec(location.hash)?.[1] ?? boardId.value;
+  view.value = here();
+});
 
 // ---- what a person just changed, laid over the picture ----
 

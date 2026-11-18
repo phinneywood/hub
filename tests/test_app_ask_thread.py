@@ -6,7 +6,7 @@ import time
 
 from fastapi.testclient import TestClient
 
-from hub import config, luna
+from hub import config, home, luna
 from hub.app.ask import brain, thread, tools, turns
 from hub.engine import state
 from hub.golden import dryrun
@@ -74,7 +74,7 @@ def test_turns_fold_into_the_summary_on_lunas_private_route_within_limits(monkey
     assert 'request 0' in sent and 'https://example.com/x' not in sent and brain.READ_ALOUD in sent
     kept = thread.summary(ALEX)
     assert 'example.com' not in kept and '4111' not in kept and 'dinner' in kept
-    assert thread.due(ALEX) == [] and state.spent(time.strftime('%Y-%m-%d'), thread.KIND)['calls_today'] == 1
+    assert thread.due(ALEX) == [] and state.spent(home.today().isoformat(), thread.KIND)['calls_today'] == 1
     assert thread.summary(SAM) == ''
     # A person's daily calls and the shared monthly limit stop it.
     monkeypatch.setattr(thread, 'CALLS_PER_DAY', 1)

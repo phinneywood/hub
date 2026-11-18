@@ -1,8 +1,21 @@
 [
  {
   "sha": null,
-  "from": "8b55ea70730878f30dd53a00cbb20daf82636418",
+  "from": "12045ca99fa1ad1f643c525b3f8adcf1d071896f",
   "live": null,
+  "title": "Dashboards: one page each for the pregnancy, the network and mail",
+  "changes": [
+   "Dashboards: a page for each part of the household, found by typing a few letters in Ask or from System. Arrange puts the blocks in your order and hides the ones you don’t want, for you only.",
+   "Pregnancy: the week, the size, the trimester and days to go, what usually comes next (visits, screenings, vaccines) with dates, a getting-ready list you both tick, and month by month. The due date can be changed on the page.",
+   "Network: whether the internet is up, speed and ping now, the day’s drops and uptime, charts for the last day, and the busiest devices.",
+   "Mail: what needs you, the inbox over a month, what’s in it by kind, and what Hub’s cleanup has done.",
+   "Ask answers “how far along are we?” or “is the internet down?” with the dashboard under the answer, and Today ends with a line for each dashboard."
+  ]
+ },
+ {
+  "sha": "12045ca99fa1ad1f643c525b3f8adcf1d071896f",
+  "from": "8b55ea70730878f30dd53a00cbb20daf82636418",
+  "live": "2026-11-17T23:52:52Z",
   "title": "Ask reads your own mail, and the music sheet shows every music in the house",
   "changes": [
    "Ask can search your own mail and read an email it found: ask “did the plumber write back?”, and the emails show under the answer, each with Open to go to it in Gmail. “Open the first one” reads it. Nothing changes your mail, and nobody else’s mail is searched.",

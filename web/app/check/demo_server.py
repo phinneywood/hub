@@ -219,6 +219,53 @@ def a_habit():
 
 a_habit()
 
+# Dashboards (hub/app/boards/): a made-up due date 176 days after the demo's day (week 15), a made-up network read
+# from a stand-in for the older Network page's overview, and a month of the made-up inbox's size.
+from datetime import timedelta  # noqa: E402
+
+from hub.app.boards import network as network_board  # noqa: E402
+
+_house = json.loads((Path(scratch) / 'household.json').read_text())
+_house['pregnancy'] = {'due': (EVENING.date() + timedelta(days=176)).isoformat()}
+(Path(scratch) / 'household.json').write_text(json.dumps(_house))
+
+
+def _wave(points, base, swing, spike=None):
+    rows = []
+    for n in range(points):
+        value = base + swing * ((n * 37) % 11) / 10 + (swing * 4 if spike and spike[0] <= n < spike[1] else 0)
+        rows.append(f'{2 + 716 * n / (points - 1):.1f},{176 - 168 * value / (base + swing * 5):.1f}')
+    return [' '.join(rows)]
+
+
+MADE_UP_NETWORK = {
+    'configured': True, 'connected': True, 'headline': 'Internet is up', 'tone': 'ok', 'facts': '14 ms ping · router link up',
+    'summary_label': 'External reachability', 'updated': '6:10 pm', 'node_count': 3, 'client_count': 26, 'online_count': 23,
+    'summary': {'reliability': 99.93, 'outages': 1, 'downtime_text': '1 min', 'incidents': []},
+    'incidents': [{'label': 'Reported offline', 'when': 'Today 3:12 am', 'duration': '1 min', 'ongoing': False}],
+    'device_incidents': [{'source': 'Upstairs mesh point', 'label': 'Reported offline', 'when': 'Today 3:12 am', 'duration': '1 min',
+                          'url': '/network'}],
+    'attention': [],
+    'cards': [{'title': 'Download traffic', 'current': '38.4 Mbit/s', 'graph': {'segments': _wave(96, 20, 30, (70, 78)), 'max': 210,
+                                                                           'unit': 'Mbit/s', 'start_label': 'Yesterday 6:10 pm', 'end_label': 'Today 6:10 pm'}},
+              {'title': 'Upload traffic', 'current': '4.2 Mbit/s', 'graph': {}},
+              {'title': 'External latency', 'current': '14.0 ms', 'graph': {'segments': _wave(96, 12, 4), 'max': 31, 'unit': 'ms',
+                                                                        'start_label': 'Yesterday 6:10 pm', 'end_label': 'Today 6:10 pm'}},
+              {'title': 'External packet loss', 'current': '0.0 %', 'graph': {}}],
+    'top': [{'name': 'Living room TV', 'download_text': '24.1 Mbit/s', 'upload_text': '0.8 Mbit/s'},
+            {'name': 'Work laptop', 'download_text': '9.6 Mbit/s', 'upload_text': '3.1 Mbit/s'},
+            {'name': 'Kitchen speaker', 'download_text': '0.4 Mbit/s', 'upload_text': '0.1 Mbit/s'}],
+}
+patch.setattr(network_board, 'read', lambda: MADE_UP_NETWORK)
+from hub.app import boards  # noqa: E402
+
+for _done in ('vitamins', 'provider', 'insurance', 'flu', 'tell'):          # the first trimester's list, done
+    boards.tick('me@example.com', 'pregnancy', _done, True)
+with store.db() as _conn:
+    for _n in range(31):
+        _conn.execute('insert or replace into inbox_history(day, total, unread) values(?,?,?)',
+                      ((EVENING.date() - timedelta(days=30 - _n)).isoformat(), 4200 - _n * 38 + (_n % 4) * 25, 120))
+
 
 # For the browser check only: put the made-up house back as it started, make it stop answering, or take Ask
 # away as on a Hub where it isn't set up yet.

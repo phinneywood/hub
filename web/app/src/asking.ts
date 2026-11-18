@@ -6,7 +6,7 @@ import { say } from "./state";
 // What the app draws under an answer. `setup`: changes to how the house is set up; `confirm`: one that waits for a tap.
 export interface Card { kind: string; rooms?: string[]; speakers?: string[]; batch?: string; after?: number; id?: number; note?: string;
   lines?: string[]; missed?: string[]; title?: string; why?: string; do?: string; items?: number[]; all?: boolean; cart?: boolean; since?: number;
-  ids?: number[]; show?: string[]; things?: Thing[]; hint?: string; rows?: MailRow[]; opened?: number[] }
+  ids?: number[]; show?: string[]; things?: Thing[]; hint?: string; rows?: MailRow[]; opened?: number[]; board?: string }
 // One email a mail search found (hub/app/ask/mailbox.py): its number for "open the second one", and where it opens.
 export interface MailRow { n: number; who: string; subject: string; when: string; href: string; off: boolean }
 // One line of Hub's morning message (hub/app/ask/morning.py): its number, the sentence, and the one button it has.
