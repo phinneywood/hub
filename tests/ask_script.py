@@ -379,6 +379,8 @@ async def scripted(messages, info):
             yield told if asks else 'Hub couldn’t do that. ' + told
     elif setup:
         yield setup
+    elif re.search(r'\bbills?\b', words) and not back:
+        yield call('errands', show='ready', about='bills')
     elif ERRANDS.search(words):
         yield call('errands', show='ready')
     elif COOKING.search(words):
