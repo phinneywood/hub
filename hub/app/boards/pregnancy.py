@@ -7,6 +7,9 @@ is read from the private settings file,
     "pregnancy": {"due": "YYYY-MM-DD"}
 
 and can be changed on the dashboard itself (after a dating scan, say), which keeps the new one in Hub's database.
+Until a dating ultrasound sets it, a due date is an estimate (from the last period or from ovulation), and the page
+says so; the dashboard's "Dated by ultrasound" switch (or `"scan": true` in the settings file) marks it as the one
+to keep.
 
 What it says about tests and visits is the usual schedule in the US (ACOG and CDC guidance), written as what is
 usual, not as advice: the household's own doctor or midwife decides. It is for the household's members (the
@@ -119,6 +122,17 @@ def due():
         return _household_due()
 
 
+def scanned():
+    """Whether a dating ultrasound set the due date; until then it is an estimate."""
+    kept = setting(ID, 'scan')
+    if kept is not None:
+        return kept == 'on'
+    try:
+        return household.section('pregnancy').get('scan') is True
+    except (OSError, ValueError):
+        return False
+
+
 def sees(login):
     """The household's members, on their own devices, once a due date is known or the settings file names one."""
     if people.who(login) is None:
@@ -222,7 +236,9 @@ def _visits(start, today):
 
 def picture(login, today):
     due_date = due()
-    settings = [{'key': 'due', 'label': 'Due date', 'type': 'date', 'value': due_date.isoformat() if due_date else ''}]
+    scan = scanned()
+    settings = [{'key': 'due', 'label': 'Due date', 'type': 'date', 'value': due_date.isoformat() if due_date else ''},
+                {'key': 'scan', 'label': 'Dated by ultrasound', 'type': 'switch', 'value': 'on' if scan else ''}]
     if due_date is None:
         return {'say': 'Set the due date', 'sub': 'Everything here is worked out from it.', 'settings': settings,
                 'blocks': [{'id': 'how', 'title': 'How it works', 'kind': 'note',
@@ -231,7 +247,7 @@ def picture(login, today):
     start = at['start']
     if at['left'] >= 0:
         say = f"Week {at['week']}" + (f": about the size of {at['size']}" if at['size'] else '')
-        sub = f"Due {_long(due_date)}. " + ('Today.' if at['left'] == 0 else f"{at['left']} day{'s' * (at['left'] != 1)} to go.")
+        sub = f"Due {_long(due_date)}{'' if scan else ', an estimate'}. " + ('Today.' if at['left'] == 0 else f"{at['left']} day{'s' * (at['left'] != 1)} to go.")
     else:
         say, sub = 'Past the due date', f"Due {_long(due_date)}, {-at['left']} day{'s' * (at['left'] != -1)} ago."
     next_tri = start + timedelta(days=T2 if at['trimester'] == 1 else T3) if at['trimester'] < 3 else None
@@ -242,9 +258,13 @@ def picture(login, today):
          'progress': min(max(at['day'], 0) / TERM, 1), 'marks': [{'at': T2 / TERM, 'label': '2nd'}, {'at': T3 / TERM, 'label': '3rd'}]},
         {'id': 'numbers', 'title': 'In numbers', 'kind': 'tiles', 'tiles': [
             {'value': str(max(at['left'], 0)), 'label': 'days to go'},
-            {'value': _short(due_date), 'label': 'due date'},
+            {'value': _short(due_date), 'label': 'due date' if scan else 'due date, estimated'},
             {'value': f"{at['trimester']}", 'label': f"trimester · next {_short(next_tri)}" if next_tri else 'trimester, the last'},
             {'value': f"{min(round(100 * max(at['day'], 0) / TERM), 100)}%", 'label': 'of the way'}]},
+        *([] if scan or at['week'] > 14 else [{'id': 'dating', 'title': 'An estimated due date', 'kind': 'note',
+            'text': 'This due date is worked out from the cycle, so it can move by a week or so. The dating ultrasound, '
+                    'usually between weeks 8 and 13, gives the date to keep: open Settings, put its date in and turn on '
+                    'Dated by ultrasound.'}]),
         {'id': 'week', 'title': f"This week, week {at['week']}", 'kind': 'note', 'text': at['this_week']},
         {'id': 'coming', 'title': 'Coming up', 'kind': 'rows', 'rows': _coming(start, today),
          'empty': 'Nothing left on the usual schedule.'},
@@ -280,7 +300,9 @@ def facts(login, today):
         return {'note': 'No due date is set on the pregnancy dashboard yet.'}
     at = where(due_date, today)
     prep = _prep(at['start'], today, at)
-    return {'today': today.isoformat(), 'due_date': due_date.isoformat(), 'along': _along(at), 'week': at['week'],
+    return {'today': today.isoformat(), 'due_date': due_date.isoformat(),
+            'due_date_is': 'set by the dating ultrasound' if scanned() else 'an estimate from the cycle, until the dating ultrasound',
+            'along': _along(at), 'week': at['week'],
             'trimester': at['trimester'], 'days_to_go': at['left'], 'size_this_week': at['size'], 'this_week': at['this_week'],
             'coming_up_on_the_usual_schedule': [f"{c['title']}: {c['sub']} ({c['right']})" for c in _coming(at['start'], today)],
             'getting_ready_not_done': [f"{i['title']} ({i['sub'].split('.')[0]})" for i in prep if not i['done']][:6],
@@ -288,7 +310,10 @@ def facts(login, today):
 
 
 def set_value(key, value):
-    """The due date, from the dashboard: within the next ten months, or empty to go back to the settings file's."""
+    """The due date, from the dashboard: within the next ten months, or empty to go back to the settings file's.
+    `scan`: whether a dating ultrasound set it."""
+    if key == 'scan':
+        return ('on', 'Marked as the date from the dating ultrasound.') if value else ('off', 'Marked as an estimate.')
     if key != 'due':
         raise Refused('Hub couldn’t read that request.')
     if not value:
