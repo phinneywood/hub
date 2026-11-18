@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "8064dea9fbafa53fe31d7ff37fa51ba567f1e77a",
+  "from": "1c4579c07cbe4903b5a421e890aa0f15a852353e",
   "live": null,
+  "title": "Dashboards on the phone",
+  "changes": [
+   "On a phone, the bar at the bottom now has Dashboards beside Ask and House: one tap lists them, one more opens one."
+  ]
+ },
+ {
+  "sha": "1c4579c07cbe4903b5a421e890aa0f15a852353e",
+  "from": "8064dea9fbafa53fe31d7ff37fa51ba567f1e77a",
+  "live": "2026-11-18T19:36:39Z",
   "title": "Money, read and never moved",
   "changes": [
    "Money is a dashboard: the month against the budget, spending by category, bills and paydays, goals, accounts and net worth.",
