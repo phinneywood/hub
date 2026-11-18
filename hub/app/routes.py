@@ -316,6 +316,22 @@ def deploy(request: Request):
     return {'ok': True, 'said': 'Updating. This takes about a minute.'}
 
 
+@router.post('/api/deploy/undo')
+def deploy_undo(request: Request):
+    """Ask the deployer for the version from before the last deploy, within a day of it. A signed-in device only."""
+    from .. import store
+    from ..engine import release
+    login = _login(request)
+    if login is None:
+        return _refuse('Undo from your phone or laptop.', 403)
+    if release.requested():
+        return _refuse('Hub is already updating. Undo once it is done.')
+    if not release.undo(login):
+        return _refuse('There’s no recent update to undo.')
+    store.log('engine_deploy', 'undo')
+    return {'ok': True, 'said': 'Going back. This takes about a minute.'}
+
+
 # ---- Engine (hub/app/engine.py): what the owner asked for, what Hub may do, what it spent ----
 
 @router.get('/api/engine')

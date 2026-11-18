@@ -788,6 +788,14 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap('.row:has-text("A new version is ready")');
     expect(await saysSoon("Versions"), "Versions: " + await says());
     expect(await until(() => document.querySelectorAll(".release").length > 2), "Versions listed no releases");
+    // A made-up update Hub made by itself an hour ago: Undo, until a request (this one, or an earlier run's) is queued.
+    expect(await page.locator('.release.undo h2:text-is("Hub updated itself")').count() === 1, "Versions didn't offer Undo for the update Hub made by itself");
+    if (await page.locator(".release.undo .btn").count()) {
+      await tap(".release.undo .btn");
+      expect(await until(() => document.querySelector(".release.undo h2")?.textContent === "Going back"), "Undo didn't say it is going back");
+    } else {
+      expect((await page.textContent(".release.undo .quiet")).startsWith("Hub is updating"), "Undo was offered while an update is under way");
+    }
     if (await page.locator('.release.ready .btn.go').count()) {
       await page.waitForTimeout(300); await shot("7b-deploy-ready");
       await tap('.release.ready .btn.go');

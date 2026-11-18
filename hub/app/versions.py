@@ -56,8 +56,11 @@ def deploy():
         return None
     ready = release.pending()
     last = release.last()
+    undo = release.undoable()
     return {
         'ready': {**ready, 'short': ready['sha'][:7]} if ready else None,
         'asked': release.requested(),
         'put_back': last['sha'][:7] if last and last['status'] != 'accepted' else None,
+        'undo': {'short': undo['sha'][:7], 'previous': undo['previous'][:7], 'at': undo['at'], 'auto': undo['auto'],
+                 'until': undo['until']} if undo else None,
     }

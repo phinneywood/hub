@@ -1,8 +1,19 @@
 [
  {
   "sha": null,
-  "from": "b23b33ca141b6422a760e49f69d449a3a108d425",
+  "from": "c5a42a88dc02114871fc2efcadd3acc2dca93023",
   "live": null,
+  "title": "Hub can update itself, and Undo puts the last update back",
+  "changes": [
+   "Once switched on, Hub puts a new version live by itself when its checks pass, goes back by itself if a check fails after the switch, and tells you on your phone.",
+   "For a day after any update, Versions shows it with Undo, which puts the version from before back.",
+   "Today says when Hub updated itself, or why an update didn’t go live."
+  ]
+ },
+ {
+  "sha": "c5a42a88dc02114871fc2efcadd3acc2dca93023",
+  "from": "b23b33ca141b6422a760e49f69d449a3a108d425",
+  "live": "2026-11-18T16:39:42Z",
   "title": "Hub checks itself more carefully after each update",
   "changes": [
    "After each update, the test light is read back a few seconds after it is switched and again after it is put back, so a light that an automation switches straight back no longer passes, and one that isn’t back as it was is set back.",
