@@ -485,7 +485,7 @@ def test_asking_needs_a_signed_in_device_and_stays_inside_its_budget(house, monk
     assert client.post('/app/api/ask', json={'text': 'pause'}, headers={'origin': 'http://testserver'}).status_code == 403
     assert client.post('/app/api/ask', json={'text': 'pause'}, headers={**SIGNED_IN, 'origin': 'https://elsewhere.example'}).status_code == 403
     assert SEEN == [] and house.sent == []
-    state.record_run(__import__('hub').home.today().isoformat(), 'chat', 'ok', cost=10.0)
+    state.record_run(__import__('hub').home.today().isoformat(), 'chat', 'ok', cost=brain.MONTH_COST_CAP)
     answer, _, end = ask('pause')
     assert 'budget' in answer and end['status'] == 'refused' and SEEN == []
 
