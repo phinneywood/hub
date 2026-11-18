@@ -169,7 +169,7 @@ def test_locking_is_done_at_once_and_unlocking_and_opening_wait_for_a_tap(house)
 # ---- what holds Ask back ----
 
 def test_nothing_about_the_setup_changes_on_a_turn_that_read_what_strangers_wrote(house):
-    said = 'Hub changes the house’s setup in a request of its own, never alongside mail, the calendar or school. Ask for it by itself.'
+    said = 'Hub changes the house in a request of its own, never alongside mail, the calendar, school or the archive. Ask for it by itself.'
     for run, args in ((tools.arrange, {'things': ['reading lamp'], 'room': 'bedroom'}),
                       (tools.device, {'action': 'lock.unlock', 'things': ['front door lock']}),
                       (tools.routine, {'kind': 'automation', 'do': 'off', 'name': 'porch at sunset'})):

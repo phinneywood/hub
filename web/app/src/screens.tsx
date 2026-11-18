@@ -240,7 +240,7 @@ export function Rail() {
       <Tabs page={PAGES[view.value] !== "System" && PAGES[view.value] !== "Dashboards"} />
       <RailBoards />
       <div class="foot">
-        <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" || view.value === "changes" || view.value === "activity" || view.value === "health" ? " on" : "") + (careCalls() ? " care" : "")} onClick={() => go("system")}>System</button>
+        <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" || view.value === "changes" || view.value === "activity" || view.value === "health" || view.value === "archive" ? " on" : "") + (careCalls() ? " care" : "")} onClick={() => go("system")}>System</button>
         <p class="ok">{fine ? "The house is answering." : trouble.value === "hub" ? "Can’t reach Hub." : "The house isn’t answering."}</p>
       </div>
     </nav>
@@ -274,6 +274,7 @@ export function System() {
           <button type="button" class={"row free" + (careCalls() ? " lit care" : "")} onClick={() => go("health")}><div class="row-main"><b>House health</b><span>{careWords()}</span></div></button>
           {me.value.update && <button type="button" class="row free lit" onClick={() => go("versions")}><div class="row-main"><b>A new version is ready</b><span>Open it to deploy</span></div></button>}
           <button type="button" class="row free" onClick={() => go("boards")}><div class="row-main"><b>Dashboards</b><span>A page for each part of the household, arranged your way</span></div></button>
+          <button type="button" class="row free" onClick={() => go("archive")}><div class="row-main"><b>Archive</b><span>Photos, documents, mail and chats, and each month’s best photos</span></div></button>
           <button type="button" class="row free" onClick={() => go("activity")}><div class="row-main"><b>Activity</b><span>What happened in the house, from Home Assistant, Apple Home and Hub</span></div></button>
           <a class="row free" href="#wall"><div class="row-main"><b>The wall</b><span>Today for the kitchen iPad, with a clock that dims at night. Open it there and add it to the Home Screen</span></div></a>
           {links.ha && <a class="row free" href={links.ha}><div class="row-main"><b>Home Assistant</b><span>Devices, rooms and automations</span></div></a>}

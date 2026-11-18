@@ -3,12 +3,13 @@
 import { signal } from "@preact/signals";
 import { say } from "./state";
 
-// What the app draws under an answer. `setup`: changes to how the house is set up; `confirm`: one that waits for a tap.
+// What the app draws under an answer. `setup`: changes to how the house is set up; `confirm`: one that waits for a tap;
+// `photos` and `found`: what a search of the archive found (`items`: photos, or the lines to open).
 export interface Card { kind: string; rooms?: string[]; speakers?: string[]; batch?: string; after?: number; id?: number; note?: string;
-  lines?: string[]; missed?: string[]; title?: string; why?: string; do?: string; items?: number[]; all?: boolean; cart?: boolean; since?: number;
+  lines?: string[]; missed?: string[]; title?: string; why?: string; do?: string; items?: unknown[]; all?: boolean; cart?: boolean; since?: number;
   ids?: number[]; show?: string[]; things?: Thing[]; hint?: string; rows?: MailRow[]; opened?: number[]; board?: string;
   target?: string; button?: string; drill?: string;
-  path?: string }
+  path?: string; count?: number; search?: string; month?: string; years?: unknown[] }
 // One email a mail search found (hub/app/ask/mailbox.py): its number for "open the second one", and where it opens.
 export interface MailRow { n: number; who: string; subject: string; when: string; href: string; off: boolean }
 // One line of Hub's morning message (hub/app/ask/morning.py): its number, the sentence, and the one button it has.
@@ -28,7 +29,8 @@ const DOING: Record<string, string> = { lights: "Switching the lights", scene: "
   kitchen: "Asking Kitchen", groceries: "Working the list", look_up: "Looking", mail_search: "Searching your mail", mail_read: "Reading the email", mail_change: "Getting the card ready", errands: "Looking at your errands", remember: "Noting that", find: "Looking around the house", details: "Reading it",
   arrange: "Moving things", rooms: "Changing the rooms", scene_setup: "Changing the scene", routine: "Writing it into Home Assistant",
   device: "Working on it", setting: "Changing the settings", integration: "Reloading it", dashboard: "Making the dashboard",
-  house_health: "Reading House health", caretaker: "Asking the caretaker" };
+  house_health: "Reading House health", caretaker: "Asking the caretaker",
+  search: "Searching the archive", read: "Reading it", archive: "Opening the archive" };
 
 export const asked = signal("");                 // what is in the field
 export const talk = signal<Turn[]>([]);          // the one conversation: what was read back from Hub, then this sitting's

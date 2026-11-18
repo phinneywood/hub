@@ -3,7 +3,7 @@
 import { computed, effect, signal } from "@preact/signals";
 import * as api from "./api";
 import type { Card } from "./asking";
-import type { Down, House, Me, Pick, Room, Said, Scene, Speaker } from "./types";
+import type { ArchiveItem, ArchiveSource, Down, House, Me, Pick, Room, Said, Scene, Speaker } from "./types";
 import { spoken } from "./words";
 
 const KEEP = "hub.house";         // the last picture, so the app opens on something at once
@@ -16,12 +16,14 @@ const SILENCE = 12000;            // Hub sends a beat every 5 s; this long witho
 
 export type Look = "auto" | "dusk" | "day";
 export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "change"; speaker: string } | { kind: "keep" }
+  | { kind: "found"; id: string; source: ArchiveSource; page?: number | null; title?: string }
+  | { kind: "viewer"; photos: ArchiveItem[]; at: number }
   | { kind: "item"; id: number } | { kind: "card"; card: Card } | { kind: "errand"; id: number; way?: number } | null;
 export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
 // "home" is Ask, the screen Hub opens to; "house" is the plan of rooms; "wall" is the brief on the kitchen iPad.
 export type View = "home" | "house" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity"
-  | "errands" | "wall" | "boards" | "board" | "health";
+  | "errands" | "wall" | "boards" | "board" | "health" | "archive";
 
 function kept(): House | null {
   try {
@@ -47,12 +49,15 @@ export const trouble = signal<Trouble>("");   // "hub": can't reach Hub; "house"
 export const why = signal("");
 export const me = signal<Me>({ signed_in: true, initial: "", versions: { js: "", css: "" }, links: { ha: null, music: null } });
 export const sheet = signal<Sheet>(null);
-const VIEWS: View[] = ["house", "today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "errands", "wall", "boards", "health"];
+const VIEWS: View[] = ["house", "today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "errands", "wall", "boards", "health", "archive"];
 // One dashboard is "#board/<id>" (hub/app/boards/): the view is "board", and which one is boardId.
 const BOARD = /^#board\/([a-z0-9-]{1,60})$/;
-const here = (): View => (BOARD.test(location.hash) ? "board" : VIEWS.find((v) => location.hash === "#" + v) ?? "home");
+const hashed = () => (location.hash === "#photos" ? "#archive" : location.hash.split("?")[0]);     // Photos is part of the Archive now
+const here = (): View => (BOARD.test(location.hash) ? "board" : VIEWS.find((v) => hashed() === "#" + v) ?? "home");
+const searched = () => (location.hash.startsWith("#archive?") ? new URLSearchParams(location.hash.slice(9)).get("q") ?? "" : "");
 export const boardId = signal(BOARD.exec(location.hash)?.[1] ?? "");
 export const view = signal<View>(here());
+export const archiveQuery = signal(searched());     // what the Archive is searching for; in the address, so it can be opened again
 export const toast = signal<Toast | null>(null);
 export const look = signal<Look>(keptLook());
 export const picks = signal<Pick[] | null>(null);
@@ -84,6 +89,7 @@ export function go(where: View, board = "") {
   if (where === "board") boardId.value = board;
   view.value = where;
   sheet.value = null;
+  if (where === "archive") archiveQuery.value = "";
   history.replaceState(null, "", where === "home" ? location.pathname : where === "board" ? "#board/" + board : "#" + where);
   window.scrollTo(0, 0);
   if (where === "system" || where === "today" || where === "health") void lookAtCare();     // the caretaker's count, fresh
@@ -91,7 +97,17 @@ export function go(where: View, board = "") {
 window.addEventListener("hashchange", () => {
   boardId.value = BOARD.exec(location.hash)?.[1] ?? boardId.value;
   view.value = here();
+  archiveQuery.value = searched();
 });
+
+/** The Archive, searching for `q`: from Ask's cards ("See all"), the phone's search button, or a search typed there. */
+export function openArchive(q = "") {
+  view.value = "archive";
+  sheet.value = null;
+  archiveQuery.value = q.trim();
+  history.replaceState(null, "", "#archive" + (q.trim() ? "?" + new URLSearchParams({ q: q.trim() }).toString() : ""));
+  window.scrollTo(0, 0);
+}
 
 // ---- what a person just changed, laid over the picture ----
 

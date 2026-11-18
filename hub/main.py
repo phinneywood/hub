@@ -62,6 +62,8 @@ def startup():
     activity.start()    # reads Home Assistant's logbook and Apple Home's events every five minutes
     from .app.money import sync as money
     money.start()       # reads the banks members connected, twice a day (hub/app/money/sync.py)
+    from .app import archive
+    archive.start()     # keeps the calendar history for the Archive: once back as far as it goes, then hourly
 
 
 @app.get("/readyz")

@@ -159,6 +159,10 @@ list, one tap with Undo). Its line in “Needs you” counts errands only; Ask r
 - 2026-11-16: the family brief (docs/app.md, “Today”) reuses Ask's approval: its note is written on Ask's route
   from what the wall shows (the weather, the calendar's titles and times, the class guide's dates, the locks and
   doors, the household's need titles), never mail or Kitchen's list, and `household.json` can switch it off.
+- 2026-11-16: Ask in the app may search the family archive (docs/app.md, “Archive”). Its model is given mail and
+  calendar results as above, and the passages of documents and ChatGPT history that match what was asked, with
+  card, account and ID-like numbers masked; the owner can switch either off on the Archive screen. Nothing about a
+  photo reaches any model. A request that read any of it changes nothing in the house.
 - Senders with AI switched off are never read for a model.
 - Agents build and test with made-up data. Real mail stays out of coding sessions.
 - Deploying, restarting, new schedules, pushing and merging to main need the owner's yes each time.

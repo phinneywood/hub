@@ -4,7 +4,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { health, healthAsk, post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, loadOlder, older, stop, talk } from "./asking";
 import type { Card, MailRow, Thing, Turn } from "./asking";
+import { FoundCard, PhotoCard, Years } from "./archive";
+import type { FoundLine } from "./archive";
 import { BoardCard, boards } from "./boards";
+import { BestOfMonth } from "./photos";
 import { ErrandsCard } from "./errands";
 import { DrillProgress } from "./health";
 import { GroceriesCard, KitchenReply } from "./kitchen";
@@ -13,7 +16,7 @@ import { RoomCell, spans } from "./screens";
 import { inApp } from "./today";
 import { dragVolume, go, lookAtCare, loadPicks, picks, playPick, runScene, say, seen, setVolume, switchRoom, undo, undone } from "./state";
 import type { View } from "./state";
-import type { CareDrill, House, Room } from "./types";
+import type { ArchiveItem, CareDrill, House, Room } from "./types";
 import { Icon, SheetFrame, Slider, Switch } from "./ui";
 
 
@@ -253,7 +256,7 @@ function HealthCard({ card }: { card: Card }) {
   );
 }
 
-function CardView({ card, now }: { card: Card; now: House }) {
+function CardView({ card, now, said = "" }: { card: Card; now: House; said?: string }) {
   if (card.kind === "morning" && card.things) return <MorningCard things={card.things} hint={card.hint ?? ""} />;
   if (card.kind === "confirm" && card.id !== undefined) return <ConfirmCard card={card} />;
   if (card.kind === "care") return <CareCard card={card} />;
@@ -286,12 +289,18 @@ function CardView({ card, now }: { card: Card; now: House }) {
     ) : null;
   }
   if (card.kind === "kitchen" && card.after !== undefined) return <KitchenReply after={card.after} />;
+  if (card.kind === "photos") {       // Hub's sentence heads the card only where the answer above doesn't already say it
+    return <PhotoCard title={card.title && said.includes(card.title) ? undefined : card.title} items={(card.items ?? []) as ArchiveItem[]} search={card.search} />;
+  }
+  if (card.kind === "found") return <FoundCard items={(card.items ?? []) as FoundLine[]} count={card.count} search={card.search} />;
+  if (card.kind === "best") return <BestOfMonth start={card.month} />;
+  if (card.kind === "onthisday") return <div class="acard"><Years years={(card.years ?? []) as { year: number; items: ArchiveItem[] }[]} /></div>;
   if (card.kind === "day") return <DayRows show={card.show ?? []} />;
-  if (card.kind === "groceries") return <GroceriesCard ids={card.items} all={card.all} cart={card.cart} since={card.since} />;
+  if (card.kind === "groceries") return <GroceriesCard ids={card.items as number[]} all={card.all} cart={card.cart} since={card.since} />;
   if (card.kind === "errands" && card.ids) return <ErrandsCard ids={card.ids} />;
   if (card.kind === "board" && card.board) return <BoardCard id={card.board} />;
   if (card.kind === "money") return <BoardCard id="money" fresh />;
-  if (card.kind.startsWith("career")) return <BoardCard id="career" fresh />;     // the desk, read again after a note, tick or job      // what a money answer or change touched, read again
+  if (card.kind.startsWith("career")) return <BoardCard id="career" fresh />;     // the desk, read again after a note, tick or job
   if (card.kind === "mail" && card.rows) return <MailRows rows={card.rows} opened={card.opened ?? []} />;
   if (card.kind === "memory" && card.id !== undefined) {
     const id = card.id;
@@ -355,7 +364,7 @@ function TurnView({ turn, now, open, onOpen }: { turn: Turn; now: House; open: b
         : <div class="hub">{shown ? <p class={"answer" + (shown.length > 160 ? " long" : "")}>{shown}</p>
           : <span class="dots" role="status" aria-label="Hub is working"><i /><i /><i /></span>}</div>}
       {turn.busy && turn.doing && <p class="took">{turn.doing}</p>}
-      {turn.cards.map((card, n) => <CardView card={card} now={now} key={n} />)}
+      {turn.cards.map((card, n) => <CardView card={card} now={now} said={turn.answer} key={n} />)}
       {!turn.busy && batch && (back
         ? <p class="took"><span>Put back as it was</span></p>
         : <p class="took">{took && <span>{took}</span>}<button type="button" onClick={() => void undo(batch)}>Undo</button></p>)}

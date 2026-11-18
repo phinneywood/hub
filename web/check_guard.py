@@ -10,7 +10,8 @@ import socket
 LOCAL = ('127.0.0.1', '::1', 'localhost')
 
 
-def apply(patch):
+def apply(patch, sockets=()):
+    """`sockets`: paths of the demo's own stand-in services (its made-up archive), the only sockets it may reach."""
     from hub import bridge, model_key
     from preschool.support import luna as preschool_luna
     patch.setattr(model_key, '_keychain', lambda service: None)
@@ -20,11 +21,12 @@ def apply(patch):
     patch.setattr(preschool_luna, 'key', lambda: None)
     patch.setattr(bridge, 'health', lambda: False)
     connect = socket.socket.connect
+    allowed = {str(s) for s in sockets}
 
     def local_only(sock, address):
         if isinstance(address, tuple) and address[0] not in LOCAL:
             raise OSError('The demo server reaches no other machine.')
-        if isinstance(address, (str, bytes)):
+        if isinstance(address, (str, bytes)) and str(address if isinstance(address, str) else address.decode()) not in allowed:
             raise OSError('The demo server reaches no service on this machine.')
         return connect(sock, address)
 

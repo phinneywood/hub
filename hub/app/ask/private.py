@@ -70,6 +70,9 @@ that you can't see more. You can only read: if asked to send, file, delete, book
 that here."""
 
 
+PICTURES = re.compile(r'\b(photos?|pictures?|videos?|snaps?)\b', re.I)
+
+
 class Unavailable(Exception):
     """The private route can't answer just now. The message is safe to show."""
 
@@ -84,6 +87,8 @@ def about(text, rooms=()):
     if any(re.search(r'\b' + re.escape(' '.join(str(room).lower().split())) + r'\b', said) for room in rooms if room):
         return set()
     found = {topic for topic, pattern in TOPICS.items() if pattern.search(text)}
+    if PICTURES.search(text):      # "photos of snow in 2019" is the archive's, not the forecast's
+        found -= {'weather'}
     return found - {'weather', 'network'} if SETTING_UP.search(text) else found
 
 

@@ -41,11 +41,13 @@ import time
 from pathlib import Path
 
 scratch = tempfile.mkdtemp(prefix='hub-app-check-')
+archive_socket = Path(tempfile.mkdtemp(prefix='arc-', dir='/tmp')) / 's.sock'     # the made-up archive's service; short, as macOS wants
 os.environ.update(HUB_DATA_DIR=scratch, HUB_BACKGROUND_JOBS='disabled', HUB_BRIDGE_URL='http://127.0.0.1:9',
                   HUB_BRIDGE_TOKEN_FILE=str(Path(scratch) / 'absent'), HUB_KITCHEN_SOCKET=str(Path(scratch) / 'absent.sock'),
                   HUB_HA_BROKER_SOCKET=str(Path(scratch) / 'absent-broker.sock'), HUB_ALLOWED_LOGINS='me@example.com,casey@example.com',
                   PYDANTIC_AI_NO_BANNER='1', HUB_RELEASES_DIR=str(Path(scratch) / 'releases'),
-                  HUB_CARETAKER_DIR=str(Path(scratch) / 'caretaker'))
+                  HUB_CARETAKER_DIR=str(Path(scratch) / 'caretaker'),
+                  HUB_ARCHIVE_SOCKET=str(archive_socket))
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -54,7 +56,7 @@ import check_guard  # noqa: E402
 import pytest  # noqa: E402
 
 patch = pytest.MonkeyPatch()
-check_guard.apply(patch)   # before the app exists: no key store, no other machine, no local service
+check_guard.apply(patch, sockets=[archive_socket])   # before the app exists: no key store, no other machine, no local service but the demo's own
 
 import uvicorn  # noqa: E402
 
@@ -79,7 +81,9 @@ _ready = Path(scratch) / 'releases'
 (_ready / 'last.json').write_text(json.dumps({'sha': 'e' * 40, 'previous': 'f' * 40, 'status': 'accepted', 'how': 'auto',
                                               'at': time.strftime('%Y-%m-%dT%H:%M:%S+00:00', time.gmtime(time.time() - 3600))}))
 # Two made-up people: the owner, whose Google account is the bridge's main one, and a partner Hub reads no mail of yet.
-(Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'}, 'people': [
+(Path(scratch) / 'household.json').write_text(json.dumps({'versions': {'repo': 'https://github.com/example/hub'},
+                                                         'photos': {'dir': str(Path(scratch) / 'curator')},
+                                                         'archive': {'owner': 'me@example.com'}, 'people': [
     {'name': 'Alex', 'logins': ['me@example.com'], 'accounts': ['default']}, {'name': 'Casey', 'logins': ['casey@example.com'], 'accounts': []}]}))
 world = app_world.install(patch)
 
@@ -116,6 +120,63 @@ patch.setattr(activity.apple, 'events', _claw_events)
 # that answers the screen's taps and plays a drill through when one is asked for.
 from tests import caretaker_world  # noqa: E402
 care = caretaker_world.Caretaker(caretaker_world.night(Path(scratch) / 'caretaker', released=True)).start()
+
+
+def _swatch(hue):
+    """A plain colour wash standing in for a photo's preview, as a PNG."""
+    import colorsys
+    import struct
+    import zlib
+    w, h = 64, 48
+    rows = b''.join(b'\0' + bytes(int(255 * c) for x in range(w)
+                                  for c in colorsys.hsv_to_rgb(hue, .35 + .4 * x / w, .45 + .4 * y / h)) for y in range(h))
+    chunk = lambda kind, data: struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))  # noqa: E731
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0))
+            + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
+
+
+# The Photos screen: a made-up month the curator chose, with previews that are colour washes.
+_curator = Path(scratch) / 'curator'
+(_curator / 'months').mkdir(parents=True)
+(_curator / 'thumbs').mkdir()
+_shots = [{'id': f'{n:08X}-0000-4000-8000-000000000000', 'taken': f'2026-10-{2 + n:02d}T{9 + n % 8:02d}:15:00-07:00',
+           'people': [['Alex'], ['Sam'], ['Alex', 'Sam'], []][n % 4], 'favorite': n % 5 == 0, 'shared': n % 2 == 0}
+          for n in range(16)]
+for _n, _shot in enumerate(_shots):
+    (_curator / 'thumbs' / f"{_shot['id']}.jpg").write_bytes(_swatch(_n / 16))
+(_curator / 'months' / '2026-10.json').write_text(json.dumps({'month': '2026-10', 'album': 'October 2026', 'looked_at': 412,
+                                                              'picks': _shots[:12], 'more': _shots[12:]}))
+(_curator / 'marks.json').write_text(json.dumps({_shots[1]['id']: {'mark': 'keep', 'by': 'me@example.com', 'at': 0},
+                                                 _shots[4]['id']: {'mark': 'print', 'by': 'me@example.com', 'at': 0}}))
+(_curator / 'applied.json').write_text(json.dumps({'album': [_shots[1]['id']], 'print': []}))
+
+# The Archive: a made-up family archive (tests/archive_world.py) indexed by the archive program's real code and
+# answered by its real service on the demo's own socket, with colour washes for every picture; made-up mail behind
+# a stand-in bridge, and a calendar history read from it.
+import threading  # noqa: E402
+import types  # noqa: E402
+
+from hub import bridge as real_bridge  # noqa: E402
+from hub.app import archive as hub_archive  # noqa: E402
+from tests import archive_world  # noqa: E402
+from tests.test_app_archive import Bridge, event  # noqa: E402
+
+import datetime as _dt  # noqa: E402
+
+from hub import home as _home  # noqa: E402
+
+_today = _dt.datetime.now(_home.PACIFIC)        # "on this day" falls on the demo's own day
+_archive_home, _archive_mac, _ = archive_world.build(Path(scratch) / 'archive-world', patch,
+                                                     now=archive_world.at(_today.year, _today.month, _today.day))
+_serve = archive_world.program('serve')
+patch.setattr(_serve, 'macos', _archive_mac)
+patch.setattr(archive_world.program('sharp'), 'macos', _archive_mac)
+threading.Thread(target=_serve.serve, args=(archive_socket,), daemon=True).start()
+_mail_bridge = Bridge({'2025-10': [event('d1', '2025-10-03', 'Furnace service', 'Home')],
+                       '2024-07': [event('d2', '2024-07-13', 'Beach day', 'Seaside Cove')]})
+patch.setattr(hub_archive, 'bridge', types.SimpleNamespace(get=_mail_bridge.get, BridgeError=real_bridge.BridgeError))
+hub_archive.calendar_collect(pause=0)
+hub_archive.calendar_collect(pause=0)
 
 # The Engine screen: a made-up instruction, something to build and a note waiting for a tap.
 from hub.engine import notes as engine_notes, state as engine_state  # noqa: E402

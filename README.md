@@ -20,6 +20,7 @@ mail, model spend against its limits, and the home network. Behind them are the 
 | Kitchen | Shared grocery list, recipes and a grocery cart, through a separate kitchen assistant |
 | Errands | What the mail and the class guide want of the household, drafted so one tap finishes each: replies, invitations, bills, bookings, renewals, forms, things to get. Hub never sends, pays or books |
 | Ask Hub | A read-only chat that answers from Hub's own lookups and cites the Hub page each answer came from |
+| Archive | One search across the family's photos, documents, mail, calendar history and ChatGPT history, read on the Mac by a program of its own, with each month's best photos to keep or print |
 
 ## How it protects privacy
 
@@ -62,6 +63,7 @@ mail, model spend against its limits, and the home network. Behind them are the 
                        └─ data directory (owner-only): SQLite files, household.json
         │
         ├─▶ local mail and calendar bridge (fixed routes; no send, draft or delete)
+        ├─▶ archive program on a Unix socket (deploy/archive: the only part with Full Disk Access; read-only, by id)
         ├─▶ Home Assistant (network) · Google Routes (bike + bus)
         ├─▶ model calls on pinned zero-data-retention routes only
         └─▶ local kitchen service (Kitchen chat)

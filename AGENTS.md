@@ -77,6 +77,16 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   its house lines and may read the music library (`music_library`), edit playlists as the older chat did (making
   and deleting wait for the owner's tap), and read Hub's own records the older chat could (`hub_info`: the trip,
   AI spend and inbox counts for the owner only, the network's devices; never MAC addresses).
+  Owner-approved (2026-11-16): Ask may also search the family archive (`hub/app/archive.py`; the archive program in
+  `deploy/archive`). Its model may be given mail and calendar results, and the passages of documents and ChatGPT
+  history that match what was asked, with card, account and ID-like numbers masked; each of the last two is a
+  switch on the Archive screen, on by default, that the owner can turn off. Nothing about a photo ever reaches a
+  model: not a picture, a label, a person, a place, a date or even whether any were found. Read "Archive" in
+  `docs/app.md` first.
+  Owner-approved (2026-11-16): each person sees their own Google account's mail and calendar and no one else's,
+  by their Tailscale login (`hub/people.py`); in the archive, any login but the owner's sees only the photos in the
+  iCloud Shared Library, never the owner's own library, documents or ChatGPT history (`archive.may_see`). The same
+  holds for what Ask's model is given on that person's behalf.
   Owner-approved (2026-11-15): Ask may change anything in Home Assistant, through `hub/tools/house/admin.py` and
   the setup door in `broker.py` only. Keep its rule for what waits for a tap in code, its record and Undo, and
   what the door keeps shut; read "Setting up the house" in `docs/app.md` first. The same day Kitchen became part
