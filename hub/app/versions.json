@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "0a299a2da64b7884ed9d5bdabea387bde9eb2e48",
+  "from": "1beb7f3d4b35844a03c743159a32a06a0637f213",
   "live": null,
+  "title": "The pregnancy dashboard, clearer",
+  "changes": [
+   "The pregnancy dashboard calls its due date an estimate until the dating ultrasound, and its Settings button changes it in one tap."
+  ]
+ },
+ {
+  "sha": "1beb7f3d4b35844a03c743159a32a06a0637f213",
+  "from": "0a299a2da64b7884ed9d5bdabea387bde9eb2e48",
+  "live": "2026-11-18T21:58:31Z",
   "title": "Ask searches the family archive",
   "changes": [
    "Ask can search the family’s photos, documents, mail, calendar history and ChatGPT history, and says where each answer came from.",

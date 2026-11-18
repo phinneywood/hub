@@ -218,7 +218,7 @@ function Settings({ board }: { board: Board }) {
     void loadBoard(board.id);
   };
   return (
-    <section class="block">
+    <section class="block bsettings">
       <h2>Settings</h2>
       <div class="rows">
         {board.settings.map((s) => s.type === "switch" ? (
@@ -289,6 +289,12 @@ export function BoardScreen() {
       {editing && <Settings board={board} />}
       <div class="btns">
         <button type="button" class={"btn " + (editing ? "go" : "ghost")} onClick={() => (arranging.value = !editing)}>{editing ? "Done" : "Arrange"}</button>
+        {!editing && board.settings.length > 0 && (       // a board's settings (a due date, say) one tap away, not only under Arrange
+          <button type="button" class="btn ghost" onClick={() => {
+            arranging.value = true;
+            requestAnimationFrame(() => document.querySelector(".bsettings")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+          }}>Settings</button>
+        )}
         <button type="button" class="btn ghost" onClick={() => go("boards")}>All dashboards</button>
       </div>
       {!editing && <p class="quiet">Arrange puts the blocks in your order and hides the ones you don’t want. It changes this page for you only.</p>}

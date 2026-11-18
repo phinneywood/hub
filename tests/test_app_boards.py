@@ -4,7 +4,7 @@ Made-up people (Alex owns the main Google account, Casey is a member) and a made
 folder. The network board reads a stand-in for the older Network page's overview; nothing reaches Home Assistant.
 """
 import json
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -87,7 +87,7 @@ def test_where_counts_weeks_the_way_a_clinic_does():
 def test_the_board_from_the_due_date(household):
     found = boards.picture('pregnancy', 'casey@example.com')
     assert found['say'] == 'Week 15: about the size of an apple'
-    assert found['sub'] == 'Due Thursday, March 4. 176 days to go.'
+    assert found['sub'] == 'Due Thursday, March 4, an estimate. 176 days to go.'
     assert _block(found, 'progress')['big'] == '14 weeks, 6 days'
     coming = [r['title'] for r in _block(found, 'coming')['rows']]
     assert coming[:3] == ['Quad screen', 'First movements', 'Anatomy scan']           # the first trimester's tests are behind
@@ -182,6 +182,30 @@ def test_the_due_date_can_change_on_the_board(household):
     assert client.post('/app/api/board/pregnancy/set', headers=CASEY, json={'key': 'due', 'value': 'soon'}).status_code == 409
     client.post('/app/api/board/pregnancy/set', headers=CASEY, json={'key': 'due', 'value': ''})
     assert pregnancy.due() == DUE                          # back to the settings file's
+
+
+def test_a_due_date_is_an_estimate_until_the_dating_ultrasound(household):
+    early = DUE - timedelta(days=280 - 7 * 6)                 # week 7: before the dating scan
+    found = pregnancy.picture('me@example.com', early)
+    assert ', an estimate.' in found['sub'] and _block(found, 'dating')['kind'] == 'note'
+    assert _block(found, 'numbers')['tiles'][1]['label'] == 'due date, estimated'
+    assert pregnancy.picture('me@example.com', ON)['blocks'][2]['id'] == 'week'       # week 15: the note has had its say
+    assert boards.facts('pregnancy', 'me@example.com')['due_date_is'].startswith('an estimate')
+    said = client.post('/app/api/board/pregnancy/set', headers=CASEY, json={'key': 'scan', 'value': 'on'}).json()
+    assert said['said'] == 'Marked as the date from the dating ultrasound.' and pregnancy.scanned()
+    found = pregnancy.picture('me@example.com', early)
+    assert 'estimate' not in found['sub'] and not any(b['id'] == 'dating' for b in found['blocks'])
+    assert [s['value'] for s in found['settings']] == [DUE.isoformat(), 'on']
+    client.post('/app/api/board/pregnancy/set', headers=CASEY, json={'key': 'scan', 'value': ''})
+    assert not pregnancy.scanned()
+
+
+def test_the_settings_file_can_say_a_scan_set_it(household):
+    (config.DATA_DIR / 'household.json').write_text(json.dumps({'pregnancy': {'due': DUE.isoformat(), 'scan': True}, 'people': [
+        {'name': 'Alex', 'logins': ['me@example.com'], 'accounts': ['default']}]}))
+    assert pregnancy.scanned()
+    client.post('/app/api/board/pregnancy/set', headers=ALEX, json={'key': 'scan', 'value': ''})
+    assert not pregnancy.scanned()                         # the dashboard's word wins
 
 
 # ---- the network and mail boards ----

@@ -680,6 +680,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.locator('[data-block="numbers"] .down').click();
     expect(await until(() => document.querySelector(".bgrid > .block")?.dataset.block === "progress"), "Move down did not move it back");
     await page.locator('.btns .btn:text-is("Done")').click();
+    expect((await page.locator(".board .sub").first().innerText()).includes(", an estimate."), "the due date is not called an estimate");
+    await page.locator('.btns .btn:text-is("Settings")').click();          // the due date is one tap away, not only under Arrange
+    expect(await until(() => { const s = document.querySelector(".bsettings"); return !!s && s.getBoundingClientRect().top < innerHeight; }),
+      "Settings did not open the board's settings");
+    expect(await page.locator('.bsettings [role="switch"][aria-label="Dated by ultrasound"]').count() === 1, "no Dated by ultrasound switch");
+    await page.waitForTimeout(400); await shot("16j-board-settings");
+    await page.locator('.btns .btn:text-is("Done")').click();
     if (phone) {    // on a phone the bar has Dashboards: one tap lists them, one more opens one
       await tap('.tabs .tab:text-is("Dashboards")');
       expect(await saysSoon("Dashboards"), "the Dashboards tab did not open the list: " + await says());

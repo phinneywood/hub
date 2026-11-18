@@ -671,7 +671,8 @@ once the person has one, and it opens the list.
   `note`. A kind the app doesn't know is left out.
 - **Arrange** puts the blocks in the person's order and hides the ones they don't want: kept by login in Hub's
   database (`app_board_layout`), theirs alone. A block a board adds later comes last. A checklist's ticks and a
-  board's settings (such as the due date) are the household's (`app_board_ticks`, `app_board_settings`).
+  board's settings (such as the due date) are the household's (`app_board_ticks`, `app_board_settings`). A board with
+  settings also has a Settings button beside Arrange, which opens them in one tap.
 - **Ask.** A question in a board's words (`private.TOPICS`: `pregnancy`, `network`) is answered with the board's
   `facts` beside it, and the board's headline and first numbers drawn under the answer (`{"kind": "board"}`), read
   from Hub for whoever is looking. Mail's questions keep Mail's own lookups.
@@ -680,7 +681,7 @@ once the person has one, and it opens the list.
 
 | Board | Reads | Shows |
 | --- | --- | --- |
-| Pregnancy | the due date (`"pregnancy": {"due": "YYYY-MM-DD"}` in `household.json`, or set on the board) | the week, size, trimester bar, days to go, what usually comes next (US schedule of visits, screenings, vaccines), a shared getting-ready list, visit cadence, month by month |
+| Pregnancy | the due date (`"pregnancy": {"due": "YYYY-MM-DD", "scan": false}` in `household.json`, or set on the board; called an estimate until a dating ultrasound sets it, the board's "Dated by ultrasound" switch or `"scan": true`) | the week, size, trimester bar, days to go, what usually comes next (US schedule of visits, screenings, vaccines), a shared getting-ready list, visit cadence, month by month |
 | Network | the older Network page's overview (`hub/tools/network/pages.overview`), at most once a minute | up or down, speed and ping now, the day's uptime and drops, download and ping charts, what needs a look, busiest devices |
 | Mail | Hub's own sorting tables, the daily inbox size, the plan of inbox changes | counts, what needs you, the inbox over 30 days, by kind, Hub's cleanup, changes that need a check |
 | Calendar | the older Calendar page's reader (`hub/tools/calendar/read.week`, through the helper) | what is on today, the week's counts and clashes, the next seven days. Replaces that page: `/calendar` opens it |
