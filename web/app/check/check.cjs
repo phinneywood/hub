@@ -326,6 +326,22 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(!(await sideways()), "the emails found are wider than the screen");
     await page.waitForTimeout(300); await shot("6c2-ask-mail");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px under the emails found: " + (await small()).join(", "));
+    // Ask changes mail only after the person's tap: "archive the first one" puts a card up naming the email, the tap
+    // archives it (here, a stand-in for Gmail), and Undo on the card puts it back
+    const mailWrites = () => page.evaluate(() => fetch("/demo/mail-writes").then((r) => r.json()));
+    await askFor("Archive the first one");
+    expect(await answered("Archive this email: waiting for your tap."), "Ask did not put the archive on a card: " + await lastAnswer());
+    expect((await lastTurn(".wait .wait-lines li")).join("|") === "Riverside Plumbing: Re: Kitchen sink estimate", "the card did not name the email");
+    expect((await mailWrites()).length === 0, "the mail changed before the tap");
+    expect(!(await sideways()), "the mail card is wider than the screen");
+    await page.waitForTimeout(300); await shot("6c3-ask-mail-card");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on the mail card: " + (await small()).join(", "));
+    await page.locator(".turn .wait .btn.go").last().click();
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelector(".wait .wait-cap")?.textContent === "Done"), "the tap did not archive the email");
+    expect((await mailWrites()).map((w) => w[0]).join("|") === "/gmail/labels/apply", "the tap did not go to Gmail once");
+    await page.locator(".turn .wait .took button").last().click();
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelector(".wait .took")?.textContent === "Put back as it was"), "Undo on the card did not put the email back");
+    expect((await mailWrites()).pop()[0] === "/gmail/undo", "Undo did not go to Gmail");
     await askFor("what errands are ready?");
     expect(await until(() => [...document.querySelectorAll(".turn .answer")].pop()?.textContent.startsWith("6 errands are ready for your tap.")),
       "Ask did not say how many errands are ready: " + await lastAnswer());

@@ -65,3 +65,34 @@ def install(patch, calls=None):
 
     patch.setattr(bridge, 'get', get)
     return calls
+
+
+LABELS = [{'id': 'Label_7', 'name': 'Receipts', 'type': 'user'}, {'id': 'INBOX', 'name': 'INBOX', 'type': 'system'}]
+
+
+def install_writes(patch, calls=None):
+    """Stand in the bridge's label paths for Ask's mail changes (hub/app/ask/mailchange.py): the labels, making one,
+    a label change and its undo. Every write is kept and answered as applied; Gmail is never reached."""
+    calls = [] if calls is None else calls
+    labels = [dict(label) for label in LABELS]
+    reading, writing = bridge.get, bridge.post
+
+    def get(path, ttl=60, timeout=None, **params):
+        if path == '/gmail/labels':
+            return {'labels': labels}
+        return reading(path, ttl=ttl, timeout=timeout, **params)
+
+    def post(path, body=None, **kw):
+        if path not in ('/gmail/labels/create', '/gmail/labels/apply', '/gmail/undo'):
+            return writing(path, body, **kw)
+        calls.append((path, body))
+        if path == '/gmail/labels/create':
+            labels.append({'id': 'Label_new', 'name': body['name'], 'type': 'user'})
+            return {'id': 'Label_new'}
+        if path == '/gmail/undo':
+            return {'undone': True}
+        return {'status': 'applied', 'change_id': f'c{len(calls)}'}
+
+    patch.setattr(bridge, 'get', get)
+    patch.setattr(bridge, 'post', post)
+    return calls

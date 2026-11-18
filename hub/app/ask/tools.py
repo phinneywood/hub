@@ -24,7 +24,7 @@ from .. import levels, model
 from .. import scenes as kept_scenes
 from ..words import are, counted, number, sentence, spoken
 from ..words import listed as _listed
-from . import mailbox, private, turns
+from . import mailbox, mailchange, private, turns
 
 EVERYWHERE = ('everywhere', 'all', 'all lights', 'all the lights', 'every light', 'the house', 'house', 'whole house',
               'the whole house', 'inside', 'indoors')
@@ -705,7 +705,7 @@ def mail_search(ctx: RunContext[Turn], query: str) -> dict:
     "when is the dentist confirmation from?", "find the school photo email"). `query` is in Gmail's search words:
     from:, to:, subject:, newer_than:7d, older_than:, is:unread, in:sent, has:attachment, or plain words; keep it
     short and specific. Gives up to 8 emails, newest first, numbered; they appear under your answer, so name the one
-    that answers and don't list them all. Read-only: Hub can't send, file, delete or label mail."""
+    that answers and don't list them all. To archive, label or mark them, follow with mail_change."""
     turn = ctx.deps
     turn.again = turn.strangers = True
     if turn.searched >= mailbox.SEARCHES_PER_TURN:
@@ -747,6 +747,37 @@ def mail_read(ctx: RunContext[Turn], which: int) -> dict:
         turn.mail = rows
     _mail_card(turn, turn.mail, row['n'])
     return {'email': found}
+
+
+# The person's own words must ask for a change to mail, not just be about mail: an email's text never proposes one.
+MAIL_VERBS = re.compile(r'\b(archiv\w*|label\w*|tag\w*|file|filed|move|put|mark\w*|unread|inbox|clean\w*|clear\w*|'
+                        r'tidy|untag\w*|unlabel\w*|take|get rid|out of)\b', re.I)
+
+
+def mail_change(ctx: RunContext[Turn], do: Literal['archive', 'inbox', 'label', 'unlabel', 'read', 'unread'],
+                which: list[int], label: str | None = None) -> dict:
+    """Change the person's own emails, only when their latest message asks for it: archive (out of the inbox),
+    inbox (back into it), label or unlabel (`label`: its name; a new one is made), read or unread. `which`: the
+    emails' numbers from mail_search in this request, or from the emails Hub showed in the last half hour; search
+    first if they name emails Hub hasn't shown. Nothing changes until the person taps the card under your answer, so
+    say it is waiting for their tap. Hub can't delete, trash, send or forward mail: say that's done in Gmail."""
+    turn = ctx.deps
+    if turn.login is None:
+        return _miss(turn, 'Change mail from your phone or laptop.', why='refused')
+    if not MAIL_VERBS.search(turn.text):
+        turn.again = True
+        return {'refused': 'The person’s latest message doesn’t ask to change any mail, so nothing was proposed.'}
+    rows = turn.mail or mailbox.last_card(turn.login)
+    try:
+        card = mailchange.propose(turn.login, do, rows, which, label)
+    except mailchange.Refused as error:
+        if str(error) == 'not_yours':
+            return _mail_refused(mailbox.NotNow('not_yours'))
+        turn.again = True
+        return {'not_done': str(error)}
+    turn.said.append(card['title'].removesuffix('?') + ': waiting for your tap.')
+    turn.cards.append(card)
+    return {'needs_tap': 'The card is under the answer; nothing changes until the person taps it.'}
 
 
 def errands(ctx: RunContext[Turn], show: Literal['ready', 'done'] = 'ready') -> dict:
@@ -1092,5 +1123,5 @@ CARE_WORDS = {'pause': 'pause', 'resume': 'start fixing again', 'try_again': 'tr
 AGREED = re.compile(r"\s*(yes|yeah|yep|yup|sure|ok|okay|please do|do it|go ahead|go for it)\b", re.I)
 
 
-ALL = (lights, scene, music, music_library, playlist, hub_info, bike_bus, remember, conversation, groceries, kitchen, look_up, mail_search, mail_read, errands, errand, find, details, arrange, rooms, scene_setup, routine,
+ALL = (lights, scene, music, music_library, playlist, hub_info, bike_bus, remember, conversation, groceries, kitchen, look_up, mail_search, mail_read, mail_change, errands, errand, find, details, arrange, rooms, scene_setup, routine,
        device, setting, integration, dashboard, house_health, caretaker)

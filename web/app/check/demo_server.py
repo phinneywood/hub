@@ -60,7 +60,7 @@ import uvicorn  # noqa: E402
 
 from hub import people, store  # noqa: E402
 from hub.app import levels, routes, scenes  # noqa: E402
-from hub.app.ask import morning, private, route, turns  # noqa: E402
+from hub.app.ask import mailchange, morning, private, route, turns  # noqa: E402
 from hub.main import app  # noqa: E402
 from hub.tools.house import admin, control, read  # noqa: E402
 
@@ -130,6 +130,7 @@ patch.setattr(mail_worker, 'start', lambda: None)
 # Ask's mail search and read: a made-up mailbox where the bridge would answer, with one sender AI is off for.
 from tests import mail_world  # noqa: E402
 mail_world.install(patch)
+MAIL_WRITES = mail_world.install_writes(patch)      # and Ask's mail changes, after the tap: kept here, never sent
 mail_plan.set_ai_blocked(mail_world.OFF, True)
 engine_notes.propose('The porch light goes off at midnight', 'remember that the porch light goes off at midnight', login='me@example.com')
 patch.setattr(control, 'CHECK_WAIT', 0.2)
@@ -284,6 +285,12 @@ with store.db() as _conn:
                       ((EVENING.date() - timedelta(days=30 - _n)).isoformat(), 4200 - _n * 38 + (_n % 4) * 25, 120))
 
 
+@app.get('/demo/mail-writes')
+def mail_writes():
+    """For the browser check: what Ask's mail cards sent to the stand-in for Gmail, in order."""
+    return MAIL_WRITES
+
+
 # For the browser check only: put the made-up house back as it started, make it stop answering, or take Ask
 # away as on a Hub where it isn't set up yet.
 @app.post('/demo/{what}')
@@ -308,6 +315,9 @@ def stage(what: str):
         shop.limited = ''
         day.school += todos()
         errands_world.again(week)
+        MAIL_WRITES.clear()
+        with mailchange._db() as conn:      # Ask's mail cards
+            conn.execute('delete from ask_mail_waiting')
         with admin._db() as conn:           # the record of setup changes, and the cards that wait
             conn.execute('delete from house_setup')
             conn.execute('delete from house_setup_waiting')

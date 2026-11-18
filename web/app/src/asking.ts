@@ -7,7 +7,8 @@ import { say } from "./state";
 export interface Card { kind: string; rooms?: string[]; speakers?: string[]; batch?: string; after?: number; id?: number; note?: string;
   lines?: string[]; missed?: string[]; title?: string; why?: string; do?: string; items?: number[]; all?: boolean; cart?: boolean; since?: number;
   ids?: number[]; show?: string[]; things?: Thing[]; hint?: string; rows?: MailRow[]; opened?: number[]; board?: string;
-  target?: string; button?: string; drill?: string }
+  target?: string; button?: string; drill?: string;
+  path?: string }
 // One email a mail search found (hub/app/ask/mailbox.py): its number for "open the second one", and where it opens.
 export interface MailRow { n: number; who: string; subject: string; when: string; href: string; off: boolean }
 // One line of Hub's morning message (hub/app/ask/morning.py): its number, the sentence, and the one button it has.
@@ -24,7 +25,7 @@ type Event = { t: "say"; text: string } | { t: "doing"; what: string } | { t: "c
 
 const SAY = "hub.say";      // the chat page reads this once and sends it (web/ask): only Hub's own pages can set it
 const DOING: Record<string, string> = { lights: "Switching the lights", scene: "Setting the scene", music: "Finding the music",
-  kitchen: "Asking Kitchen", groceries: "Working the list", look_up: "Looking", mail_search: "Searching your mail", mail_read: "Reading the email", errands: "Looking at your errands", remember: "Noting that", find: "Looking around the house", details: "Reading it",
+  kitchen: "Asking Kitchen", groceries: "Working the list", look_up: "Looking", mail_search: "Searching your mail", mail_read: "Reading the email", mail_change: "Getting the card ready", errands: "Looking at your errands", remember: "Noting that", find: "Looking around the house", details: "Reading it",
   arrange: "Moving things", rooms: "Changing the rooms", scene_setup: "Changing the scene", routine: "Writing it into Home Assistant",
   device: "Working on it", setting: "Changing the settings", integration: "Reloading it", dashboard: "Making the dashboard",
   house_health: "Reading House health", caretaker: "Asking the caretaker" };

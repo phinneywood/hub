@@ -687,6 +687,37 @@ def mail_tap(do: str, request: Request, body: dict = Body(default={})):
     return {'ok': True, 'said': said} if ok else _refuse(said)
 
 
+# ---- Ask's mail changes (hub/app/ask/mailchange.py): archive, label, read, each only after the person's tap ----
+
+@router.get('/api/mail/change/{number}')
+def mail_change_card(number: int, request: Request):
+    """What became of one card, for an app that was closed while it waited. Only for the person it is for."""
+    from .ask import mailchange
+    row = mailchange.card(number)
+    if row is None or row['login'] != _login(request):
+        return {'status': 'gone', 'batch': None}
+    return {'status': row['status'], 'batch': None, 'undo': row['status'] == 'done'}
+
+
+@router.post('/api/mail/change/{number}/{choice}')
+def mail_change_tap(number: int, choice: str, request: Request):
+    """The person's tap on Ask's mail card: `confirm` makes the change, `dismiss` puts the card away, `undo` puts a
+    done change back. Only a signed-in device of the person who asked can do any of these, and no tool of Ask's can."""
+    from .ask import mailchange
+    taps = {'confirm': mailchange.confirm, 'dismiss': mailchange.dismiss, 'undo': mailchange.undo}
+    if choice not in taps:
+        return _refuse('Hub couldn’t read that request.', 404)
+    if _login(request) is None:
+        return _refuse('Change mail from your phone or laptop.', 403)
+    if _not_theirs(request):
+        return _refuse(NOT_CONNECTED, 403)
+    try:
+        said = taps[choice](number, _login(request))
+    except mailchange.Refused as error:
+        return _refuse(error)
+    return {'ok': True, 'said': said, 'batch': None, 'undo': choice == 'confirm'}
+
+
 # ---- Dashboards (hub/app/boards/): one page per category, arranged by each person ----
 
 @router.get('/api/boards')

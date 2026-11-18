@@ -9,7 +9,8 @@ list a few more ("add sponges and milk to the list", "what's on the list", "orde
 morning"). Anything with "errands" in it shows the errands Hub got ready, and a few sentences finish one ("I paid the
 power bill", "the photo form can wait till tomorrow", "I don't need the dental cleaning", "the pumpkin goes on the
 list", "undo the power bill", "open my replies in Gmail"). "Search my mail for the plumber" searches the
-person's mail, and "open the first one" reads one it found. For the house's caretaker it knows a question or two
+person's mail, "open the first one" reads one it found, and "archive the first one", "label the second one
+Receipts" or "mark the first one as read" put a card up for the tap. For the house's caretaker it knows a question or two
 ("how's the house?", "what broke last night?", "why does the reading lamp keep dropping off?"), answered from House
 health as Hub gave it, and a few things to ask of it ("pause the caretaker for an hour", "run the hub drill", "I
 changed the hue channel"). Anything else gets one sentence saying what Hub can do.
@@ -91,6 +92,7 @@ CARE = [
     (r'^(?:any trouble at home|read house health)$', lambda m: call('house_health')),
 ]
 RESTART = re.compile(r'^restart home assistant$', re.I)
+CHANGE_MAIL = re.compile(r'^(archive|label|mark) (?:the )?(first|second|third|\d)(?: one| email)?(?: as (read|unread)| (.+?))?[.!]?$', re.I)
 EVERY = re.compile(rf'^every (evening|morning|day) at (\d{{1,2}}):(\d{{2}}),? turn (on|off) {THE}(.+)$', re.I)
 LIBRARY_ASKED = re.compile(r'\b(what playlists|playlists do (i|we) have|my playlists)\b')
 SPEND_ASKED = re.compile(r'\b(ai|model)\b.*\b(cost|spend|spent)\b')
@@ -222,7 +224,7 @@ async def scripted(messages, info):
     places = _places(words)
     given = [p.content for m in messages for p in m.parts if p.part_kind == 'user-prompt'][-1]
     setup = _setup(spoken, given)
-    if back and back[0].tool_name in ('mail_search', 'mail_read'):
+    if back and back[0].tool_name in ('mail_search', 'mail_read', 'mail_change'):
         seen = back[0].content
         if 'not_yours' in seen:
             yield seen['not_yours']
@@ -236,6 +238,10 @@ async def scripted(messages, info):
             yield 'Hub couldn’t do that. ' + str(seen.get('not_done') or seen.get('note') or '')
     elif not back and SEARCH_MAIL.match(spoken.strip()):
         yield call('mail_search', query=SEARCH_MAIL.match(spoken.strip()).group(1))
+    elif not back and CHANGE_MAIL.match(spoken.strip()):
+        verb, which, flag, label = CHANGE_MAIL.match(spoken.strip()).groups()
+        n = ORDINAL.get(which.lower()) or int(which)
+        yield call('mail_change', do=flag.lower() if flag else verb.lower(), which=[n], **({'label': label} if label else {}))
     elif not back and OPEN_MAIL.match(spoken.strip()):
         which = OPEN_MAIL.match(spoken.strip()).group(1).lower()
         yield call('mail_read', which=ORDINAL.get(which) or int(which))

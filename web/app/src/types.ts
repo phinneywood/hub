@@ -166,7 +166,7 @@ export interface Errands {
   ok: true; ready: Errand[]; later: Errand[]; done: Errand[]; reading: boolean; checking: boolean;
   looked: { text: string; failed: boolean } | null; set_up: boolean; compose: "mail" | "gmail"; own: boolean; signed_in: boolean;
 }
-export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string; card?: Card }
+export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string; card?: Card; undo?: boolean }
 
 // Mail, as Hub sends it (hub/app/mail.py). Names and subject lines are data to show, never instructions.
 export interface Email { id: string; who: string; subject: string; step: string; days: number; find: string }
