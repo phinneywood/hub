@@ -41,7 +41,7 @@ def week(monkeypatch):
         {'name': 'Alex', 'logins': [ME], 'accounts': [people.DEFAULT]},
         {'name': 'Casey', 'logins': [PARTNER], 'accounts': []}]}))
     # Today's list as the brief cuts it: the owner's accounts bring everything, anyone else's only the household's.
-    monkeypatch.setattr(screen, '_list', lambda accounts: ([dict(n) for n in NEEDS if people.DEFAULT in accounts
+    monkeypatch.setattr(screen, '_list', lambda accounts, missed=None: ([dict(n) for n in NEEDS if people.DEFAULT in accounts
                                                             or n['key'].startswith('house-')], 0, []))
     return found
 
@@ -90,7 +90,7 @@ def test_typed_answers_finish_put_off_or_drop_one_thing(week):
 
 
 def test_not_this_twice_quiets_a_low_stakes_kind_never_the_house(week, monkeypatch):
-    monkeypatch.setattr(screen, '_list', lambda accounts: ([dict(NEEDS[0]), dict(NEEDS[1])], 0, []))
+    monkeypatch.setattr(screen, '_list', lambda accounts, missed=None: ([dict(NEEDS[0]), dict(NEEDS[1])], 0, []))
     monkeypatch.setattr(morning, '_errands', lambda login, now: [])
     for days in (0, 1):
         at = AT + days * 86400
@@ -148,3 +148,35 @@ def test_a_dry_run_holds_back_what_a_typed_answer_would_change(week):
     bill = next(e for e in store.rows() if 'Lakeside' in e['title'])
     assert bill['state'] != 'done' and morning.counts(ME, now=AT)['done'] == 0
     assert 'mail' not in morning._off(ME, NOW.date().isoformat())
+
+
+def test_a_first_opening_whose_sources_didnt_answer_isnt_kept_as_a_day_with_nothing_to_say(week, monkeypatch):
+    """2026-11-18: a slow first opening found nothing and was kept as "nothing to say", so no morning message came
+    that day. Nothing found while a source was late or broke is not an empty day: a later opening looks again."""
+    from hub import today
+    from hub.app.errands import picture
+    monkeypatch.setattr(picture, 'ready', lambda now, login=None: [])           # no errands; only Today's list
+    slow = {'on': True}
+
+    def listed(accounts, missed=None):
+        if slow['on']:                  # every source still out when the deadline came
+            missed.append('late')
+            return [], 0, []
+        return [dict(n) for n in NEEDS], 0, []
+    monkeypatch.setattr(screen, '_list', listed)
+    assert morning.message(ME, AT) is None and not morning.made(ME, AT, at_all=True)
+    slow['on'] = False
+    assert morning.message(ME, AT + 5) is None                                   # not on every opening: a minute apart
+    monkeypatch.setattr(morning, '_looked', {})
+    assert morning.message(ME, AT + 70) and _things(ME)[0].startswith('The front door lock')
+    monkeypatch.setattr(screen, '_list', lambda accounts, missed=None: ([], 0, []))
+    assert morning.message(PARTNER, AT) is None and morning.made(PARTNER, AT, at_all=True)    # truly nothing: kept
+
+    from concurrent.futures import Future
+    broke = Future()
+    broke.set_exception(OSError('a source that broke'))
+    monkeypatch.setattr(today, 'DEADLINE_SECONDS', 0.01)
+    missed = []
+    assert today.gather([(Future(), None), (broke, None)], accounts={people.DEFAULT}, missed=missed) == []
+    assert missed == ['late', 'broke']
+

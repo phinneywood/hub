@@ -87,13 +87,14 @@ def _cart():
     return [{'key': CART, 'title': 'Approve the grocery cart', 'why': 'Kitchen has a cart ready. Nothing is ordered until you approve it.', **waiting}]
 
 
-def _list(accounts):
+def _list(accounts, missed=None):
     """(needs, how many more can wait, the quiet lines) from Hub's list, the emails and the cart: what a person who
-    sees these accounts may see (people.py). The emails are the owner's, so they come only with the owner's list."""
+    sees these accounts may see (people.py). The emails are the owner's, so they come only with the owner's list.
+    `missed`: as today.gather's."""
     from .. import store
     from ..tools import TOOLS
     jobs = today.start()
-    found = today.gather(jobs, today.mine(home.tiles(TOOLS), accounts), accounts=accounts)
+    found = today.gather(jobs, today.mine(home.tiles(TOOLS), accounts), accounts=accounts, missed=missed)
     hidden = store.snoozed(home.today().isoformat())
     needs, quiet = [], []
     for item in found:

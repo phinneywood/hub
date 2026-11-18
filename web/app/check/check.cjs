@@ -45,9 +45,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     };
 
     // ---- opening: Ask, a conversation where Hub speaks first with the day, what needs you and the house ----
+    // Opening Ask makes the day's morning message. Let that first opening finish before the demo is reset, or the
+    // two cross: it once wrote the day down as "nothing to say" after the reset, and the reloaded Ask had no message.
+    const opened = page.waitForResponse((r) => new URL(r.url()).pathname === "/app/api/ask", { timeout: 30000 }).catch(() => null);
     await page.goto(base + "/");
     expect(new URL(page.url()).pathname === "/app/", "Hub's front door did not lead to the app");
     await page.waitForSelector(".askpage");
+    expect(await opened, "Ask did not ask Hub for the conversation");
     await stage("reset");
     await page.reload(); await page.waitForSelector(".askpage .now"); await page.waitForTimeout(2000);
     await shot("0-ask");

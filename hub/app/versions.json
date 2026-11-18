@@ -7,7 +7,8 @@
   "changes": [
    "House health, under System, shows what the house’s caretaker sees: what needs you, last night, each part of the house over seven days, ways to make the house sturdier, and batteries.",
    "Ask answers “how’s the house?” from it and steers it: pause or resume it, run a drill, try a fix again, or mark a problem sorted. Restarting Home Assistant and leaving a problem alone still wait for your tap on the card.",
-   "What the caretaker hands you shows on Today and in the morning message, and the button at the top turns amber until it’s sorted."
+   "What the caretaker hands you shows on Today and in the morning message, and the button at the top turns amber until it’s sorted.",
+   "When Hub is slow the first time Ask opens in the morning, the morning message now comes at a later opening instead of not at all that day."
   ]
  },
  {
