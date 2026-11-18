@@ -24,6 +24,12 @@ BUYS = {
     'butternut squash': ('Green Valley Butternut Squash', '1 each', 'history', 4, '2026-10-12', '2.49', 1, ''),
     'lime': ('Fresh Limes', '1 each', 'history', 6, '2026-10-26', '0.50', 3, ''),
 }
+# What they buy at the second store, Costco Same-Day, in the same shape: such a thing goes to Costco's cart.
+COSTCO = {
+    'paper towel': ('Bulk Barn Paper Towels, 12 Rolls', '12 rolls', 'history', 4, '2026-10-13', '22.99', 1, ''),
+}
+STORES = [{'id': 'fredmeyer', 'name': 'Fred Meyer', 'cart': 'https://www.fredmeyer.com/cart'},
+          {'id': 'costco', 'name': 'Costco', 'cart': 'https://sameday.costco.com/store/costco/storefront'}]
 # Other things they have bought that the same word could mean, offered beside the pick.
 ALSO = {
     'sponge': [('Tidy Home Heavy Duty Sponges', '3 ct', 'history', 2, '2026-11-02', '4.29')],
@@ -115,14 +121,15 @@ class Kitchen:
                 twin.update(asked=qty, state='ready' if twin['state'] == 'cart' and take != twin['qty'] else twin['state'], qty=take)
                 return None, dict(twin, changed=True)
             return None, twin
-        buys = BUYS.get(key)
+        buys, store = (COSTCO[key], 'costco') if key in COSTCO else (BUYS.get(key), 'fredmeyer')
         options = [{'product': p, 'size': s, 'why': why, 'times': n, 'last': last, 'price': price, 'qty': 1, 'note': ''}
                    for p, s, why, n, last, price in ALSO.get(key, [])]
         item = {'id': self.next, 'at': time.time(), 'name': name, 'qty': _take(qty, buys[1] if buys else '', buys[6] if buys else 1),
                 'asked': qty or None, 'source': source, 'by': by, 'note': '',
                 'product': buys[0] if buys else None, 'size': buys[1] if buys else None, 'why': buys[2] if buys else None,
                 'times': buys[3] if buys else 0, 'last': buys[4] if buys else None, 'price': buys[5] if buys else None,
-                'about': buys[7] if buys else None, 'url': '', 'state': 'ready' if buys else 'pick', 'how': None, 'options': options, 'left': False}
+                'about': buys[7] if buys else None, 'url': '', 'state': 'ready' if buys else 'pick', 'how': None, 'options': options, 'left': False,
+                'store': store}
         if not buys and not options:        # never bought: what the shop offers, as the service's search would bring back
             title = name.capitalize()
             item['options'] = [{'product': f'Store Brand {title}', 'size': '', 'why': 'shop', 'times': 0, 'last': '', 'price': '3.49', 'qty': 1, 'note': ''},
@@ -177,7 +184,7 @@ class Kitchen:
                 'plan': {'id': pending, 'status': 'pending', 'items': self.planned[pending]} if pending else None,
                 'order': {'id': 3, 'review': REVIEW, 'status': order['status'], 'decided_by': order.get('decided_by'), 'placed': order.get('placed')}
                 if order else None,
-                'cart': {'seen': copy.deepcopy(self.cart_seen), 'practice': True},
+                'cart': {'seen': copy.deepcopy(self.cart_seen), 'practice': True, 'stores': STORES},
                 'ideas': {'at': time.time() - 3 * 3600, 'after': 2, 'recipes': SO_FAR[1]['recipes']},
                 'settings': {'auto_cart': self.auto, 'cart_wait': 60, 'reminders': dict(self.reminders, wanted=self.reminders['state'] != 'off')},
                 'history': {'orders': 64, 'newest': '2026-11-07', 'stale': True},
@@ -259,6 +266,18 @@ class Kitchen:
                 new, twin = self._add(written, body.get('source') or 'app', 'me')
                 (added if new else changed if twin.pop('changed', False) else already).append(copy.deepcopy(new or twin))
             return 200, {'added': added, 'already': already, 'changed': changed}
+        found = re.fullmatch(r'/items/(\d+)/store', path)
+        if found:                           # moved to the other store: its product there, or a pick to make
+            item = next((i for i in self.items if i['id'] == int(found.group(1))), None)
+            if body.get('store') not in ('fredmeyer', 'costco'):
+                return 400, {'error': 'Not one of the household’s stores.'}
+            if item is None or item['state'] not in ('pick', 'ready', 'unavailable'):
+                return 409, {'error': 'That item isn’t waiting on the list any more.'}
+            buys = (COSTCO if body['store'] == 'costco' else BUYS).get(_key(item['name']))
+            item.update(store=body['store'], product=buys[0] if buys else None, size=buys[1] if buys else None, why=buys[2] if buys else None,
+                        times=buys[3] if buys else 0, last=buys[4] if buys else None, price=buys[5] if buys else None,
+                        state='ready' if buys else 'pick', options=[])
+            return 200, {'item': copy.deepcopy(item)}
         found = re.fullmatch(r'/items/(\d+)/(remove|pick|keep|qty)', path)
         if found:
             item = next((i for i in self.items if i['id'] == int(found.group(1))), None)
@@ -277,6 +296,9 @@ class Kitchen:
                     self._fill()
             elif found.group(2) == 'keep':
                 item['left'] = False
+            elif item['state'] in ('cart', 'unknown') and item.get('store') == 'costco':     # the Costco cart is never taken from
+                self.items.remove(item)
+                item = dict(item, state='gone', how='kept')
             elif item['state'] in ('cart', 'unknown'):
                 item.update(state='removing', left=False)
                 self._fill(adding=self.auto)

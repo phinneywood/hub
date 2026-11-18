@@ -736,6 +736,21 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap('.kitchen .kcard .btn.go:text-is("Place order")');
     expect(await saysSoon("The list is empty.", 6000), "placing the order did not clear the list: " + await says());
     expect(await until(() => document.querySelector(".kitchen .block .quiet")?.textContent.startsWith("Nothing on it.")), "an empty list did not say how to add to it");
+    // Two stores: a thing bought at Costco says so, moves to Fred Meyer with one tap, and each store's cart has its link.
+    await page.locator('.kitchen [role="switch"]').first().click();
+    expect(await until(() => document.querySelector('.kitchen [role="switch"]')?.getAttribute("aria-checked") === "false"), "the switch that fills the cart by itself did not switch off");
+    await page.fill(".kadd .field", "paper towels");
+    await page.keyboard.press("Enter");
+    expect(await until(() => document.querySelector(".kitchen .rows .row.item .store-tag")?.textContent === " · Costco"), "a thing bought at Costco did not say so");
+    expect((await page.locator(".kitchen .store-carts a").allInnerTexts()).join("|") === "Open the Fred Meyer cart|Open the Costco cart", "each store’s cart was not offered");
+    await page.locator(".kitchen .rows .row.item").first().click();
+    expect(await until(() => document.querySelector('.sheet .store-pick .pill[aria-pressed="true"]')?.textContent === "Costco"), "a thing’s sheet did not say its store");
+    await page.waitForTimeout(350); await shot("13i-kitchen-store");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on a thing’s store: " + (await small()).join(", "));
+    await tap('.sheet .store-pick .pill:text-is("Fred Meyer")');
+    expect(await until(() => document.querySelector('.sheet .store-pick .pill[aria-pressed="true"]')?.textContent === "Fred Meyer"), "moving a thing to Fred Meyer did not move it");
+    expect(await until(() => !document.querySelector(".kitchen .rows .row.item .store-tag")), "the list still said Costco after the move");
+    await page.keyboard.press("Escape");
     // The kitchen service stopped, and one from before it kept the list: each says so, and nothing looks broken.
     // (A recipe asked about above looks for its answer again when Kitchen is drawn, and is refused while it is away.)
     quiet = true;
