@@ -797,11 +797,12 @@ def mail_change(ctx: RunContext[Turn], do: Literal['archive', 'inbox', 'label', 
     return {'needs_tap': 'The card is under the answer; nothing changes until the person taps it.'}
 
 
-def errands(ctx: RunContext[Turn], show: Literal['ready', 'done'] = 'ready') -> dict:
+def errands(ctx: RunContext[Turn], show: Literal['ready', 'done'] = 'ready', about: Literal['everything', 'bills'] = 'everything') -> dict:
     """What Hub got ready for the owner from their mail and the class guide: replies drafted, invitations to answer,
     bills with the page to pay them on, bookings, renewals, forms to sign, things to get and dates for the calendar.
     They appear under your answer as cards the owner finishes with one tap each. show: ready (waiting for a tap, most
-    pressing first) or done (finished this week, and how). Hub itself never sends, pays, books or orders anything."""
+    pressing first) or done (finished this week, and how). about: bills, for a question about bills, payments or
+    renewals: only those, and only their cards. Hub itself never sends, pays, books or orders anything."""
     from ...engine import catalog
     turn = ctx.deps
     turn.again = turn.strangers = True
@@ -809,6 +810,10 @@ def errands(ctx: RunContext[Turn], show: Literal['ready', 'done'] = 'ready') -> 
         found = catalog.errands_lookup(show, login=turn.login)
     except Exception:  # noqa: BLE001 - a reader that failed is an answer the model can pass on
         return {'not_done': 'Hub couldn’t read its errands just now.'}
+    if about == 'bills' and isinstance(found.get('errands'), list):      # a question about bills: the bills, not every errand
+        found = {**found, 'errands': [e for e in found['errands'] if e.get('kind') in ('Bill', 'Renewal')]}
+        if not found['errands']:
+            found['note'] = 'No bills or renewals are among the errands.'
     if show == 'ready' and found.get('errands'):
         turn.cards.append({'kind': 'errands', 'ids': [e['ref'] for e in found['errands']]})
     return found

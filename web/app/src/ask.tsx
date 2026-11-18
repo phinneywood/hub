@@ -1,5 +1,6 @@
 // Ask, the screen Hub opens to: a conversation with Hub, which speaks first with what needs you and the house.
 import { Fragment } from "preact";
+import type { VNode } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { health, healthAsk, post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, loadOlder, older, stop, talk } from "./asking";
@@ -35,6 +36,19 @@ const PAGES: [View, string, string][] = [
   ["engine", "Engine", "What Hub learned and what was asked of it"], ["mailsettings", "Mail settings", "How Hub sorts mail"],
   ["boards", "Dashboards", "One page for each part of the household"],
 ];
+
+/** The one page or dashboard a few typed letters name (one word, a name that starts with it, or is it), for Return to
+ * open instead of sending the letters to the model ("Kitc"). Rooms, scenes and playlists are left to their own taps. */
+function onePlace(text: string): (() => void) | null {
+  const typed = text.trim().toLowerCase();
+  if (typed.length < 2 || /\s/.test(typed)) return null;
+  const pages = PAGES.filter(([, name]) => name.toLowerCase().startsWith(typed));
+  const dashboards = (boards.value ?? []).filter((b) => b.name.toLowerCase().startsWith(typed));
+  const exact = pages.find(([, name]) => name.toLowerCase() === typed);
+  if (exact) return () => go(exact[0]);
+  if (pages.length + dashboards.length !== 1) return null;
+  return pages.length ? () => go(pages[0]![0]) : () => go("board", dashboards[0]!.id);
+}
 
 /** What a few letters reach without asking anything: rooms, scenes, playlists and pages, worked right in the list.
  * With nothing typed, nothing, except where Ask isn't set up: there, where the words will go. */
@@ -337,17 +351,46 @@ function sessionStart(turns: Turn[]): number {
   return start;
 }
 
+const ITEM = /^\s*(?:[-*•]|\d+[.)])\s+(.*)$/;      // a line a model wrote as a list item
+
+/** A line's **bold** drawn bold; a stray mark is dropped, never shown. */
+function bolded(line: string) {
+  return line.split(/(\*\*[^*\n]+\*\*)/g).map((part, n) =>
+    part.length > 4 && part.startsWith("**") && part.endsWith("**") ? <b key={n}>{part.slice(2, -2)}</b> : part.replace(/\*\*/g, ""));
+}
+
+/** The answer as plain text, its marks taken out: for a folded turn and for screen readers. */
+const unmarked = (text: string) => text.replace(/\*\*/g, "").split("\n").map((line) => line.replace(ITEM, "$1")).join("\n");
+
+/** An answer as it reads: lines as lines, "- " and "1. " lines as a list, **bold** in bold. The marks never show. */
+function Said({ text }: { text: string }) {
+  const out: VNode[] = [];
+  let list: string[] = [];
+  const done = () => {
+    if (list.length) out.push(<ul class="said-list" key={out.length}>{list.map((item, n) => <li key={n}>{bolded(item)}</li>)}</ul>);
+    list = [];
+  };
+  for (const line of text.split("\n")) {
+    const item = ITEM.exec(line);
+    if (item) { list.push(item[1]!); continue; }
+    done();
+    out.push(<span class="said-line" key={out.length}>{bolded(line)}</span>);
+  }
+  done();
+  return <>{out}</>;
+}
+
 function TurnView({ turn, now, open, onOpen }: { turn: Turn; now: House; open: boolean; onOpen: () => void }) {
   // A change to the house says how long it took and can be put back. An answer needs neither.
   const batch = turn.cards.find((card) => card.batch)?.batch;
   const back = batch !== undefined && undone.value.includes(batch);
   if (!open) {         // an earlier turn: both bubbles, a line each, small; a tap opens it, and its Undo stays
-    const first = (turn.answer.split("\n")[0] ?? "").slice(0, 140);
+    const first = (unmarked(turn.answer).split("\n")[0] ?? "").slice(0, 140);
     return (
       <div class={"turn folded" + (back ? " back" : "") + (batch ? " undoable" : "")}>
-        <button type="button" class="fold" aria-expanded="false" aria-label={`${turn.asked}. Hub: ${turn.answer}`} onClick={onOpen}>
+        <button type="button" class="fold" aria-expanded="false" aria-label={`${turn.asked}. Hub: ${unmarked(turn.answer)}`} onClick={onOpen}>
           {turn.asked && <span class="fold-asked">{turn.asked}</span>}
-          {first && <span class="fold-answer">{first}</span>}
+          {first && <span class="fold-answer"><span class="fold-text">{first}</span><Icon name="right" /></span>}
         </button>
         {batch && (back ? <span class="fold-back">Undone</span>
           : <button type="button" class="fold-undo" onClick={() => void undo(batch)}>Undo</button>)}
@@ -361,7 +404,7 @@ function TurnView({ turn, now, open, onOpen }: { turn: Turn; now: House; open: b
     <div class={"turn" + (back ? " back" : "")}>
       {turn.asked && <p class="asked">{turn.asked}</p>}
       {turn.waiting ? <p class="took waits">Waits for the last request to finish</p>
-        : <div class="hub">{shown ? <p class={"answer" + (shown.length > 160 ? " long" : "")}>{shown}</p>
+        : <div class="hub">{shown ? <div class={"answer" + (shown.length > 160 ? " long" : "")}><Said text={shown} /></div>
           : <span class="dots" role="status" aria-label="Hub is working"><i /><i /><i /></span>}</div>}
       {turn.busy && turn.doing && <p class="took">{turn.doing}</p>}
       {turn.cards.map((card, n) => <CardView card={card} now={now} said={turn.answer} key={n} />)}
@@ -383,7 +426,11 @@ function Composer() {
     box.style.height = "auto";
     box.style.height = `${Math.min(box.scrollHeight, 140)}px`;
   }, [text]);
-  const send = () => { if (text.trim()) void ask(text); };
+  const send = () => {
+    const place = onePlace(text);
+    if (place) { asked.value = ""; place(); return; }
+    if (text.trim()) void ask(text);
+  };
   return (
     <form class="composer" onSubmit={(e) => { e.preventDefault(); send(); }}>
       <textarea class="field" id="askq" ref={field} rows={1} autocomplete="off" autocapitalize="sentences" enterkeyhint="send"
@@ -399,6 +446,7 @@ function Composer() {
 
 // Questions anyone can ask without changing anything, offered as a start beside what this person often asks.
 const STARTERS = ["What needs me today?", "What’s on tomorrow?", "What’s on the list?"];
+const PLACES: [View, string][] = [["today", "Today"], ["kitchen", "Kitchen"]];      // pages with no tab, one tap away at the start
 
 /** Suggested messages above the field, as a chat offers them, until the person says something (Hub speaking first
  * with the morning message doesn't count). One tap sends it. */
@@ -411,6 +459,9 @@ function Prompts({ quiet }: { quiet: boolean }) {
       {offered.map((words) => (
         <button type="button" key={words} class={"prompt" + (usual.includes(words) ? " usual" : "")}
           title={usual.includes(words) ? "You often ask this around now" : undefined} onClick={() => void ask(words)}>{words}</button>
+      ))}
+      {PLACES.map(([where, name]) => (
+        <button type="button" key={where} class="prompt place" onClick={() => go(where)}>{name}<Icon name="right" /></button>
       ))}
     </div>
   );

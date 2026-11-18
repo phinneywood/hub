@@ -379,6 +379,8 @@ async def scripted(messages, info):
             yield told if asks else 'Hub couldn’t do that. ' + told
     elif setup:
         yield setup
+    elif re.search(r'\bbills?\b', words) and not back:
+        yield call('errands', show='ready', about='bills')
     elif ERRANDS.search(words):
         yield call('errands', show='ready')
     elif COOKING.search(words):
@@ -400,6 +402,8 @@ async def scripted(messages, info):
         yield _lights(words, places)
     elif any(name.lower() in words for name in SCENES):
         yield call('scene', name=next(name for name in SCENES if name.lower() in words))
+    elif words.startswith('give me the short version'):        # a model that writes marks: the app draws them, never shows them
+        yield 'Three things:\n- **Milk** for the morning\n- Eggs\n- Bread'
     else:
         yield 'Hub can switch and dim lights, run scenes, play music and change how the house is set up. What would you like?'
 

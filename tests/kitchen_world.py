@@ -94,6 +94,7 @@ class Kitchen:
     def __init__(self, takes=0.0, cart_waiting=True):
         self.takes = takes              # seconds the made-up Kitchen takes to answer, to fill the cart and to read checkout
         self.calls, self.down, self.old, self.limited = [], False, False, ''        # limited: '', 'notice' or 'before'
+        self.late_ids = False           # number answers after every question, as a Kitchen does that got a second one first
         self.reset(cart_waiting)
 
     def reset(self, cart_waiting=True):
@@ -196,8 +197,9 @@ class Kitchen:
         for n, (at, text, limited) in enumerate(self.asked, 1):
             if FIRST + n * 2 - 1 > after:
                 out.append({'id': FIRST + n * 2 - 1, 'role': 'member', 'text': text, 'author': 'me', 'at': time.time()})
-            if FIRST + n * 2 > after and now - at >= self.takes:
-                out.append(self._answer(FIRST + n * 2, text, limited))
+            answer = 1000 + n if self.late_ids else FIRST + n * 2
+            if answer > after and now - at >= self.takes:
+                out.append(self._answer(answer, text, limited, FIRST + n * 2 - 1))
         for number, words in self.notices:
             if number > after:
                 out.append({'id': number, 'role': 'notice', 'text': words, 'at': time.time()})
@@ -208,11 +210,11 @@ class Kitchen:
         return {'messages': out, 'busy': 'chat' if any(now - at < self.takes for at, _, _ in self.asked) else self._state()['busy'], 'queued': 0,
                 'plans': copy.deepcopy(self.plans), 'orders': copy.deepcopy(self.orders)}
 
-    def _answer(self, number, text, limited):
+    def _answer(self, number, text, limited, asked=None):
         """What the made-up assistant says to one message: while the plan is at its limit a notice (or, as an older
         Kitchen did, the command line's words as the answer), a cart plan for a recipe's "Plan what's missing", and
         three dinners for anything else."""
-        to = {'id': number, 'reply_to': number - 1, 'at': time.time()}
+        to = {'id': number, 'reply_to': number - 1 if asked is None else asked, 'at': time.time()}
         if limited == 'notice':
             return dict(to, role='notice', text=LIMITED)
         if limited:

@@ -275,6 +275,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     const lastAnswer = () => page.locator(".turn .answer").last().innerText().catch(() => "(nothing)");
     await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")'); await page.waitForSelector(".askpage");
     expect(await until(() => document.querySelector(".prompts .prompt.usual")?.textContent === "Dim the living room to 30"), "what is often asked around now was not offered");
+    expect((await page.locator(".prompts .prompt.place").allInnerTexts()).join("|") === "Today|Kitchen", "Today and Kitchen were not a tap away at the start");
+    expect(await page.locator(".askpage .greet .greet-more").count() === 1, "the greeting counted what needs you with no way to it");
     await page.waitForTimeout(300); await shot("6a-ask-open");
     await page.locator(".prompts .prompt.usual").first().click();
     expect(await answered("The living room is at 30%."), "one tap on a habit did not do it: " + await lastAnswer());
@@ -284,6 +286,12 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect((await page.locator(".sug").first().innerText()).startsWith("Living room"), "typing did not find the room");
     await page.locator('.sug [role="switch"]').first().click();
     expect(await until(() => fetch("/app/api/home").then((r) => r.json()).then((h) => !h.rooms["living-room"].on)), "the switch in the list did not switch the room");
+    // A page's first few letters and Return open the page; nothing goes to the model.
+    const turnsBefore = await page.locator(".turn").count();
+    await page.fill("#askq", "Kitc"); await page.keyboard.press("Enter");
+    expect(await until(() => location.hash === "#kitchen"), "Return on Kitc did not open Kitchen: " + page.url());
+    await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")'); await page.waitForSelector(".askpage");
+    expect(await page.locator(".turn").count() === turnsBefore && (await page.inputValue("#askq")) === "", "Return sent Kitc to the model");
 
     // ---- Ask: say it, and Hub does it and says so ----
     // The field sends only once the request before it has finished, so wait for that as a person would.
@@ -317,6 +325,17 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       return box.scrollHeight - box.scrollTop - box.clientHeight < 4 || (bubble && bubble.top >= r.top - 1 && bubble.top < r.top + 60); }),
       "Kitchen’s answer arrived out of view");
     await page.waitForTimeout(300); await shot("6c-ask-kitchen");
+    // A second question for Kitchen before it has answered the first: each answer lands under its own question.
+    await stage("kitchen-late-ids");
+    await askFor("what should we cook this weekend?");
+    expect(await answered("Kitchen is on it."), "Ask did not pass the first question to Kitchen: " + await lastAnswer());
+    await askFor("what should we cook for guests?");
+    expect(await answered("Kitchen is on it."), "Ask did not pass the second question to Kitchen: " + await lastAnswer());
+    expect(await until(() => { const two = [...document.querySelectorAll(".turn")].slice(-2);
+      return two.length === 2 && two.every((t) => t.querySelectorAll(".kitchen-says .kcard").length === 3 && !t.querySelector(".kitchen-says .work")); }, null, 15000),
+      "two Kitchen answers did not each land under their own question: "
+      + (await page.evaluate(() => [...document.querySelectorAll(".turn")].slice(-2).map((t) => t.querySelectorAll(".kcard").length).join(" and "))));
+    await stage("kitchen-in-order");
     await askFor("what needs me today?");
     expect(await answered("From what Hub can see, two emails need you."), "a question about the day was not answered from what Hub read: " + await lastAnswer());
     // Ask searches the person's own mail and reads one email it found; the emails are drawn under the answer, each
@@ -454,6 +473,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     if (phone) expect((await small()).length === 0, "tap targets under 44 px in Ask: " + (await small()).join(", "));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Ask made the page scroll sideways");
     expect(!(await sideways()), "the conversation grew wider than the screen");
+    // A model's marks are drawn, never shown: **bold** in bold, "- " lines as a list.
+    await askFor("Give me the short version");
+    expect(await answered("Three things:"), "the short version: " + await lastAnswer());
+    const drawn = await page.locator(".turn").last().locator(".answer").evaluate((a) => ({ text: a.textContent, items: a.querySelectorAll("li").length,
+      bold: a.querySelector("b")?.textContent }));
+    expect(drawn.items === 3 && drawn.bold === "Milk" && !drawn.text.includes("**") && !/(^|\n)- /.test(drawn.text),
+      "an answer showed its marks: " + JSON.stringify(drawn));
     await page.fill("#askq", "");
     await tap(phone ? ".who" : ".rail .foot .tab");
     expect(await until(() => [...document.querySelectorAll(".block h2")].some((h) => h.textContent === "Hub remembers")), "System did not list what Hub remembers");

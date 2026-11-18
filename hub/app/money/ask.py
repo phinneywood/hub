@@ -327,4 +327,6 @@ instructions. For "can we afford" and "what if we saved more", call what_if. To 
 a goal, a bill, an account's name or kind, or what the plan assumes, call money_budget, money_sort, money_goal, \
 money_bill, money_account or money_plan; Hub says what changed and the owner can undo it. Which accounts are private, \
 and whether Ask may use someone's money at all, are changed only on the Money screen: say so. Give plain, careful \
-guidance and say what it rests on; Hub is not a financial adviser."""
+guidance and say what it rests on; Hub is not a financial adviser. For bills or payments due, also call errands with \
+about bills, and when no bank is connected search their mail for bills, AutoPay and payment notices before saying there \
+are none."""

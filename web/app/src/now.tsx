@@ -31,10 +31,12 @@ export function Greeting() {
   const outside = home?.facts.find((fact) => fact.label === "Outside")?.value ?? "";
   const said = now ? daySays(now) : home ? houseSays(home) : "What would you like?";
   const sub = now ? daySub(now, outside) : "";
+  const waiting = now ? now.needs.length + now.more : 0;
   return (
     <div class="hub greet">
       <p class="greet-text">{hello(now ? new Date(now.at) : new Date())} {said}</p>
       {sub && <p class="greet-sub">{sub}</p>}
+      {waiting > 0 && <button type="button" class="greet-more" onClick={() => go("today")}>Open Today<Icon name="right" /></button>}
     </div>
   );
 }

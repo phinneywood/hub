@@ -831,3 +831,14 @@ def test_old_errands_lose_their_words_then_go(ready):
     assert by_title('dental')['why'] == 'Harbor Dental says your six-month cleaning is due.'      # still waiting: kept
     store.prune(NOW.timestamp() + 61 * 86400)
     assert store.rows() == []
+
+
+def test_a_question_about_bills_brings_the_bills_only(ready, monkeypatch):
+    """2026-11-18: "any bills due in the next week?" drew eight cards, invitations and alerts among them."""
+    app_world.install(monkeypatch)
+    monkeypatch.setattr(route, 'build', lambda http_client=None: ask_script.MODEL)
+    monkeypatch.setattr(route, 'ready', lambda: None)
+    _, cards = ask('any bills due this week?')
+    bills = [e['id'] for e in picture.ready(login=ME) if e['kind'] in ('pay', 'renew')]
+    assert bills and cards == [{'kind': 'errands', 'ids': bills}]
+

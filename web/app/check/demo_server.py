@@ -432,6 +432,8 @@ def stage(what: str):
         world.accessories = copy.deepcopy(app_world.ACCESSORIES)
         at_hour('evening')
         care.reset()
+    elif what in ('kitchen-late-ids', 'kitchen-in-order'):     # answers numbered after the next question, or straight after their own
+        shop.late_ids = what == 'kitchen-late-ids'
     elif what in HOURS:
         at_hour(what)
     elif what in ('down', 'up'):
