@@ -63,3 +63,36 @@ def test_a_paused_helper_applies_nothing_and_says_so(monkeypatch):
     assert client.get('/app/api/mail-settings', headers=OWNER).json()['paused']
     assert client.post('/app/api/mail-settings/rules-check', json={}, headers=OWNER).status_code == 409
     assert delayed.rules() == []
+
+
+# ---- quiet your loudest senders, in the app ----
+
+def test_the_loudest_sender_is_offered_in_the_app_and_a_choice_goes_into_the_plan(monkeypatch):
+    from hub import bridge
+    from tests import test_app
+    _ready(monkeypatch)
+    monkeypatch.setattr(bridge, 'get', test_app.fake_get)
+    card = client.get('/app/api/mail-settings/quiet', headers=OWNER).json()
+    assert card['ok'] and not card['done'] and card['count'] == 1234 and card['exact'] is True and card['unread_share'] == 100
+    assert card['recent'] == [{'subject': '<script>x</script>', 'unread': False}]           # drawn as text by the app
+    sender = card['sender']
+    assert client.post('/app/api/mail-settings/quiet', json={'key': sender, 'value': {'decision': 'filter_archive', 'count': 1234}},
+                       headers={'origin': 'http://testserver'}).status_code == 403          # this Mac: no change
+    said = client.post('/app/api/mail-settings/quiet', json={'key': sender, 'value': {'decision': 'filter_archive', 'count': 1234, 'exact': True}},
+                       headers=OWNER).json()
+    assert said['said'].startswith('In your plan')
+    assert [i['decision'] for i in store.items() if i['sender'] == sender] == ['filter_archive']
+    assert client.get('/app/api/mail-settings/quiet', headers=OWNER).json().get('sender') != sender
+    assert client.post('/app/api/mail-settings/quiet', json={'key': 'not an address', 'value': {'decision': 'keep'}}, headers=OWNER).status_code == 409
+    assert client.post('/app/api/mail-settings/quiet', json={'key': sender, 'value': {'decision': 'delete'}}, headers=OWNER).status_code == 409
+
+
+def test_someone_else_gets_no_card_and_the_mailbox_is_not_read(monkeypatch):
+    from hub import bridge
+    _ready(monkeypatch)
+    monkeypatch.setattr(config, 'ALLOWED_LOGINS', {'me@example.com', 'casey@example.com'})
+    monkeypatch.setattr(bridge, 'get', lambda *a, **k: (_ for _ in ()).throw(AssertionError('read for someone else')))
+    (config.DATA_DIR / 'household.json').write_text('{"people": [{"name": "Alex", "logins": ["me@example.com"], "accounts": ["default"]},'
+                                                     ' {"name": "Casey", "logins": ["casey@example.com"], "accounts": []}]}')
+    assert client.get('/app/api/mail-settings/quiet', headers={**OWNER, 'tailscale-user-login': 'casey@example.com'}).json() == {
+        'ok': True, 'connected': False}

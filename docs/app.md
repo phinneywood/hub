@@ -58,7 +58,7 @@ sets this in the private settings file (`household.json`):
 | `GET /app/api/activity` | What happened in the house, newest first; `kinds`, `sources` (comma lists) and `before` (a time, for more) (see “Activity”) |
 | `GET /app/api/changes`, `POST /app/api/playlist/{do}` | Everything Hub changed, and playlist taps: `make`, `skip`, `undo` (see “Changes”) |
 | `GET /app/api/engine`, `POST /app/api/engine/{do}` | The Engine screen, and its taps: `tell`, `forget`, `request-done`, `improvement-done`, `note-save`, `note-skip`, `recipe-save`, `recipe-skip`, `recipe-remove`, `trust`, `run` (see “Engine”) |
-| `GET /app/api/mail-settings`, `POST /app/api/mail-settings/{do}` | Mail settings, and its taps: `level`, `charge`, `sender`, `apply`, `remove`, `undo`, `rule-stop`, `rule-resume`, `rules-check`, `backlog` (see “Mail settings”) |
+| `GET /app/api/mail-settings`, `POST /app/api/mail-settings/{do}` | Mail settings, and its taps: `level`, `charge`, `sender`, `apply`, `remove`, `undo`, `rule-stop`, `rule-resume`, `rules-check`, `backlog`, `quiet` (see “Mail settings”); `GET /app/api/mail-settings/quiet`, the next loud sender |
 | `POST /app/api/today/tick` | A need's circle: `{"key": ...}` handles an email or hides an item; with `"back": true`, puts it back |
 | `GET /app/api/errands` | The errands Hub got ready, set aside and finished lately, and how the last read went (see “Errands”) |
 | `POST /app/api/errands/{id}/{do}` | A tap on an errand: `go` (a step was opened, `{"choice", "step"}`), `list` (`{"choice"}`), `done`, `later`, `not`, `back` |
@@ -1014,7 +1014,14 @@ inbox changes with Apply, Remove and, once applied, Undo; the backlog offer; how
 alert; senders the owner sorted by hand, with "Let Hub decide"; and the archive-after-30-days rules, with Stop,
 Resume and "Check them now". Each tap calls the older Mail page's own handler and reads its redirect, so the pause,
 the checks and Undo are the same. While the plan applies or the rules are checked, the screen looks again every
-few seconds. Quieting senders one at a time, bulk clean-up and tidying filters still open the older pages.
+few seconds.
+
+**Quiet your loudest senders** (since 2026-11-18, moved in from the older Quiet page): one sender at a time, as that
+page's card showed it (how many are in the inbox, how much is unread, the last three subjects, whether a filter
+already skips the inbox), read from the Gmail helper by `GET /app/api/mail-settings/quiet` for the mailbox owner
+only. Skip the inbox and archive, new mail only, Keep or Later goes into the plan above through the older page's own
+`decide`; nothing changes in Gmail until the plan is applied. Labels, 30-day rules and Luna's advice still open the
+older page, as do bulk clean-up and tidying filters. The older Inbox overview and Labels pages open the Mail board.
 
 ## Engine
 

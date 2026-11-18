@@ -1,7 +1,7 @@
 from email.utils import parseaddr
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ... import bridge, senders
 from . import common, health as checks
@@ -15,15 +15,10 @@ def explore(request: Request):
     return page(request, "explore.html", "explore")
 
 
-@router.get("/overview", response_class=HTMLResponse)
-def overview(request: Request):
-    profile = bridge.get("/gmail/profile")
-    try:
-        data, problem = common.overview(), None
-    except bridge.BridgeError as err:
-        data, problem = None, str(err)
-    inbox = common.inbox_counts(data) if data else None
-    return page(request, "dashboard.html", "explore", child=True, profile=profile, overview=data, problem=problem, inbox=inbox)
+@router.get("/overview")
+def overview():
+    """The inbox overview is the app's Mail board now (counts, by kind, the inbox over time)."""
+    return RedirectResponse("/app/#board/mail", status_code=302)
 
 
 @router.get("/filters", response_class=HTMLResponse)
@@ -54,12 +49,10 @@ def health_page(request: Request, run: int = 0):
                 label_total=sum(x.get("type") == "user" for x in labels))
 
 
-@router.get("/labels", response_class=HTMLResponse)
-def labels(request: Request):
-    items = bridge.get("/gmail/labels").get("labels", [])
-    user = sorted((x for x in items if x.get("type") == "user"), key=lambda x: x["name"].lower())
-    system = sorted((x for x in items if x.get("type") != "user"), key=lambda x: x["name"])
-    return page(request, "labels.html", "explore", child=True, user=user, system=system)
+@router.get("/labels")
+def labels():
+    """The label list is retired: Ask labels mail (after a tap) and the Mail board shows what is in the inbox."""
+    return RedirectResponse("/app/#board/mail", status_code=302)
 
 
 @router.get("/search", response_class=HTMLResponse)

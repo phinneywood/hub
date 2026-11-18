@@ -76,8 +76,9 @@ def test_the_mail_and_calendar_pages_show_someone_else_a_calm_page_and_read_noth
 
 def test_alex_opens_them_as_before(monkeypatch):
     monkeypatch.setattr(bridge, 'get', test_app.fake_get)
-    assert 'Bills' in client.get('/gmail/labels', headers=by(ALEX)).text
-    assert 'Bills' not in client.get('/gmail/labels', headers=by(CASEY)).text
+    assert 'Bills' in client.get('/gmail/filters', headers=by(ALEX)).text
+    assert client.get('/gmail/labels', headers=by(ALEX), follow_redirects=False).headers['location'] == '/app/#board/mail'
+    assert 'Bills' not in client.get('/gmail/filters', headers=by(CASEY)).text
 
 
 # ---- the app ----
