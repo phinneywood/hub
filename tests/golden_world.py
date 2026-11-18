@@ -40,11 +40,28 @@ CATALOG = {'playlists': [('Calm Piano Evening', 'apple_music://playlist/p1'), ('
 class World:
     def __init__(self):
         self.sent = []          # every write that reached a fake service: must stay empty in a dry run
+        self.follows = False    # True: a light or plug switched here reads back switched, as in the real house
+        self.now = {}           # entity id: (state, attributes) after such a switch
+
+    def _switched(self, message):
+        domain, _, service = message.get('path', '').removeprefix('/api/services/').partition('/')
+        body = message.get('body') or {}
+        if not self.follows or domain not in ('light', 'switch') or service not in ('turn_on', 'turn_off'):
+            return
+        named = body.get('entity_id')
+        for entity in [named] if isinstance(named, str) else named or ():
+            was = self.now.get(entity) or next(((s, a) for e, _, _, s, a in ENTITIES if e == entity), ('off', {}))
+            if service == 'turn_off':
+                self.now[entity] = ('off', {})
+            else:
+                level = {'brightness': round(body['brightness_pct'] * 255 / 100)} if 'brightness_pct' in body else {}
+                self.now[entity] = ('on', {**was[1], **level})
 
     # Home Assistant, as the broker answers it
     def exchange(self, message, timeout):
         if message['op'] == 'request':
             self.sent.append(('home', message))
+            self._switched(message)
             return []
         answers = {
             'config/area_registry/list': AREAS,
@@ -55,7 +72,7 @@ class World:
                                             for e, a, n, _, _ in ENTITIES],
             'get_states': [{'entity_id': e, 'state': s, 'attributes': {'friendly_name': n, **copy.deepcopy(attrs),
                                                                        **({'group_members': [e]} if e.startswith('media_player.') else {})}}
-                           for e, _, n, s, attrs in ENTITIES],
+                           for e, _, n, s, attrs in ((e, a, n, *self.now.get(e, (s, attrs))) for e, a, n, s, attrs in ENTITIES)],
         }
         return [answers[c['type']] for c in message['commands']]
 

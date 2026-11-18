@@ -28,7 +28,7 @@ def house(monkeypatch):
     monkeypatch.setattr(route, 'build', lambda http_client=None: ask_script.MODEL)
     monkeypatch.setattr(route, 'ready', lambda: None)
     monkeypatch.setattr(trial, 'SPACING', 0)
-    monkeypatch.setattr(trial, 'COOL_OFF', 0)
+    monkeypatch.setattr(trial, 'BACKOFF', (0, 0, 0))
     brain._playlists.update(names=[], at=float('-inf'))
     return made
 
@@ -143,7 +143,7 @@ def test_the_live_check_of_ask_says_how_many_and_is_not_asked_again_on_the_same_
     with pytest.raises(checks.Skipped, match='passed on this version'):
         checks.ask_setup()
     monkeypatch.setattr(runner, 'history', lambda limit=1: {'ask.setup': [{'status': 'fail', 'version': runner.version(), 'at': 0}]})
-    monkeypatch.setattr(trial, 'run', lambda: {'ran': 6, 'failed': ['move', 'automation'], 'left_out': [], 'cost': 0.0412})
+    monkeypatch.setattr(trial, 'run', lambda within=None: {'ran': 6, 'failed': ['move', 'automation'], 'left_out': [], 'cost': 0.0412})
     with pytest.raises(checks.Failed, match='2 of 6 requests went wrong: move, automation'):
         checks.ask_setup()
     assert {'house.setup', 'ask.setup'} <= {c.id for c in checks.CHECKS}
@@ -187,18 +187,41 @@ def test_the_core_checks_tell_wrong_outcomes_apart(house):
     assert trial._answered(seen(said='No rain.'), who) == '' and trial._answered(seen(), who) == 'There was no answer.'
 
 
-def test_a_rate_limit_leaves_a_request_out_rather_than_failing_ask(house, monkeypatch):
+def _busy(status):
     from pydantic_ai.exceptions import ModelHTTPError
     from pydantic_ai.models.function import FunctionModel
 
     async def busy(messages, info):
-        raise ModelHTTPError(429, 'claude-sonnet-5-5')
+        raise ModelHTTPError(status, 'claude-sonnet-5-5')
         yield ''
-    monkeypatch.setattr(route, 'build', lambda http_client=None: FunctionModel(stream_function=busy))
+    return FunctionModel(stream_function=busy)
+
+
+def test_a_rate_limit_leaves_a_request_out_rather_than_failing_ask(house, monkeypatch):
+    built = []
+    monkeypatch.setattr(route, 'build', lambda http_client=None: built.append(1) or _busy(429))
     result = trial.run('core')
     assert result['ran'] == 0 and result['failed'] == [] and len(result['busy']) == 4
-    with pytest.raises(checks.Skipped, match='busy'):
+    assert len(built) == 1 + 4 * 4                   # its look that Ask is set up, then each request after each wait
+    with pytest.raises(checks.Skipped, match='Inconclusive: the model was busy'):
         checks.ask()
-    monkeypatch.setattr(trial, 'run', lambda kind='setup': {'ran': 4, 'failed': ['play'], 'left_out': [], 'busy': [], 'cost': 0.01})
+    monkeypatch.setattr(trial, 'run', lambda kind='setup', within=None: {'ran': 4, 'failed': ['play'], 'left_out': [], 'busy': [], 'cost': 0.01})
     with pytest.raises(checks.Failed, match='1 of 4 Ask requests went wrong: play'):
         checks.ask()
+
+
+def test_a_request_the_model_turned_away_is_asked_again_and_counts_when_it_goes_through(house, monkeypatch):
+    models = [ask_script.MODEL, _busy(529), _busy(429)]     # set up; then overloaded, rate-limited, and through
+
+    def build(http_client=None):
+        return models.pop(0) if models else ask_script.MODEL
+    monkeypatch.setattr(route, 'build', build)
+    result = trial.run('core')
+    assert (result['ran'], result['failed'], result['busy']) == (4, [], [])
+
+
+def test_a_busy_model_is_waited_for_only_while_the_trial_has_time(house, monkeypatch):
+    built = []
+    monkeypatch.setattr(route, 'build', lambda http_client=None: built.append(1) or _busy(429))
+    result = trial.run('core', within=trial.TURN - 1)    # no time for a wait and another try
+    assert len(result['busy']) == 4 and len(built) == 1 + 4

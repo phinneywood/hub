@@ -302,14 +302,32 @@ def kitchen():
 # ---- The model route ----
 
 KIND = 'checks'             # these calls in the engine's record of runs
+BACKOFF = (20.0, 60.0, 120.0)   # a model that is rate-limited or overloaded is asked again after each of these waits
+BUSY = (429, 503, 529)      # what the route answers when its model is rate-limited or overloaded: not a failure of Hub
+MODEL_SECONDS = 300
 
 
 def model():
-    """One call with invented data over the same pinned route everything else uses."""
-    from .. import actions, home, luna
-    from ..engine import state
+    """One call with invented data over the same pinned route everything else uses. A busy model is asked again,
+    later each time; busy every time, the check says nothing either way (skipped), so it can't stop a deploy."""
+    from .. import luna
     if not luna.configured():
         raise Failed('The model key isn’t set up.')
+    until = time.monotonic() + MODEL_SECONDS - 10
+    for wait in (*BACKOFF, None):
+        try:
+            return _model_once()
+        except luna.LunaError as error:
+            if error.status not in BUSY:
+                raise Failed(str(error)) from None
+            if wait is None or time.monotonic() + wait + luna.TIMEOUT > until:
+                raise Skipped('Inconclusive: the model was busy (rate limit or overload) every time it was asked.') from None
+        time.sleep(wait)
+
+
+def _model_once():
+    from .. import actions, home, luna
+    from ..engine import state
     usage, ok = {}, False
     try:
         raw, usage = luna.call(luna.build_request(luna.build_messages(
@@ -317,8 +335,6 @@ def model():
             'Put these under Receipts')))
         actions.validate(raw, 'shop@example.invalid', [{'id': 'Label_1', 'name': 'Receipts', 'type': 'user'}])
         ok = True
-    except luna.LunaError as error:
-        raise Failed(str(error)) from None
     except actions.ActionError:
         raise Failed('The model answered, but not in the form Hub asked for.') from None
     finally:
@@ -333,20 +349,22 @@ def ask():
     this ran the older chat's golden scenarios, which said nothing about the Ask in the app."""
     from ..app.ask import trial
     try:
-        result = trial.run('core')
+        result = trial.run('core', within=ASK_SECONDS - 20)
     except trial.Stopped as error:
         raise Skipped(str(error)) from None
     if result['failed']:
         raise Failed(f'{len(result["failed"])} of {result["ran"]} Ask requests went wrong: ' + ', '.join(result['failed'])
                      + f'. What Ask did is in Hub’s private folder (${result["cost"]:.3f}).')
     if not result['ran']:
-        raise Skipped('The model was busy or out of reach, so nothing was checked.' if result['busy']
-                      else 'No request ran.')
+        raise Skipped('Inconclusive: the model was busy or out of reach every time it was asked, so nothing was checked.'
+                      if result['busy'] else 'No request ran.')
     busy = f' {len(result["busy"])} left out: the model was busy.' if result['busy'] else ''
     return f'{result["ran"]} everyday Ask requests went the right way as a dry run (${result["cost"]:.3f}).{busy}'
 
 
+ASK_SECONDS = 360              # four requests, and waits for a busy model on top
 ASK_SETUP_DAYS = 30
+ASK_SETUP_SECONDS = 450
 
 
 def ask_setup():
@@ -359,14 +377,14 @@ def ask_setup():
     if last and last['status'] == 'pass' and last['version'] == runner.version() and time.time() - last['at'] < ASK_SETUP_DAYS * 86400:
         raise Skipped('It passed on this version already.')
     try:
-        result = trial.run()
+        result = trial.run(within=ASK_SETUP_SECONDS - 20)
     except trial.Stopped as error:
         raise Skipped(str(error)) from None
     if result['failed']:
         raise Failed(f'{len(result["failed"])} of {result["ran"]} requests went wrong: ' + ', '.join(result['failed'])
                      + f'. What Ask did is in Hub’s private folder (${result["cost"]:.3f}).')
     if result.get('busy'):          # not a pass: it would not be asked again on this version for a month
-        raise Skipped(f'The model was busy for {len(result["busy"])} of the requests, so this version isn’t checked yet.')
+        raise Skipped(f'Inconclusive: the model was busy for {len(result["busy"])} of the requests, so this version isn’t checked yet.')
     if not result['ran']:
         raise Skipped('No request ran.')
     left = f' {len(result["left_out"])} left out at the spending limit.' if result['left_out'] else ''
@@ -395,9 +413,31 @@ def quiet(hour=None):
     return hour >= start or hour < end
 
 
+SETTLE = 3.0                # seconds the light must hold as Hub left it; an automation that fights it acts sooner
+NEAR = 2                    # brightness, in percent, that counts as the same when read back
+
+
+def _held(entity):
+    """The light as Home Assistant has it now, read fresh: {'state', 'level'}, or None when it can't be read."""
+    from ..tools.house import broker, control
+    try:
+        found = control.devices(control.read.snapshot(fresh=True)).get(entity)
+    except broker.HomeDown:
+        return None
+    return {'state': found['state'], 'level': found['level']} if found else None
+
+
+def _same(now, before):
+    if not now or now['state'] != before['state']:
+        return False
+    return before['state'] != 'on' or now['level'] is None or before['level'] is None or abs(now['level'] - before['level']) <= NEAR
+
+
 def light():
-    """Turn the one light the owner named for this on or off, read it back, and put it back, through the same
-    door a typed request uses (allowlist, record, Undo). The record shows it as `via` = check."""
+    """Turn the one light the owner named for this on or off, and put it back, through the same door a typed request
+    uses (allowlist, record, Undo). The record shows it as `via` = check. Each step is read back SETTLE seconds later,
+    so a light that something else switches straight back (an automation fighting it) fails rather than passes, and
+    a light that isn't back as it was is set back again before the check says so."""
     from ..tools.house import control
     entity = settings().get('undo_light')
     if not isinstance(entity, str) or not entity.startswith(('light.', 'switch.')):
@@ -406,21 +446,39 @@ def light():
         raise Skipped('Quiet hours: nothing in the house is changed for a check.')
     try:
         device = control._known(control.devices(control.read.snapshot(fresh=True)), entity)
-        action = 'off' if device['state'] == 'on' else 'on'
+        before = {'state': device['state'], 'level': device['level']}
+        if before['state'] not in ('on', 'off'):
+            raise Failed(f'The test light isn’t answering in Home Assistant ({before["state"]}).')
+        action = 'off' if before['state'] == 'on' else 'on'
         done = control.change([entity], action, login=LOGIN, via='check')
     except control.Refused as error:
         raise Failed(str(error)) from None
     if done['not_sent']:
         raise Failed('The change to the test light wasn’t sent.')
+    time.sleep(SETTLE)
+    held = _held(entity)
     try:
         back = control.undo(done['batch'], login=LOGIN, via='check')
     except control.Refused as error:
         raise Failed(f'The test light changed but wasn’t put back: {error} See Home changes.') from None
+    time.sleep(SETTLE)
+    if not _same(_held(entity), before):
+        again = 'off' if before['state'] == 'off' else 'on'
+        level = before['level'] if again == 'on' else None
+        try:
+            control.change([entity], again, value=level, login=LOGIN, via='check')
+        except control.Refused:
+            pass
+        raise Failed(f'The test light wasn’t back as it was {SETTLE:.0f} s after it was put back, so Hub set it '
+                     f'{again} again. See Home changes.')
     if not back['done']:
         raise Failed('The test light changed but putting it back wasn’t confirmed. See Home changes.')
     if not done['done']:
         raise Failed('The test light didn’t confirm the change. It was put back.')
-    return 'The test light changed and was put back.'
+    if not held or held['state'] != action:
+        raise Failed(f'The test light didn’t stay {action}: something switched it back within {SETTLE:.0f} s, so an '
+                     'automation or scene may fight it. Name a light nothing else switches. It was put back.')
+    return f'The test light changed, held for {SETTLE:.0f} s and was put back as it was.'
 
 
 CHECKS = (
@@ -440,13 +498,14 @@ CHECKS = (
     Check('calendar.read', 'Calendar', 'The calendar week can be read.', 'read', calendar),
     Check('kitchen.answers', 'Kitchen', 'The Kitchen service answers.', 'read', kitchen),
     # Before the checks that call the model: the Ask check stands a dry-run layer in front of the house while it runs.
-    Check('house.light', 'A real change, undone', 'One named light is switched and put straight back.', 'undo', light, 60),
-    Check('model.route', 'Model route', 'One call with invented data over the pinned private route.', 'spend', model, 60),
+    Check('house.light', 'A real change, undone', 'One named light is switched, holds, and is put back as it was.', 'undo', light, 60,
+          seed='The test lamp had an automation that switched it straight back, and the check passed on what Home Assistant accepted.'),
+    Check('model.route', 'Model route', 'One call with invented data over the pinned private route.', 'spend', model, MODEL_SECONDS),
     Check('ask.golden', 'Ask, end to end', 'Everyday requests through Ask in the app with the real model, as a dry run: your '
-          'playlists, playing one, a room’s lights and the weather.', 'spend', ask, 240,
+          'playlists, playing one, a room’s lights and the weather.', 'spend', ask, ASK_SECONDS,
           seed='Ask couldn’t say what playlists the owner has, and the old check tested the older chat instead.'),
     Check('ask.setup', 'Ask sets up the house, end to end', 'A move, an automation, a removal, an unlock and the shopping list asked of '
-          'Ask with the real model on the real house, as a dry run: nothing is sent.', 'spend', ask_setup, 300),
+          'Ask with the real model on the real house, as a dry run: nothing is sent.', 'spend', ask_setup, ASK_SETUP_SECONDS),
 )
 
 

@@ -114,14 +114,66 @@ def test_the_light_check_is_off_until_named_and_never_runs_in_quiet_hours(world,
     assert world.sent == []
 
 
-def test_the_light_check_changes_the_named_light_and_puts_it_back(world, monkeypatch):
+@pytest.fixture
+def lamp(world, monkeypatch):
+    """The test light named and switched on, a house that reads back what was switched, and no waiting."""
     _settings(undo=True, undo_light=LAMP)
     monkeypatch.setattr(checks, 'quiet', lambda hour=None: False)
-    assert checks.light() == 'The test light changed and was put back.'
-    services = [m['path'].rsplit('/', 1)[-1] for kind, m in world.sent if kind == 'home']
-    assert sorted(services) == ['turn_off', 'turn_on'] and all(m['body']['entity_id'] == LAMP for _, m in world.sent)
+    monkeypatch.setattr(checks, 'SETTLE', 0)
+    world.follows = True
+    return world
+
+
+def _lamp_now():
+    return checks._held(LAMP)
+
+
+def test_the_light_check_changes_the_named_light_and_puts_it_back(lamp):
+    before = _lamp_now()
+    assert before == {'state': 'on', 'level': 78}
+    assert checks.light() == 'The test light changed, held for 0 s and was put back as it was.'
+    sent = [m for kind, m in lamp.sent if kind == 'home']
+    assert [m['path'].rsplit('/', 1)[-1] for m in sent] == ['turn_off', 'turn_on'] and all(m['body']['entity_id'] == LAMP for m in sent)
+    assert sent[1]['body']['brightness_pct'] == 78 and _lamp_now() == before
     rows = control.recent()
     assert {r['via'] for r in rows} == {'check', 'undo'} and {r['login'] for r in rows} == {checks.LOGIN}
+
+
+def test_the_light_check_fails_when_something_switches_the_light_straight_back(lamp, monkeypatch):
+    """2026-11-18: the test lamp had an automation that turned it back on within a moment, and the check passed,
+    because Home Assistant had accepted both requests. The light is now read back after it settles."""
+    sent = lamp.exchange
+
+    def fights(message, timeout):
+        answer = sent(message, timeout)
+        lamp.now.pop(LAMP, None)                    # an automation puts the lamp back as it was, at once
+        return answer
+    monkeypatch.setattr(broker, '_exchange', fights)
+    with pytest.raises(checks.Failed, match='didn’t stay off: something switched it back'):
+        checks.light()
+    assert _lamp_now() == {'state': 'on', 'level': 78}
+
+
+def test_the_light_check_sets_the_light_back_when_putting_it_back_did_not_hold(lamp, monkeypatch):
+    sent, dropped = lamp.exchange, []
+
+    def loses_the_first_put_back(message, timeout):
+        if message['op'] == 'request' and message['path'].endswith('/turn_on') and not dropped:
+            dropped.append(message)                 # accepted, and lost on its way to the lamp
+            return []
+        return sent(message, timeout)
+    monkeypatch.setattr(broker, '_exchange', loses_the_first_put_back)
+    with pytest.raises(checks.Failed, match='wasn’t back as it was 0 s after it was put back, so Hub set it on again'):
+        checks.light()
+    assert _lamp_now() == {'state': 'on', 'level': 78}
+    assert control.recent()[0]['done'] == ['Reading Lamp on at 78%'] and len(control.recent()) == 3   # the set-back is on record
+
+
+def test_the_light_check_fails_when_the_light_is_not_answering(lamp, monkeypatch):
+    monkeypatch.setitem(lamp.now, LAMP, ('unavailable', {}))
+    with pytest.raises(checks.Failed, match='isn’t answering'):
+        checks.light()
+    assert lamp.sent == []
 
 
 def test_a_run_only_makes_a_real_change_when_allowed_and_switched_on(world, monkeypatch):
@@ -308,12 +360,39 @@ def test_the_model_check_makes_one_call_with_invented_data_and_records_it(monkey
         checks.model()
 
 
+def test_a_busy_model_is_asked_again_later_and_never_fails_the_model_check(monkeypatch):
+    """A rate limit or an overload says nothing about Hub: the check waits and asks again, and when the model stays
+    busy it is inconclusive (skipped), which never stops or undoes a deploy. Any other refusal still fails."""
+    from hub import luna
+    waited, answers = [], []
+    monkeypatch.setattr(luna, 'configured', lambda: True)
+    monkeypatch.setattr(checks.time, 'sleep', waited.append)
+
+    def call(request):
+        status = answers.pop(0)
+        if status != 200:
+            raise luna.LunaError(f'Luna is unavailable right now (status {status})', status=status)
+        return ({'unsupported': None, 'skip_inbox': False, 'mark_read': False, 'label': 'Receipts', 'future': True, 'existing': False,
+                 'older_than_days': None, 'subject_include': [], 'subject_exclude': []}, {})
+    monkeypatch.setattr(luna, 'call', call)
+    answers[:] = [429, 529, 200]
+    assert 'private route' in checks.model() and waited == [20.0, 60.0]
+    waited.clear()
+    answers[:] = [429, 429, 503, 529]
+    with pytest.raises(checks.Skipped, match='Inconclusive'):
+        checks.model()
+    assert waited == [20.0, 60.0, 120.0] and answers == []
+    answers[:] = [500]
+    with pytest.raises(checks.Failed, match='status 500'):
+        checks.model()
+
+
 def test_the_ask_check_runs_the_ask_in_the_app_not_the_older_chat(world, monkeypatch):
     from hub.app.ask import trial
     with pytest.raises(checks.Skipped):                          # no key: nothing to run, not a failure of Ask
         checks.ask()
     ran = []
-    monkeypatch.setattr(trial, 'run', lambda kind='setup': ran.append(kind) or {'ran': 4, 'failed': [], 'left_out': [], 'busy': [], 'cost': 0.004})
+    monkeypatch.setattr(trial, 'run', lambda kind='setup', within=None: ran.append(kind) or {'ran': 4, 'failed': [], 'left_out': [], 'busy': [], 'cost': 0.004})
     assert checks.ask() == '4 everyday Ask requests went the right way as a dry run ($0.004).' and ran == ['core']
 
 
