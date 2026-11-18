@@ -240,7 +240,7 @@ that it was given.
 **One trip to the model.** A tool that did the job says so itself, in a sentence Hub writes
 (“The kitchen and the living room are at 40%.”), and the turn ends there: no second trip for the model to
 describe what happened. Only when a tool could not do it as asked (nothing matched a search, a room it
-couldn't place) or gave something to answer from (`look_up`, `music_library`, `hub_info`, `conversation`'s show,
+couldn't place) or gave something to answer from (`look_up`, `music_library`, `hub_info`, `bike_bus`, `conversation`'s show,
 `find`, `details`) does the model get its answer and go on. A tool that reads never ends a turn with a sentence of
 its own: on 2026-11-18 "what's that playlist you made for me?" reached `conversation`, whose stock line about the
 summary became the whole answer. A turn is at most six trips.
@@ -263,7 +263,10 @@ playlists, a playlist's songs, search with handles `music` plays exactly, and wh
 `playlist` (make, add to, take from, reorder, rename or delete a playlist, only when the person's own words ask;
 making and deleting wait for their tap on Hub's Playlists page, the rest have Undo there for a day: the older chat's
 `edit_playlist`, `catalog.edit_playlist`), `hub_info` (the trip, what Hub's AI costs and the inbox's counts, those
-two for the owner only, and the devices on the home network; read-only), `mail_search` and `mail_read`
+two for the owner only, and the devices on the home network; read-only), `bike_bus` (since 2026-11-18, the older
+Bike + bus page's planner: their bike or a Lime with the bus, against the bus alone; the saved trip when no place is
+said; the page's own limit of one search at a time and six an hour, `mobility/pages.limited_search`; the model gets
+times, lines and stop names, never the saved addresses; read-only), `mail_search` and `mail_read`
 (see “Ask reads mail”), `errands`
 (the asker's errands Hub got ready, drawn as cards under the answer; read-only), `errand` (Done, Tomorrow, Not this,
 the list, Undo and where replies open, only as the person's own words ask; see “Errands”), `house_health` and

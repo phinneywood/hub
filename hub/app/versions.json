@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "26c128b96d4e63d17a315f80e953a7c6dc41ed26",
+  "from": "479e1277b60d7ab869f9fba26c076a5ad2a6a452",
   "live": null,
+  "title": "Ask plans trips by bike and bus",
+  "changes": [
+   "Ask plans trips by bike or Lime and bus: ask how to get somewhere."
+  ]
+ },
+ {
+  "sha": "479e1277b60d7ab869f9fba26c076a5ad2a6a452",
+  "from": "26c128b96d4e63d17a315f80e953a7c6dc41ed26",
+  "live": "2026-11-18T18:22:29Z",
   "title": "Older pages become dashboards",
   "changes": [
    "Calendar and AI spend are dashboards now; the older Calendar and Insights pages open them.",

@@ -460,6 +460,44 @@ def hub_info(ctx: RunContext[Turn], what: Literal['trip', 'ai_spend', 'inbox_cou
     return catalog.network_devices_lookup(name=name)
 
 
+# ---- getting somewhere by bike or scooter and the bus (the older Bike + bus page's planner) ----
+
+ROUTES_SHOWN = 3
+
+
+def bike_bus(ctx: RunContext[Turn], destination: str = '', start: str = '',
+             ride: Literal['bike', 'lime', 'lime_last', 'lime_both'] = 'bike', leave: str = '', max_ride: Literal[10, 15, 25, 40] = 25) -> dict:
+    """Plan a trip that combines the person's own bike, or a Lime scooter, with buses, and compare it with taking the
+    bus alone. destination and start: addresses or place names as the person said them; leave either empty to use
+    the saved trip shortcut (start) or the usual destination. ride: bike (their own bike), lime (Lime to the bus),
+    lime_last (Lime after the bus), lime_both. leave: a local departure time as YYYY-MM-DDTHH:MM within the next
+    seven days, or empty for now. Each search uses Google Maps and Hub allows six an hour, so search once per request
+    and only when they ask how to get somewhere this way. Read-only: nothing is booked or unlocked."""
+    from ...tools.mobility import google, pages, places, planner
+    turn = ctx.deps
+    turn.again = True
+    saved = places.load() or {}
+    start = start.strip() or saved.get('origin', '')
+    destination = destination.strip() or saved.get('destination', '') or planner.area().get('default_destination', '')
+    if not start or not destination:
+        return {'not_done': 'Say where from and where to; Hub has no saved trip to use.'}
+    try:
+        found = pages.limited_search(start, destination, ride, leave, max_ride)
+    except google.MapsError as error:
+        return {'not_done': str(error)[:300]}
+    routes = []
+    for route in found['routes'][:ROUTES_SHOWN]:
+        routes.append({'leave': route['departure'], 'arrive': route['arrival'], 'minutes': route['minutes'],
+                       'riding_minutes': route['ride_minutes'], 'walking_minutes': route['walk_minutes'],
+                       'waiting_minutes': route['wait_minutes'], 'buses': route['lines'], 'transfers': route['transfers'],
+                       'minutes_saved_vs_bus_alone': route.get('vs_bus'),
+                       'steps': [f"{s['start']} {s['title']} ({s['minutes']} min)" for s in route['steps']][:10],
+                       'warnings': route['warnings'][:3]})
+    return {'ride': planner.KINDS[ride], 'date': found['date'], 'routes': routes,
+            'note': ('Hub stopped early to stay within its search limit; there may be more.' if found['limited'] else '')
+            + ('' if routes else 'No route combining a ride and the bus fits; the bus alone may be best.')}
+
+
 # ---- the one conversation: what Hub keeps of it, and starting over ----
 
 ABOUT_THE_CONVERSATION = re.compile(r'\b(summary|what do you (remember|know|keep)|our (conversation|chat)|this (conversation|chat))\b', re.I)
@@ -1054,5 +1092,5 @@ CARE_WORDS = {'pause': 'pause', 'resume': 'start fixing again', 'try_again': 'tr
 AGREED = re.compile(r"\s*(yes|yeah|yep|yup|sure|ok|okay|please do|do it|go ahead|go for it)\b", re.I)
 
 
-ALL = (lights, scene, music, music_library, playlist, hub_info, remember, conversation, groceries, kitchen, look_up, mail_search, mail_read, errands, errand, find, details, arrange, rooms, scene_setup, routine,
+ALL = (lights, scene, music, music_library, playlist, hub_info, bike_bus, remember, conversation, groceries, kitchen, look_up, mail_search, mail_read, errands, errand, find, details, arrange, rooms, scene_setup, routine,
        device, setting, integration, dashboard, house_health, caretaker)
