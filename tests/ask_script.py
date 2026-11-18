@@ -74,9 +74,12 @@ SEARCH_MAIL = re.compile(r'^search my (?:mail|email) for (.+?)[.?!]?$', re.I)
 OPEN_MAIL = re.compile(r'^(?:open|read) (?:the )?(first|second|third|\d)(?: one| email)?\b', re.I)
 ORDINAL = {'first': 1, 'second': 2, 'third': 3}
 EVERY = re.compile(rf'^every (evening|morning|day) at (\d{{1,2}}):(\d{{2}}),? turn (on|off) {THE}(.+)$', re.I)
+LIBRARY_ASKED = re.compile(r'\b(what playlists|playlists do (i|we) have|my playlists)\b')
+SPEND_ASKED = re.compile(r'\b(ai|model)\b.*\b(cost|spend|spent)\b')
+REMEMBERS = re.compile(r'\b(what do you remember|our conversation|that playlist you made)\b')
 SOUND = re.compile(r'\b(play|music|songs?|jazz|piano|playlist|pause|resume|skip|next|previous|quieter|louder|volume|too|as well)\b')
 LIGHTS = re.compile(r'\b(dim|turn|switch|lights?|lamps?|on|off)\b')
-FILLER = re.compile(r'\b(please|play|put on|some|a bit of|softly|quietly|music|in|on|the|speakers?)\b')
+FILLER = re.compile(r'\b(please|play|put on|some|a bit of|softly|quietly|music|in|on|the|speakers?|my|playlist)\b')
 LIBRARY = ['Evening Jazz', 'Kitchen Dance Party', 'Sunday Morning', 'Quiet Piano', 'Rainy Day', 'Songs for the Car']
 BAND = {'name': 'The Example Band', 'uri': 'apple_music://artist/77'}
 
@@ -194,6 +197,23 @@ async def scripted(messages, info):
         yield 'Week 15: fourteen weeks and six days, in the second trimester, with 176 days to go.'
     elif not back and '"network": {' in given:
         yield 'The internet is up: 14 ms ping, and one short drop overnight.'
+    elif back and back[0].tool_name == 'music_library':
+        names = [p['name'] for p in back[0].content.get('playlists', ())]
+        yield f'You have {len(names)} playlists:\n' + '\n'.join(names) if names else 'Hub couldn’t read the library.'
+    elif back and back[0].tool_name == 'hub_info':
+        seen = back[0].content
+        yield (f'This month Hub’s AI has cost {", ".join(m["spent"] for m in seen["limits"])}.' if 'limits' in seen
+               else str(next(iter(seen.values()), '')))
+    elif back and back[0].tool_name == 'conversation':
+        seen = back[0].content
+        yield (f'From our conversation: {seen["summary"]}' if not seen['summary'].startswith('(none')
+               else 'Hub has no record of that in our conversation. Hub can list your playlists if that helps.')
+    elif not back and LIBRARY_ASKED.search(words):
+        yield call('music_library')
+    elif not back and SPEND_ASKED.search(words):
+        yield call('hub_info', what='ai_spend')
+    elif not back and REMEMBERS.search(words):
+        yield call('conversation', do='show')
     elif back and back[0].tool_name == 'look_up' or not back and '<data>' in given:
         yield 'From what Hub can see, ' + ('the dentist is Tuesday at three.' if back else 'two emails need you.')
     elif back and back[0].tool_name == 'find' and back[0].content.get('found') and EVERY.match(' '.join(spoken.split()).rstrip('.')):

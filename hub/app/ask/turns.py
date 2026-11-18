@@ -26,26 +26,64 @@ create table if not exists app_ask(
   status text not null default 'ok');
 create index if not exists app_ask_login on app_ask(login, ts);
 """
+# Added 2026-11-18: which tools a turn used and how each came out ("music_library:read", "find:not_done"), and what
+# kind of failure ended it ("rate_limit"). Names and outcome words only, never what was said or found.
+COLUMNS = (('tools', "text not null default '[]'"), ('problem', "text not null default ''"))
+# How a turn ended. ok: answered or done. stuck: tools were used and none of them did the job. unanswered: the model
+# neither spoke nor acted. failed: an error ended it. refused: Hub wouldn't run it (no key, a limit).
+STATUSES = ('ok', 'stuck', 'unanswered', 'failed', 'refused')
 
 
 def _db():
     conn = store.db()
     conn.executescript(SCHEMA)
+    have = {row[1] for row in conn.execute('pragma table_info(app_ask)')}
+    missing = [(name, kind) for name, kind in COLUMNS if name not in have]
+    for name, kind in missing:          # a database from before these columns
+        conn.execute(f'alter table app_ask add column {name} {kind}')
+    if missing:
+        conn.commit()
     return conn
 
 
 def _turn(row):
     return {'id': row['id'], 'at': row['ts'], 'asked': row['asked'], 'answer': row['answer'], 'cards': json.loads(row['cards']),
-            'private': bool(row['private']), 'ms': row['ms'], 'status': row['status']}
+            'private': bool(row['private']), 'ms': row['ms'], 'status': row['status'],
+            'tools': json.loads(row['tools']) if 'tools' in row.keys() and row['tools'] else [],
+            'problem': row['problem'] if 'problem' in row.keys() else ''}
 
 
-def save(login, asked, answer, cards=(), private=False, ms=0, status='ok', at=None):
-    """Keep one turn; returns its number. Older than a month goes. `at`: when it was asked, for tests."""
+def save(login, asked, answer, cards=(), private=False, ms=0, status='ok', at=None, tools=(), problem=''):
+    """Keep one turn; returns its number. Older than TEXT_DAYS goes. `at`: when it was asked, for tests. `tools`:
+    "name:outcome" for each tool the turn used; `problem`: the kind of failure that ended it."""
     with _db() as conn:
         conn.execute('delete from app_ask where ts < ?', (time.time() - TEXT_DAYS * 86400,))
-        return conn.execute('insert into app_ask(ts, login, asked, answer, cards, private, ms, status) values (?,?,?,?,?,?,?,?)',
+        return conn.execute('insert into app_ask(ts, login, asked, answer, cards, private, ms, status, tools, problem) '
+                            'values (?,?,?,?,?,?,?,?,?,?)',
                             (at or time.time(), login, asked[:2000], answer[:4000], json.dumps(list(cards)), int(private), int(ms),
-                             status)).lastrowid
+                             status, json.dumps([str(t)[:60] for t in tools][:20]), str(problem or '')[:60])).lastrowid
+
+
+def health(days=7, now=None):
+    """How Ask's turns ended over the last `days`, for the System page and the live check: counts by status, the
+    tools that most often didn't do the job, and the kinds of failure. Counts and names only, never words."""
+    now = now or time.time()
+    with _db() as conn:
+        rows = conn.execute("select status, tools, problem from app_ask where ts > ? and asked != ''",
+                            (now - days * 86400,)).fetchall()
+    by_status, misses, problems = {}, {}, {}
+    for row in rows:
+        by_status[row['status']] = by_status.get(row['status'], 0) + 1
+        for used in json.loads(row['tools'] or '[]'):
+            name, _, outcome = str(used).partition(':')
+            if outcome in MISSES:
+                misses[name] = misses.get(name, 0) + 1
+        if row['problem']:
+            problems[row['problem']] = problems.get(row['problem'], 0) + 1
+    return {'days': days, 'turns': len(rows), 'by_status': by_status, 'tool_misses': misses, 'problems': problems}
+
+
+MISSES = ('not_done', 'refused', 'error', 'unavailable', 'retry')
 
 
 def usual(login, now=None):

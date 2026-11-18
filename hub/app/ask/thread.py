@@ -36,6 +36,9 @@ MORNING = ('(The morning message: up to three numbered things from their errands
            '"done", "not this" or a day, with its number.)')
 ASKED_FRESH = re.compile(r"\b(start (?:over|fresh|afresh|again)|fresh start|clean slate|forget (?:this|our|the) "
                          r"(?:conversation|chat)|clear (?:the |our |this )?(?:conversation|chat|context))\b", re.I)
+# Turns carried into the context. A turn that got stuck or failed is kept too (since 2026-11-18), so "try harder"
+# or "try again" right after it knows what was asked; only turns Hub refused to run (no key, a limit) are left out.
+KEPT = ('ok', 'stuck', 'unanswered', 'failed')
 SCHEMA = """
 create table if not exists app_ask_thread(
   person text primary key, summary text not null default '', upto integer not null default 0,
@@ -109,8 +112,8 @@ def _turns(login, after, limit=None, newest=False):
     order = 'desc' if newest else 'asc'
     with closing(turns._db()) as conn:
         rows = conn.execute(f"select * from app_ask where lower(login) in ({','.join('?' * len(names))}) and id > ? "
-                            f"and status = 'ok' order by id {order}" + (' limit ?' if limit else ''),
-                            (*names, after, *((limit,) if limit else ()))).fetchall()
+                            f"and status in ({','.join('?' * len(KEPT))}) order by id {order}" + (' limit ?' if limit else ''),
+                            (*names, after, *KEPT, *((limit,) if limit else ()))).fetchall()
     found = [turns._turn(r) for r in rows]
     return list(reversed(found)) if newest else found
 

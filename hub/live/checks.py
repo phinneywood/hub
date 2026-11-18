@@ -327,25 +327,23 @@ def model():
     return 'The model answered on the private route, in the form Hub asked for.'
 
 
-GOLDEN = ('what-needs-me-today', 'music-softly-in-one-room', 'lights-room-off', 'music-era-found-plays')
-GOLDEN_CAP = 0.10
-
-
 def ask():
-    """A few golden scenarios through the real Ask with the real model, as a dry run: nothing is sent to the house."""
-    from ..golden import runner
+    """Everyday requests through the Ask the owner uses (hub/app/ask) with the real model, on the real house, as a dry
+    run: nothing is sent. Their playlists, playing one, a room's lights, the weather (`trial.core`). Until 2026-11-18
+    this ran the older chat's golden scenarios, which said nothing about the Ask in the app."""
+    from ..app.ask import trial
     try:
-        result = runner.live(only=GOLDEN, cap=GOLDEN_CAP)
-    except runner.Stopped as error:
+        result = trial.run('core')
+    except trial.Stopped as error:
         raise Skipped(str(error)) from None
-    rows = result['scenarios']
-    failed = [r['id'] for r in rows if r['status'] in ('fail', 'error')]
-    ran = [r for r in rows if r['status'] != 'skipped']
-    if failed:
-        raise Failed(f'{len(failed)} of {len(ran)} Ask scenarios failed: ' + ', '.join(failed) + '.')
-    if not ran:
-        raise Skipped(result.get('stopped') or 'No scenario ran.')
-    return f'{len(ran)} Ask scenarios passed as a dry run (${result["cost"]:.3f}).'
+    if result['failed']:
+        raise Failed(f'{len(result["failed"])} of {result["ran"]} Ask requests went wrong: ' + ', '.join(result['failed'])
+                     + f'. What Ask did is in Hub’s private folder (${result["cost"]:.3f}).')
+    if not result['ran']:
+        raise Skipped('The model was busy or out of reach, so nothing was checked.' if result['busy']
+                      else 'No request ran.')
+    busy = f' {len(result["busy"])} left out: the model was busy.' if result['busy'] else ''
+    return f'{result["ran"]} everyday Ask requests went the right way as a dry run (${result["cost"]:.3f}).{busy}'
 
 
 ASK_SETUP_DAYS = 30
@@ -367,6 +365,8 @@ def ask_setup():
     if result['failed']:
         raise Failed(f'{len(result["failed"])} of {result["ran"]} requests went wrong: ' + ', '.join(result['failed'])
                      + f'. What Ask did is in Hub’s private folder (${result["cost"]:.3f}).')
+    if result.get('busy'):          # not a pass: it would not be asked again on this version for a month
+        raise Skipped(f'The model was busy for {len(result["busy"])} of the requests, so this version isn’t checked yet.')
     if not result['ran']:
         raise Skipped('No request ran.')
     left = f' {len(result["left_out"])} left out at the spending limit.' if result['left_out'] else ''
@@ -442,8 +442,9 @@ CHECKS = (
     # Before the checks that call the model: the Ask check stands a dry-run layer in front of the house while it runs.
     Check('house.light', 'A real change, undone', 'One named light is switched and put straight back.', 'undo', light, 60),
     Check('model.route', 'Model route', 'One call with invented data over the pinned private route.', 'spend', model, 60),
-    Check('ask.golden', 'Ask, end to end', 'A few real requests through Ask with the real model, as a dry run.', 'spend', ask, 240,
-          seed='Ask passed a whole sentence to the speaker as a search; “as well” started a second stream.'),
+    Check('ask.golden', 'Ask, end to end', 'Everyday requests through Ask in the app with the real model, as a dry run: your '
+          'playlists, playing one, a room’s lights and the weather.', 'spend', ask, 240,
+          seed='Ask couldn’t say what playlists the owner has, and the old check tested the older chat instead.'),
     Check('ask.setup', 'Ask sets up the house, end to end', 'A move, an automation, a removal, an unlock and the shopping list asked of '
           'Ask with the real model on the real house, as a dry run: nothing is sent.', 'spend', ask_setup, 300),
 )

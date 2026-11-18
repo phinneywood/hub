@@ -308,26 +308,13 @@ def test_the_model_check_makes_one_call_with_invented_data_and_records_it(monkey
         checks.model()
 
 
-def test_the_ask_check_runs_a_few_golden_scenarios_as_a_dry_run(world, monkeypatch):
-    from hub import luna
-    from hub.golden import runner as golden
-    from tests.test_golden import _scripted_for
-    with pytest.raises(checks.Skipped, match='key'):             # no key: nothing to run, not a failure of Ask
+def test_the_ask_check_runs_the_ask_in_the_app_not_the_older_chat(world, monkeypatch):
+    from hub.app.ask import trial
+    with pytest.raises(checks.Skipped):                          # no key: nothing to run, not a failure of Ask
         checks.ask()
-    monkeypatch.setattr(luna, 'configured', lambda: True)
-    live = golden.live
-    monkeypatch.setattr(golden, 'live', lambda only=(), cap=0: live(only=only, cap=cap, model_for=_scripted_for))
-    assert f'{len(checks.GOLDEN)} Ask scenarios passed' in checks.ask()
-    assert world.sent == []                                      # a dry run: nothing reached the house or the speakers
-    monkeypatch.setattr(golden, 'live', lambda only=(), cap=0: {'cost': 0.01, 'stopped': None, 'scenarios': [
-        {'id': 'lights-room-off', 'status': 'fail'}, {'id': 'what-needs-me-today', 'status': 'pass'}]})
-    with pytest.raises(checks.Failed, match='1 of 2 Ask scenarios failed: lights-room-off'):
-        checks.ask()
-
-
-def test_the_golden_scenarios_the_ask_check_names_exist():
-    from hub.golden import scenarios
-    assert set(checks.GOLDEN) <= {s.id for s in scenarios.SCENARIOS}
+    ran = []
+    monkeypatch.setattr(trial, 'run', lambda kind='setup': ran.append(kind) or {'ran': 4, 'failed': [], 'left_out': [], 'busy': [], 'cost': 0.004})
+    assert checks.ask() == '4 everyday Ask requests went the right way as a dry run ($0.004).' and ran == ['core']
 
 
 def test_the_calendar_and_kitchen_checks(world, monkeypatch, tmp_path):

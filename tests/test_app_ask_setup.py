@@ -276,7 +276,7 @@ def test_a_scene_that_holds_the_lock_goes_on_a_card_and_one_of_lights_runs_at_on
     assert tool(tools.scene, name='leaving')[0] == {'done': 'Leaving is on.'}
     assert tool(tools.scene, name='dinner')[0] == {'done': 'Dinner is on.'}
     # Mail in view: no scene that touches the lock is set at all, whichever way it would go.
-    assert 'request of its own' in tool(tools.scene, strangers=True, name='arriving')[0]['done']
+    assert 'request of its own' in tool(tools.scene, strangers=True, name='arriving')[0]['refused']
 
 
 def test_disabling_waits_on_a_card_and_reloading_an_integration_happens_at_once(house):
@@ -374,7 +374,7 @@ def test_a_scene_that_doesnt_say_what_it_holds_goes_the_careful_way(house):
     said, turn = tool(tools.scene, name='welcome home')
     assert said == {'done': 'That one waits for your tap.'} and turn.cards[0]['title'] == 'Set Welcome home?' and house.sent == []
     said, turn = tool(tools.scene, strangers=True, name='welcome home')        # never on a turn that read mail
-    assert 'never alongside mail' in said['done'] and house.sent == []
+    assert 'never alongside mail' in said['refused'] and house.sent == []
     # A scene from an integration whose scenes only set its own lights runs at once, as any lights-only scene.
     assert tool(tools.scene, name='relax')[0] == {'done': 'Relax is on.'} and house.sent[-1] == ('scene/turn_on', {'entity_id': 'scene.relax'})
 

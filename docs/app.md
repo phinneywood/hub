@@ -182,7 +182,8 @@ instead. Cmd-K (Ctrl-K) puts the cursor in the field from anywhere.
    asked of anyone. What this person often asks around this time of day (`turns.usual`, counted from their own
    earlier requests, no model) is offered as one tap.
 2. **Anything typed** goes once to the model with the house beside it: rooms, lights, speakers, what is
-   playing, the scenes and what Hub remembers, as a few plain lines (`brain.house`), plus the last few
+   playing, the scenes, the owner's playlists by name (read from Music Assistant at most every ten minutes,
+   `brain.playlists`) and what Hub remembers, as a few plain lines (`brain.house`), plus the last few
    requests and what Hub did. So the model can act at once instead of looking first.
 3. **A question about mail, the calendar, school or today's list** (owner decision, 2026-11-15, reversing the
    14th) goes the same way, with what Hub knows about it beside it in `<data>`: the same bounded lookups the
@@ -236,13 +237,30 @@ that it was given.
 **One trip to the model.** A tool that did the job says so itself, in a sentence Hub writes
 (“The kitchen and the living room are at 40%.”), and the turn ends there: no second trip for the model to
 describe what happened. Only when a tool could not do it as asked (nothing matched a search, a room it
-couldn't place, something it read with `look_up`) does the model get its answer and one more try. A turn is at most six trips.
+couldn't place) or gave something to answer from (`look_up`, `music_library`, `hub_info`, `conversation`'s show,
+`find`, `details`) does the model get its answer and go on. A tool that reads never ends a turn with a sentence of
+its own: on 2026-11-18 "what's that playlist you made for me?" reached `conversation`, whose stock line about the
+summary became the whole answer. A turn is at most six trips.
+
+**How each turn ended is kept** (since 2026-11-18, after a diagnosis found every bad answer marked "ok"). Each turn
+in `app_ask` keeps the tools it used with one word for how each came out (`"music_library:read"`, `"lights:not_done"`)
+and, for a failure, its kind (`rate_limit`, `overloaded`, `timeout`, `too_many_steps`, or the error's class name).
+Its status is `ok`, `stuck` (tools were used and none did the job or gave anything to answer from), `unanswered`
+(the model neither spoke nor acted), `failed` (an error ended it) or `refused` (no key, a limit). Hub's log gets one
+line a turn with the status, time and tools, never words. `turns.health()` counts them for a week. A rate limit or
+a busy model is told as such ("Hub's model is busy just now"), not as "Hub couldn't finish that". Turns that got
+stuck or failed stay in the context, so "try again" knows what to try.
 
 **What it can do** (`tools.py`): `lights` (rooms, floors, single lights, everywhere indoors, outside; on
 restores each lamp's last brightness), `scene` (by its name, or by the words that single it out), `music` (play,
 pause, resume, next, previous, volume, a room joining or leaving), `remember`, `groceries` (the shopping list and
 the cart; see “Kitchen”), `kitchen` (passes the owner's words to the kitchen assistant, whose answer appears
-under the request), `look_up` (reads mail, the calendar, the class guide or today's list; read-only), `mail_search` and `mail_read`
+under the request), `look_up` (reads mail, the calendar, the class guide or today's list; read-only), `music_library` (the owner's
+playlists, a playlist's songs, search with handles `music` plays exactly, and what played lately; read-only),
+`playlist` (make, add to, take from, reorder, rename or delete a playlist, only when the person's own words ask;
+making and deleting wait for their tap on Hub's Playlists page, the rest have Undo there for a day: the older chat's
+`edit_playlist`, `catalog.edit_playlist`), `hub_info` (the trip, what Hub's AI costs and the inbox's counts, those
+two for the owner only, and the devices on the home network; read-only), `mail_search` and `mail_read`
 (see “Ask reads mail”), `errands`
 (the asker's errands Hub got ready, drawn as cards under the answer; read-only), `errand` (Done, Tomorrow, Not this,
 the list, Undo and where replies open, only as the person's own words ask; see “Errands”), and the
@@ -339,6 +357,12 @@ the model, so two live checks (`hub/live/checks.py`, on the Checks page) do the 
   door, Music Assistant and Kitchen: every change is written down and none is sent. Each request has one right
   outcome, checked in code. It runs once per version. What was asked and what Ask did is kept in Hub's private
   folder (`ask-trial.json`), since it names the house's things; the check itself says only how many.
+- `ask.golden` (a cent or two, after each Deploy): the same trial's `core` set, on the Ask the owner uses: "What
+  playlists do I have?" (the answer must name their real playlists), playing one of them in a room with a speaker
+  (by its own address), a room's lights off, and a question about the weather. Requests are spaced a couple of
+  seconds apart; one the model's rate limit stopped is left out, not failed, and a run the rate limit stopped
+  entirely is skipped as "the model was busy". Kept in `ask-trial-core.json`. Until 2026-11-18 this check ran the
+  older chat's golden scenarios (`hub/golden/`), which said nothing about Ask in the app.
 
 **What Hub remembers.** One list per person: the engine's standing notes (`hub/engine/state.py`), the same list the
 older chat saved to, each kept with the login that saved it, so a note steers only its own person's turns. Ask keeps a note at once when asked, shows it with Forget, and lists them under System. The

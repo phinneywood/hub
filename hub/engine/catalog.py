@@ -474,10 +474,14 @@ def library_lookup(search: str | None = None, playlist: str | None = None) -> di
             return {kind + 's': [song(s) + (f' {s["handle"]}' if s.get('handle') else '') for s in items]
                     for kind, items in found.items()}
         lists = music.playlists()
+        try:        # what played lately is extra: the playlists still answer without it
+            recent = [name(r['name']) for r in music.recent()]
+        except (music.MusicDown, control.Refused):
+            recent = None
         return {'playlists': [{'name': name(p['name']), 'where': music.WHERE_WORDS[p['where']],
                                'can_edit': ('everything' if p['where'] == 'music' else 'add songs only')
                                if p['editable'] and p['where'] != 'other' else 'no'} for p in lists[:LIBRARY_ITEMS]],
-                'recently_played': [name(r['name']) for r in music.recent()]}
+                **({'recently_played': recent} if recent is not None else {'recently_played': 'Hub couldn’t read this just now.'})}
     except control.Refused as error:
         return {'error': luna.clip(judge.scrub(str(error)), 600)}       # it may list playlist names
     except music.MusicDown as error:
