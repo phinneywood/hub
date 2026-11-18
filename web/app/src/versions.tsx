@@ -9,6 +9,7 @@ import type { Deploy, Release, Releases, Undo } from "./types";
 
 const FOLLOW = 3000;   // how often to look again while an update is under way
 const GIVE_UP = 180;   // seconds after which the card stops waiting and says to look again later
+const SHOWN = 6;       // releases listed before "Earlier versions": the newest, and down to the one running if it is older
 
 const DAY = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -104,9 +105,12 @@ function Undoing({ undo, asked, from, again }: { undo: Undo; asked: boolean; fro
 export function Versions() {
   const [found, setFound] = useState<Releases | null>(null);
   const [failed, setFailed] = useState(false);
+  const [all, setAll] = useState(false);
   const again = () => api.versions().then((now) => { setFound(now); return now; }, () => null);
   useEffect(() => { api.versions().then(setFound, () => setFailed(true)); }, []);
   const now = found?.versions.find((r) => r.running);
+  const list = found?.versions ?? [];
+  const shown = all ? list : list.slice(0, Math.max(SHOWN, list.findIndex((r) => r.running) + 1));
   return (
     <div class="wrap">
       <Top />
@@ -119,7 +123,10 @@ export function Versions() {
       )}
       {found?.deploy?.ready && <Ready deploy={found.deploy} from={found.running} again={again} />}
       {found?.deploy?.undo && <Undoing undo={found.deploy.undo} asked={found.deploy.asked} from={found.running} again={again} />}
-      {found?.versions.map((release) => <Entry release={release} key={release.sha ?? "next"} />)}
+      {shown.map((release) => <Entry release={release} key={release.sha ?? "next"} />)}
+      {shown.length < list.length && (
+        <button type="button" class="btn ghost more-btn" onClick={() => setAll(true)}>Earlier versions ({list.length - shown.length})</button>
+      )}
     </div>
   );
 }
