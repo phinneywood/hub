@@ -170,13 +170,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     if (phone) expect((await small()).length === 0, "tap targets under 44 px in a room: " + (await small()).join(", "));
     // The screen shows a change at once; Hub answers a moment later. The scene below must come after both answers,
     // or it can run first and the dimmed kitchen lands on top of it ("Three rooms are lit").
-    const answered = (part) => page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname.startsWith("/app/api/" + part + "/"))
+    const hubAnswers = (part) => page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname.startsWith("/app/api/" + part + "/"))
       .then((r) => r.ok(), () => false);
-    const dimmed = answered("room");
+    const dimmed = hubAnswers("room");
     await page.locator('.sheet .dimmer input').fill("30");
     await page.locator('.sheet .dimmer input').dispatchEvent("change");
     expect(await until((sel) => document.querySelector(sel + " .room-num")?.textContent.trim() === "30%", room("kitchen")), "the dimmer did not dim the room");
-    const plugged = answered("device");
+    const plugged = hubAnswers("device");
     await page.locator('.sheet [aria-label="Coffee maker"]').click();
     expect(await until(() => document.querySelector('.sheet [aria-label="Coffee maker"]')?.getAttribute("aria-checked") === "true"), "the plug did not switch on");
     expect(await dimmed && await plugged, "Hub did not answer the dimmer and the plug");
