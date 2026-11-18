@@ -105,7 +105,7 @@ def test_undo_asks_the_deployer_for_the_version_from_before_for_a_day(tmp_path, 
     assert (asked['sha'], asked['undo'], asked['by']) == ('a' * 40, True, 'me@example.com')
     assert 'already updating' in client.post('/app/api/deploy/undo', headers=owner).json()['error']
     (root / 'queue' / 'request.json').unlink()
-    for how, ago, previous in (('undo', 600, 'a' * 40), ('tap', 2 * 86400, 'a' * 40), ('tap', 600, 'c' * 40)):
+    for how, ago, previous in (('undo', 600, 'a' * 40), (None, 600, 'a' * 40), ('tap', 2 * 86400, 'a' * 40), ('tap', 600, 'c' * 40)):
         _deployed(root, how, ago, previous)
         if previous == 'c' * 40:
             (root / previous / 'venv').rmdir()                      # the version from before is gone
@@ -129,8 +129,12 @@ def test_hub_says_what_it_did_by_itself_on_today_and_on_the_phone(tmp_path, monk
     note('started')
     assert release.notice() is None                                 # under way: nothing to say yet
     note('accepted')
+    monkeypatch.setattr(versions, 'entries', lambda: [{'sha': None, 'from': 'a' * 40, 'title': 'A made-up release'}])
     title, words = release.notice()
-    assert title == 'Hub updated itself' and words.startswith(versions.entries()[0]['title'])
+    assert title == 'Hub updated itself' and words.startswith('A made-up release.')
+    monkeypatch.setattr(versions, 'entries', lambda: [{'sha': None, 'from': 'c' * 40, 'title': 'An older release'}])
+    (root / 'pending.json').write_text(json.dumps({'sha': 'b' * 40, 'subjects': ['Merge pull request #1', 'Kitchen: a made-up fix']}))
+    assert release.notice()[1].startswith('Kitchen: a made-up fix.')    # the newest entry was written for another release
     [item] = catalog.hub_release()
     assert (item['key'], item['tone'], item['cta'], item['href']) == ('hub-release-auto', 'info', 'Undo', catalog.VERSIONS)
     assert release.tell() == 'Shown on Today; no phone is named in Hub’s settings.'
@@ -139,7 +143,7 @@ def test_hub_says_what_it_did_by_itself_on_today_and_on_the_phone(tmp_path, monk
     (config.DATA_DIR / 'household.json').write_text(json.dumps({'deploy': {'notify': 'mobile_app_test_phone'}}))
     assert release.tell() == 'Told the owner on their phone and on Today.'
     assert sent == [{'op': 'request', 'method': 'POST', 'path': '/api/services/notify/mobile_app_test_phone',
-                     'body': {'title': title, 'message': words}}]
+                     'body': {'title': title, 'message': release.notice()[1]}}]
     _deployed(root, 'undo')
     assert catalog.hub_release() == []                              # undone: nothing more to undo
     note('checks_failed', 'its checks on GitHub did not all pass')

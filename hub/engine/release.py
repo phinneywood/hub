@@ -95,10 +95,11 @@ def _age(note):
 def undoable():
     """The last deploy while Undo can still put back the version from before it: {'sha', 'previous', 'at', 'auto'}.
     None unless it was accepted less than UNDO_HOURS ago, is still running, wasn't itself an Undo, and the version
-    from before is still here. The deployer checks all of it again."""
+    from before is still here. The deployer checks all of it again. A receipt without `how` comes from a deployer
+    that predates Undo, which would refuse it."""
     note = _note('last.json')
     previous = note and note.get('previous')
-    if not note or note.get('status') != 'accepted' or note.get('how') == 'undo' or _current() != note['sha'] \
+    if not note or note.get('status') != 'accepted' or note.get('how') not in ('tap', 'auto') or _current() != note['sha'] \
             or not isinstance(previous, str) or not SHA.fullmatch(previous) or not (folder() / previous / 'venv').is_dir():
         return None
     age = _age(note)
@@ -131,15 +132,25 @@ def tried():
     return {'sha': note['sha'], 'status': str(note['status']), 'error': error[0].rstrip(':. ')[:160] if error else '', 'at': note['at']}
 
 
+def _what(sha):
+    """What a release is, in a few words: its entry in versions.json when that entry was written for it (it follows the
+    version before), else its first commit subject that isn't a merge."""
+    from ..app import versions
+    top, last = (versions.entries() or [{}])[0], _note('last.json')
+    if top.get('sha') is None and top.get('title') and last and last['sha'] == sha and top.get('from') == last.get('previous'):
+        return top['title']
+    note = _note('pending.json')
+    subjects = [str(s) for s in (note.get('subjects') or ()) if not str(s).startswith('Merge ')] if note and note['sha'] == sha else []
+    return subjects[0][:120] if subjects else 'A new version'
+
+
 def notice():
     """What to tell the owner about the last automatic deploy: (title, words), or None when there is nothing to say."""
     note = tried()
     if not note:
         return None
     if note['status'] == 'accepted':
-        from ..app import versions
-        title = (versions.entries() or [{}])[0].get('title') or 'a new version'
-        return 'Hub updated itself', f'{title}. If something is off, Undo is on Versions for a day.'
+        return 'Hub updated itself', f'{_what(note["sha"])}. If something is off, Undo is on Versions for a day.'
     if note['status'] == 'rolled_back':
         return 'A Hub update didn’t hold', 'A check failed after the switch, so the version from before is running again.'
     if note['status'] == 'recovery_needed':
