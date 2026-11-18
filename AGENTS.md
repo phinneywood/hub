@@ -105,5 +105,11 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   is theirs alone. Ask's model may read it only while that person's switch "Hub's model may read my desk" is on;
   words they list as theirs alone are masked first and `ip.md` is never sent. Research and drafts run on Ask's
   route with web search, within $5 a month and 6 a day. Hub never publishes, posts, applies or contacts anyone.
+  Owner-approved (2026-11-16, the family archive): nothing about a photo ever reaches a model, not the picture, a
+  label, a person, a place, a date or whether any were found; Hub draws the card and writes the sentence itself.
+  Documents' and ChatGPT history's matching passages go to Ask's model masked (card, account and ID-like numbers),
+  each behind a switch the owner can turn off; mail and calendar results go as mail does. Any login but the
+  owner's sees only the iCloud Shared Library's photos. Hub Archive (`deploy/archive`) is the only thing with Full
+  Disk Access, serves Hub read-only over a local socket, and is installed by the owner.
   Who sees what (2026-11-16): each person only their own accounts' things, by Tailscale login (`hub/people.py`,
   `docs/people.md`); the kitchen wall is the household's only. Read "Today" in `docs/app.md` first.
