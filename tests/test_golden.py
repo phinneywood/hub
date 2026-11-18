@@ -274,7 +274,8 @@ def test_golden_page_and_run_button(monkeypatch):
     assert client.post('/golden/run', headers={**signed_in, 'origin': 'http://evil.example'}).status_code == 403
     reply = client.post('/golden/run', headers={**signed_in, 'origin': 'http://testserver'}, follow_redirects=False)
     assert reply.status_code == 303 and started == [([__import__('sys').executable, '-m', 'hub.golden', 'live'], str(config.DATA_DIR))]
-    assert 'Golden tests' in client.get('/settings', headers=signed_in).text
+    from pathlib import Path
+    assert '"Golden tests", "/golden"' in (Path(__file__).parents[1] / 'web/app/src/screens.tsx').read_text()      # listed in the app's System
 
 
 def test_the_spend_board_shows_the_latest_run(world, monkeypatch):

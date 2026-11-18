@@ -78,7 +78,7 @@ def test_saved_by_a_signed_in_tap_then_edited_on_the_page(house):
     [kept] = recipes.saved()
     assert kept['name'] == 'film night' and [recipes.describe(s) for s in kept['steps']] == ['Reading Lamp at 20%']
     client.post('/engine/recipes/remove', data={'recipe_id': kept['id']}, headers=SIGNED_IN)
-    assert recipes.saved() == [] and 'Recipes' in client.get('/settings', headers=SIGNED_IN).text
+    assert recipes.saved() == []
 
 
 def test_a_proposal_with_the_same_name_replaces_the_recipe_when_saved(house):

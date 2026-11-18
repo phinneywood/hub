@@ -41,7 +41,7 @@ def test_each_icon_is_the_size_its_name_says():
 
 
 def test_every_page_declares_the_icons_and_they_are_served():
-    for path in ('/ask', '/today', '/tools', '/settings'):
+    for path in ('/ask', '/today'):
         page = client.get(path).text
         for link in ('<link rel="icon" href="/favicon.ico" sizes="48x48">',
                      '<link rel="icon" href="/static/favicon.svg" type="image/svg+xml" sizes="any">',

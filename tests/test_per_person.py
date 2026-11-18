@@ -80,14 +80,6 @@ def test_alex_opens_them_as_before(monkeypatch):
     assert 'Bills' not in client.get('/gmail/labels', headers=by(CASEY)).text
 
 
-def test_all_tools_lists_the_mail_and_calendar_only_for_alex():
-    def listed(who):
-        menu = client.get('/tools', headers=by(who)).text.split('<nav class="menu"')[1].split('</nav>')[0]
-        return {part.split('"')[0] for part in menu.split('href="')[1:]}
-    assert {'/gmail', '/calendar', '/trip'} <= listed(ALEX)
-    assert not {'/gmail', '/calendar'} & listed(CASEY) and '/trip' in listed(CASEY)
-
-
 # ---- the app ----
 
 @pytest.fixture

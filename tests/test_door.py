@@ -222,8 +222,6 @@ def test_without_the_door_nothing_changes(monkeypatch):
     settings(ha_url=HA, music_url='https://music.example.test:8095')
     client = TestClient(app)
     assert read.framed() == {} and read.opens()['ha_url'] == HA
-    page = client.get('/tools', headers=SIGNED_IN).text
-    assert '/house/assistant' not in page and 'Opens in a new tab' in page
     assert client.get('/house/assistant', headers=SIGNED_IN, follow_redirects=False).headers['location'] == '/house/changes'
     assert client.get('/house', headers=SIGNED_IN, follow_redirects=False).headers['location'] == HA
 
@@ -240,8 +238,6 @@ def test_with_the_door_home_assistant_and_music_assistant_are_screens_of_hub():
     assert f'src="{HA}/app/abc123_music_assistant"' in music_page.text
     nav = client.get('/today', headers=SIGNED_IN).text
     assert 'href="/house/assistant">Home Assistant</a>' in nav and 'href="/house/player">Music Assistant</a>' in nav
-    tools = client.get('/tools', headers=SIGNED_IN).text
-    assert 'href="/app/#board/spend"' in tools and 'href="/house/assistant"' in tools and 'Opens in a new tab' not in tools
     assert client.get('/house', headers=SIGNED_IN, follow_redirects=False).headers['location'] == '/house/assistant'
     assert client.get('/house/assistant', headers={'tailscale-user-login': 'stranger@example.com'}).status_code == 403
 

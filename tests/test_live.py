@@ -279,7 +279,8 @@ def test_the_checks_page_shows_history_and_starts_a_run_in_its_own_process(monke
     reply = client.post('/checks/run', headers={**SIGNED_IN, 'origin': 'http://testserver'}, follow_redirects=False)
     assert reply.status_code == 303
     assert started == [([sys.executable, '-m', 'hub.live', 'run', '--trigger', 'manual'], str(config.DATA_DIR))]
-    assert 'Checks' in client.get('/settings', headers=SIGNED_IN).text
+    from pathlib import Path
+    assert '"Checks", "/checks"' in (Path(__file__).parents[1] / 'web/app/src/screens.tsx').read_text()      # listed in the app's System
 
 
 def test_a_failing_check_is_an_item_on_today_until_it_passes(monkeypatch):

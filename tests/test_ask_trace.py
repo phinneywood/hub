@@ -225,7 +225,8 @@ def test_the_activity_page_is_signed_in_only_and_can_show_only_failed_turns(clie
     assert ok_id in every and failed_id in every and failed_id in failed and ok_id not in failed
     assert 'RuntimeError' in failed and 'Turn traceback' in failed
     assert 'trip plan' not in every and 'flights?' not in every
-    assert '/engine/ask-activity' in client.get('/settings', headers=OWNER).text
+    from pathlib import Path
+    assert '"/engine/ask-activity"' in (Path(__file__).parents[1] / 'web/app/src/screens.tsx').read_text()      # listed in the app's System
 
 
 def test_the_cli_prints_a_turn_or_the_last_turns_and_never_creates_a_trace(client, monkeypatch, capsys, tmp_path):

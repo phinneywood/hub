@@ -60,25 +60,17 @@ def _main_nav(page):
 
 
 def test_every_older_page_carries_the_apps_tabs_and_leads_back_to_it(client):
-    for path in ('/ask', '/today', '/trip', '/engine', '/status', '/settings'):
+    for path in ('/ask', '/today', '/trip', '/engine', '/status'):
         page = client.get(path).text
         assert _main_nav(page) == ['/app/', '/app/#today', '/app/#mail', '/app/#kitchen']
         assert 'class="brand" href="/app/"' in page and 'href="/app/#system">System</a>' in page
-        assert 'href="/tools"' in page and 'href="#main"' in page and '/static/look.js' in page
+        assert 'href="/tools"' not in page and 'href="#main"' in page and '/static/look.js' in page
 
 
-def test_all_tools_lists_every_tool_and_settings_holds_engine_and_status(client):
-    from hub.tools import TOOLS
-    menu = client.get('/tools', headers=test_app.AS_OWNER).text.split('<nav class="menu"')[1].split('</nav>')[0]
-    assert [part.split('"')[0] for part in menu.split('href="')[1:]] == ['/' + t['slug'] for t in TOOLS if t['slug'] != 'ask']
-    menu = client.get('/tools').text.split('<nav class="menu"')[1].split('</nav>')[0]      # this Mac: one person's mailbox isn't listed
-    assert [part.split('"')[0] for part in menu.split('href="')[1:]] == ['/' + t['slug'] for t in TOOLS
-                                                                          if t['slug'] != 'ask' and not t.get('account')]
-    settings = client.get('/settings').text.split('<nav class="menu"')[1].split('</nav>')[0]
-    assert 'href="/engine"' in settings and 'href="/status"' in settings
-
-
-# ---- Today ----
+def test_all_tools_and_settings_open_the_apps_system(client):
+    for old in ('/tools', '/settings'):
+        moved = client.get(old, follow_redirects=False)
+        assert moved.status_code == 302 and moved.headers['location'] == '/app/#system'
 
 def test_today_has_a_card_per_decision_with_one_tap_only_where_the_owner_trusts_it(client, monkeypatch):
     _sources(monkeypatch, lambda: [

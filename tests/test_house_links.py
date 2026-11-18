@@ -31,25 +31,15 @@ def client():
     return TestClient(app)
 
 
-def test_all_tools_lists_both_and_they_open_in_a_new_tab(client):
+def test_an_address_that_isnt_set_or_isnt_a_web_address_gives_no_link():
     settings(ha_url=HA, music_url=MA)
-    page = client.get('/tools').text
-    for href, name in ((HA, 'Home Assistant'), (MA, 'Music Assistant')):
-        [tag] = links_to(page, href)
-        assert 'target="_blank"' in tag and 'rel="noopener"' in tag
-        assert f'<strong>{name}</strong>' in page
-    assert page.count('class="tool-ico"') >= 2 and '<iframe' not in page
-
-
-def test_an_address_that_isnt_set_hides_its_link(client):
+    assert read.links() == {'ha_url': HA, 'music_url': MA}
     settings(music_url=MA)
-    page = client.get('/tools').text
-    assert 'Home Assistant' not in page and links_to(page, MA)
+    assert read.links() == {'music_url': MA}
     settings(ha_url='javascript:alert(1)')
-    page = client.get('/tools').text
-    assert 'Home Assistant' not in page and 'Music Assistant' not in page and 'javascript:' not in page
+    assert read.links() == {}
     settings()
-    assert read.elsewhere() == [] and read.links() == {}
+    assert read.links() == {}
 
 
 def test_the_older_key_still_counts_and_the_new_one_wins():

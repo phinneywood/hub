@@ -584,6 +584,10 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await partner.waitForSelector('a.row.free[href="/trip"]', { timeout: 6000 });
     const olderPages = await partner.locator("a.row.free").evaluateAll((links) => links.map((a) => a.getAttribute("href")));
     expect(!olderPages.includes("/gmail") && !olderPages.includes("/calendar"), "the partner was offered the owner’s Gmail or Calendar: " + olderPages.join(" "));
+    expect((await partner.locator('.block:has(h2:text-is("How Hub checks itself")) .row b').allInnerTexts()).join("|") === "Status|Checks|Golden tests|Ask activity",
+      "System did not list how Hub checks itself");
+    const oldMenu = await partner.goto(base + "/settings");
+    expect(new URL(partner.url()).hash === "#system" && oldMenu.ok(), "the older Settings address did not open System: " + partner.url());
     const olderGmail = await partner.goto(base + "/gmail");
     expect(olderGmail.status() === 200 && (await partner.textContent("main h1")).trim() === "Not yours to open", "the older Gmail page opened for the partner");
     // ... and Ask searches none of it for the partner

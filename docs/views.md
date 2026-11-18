@@ -12,9 +12,9 @@ the detail screens behind these three.
 With the door set up (docs/door.md) the bar is **Ask**, **Today**, **Home** and **Music**: Home and Music are Home
 Assistant and Music Assistant themselves (`/house/assistant`, `/house/player`), and Insights is listed under All tools.
 
-Behind two icons in the header: **All tools** (`/tools`, every tool's own page) and **Settings**
-(`/settings`, which leads to Engine and Status). A tool page marks All tools as the current place;
-Engine and Status mark Settings. No address was removed: `/` still answers 200, now with Ask.
+All tools (`/tools`) and Settings (`/settings`) were retired on 2026-11-18 (owner's ask to move every older page
+into the app): both open the app's System, which lists the older pages, Home Assistant and Music Assistant, and
+“How Hub checks itself” (Status, Checks, Golden tests, Ask activity). `/` still answers 200, now with Ask.
 
 ## Today's cards
 
