@@ -134,7 +134,7 @@ function Skeleton() {
   );
 }
 
-/** The scenes, one tap each. A family of a bridge's presets ("Window light ho·Window amber 1" … 20 of them) is one chip
+/** The scenes, one tap each. A family of a bridge's presets ("Window glow·Amber 1" … 20 of them) is one chip
  * that opens them, so the scenes people use stay in view. `where`: above the rooms (a phone) or below them (a wide
  * screen, where the rooms come first); the stylesheet shows one of the two. */
 function Scenes({ now, where }: { now: House; where: "top" | "below" }) {

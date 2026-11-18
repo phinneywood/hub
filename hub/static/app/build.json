@@ -24,7 +24,7 @@
     "src/main.tsx": "c4369221a8a70fbc7089654f3f10dc7aa860b6eb2a58ff67ce05adb55e970cc3",
     "src/now.tsx": "ac71b14121e3fdf87c48c5d66745ea3773758503f449545e32060a076a117d9f",
     "src/photos.tsx": "3f23e83dbb1fb6dcf9a126ee73770cdbf43ee1dbf3686818484ec8c603a0e84a",
-    "src/screens.tsx": "7ffc488e4da5e5d3c55115ce66724c70ce0576accaa746371269323cbadccdc0",
+    "src/screens.tsx": "98ed5f3f880200c564e4083a2ad8bb25ae230e7121aeee2789302048b0f73181",
     "src/sheets.tsx": "938fd1b4de42cb155602fe36e7cb059294fb1562d41179f54edabb98a403de3c",
     "src/state.ts": "cf3d70b2e4a5cd2fc24aa1bbbae22d5c4d6dfc5f83e9f095b0aad540b63eaf66",
     "src/today.tsx": "3b5d2379ddfad8ed98b44a99aeb713beee52d9ed7cb0245708ced6a5237e380d",
@@ -34,7 +34,7 @@
     "src/viewport.ts": "63bba57ca9fa83d5e1b9db81eb97f8c402fba4eb67558735d481a51af039a2c5",
     "src/vite-env.d.ts": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
     "src/wall.tsx": "039ef2262398f52128c69bbe4be5e8dbdd9083a52d4c1eb524558c0298a8c09c",
-    "src/words.ts": "23879baa2f2ce14275ab8621b19e8f8d17c14e5538a731eeaa1ee0c0f58ad04a"
+    "src/words.ts": "056b526214644773586d23da197603d2cc56a0848413c86313d712a5bb7c5384"
   },
   "built": {
     "app.css": "9b22376a8f2e35f025a9aa9dc283874b5752021ec4d8abcc7d1732ce80cb7c99",

@@ -110,7 +110,7 @@ export function partOfDay(at: string): string {
   return hour < 12 ? "Today" : hour < 17 ? "This afternoon" : "This evening";
 }
 
-/** A family of scenes: this many or more sharing a name before "·" (a light bridge's presets, "Window light ho·Window amber 1"
+/** A family of scenes: this many or more sharing a name before "·" (a light bridge's presets, "Window glow·Amber 1"
  * and 19 more) are shown as one, so the scenes people use stay in view. */
 export const FAMILY = 4;
 export const familyOf = (name: string) => { const cut = name.indexOf("·"); return cut > 0 ? name.slice(0, cut).trim() : ""; };
