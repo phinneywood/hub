@@ -1,5 +1,10 @@
-"""A trial of Ask on the real house with nothing sent: the live check that the real model uses Ask's setup and
-list tools the way Hub's own tests assume.
+"""A trial of Ask on the real house with nothing sent: the live check that the real model uses Ask's tools the way
+Hub's own tests assume.
+
+Two sets of requests. `core` (since 2026-11-18, run after each Deploy as `ask.golden`): everyday asking, on the Ask
+the owner actually uses: what playlists they have, play one of them in a room, turn a room's lights off, and a
+question about the weather. `setup` (`ask.setup`, once a version a month): moving, automations, removing,
+unlocking and the shopping list.
 
 Hub's tests run Ask with a stand-in for the model, so they prove everything under the model and nothing about it.
 This is the other half. A few plain requests are made up from the house as it is (a lamp and two rooms, an
@@ -14,6 +19,7 @@ import asyncio
 import json
 import os
 import time
+from contextlib import suppress
 
 from ... import config, home
 from ...engine import state
@@ -23,7 +29,11 @@ from . import brain, route, turns
 LOGIN = 'live-check@hub.invalid'
 KIND = 'checks'                 # these calls in the engine's record of runs, apart from the owner's own asking
 CAP = 0.20                      # dollars one trial may cost; it stops asking once it has spent this
-FILE = 'ask-trial.json'
+FILE = 'ask-trial.json'         # the setup set's record; the core set's is ask-trial-core.json
+KINDS = ('setup', 'core')
+SPACING = 2.0                   # seconds between requests, so a trial doesn't run into the model's rate limit itself
+BUSY = ('rate_limit', 'overloaded', 'timeout', 'connection')    # failures of the model's service, not of Ask
+COOL_OFF = 20.0                 # after a request the rate limit stopped, wait this long before the next
 
 
 class Stopped(Exception):
@@ -53,7 +63,38 @@ def cast(w):
     locks = next((t for kind in ('lock', 'alarm_control_panel') for t in sorted(plain, key=lambda t: t['id'])
                   if t['domain'] == kind and _named(t, w) and (kind == 'lock' or t['state'] != 'disarmed')), None)
     return {'lamp': lamp, 'lamp_said': lamp and _named(lamp, w), 'room': lamp and w['rooms'].get(lamp['area']), 'other': other,
-            'automation': routine, 'automation_said': routine and _named(routine, w), 'locks': locks, 'locks_said': locks and _named(locks, w)}
+            'automation': routine, 'automation_said': routine and _named(routine, w), 'locks': locks, 'locks_said': locks and _named(locks, w),
+            **music_cast()}
+
+
+def music_cast():
+    """The music part of the cast: the owner's playlists ({'name', 'uri'}: short plain names that only one playlist
+    has, each with the address Hub itself would play for that name) and a room with a speaker, as Ask's own house
+    lines name it. Missing parts are [] or None."""
+    from ...tools.house import music as library
+    from ...tools.house import read
+    from .. import model
+    lists, room = [], None
+    with suppress(Exception):           # no Music Assistant, or it isn't answering: the music requests are left out
+        if library.ready():
+            found = library.playlists()
+            names = [' '.join(str(p.get('name') or '').lower().split()) for p in found]
+            for p in found:
+                if len(lists) >= 6:     # the first few, as the model's list would start with them
+                    break
+                name = p.get('name') or ''
+                if not (3 <= len(name) <= 40 and len(name.split()) <= 5) or names.count(' '.join(name.lower().split())) != 1:
+                    continue
+                with suppress(Exception):
+                    picked = library.pick(name, 'playlist')
+                    if picked['kind'] == 'playlist' and picked['mine']:
+                        lists.append({'name': name, 'uri': picked['uri']})
+    with suppress(Exception):
+        found = read.snapshot(fresh=True)
+        rooms = [r['name'] for r in found['rooms'] if r['name'] != read.OTHER_ROOM]
+        homes = sorted(h for h in (model._home_of(s, rooms) for s in found['speakers'] if not s['offline']) if h)
+        room = homes[0] if homes else None
+    return {'playlists': lists, 'speaker_room': room}
 
 
 def _setup(changes):
@@ -105,8 +146,49 @@ def _listed(seen, who):
     return '' if len(items) == 1 and 'banana' in items[0] else 'The list wasn’t given what was asked for.'
 
 
-def requests(who):
-    """(a short name, what is asked, the check of what Ask did), for each request this house can be asked."""
+def _named_playlists(seen, who):
+    """A question about the library: nothing changed, and the answer names some of the owner's real playlists."""
+    if seen['changes'] or seen['cards'].count('confirm'):
+        return 'A question changed something.'
+    plain = lambda text: ' '.join(str(text).lower().replace('’', "'").split())    # noqa: E731
+    said = plain(seen['said'])
+    named = [p for p in who['playlists'] if plain(p['name']) in said]
+    return '' if len(named) >= min(2, len(who['playlists'])) else 'The answer didn’t name the owner’s playlists.'
+
+
+def _played_mine(seen, who):
+    """Their own playlist, by its own address, and nothing but the speakers."""
+    plays = [c for c in seen['changes'] if c['what'] in PLAYS]
+    if not plays:
+        return 'Nothing was played.'
+    if any(c['to'] != 'home' or c['what'].split('/')[0] not in ('media_player', 'music_assistant') for c in seen['changes']):
+        return 'Something besides the music was changed.'
+    wanted = who['play']['uri']
+    sent = [(c['data'] or {}).get('media_id') or (c['data'] or {}).get('media_content_id') for c in plays]
+    return '' if wanted in sent else 'Something else was played.'
+
+
+PLAYS = ('music_assistant/play_media', 'media_player/play_media')
+
+
+def _lights_off(seen, who):
+    """The room's lights off (or Hub saying they were off already), and nothing else."""
+    if any(c['what'] != 'light/turn_off' for c in seen['changes']):
+        return 'More than the lights was changed.'
+    off = any(c['what'] == 'light/turn_off' for c in seen['changes']) or 'already off' in seen['said']
+    return '' if off and 'lights:done' in seen.get('used', ()) else 'The lights weren’t turned off.'
+
+
+def _answered(seen, who):
+    if seen['changes'] or seen['cards'].count('confirm'):
+        return 'A question changed something.'
+    return '' if seen['said'] else 'There was no answer.'
+
+
+def requests(who, kind='setup'):
+    """(a short name, what is asked, the check of what Ask did), for each request of this set the house can be asked."""
+    if kind == 'core':
+        return core(who)
     lamp, other = who['lamp_said'], who['other'] and who['other']['name']
     out = []
     if lamp and other:
@@ -121,6 +203,19 @@ def requests(who):
         verb = 'Unlock' if who['locks']['domain'] == 'lock' else 'Disarm'
         out.append(('unlock', f'{verb} the {who["locks_said"]}', _waited))
     out.append(('list', 'Add bananas to the shopping list', _listed))
+    return out
+
+
+def core(who):
+    out = []
+    if who.get('playlists'):
+        out.append(('playlists', 'What playlists do I have?', _named_playlists))
+        who['play'] = who['playlists'][len(who['playlists']) // 2]
+        if who.get('speaker_room'):
+            out.append(('play', f'Play my {who["play"]["name"]} playlist in the {who["speaker_room"]}', _played_mine))
+    if who.get('room'):
+        out.append(('lights', f'Turn off the {who["room"]["name"]} lights', _lights_off))
+    out.append(('weather', 'Will it rain tomorrow?', _answered))
     return out
 
 
@@ -142,34 +237,42 @@ def _spent():
     return state.spent(home.today().isoformat(), KIND)['month_cost']
 
 
-async def _all(asked, who, ledger, started):
+async def _all(asked, who, ledger, started, kept):
     out = []
-    for name, text, check in asked:
+    for at, (name, text, check) in enumerate(asked):
         if _spent() - started >= CAP:
             out.append({'id': name, 'asked': text, 'ok': None, 'why': 'Left out: the trial had spent its limit.'})
             continue
-        before = len(ledger.changes)
+        if at:
+            await asyncio.sleep(SPACING)
+        before, saved = len(ledger.changes), len(kept)
         seen = await _ask(text)
         seen['changes'] = ledger.changes[before:]
-        why = 'Ask couldn’t finish the request.' if seen['status'] != 'ok' else check(seen, who)
+        record = kept[saved] if len(kept) > saved else {}
+        seen['used'], seen['problem'] = list(record.get('tools') or ()), record.get('problem') or ''
+        if seen['problem'] in BUSY:     # the model was busy or out of reach: this says nothing about Ask
+            out.append({'id': name, 'asked': text, 'ok': None, 'why': 'Left out: the model was busy or out of reach.', **seen})
+            await asyncio.sleep(COOL_OFF)
+            continue
+        why = (f'Ask couldn’t finish the request ({seen["status"]}).' if seen['status'] != 'ok' else check(seen, who))
         out.append({'id': name, 'asked': text, 'ok': not why, 'why': why, **seen})
     return out
 
 
-def _keep(rows, cost):
+def _keep(rows, cost, kind='setup'):
     """The private record of this trial, for whoever looks into a failure. Owner-only; it names the house's things."""
     try:
         config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        path = config.DATA_DIR / FILE
+        path = config.DATA_DIR / (FILE if kind == 'setup' else f'ask-trial-{kind}.json')
         path.write_text(json.dumps({'at': time.time(), 'cost': round(cost, 4), 'requests': rows}, indent=1, default=str))
         os.chmod(path, 0o600)
     except OSError:
         pass
 
 
-def run():
-    """Put the requests to Ask with the real model, nothing sent. Returns {'ran', 'failed': [names], 'left_out':
-    [names], 'cost'}. Raises Stopped when it can't run here."""
+def run(kind='setup'):
+    """Put one set of requests (`KINDS`) to Ask with the real model, nothing sent. Returns {'ran', 'failed': [names],
+    'left_out': [names], 'busy': [names the rate limit stopped], 'cost'}. Raises Stopped when it can't run here."""
     from ...golden import dryrun
     try:
         route.build()
@@ -179,17 +282,18 @@ def run():
         who = cast(admin.world(fresh=True))
     except broker.HomeDown:
         raise Stopped('The house can’t be read, so there is nothing to ask about.') from None
-    asked = requests(who)
+    asked = requests(who, kind)
     keep, save = brain.KIND, turns.save
-    started = _spent()
+    started, kept = _spent(), []
     try:
         brain.KIND = KIND                           # counted apart from the owner's own asking, and against no budget of theirs
-        turns.save = lambda *args, **more: 0        # no line in anyone's history of asking
+        turns.save = lambda *args, **more: kept.append(more) or 0     # no line in anyone's history of asking
         with dryrun.layer() as ledger:
-            rows = asyncio.run(_all(asked, who, ledger, _spent()))
+            rows = asyncio.run(_all(asked, who, ledger, _spent(), kept))
     finally:
         brain.KIND, turns.save = keep, save
     cost = max(0.0, _spent() - started)
-    _keep(rows, cost)
+    _keep(rows, cost, kind)
     return {'ran': sum(r['ok'] is not None for r in rows), 'failed': [r['id'] for r in rows if r['ok'] is False],
-            'left_out': [r['id'] for r in rows if r['ok'] is None], 'cost': cost}
+            'left_out': [r['id'] for r in rows if r['ok'] is None],
+            'busy': [r['id'] for r in rows if r['ok'] is None and r.get('problem') in BUSY], 'cost': cost}

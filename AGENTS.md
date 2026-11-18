@@ -68,6 +68,10 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   Owner-approved (2026-11-17, "Mail week 1"): Ask may also search the person's own mail and read up to three emails
   it found in full (`hub/app/ask/mailbox.py`), read-only, for the person whose account it is. A request that read
   mail changes nothing in the house or on the list. Changing mail from Ask comes later and waits for the owner's tap.
+  Owner-approved (2026-11-18, "Both in one go" after the Ask diagnosis): Ask is given the owner's playlist names in
+  its house lines and may read the music library (`music_library`), edit playlists as the older chat did (making
+  and deleting wait for the owner's tap), and read Hub's own records the older chat could (`hub_info`: the trip,
+  AI spend and inbox counts for the owner only, the network's devices; never MAC addresses).
   Owner-approved (2026-11-15): Ask may change anything in Home Assistant, through `hub/tools/house/admin.py` and
   the setup door in `broker.py` only. Keep its rule for what waits for a tap in code, its record and Undo, and
   what the door keeps shut; read "Setting up the house" in `docs/app.md` first. The same day Kitchen became part

@@ -8,7 +8,7 @@ import re
 import pytest
 
 from hub import config
-from hub.app.ask import route, tools, trial
+from hub.app.ask import brain, route, tools, trial
 from hub.engine import state as engine
 from hub.golden import dryrun
 from hub.live import checks, runner
@@ -27,6 +27,9 @@ def house(monkeypatch):
     ask_script.library(monkeypatch, made)
     monkeypatch.setattr(route, 'build', lambda http_client=None: ask_script.MODEL)
     monkeypatch.setattr(route, 'ready', lambda: None)
+    monkeypatch.setattr(trial, 'SPACING', 0)
+    monkeypatch.setattr(trial, 'COOL_OFF', 0)
+    brain._playlists.update(names=[], at=float('-inf'))
     return made
 
 
@@ -144,3 +147,58 @@ def test_the_live_check_of_ask_says_how_many_and_is_not_asked_again_on_the_same_
     with pytest.raises(checks.Failed, match='2 of 6 requests went wrong: move, automation'):
         checks.ask_setup()
     assert {'house.setup', 'ask.setup'} <= {c.id for c in checks.CHECKS}
+
+
+# ---- the core set: everyday asking, run after each Deploy as ask.golden (2026-11-18) ----
+
+def test_the_core_trial_asks_everyday_things_of_the_ask_in_the_app_and_sends_nothing(house):
+    who = trial.cast(admin.world(fresh=True))
+    asked = [(name, text) for name, text, _ in trial.requests(who, 'core')]
+    assert asked == [('playlists', 'What playlists do I have?'), ('play', 'Play my Quiet Piano playlist in the Bedroom'),
+                     ('lights', 'Turn off the Bath lights'), ('weather', 'Will it rain tomorrow?')]
+    result = trial.run('core')
+    assert (result['ran'], result['failed'], result['left_out'], result['busy']) == (4, [], [], [])
+    assert house.sent == [] and house.setup == []
+    kept = json.loads((config.DATA_DIR / 'ask-trial-core.json').read_text())
+    assert [(r['id'], r['ok'], r['used']) for r in kept['requests']][:3] == [
+        ('playlists', True, ['music_library:read']), ('play', True, ['music:done']), ('lights', True, ['lights:done'])]
+    assert (config.DATA_DIR / 'ask-trial-core.json').stat().st_mode & 0o077 == 0
+    assert '4 everyday Ask requests went the right way as a dry run' in checks.ask()
+
+
+def test_the_core_checks_tell_wrong_outcomes_apart(house):
+    who = trial.cast(admin.world(fresh=True))
+    who['play'] = who['playlists'][0]
+    seen = lambda changes=(), said='', cards=(): {'changes': list(changes), 'cards': list(cards), 'tools': [], 'said': said}  # noqa: E731
+    assert trial._named_playlists(seen(said='Evening Jazz, Rainy Day'), who) == ''
+    assert trial._named_playlists(seen(said='You have some playlists.'), who) == 'The answer didn’t name the owner’s playlists.'
+    play = lambda uri: {'to': 'home', 'what': 'music_assistant/play_media', 'data': {'media_id': uri}}   # noqa: E731
+    assert trial._played_mine(seen([play(who['play']['uri'])]), who) == ''
+    assert trial._played_mine(seen([play('apple_music://artist/77')]), who) == 'Something else was played.'
+    assert trial._played_mine(seen([play(who['play']['uri']), {'to': 'home', 'what': 'light/turn_on', 'data': {}}]), who) \
+        == 'Something besides the music was changed.'
+    assert trial._played_mine(seen(), who) == 'Nothing was played.'
+    off = {'to': 'home', 'what': 'light/turn_off', 'data': {}}
+    assert trial._lights_off(dict(seen([off]), used=['lights:done']), who) == ''
+    assert trial._lights_off(dict(seen(said='The bathroom is already off.'), used=['lights:done']), who) == ''   # off already
+    assert trial._lights_off(dict(seen(said='Done.'), used=['lights:done']), who) == 'The lights weren’t turned off.'
+    assert trial._lights_off(dict(seen(), used=['lights:not_done']), who) == 'The lights weren’t turned off.'
+    assert trial._lights_off(dict(seen([off, play('x')]), used=['lights:done']), who) == 'More than the lights was changed.'
+    assert trial._answered(seen(said='No rain.'), who) == '' and trial._answered(seen(), who) == 'There was no answer.'
+
+
+def test_a_rate_limit_leaves_a_request_out_rather_than_failing_ask(house, monkeypatch):
+    from pydantic_ai.exceptions import ModelHTTPError
+    from pydantic_ai.models.function import FunctionModel
+
+    async def busy(messages, info):
+        raise ModelHTTPError(429, 'claude-sonnet-5-5')
+        yield ''
+    monkeypatch.setattr(route, 'build', lambda http_client=None: FunctionModel(stream_function=busy))
+    result = trial.run('core')
+    assert result['ran'] == 0 and result['failed'] == [] and len(result['busy']) == 4
+    with pytest.raises(checks.Skipped, match='busy'):
+        checks.ask()
+    monkeypatch.setattr(trial, 'run', lambda kind='setup': {'ran': 4, 'failed': ['play'], 'left_out': [], 'busy': [], 'cost': 0.01})
+    with pytest.raises(checks.Failed, match='1 of 4 Ask requests went wrong: play'):
+        checks.ask()

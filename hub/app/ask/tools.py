@@ -10,6 +10,7 @@ A tool says what it did in a plain sentence (`turn.said`), so a request that was
 second trip to the model; a tool that needs the model again (nothing matched, a name it couldn't place, something
 it read) sets `turn.again`.
 """
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Literal
@@ -59,6 +60,19 @@ def _again(turn, problem):
     return {'not_done': str(problem)[:400]}
 
 
+def _miss(turn, told, card=None, why='unavailable'):
+    """Hub tells the owner itself that it couldn't (the house or Music Assistant down, a setting holding Ask back):
+    said as `_say` says it, but kept as a miss in the turn's record, not as done (`brain.outcome`)."""
+    _say(turn, told, card)
+    return {why: told}
+
+
+def _ask_owner(turn, question):
+    """Nothing is wrong, but the model needs to ask the owner something ("which room?"): not a miss."""
+    turn.again = True
+    return {'question': str(question)[:400]}
+
+
 class NotNow(Exception):
     """Hub may not change the house for this request. The message is for the owner, as it is."""
 
@@ -84,14 +98,14 @@ def _outcome(turn, result, told, card=None):
     from ..feed import feed
     feed.poke()
     if result.get('silent'):
-        return _say(turn, 'Hub sent that, but the speaker isn’t playing. Check Music Assistant.', card)
+        return _miss(turn, 'Hub sent that, but the speaker isn’t playing. Check Music Assistant.', card)
     if result['done']:
         if card is not None and result.get('undo'):
             card = dict(card, batch=result['batch'])
         return _say(turn, told, card)
     if result['unknown']:
         return _say(turn, 'Hub sent that, but the house didn’t confirm it.', card)
-    return _say(turn, 'The house couldn’t be reached, so nothing was changed.')
+    return _miss(turn, 'The house couldn’t be reached, so nothing was changed.')
 
 
 # ---- lights ----
@@ -166,7 +180,7 @@ def lights(ctx: RunContext[Turn], where: list[str], change: Literal['on', 'off',
             changes, words = [(ids, 'brightness' if lvl else 'on', lvl) for lvl, ids in again.items()], 'on'
         else:
             if level is None or not 1 <= int(level) <= 100:
-                return _again(turn, 'Say how bright, from 1 to 100.')
+                return _ask_owner(turn, 'Say how bright, from 1 to 100.')
             # In each place: the lamps that are lit, or all of them when it is dark. Lamps that can't dim are left.
             dims = [d['id'] for lamps in places.values() for d in ([x for x in lamps if x['on']] or lamps) if d.get('dims')]
             if not dims:
@@ -178,11 +192,11 @@ def lights(ctx: RunContext[Turn], where: list[str], change: Literal['on', 'off',
             return _say(turn, f'{names} {are} already {words}.')
         result = control.several(changes, login=turn.login, via=VIA, taps=False)
     except NotNow as error:
-        return _say(turn, str(error))
+        return _miss(turn, str(error), why='refused')
     except control.Refused as error:
         return _again(turn, error)
     except broker.HomeDown:
-        return _say(turn, 'The house isn’t answering, so nothing was changed.')
+        return _miss(turn, 'The house isn’t answering, so nothing was changed.')
     touched = {entity for ids, _, _ in changes for entity in ids}       # the card draws the rooms that changed, no others
     rooms = list(dict.fromkeys(model.slug(d['room']) for d in devices if d['id'] in touched))
     return _outcome(turn, result, f'{names} {are} {words}.', {'kind': 'rooms', 'rooms': rooms})
@@ -220,11 +234,11 @@ def scene(ctx: RunContext[Turn], name: str) -> dict:
         if theirs:
             return _outcome(turn, control.change([theirs['id']], 'activate', login=turn.login, via=VIA), f'{theirs["name"]} is on.')
     except NotNow as error:
-        return _say(turn, str(error))
+        return _miss(turn, str(error), why='refused')
     except control.Refused as error:
         return _again(turn, error)
     except broker.HomeDown:
-        return _say(turn, 'The house isn’t answering, so nothing was changed.')
+        return _miss(turn, 'The house isn’t answering, so nothing was changed.')
     return _again(turn, f'There is no scene called “{str(name)[:60]}”.')
 
 
@@ -297,10 +311,10 @@ def music(ctx: RunContext[Turn], do: Literal['play', 'pause', 'resume', 'next', 
         asked = _speakers(rooms, found)
         if do == 'play':
             if not library.ready():
-                return _say(turn, 'Music Assistant isn’t set up in Hub, so Hub can’t look up what to play.')
+                return _miss(turn, 'Music Assistant isn’t set up in Hub, so Hub can’t look up what to play.')
             targets = asked or ([now['leader']] if now else [])
             if not targets:
-                return _again(turn, 'Nothing is playing, so Hub needs to know where: ask the owner which room.')
+                return _ask_owner(turn, 'Nothing is playing, so Hub needs to know where: ask the owner which room.')
             picked, reasons = _pick(what, kind)
             if picked is None:
                 return _again(turn, ' '.join(reasons) or 'Say what to play.')
@@ -319,7 +333,7 @@ def music(ctx: RunContext[Turn], do: Literal['play', 'pause', 'resume', 'next', 
             if not now:
                 return _again(turn, 'Nothing is playing to join or leave.')
             if not asked:
-                return _again(turn, 'Say which room.')
+                return _ask_owner(turn, 'Say which room.')
             results = [nowplaying.change(now['leader'], 'add' if do == 'join' else 'remove', login=turn.login, via=VIA, target=e)
                        for e in asked]
             names = _listed([_called(e, found) for e in asked])
@@ -331,14 +345,14 @@ def music(ctx: RunContext[Turn], do: Literal['play', 'pause', 'resume', 'next', 
                             {'kind': 'music', 'speakers': asked})
         if do == 'volume':
             if volume is None:
-                return _again(turn, 'Say the volume, from 0 to 100.')
+                return _ask_owner(turn, 'Say the volume, from 0 to 100.')
             if asked:
                 result = control.change(asked, 'volume', value=volume, login=turn.login, via=VIA)
                 names = sentence(_listed([_called(e, found) for e in asked]))
                 return _outcome(turn, result, f'{names} {"is" if len(asked) == 1 else "are"} at {int(volume)}%.',
                                 {'kind': 'music', 'speakers': asked})
             if not now:
-                return _again(turn, 'Nothing is playing. Say which room.')
+                return _ask_owner(turn, 'Nothing is playing. Say which room.')
             result = nowplaying.change(now['leader'], 'group_volume', login=turn.login, via=VIA, value=volume)
             return _outcome(turn, result, f'Volume at {int(volume)}%.', _card(now['leader'], players))
         anchor = asked[0] if asked else now['leader'] if now else None
@@ -349,16 +363,104 @@ def music(ctx: RunContext[Turn], do: Literal['play', 'pause', 'resume', 'next', 
         return _outcome(turn, result, {'pause': 'Paused.', 'resume': 'Playing again.', 'next': 'Next song.',
                                        'previous': 'Back a song.'}[do], _card(anchor, players))
     except NotNow as error:
-        return _say(turn, str(error))
+        return _miss(turn, str(error), why='refused')
     except control.Refused as error:
         return _again(turn, error)
     except library.MusicDown:
-        return _say(turn, 'Music Assistant isn’t answering, so nothing was played.')
+        return _miss(turn, 'Music Assistant isn’t answering, so nothing was played.')
     except broker.HomeDown:
-        return _say(turn, 'The house isn’t answering, so nothing was changed.')
+        return _miss(turn, 'The house isn’t answering, so nothing was changed.')
+
+
+# ---- the music library: the owner's playlists, search, what played, and editing playlists ----
+
+def music_library(ctx: RunContext[Turn], search: str | None = None, playlist: str | None = None) -> dict:
+    """Read the music library in Music Assistant. With nothing: the owner's playlists (each marked Music Assistant or
+    Apple Music, and whether it can be edited) and what played recently. With `search`: songs, albums, artists and
+    playlists matching it, each with a handle (#1a2b3c) that music play plays exactly. With `playlist` (a name from
+    the list): its songs in order. Read-only. For "what playlists do I have", "what's on my running playlist", "what
+    did we play last night" or finding something before playing it."""
+    from ...engine import catalog
+    turn = ctx.deps
+    turn.again = True
+    found = catalog.library_lookup(search=search, playlist=playlist)
+    if not search and not playlist and isinstance(found.get('playlists'), list):
+        try:
+            total = len(library.playlists())
+        except Exception:  # noqa: BLE001 - the list itself came back; only its count is missing
+            total = len(found['playlists'])
+        found['how_many_playlists'] = total
+        if total > len(found['playlists']):
+            found['note'] = f'{len(found["playlists"])} of {total} shown; search by name for the rest.'
+    return found
+
+
+PLAYLIST_TAP = {'create': 'Nothing is made yet: the owner taps Make playlist for it on Hub’s Playlists page.',
+                'delete': 'Nothing is deleted yet: the owner confirms it on Hub’s Playlists page; deleting can’t be undone.'}
+
+
+def playlist(ctx: RunContext[Turn], do: Literal['create', 'add', 'remove', 'move', 'rename', 'delete'], name: str,
+             songs: list[str] | None = None, new_name: str | None = None, position: int | None = None) -> dict:
+    """Change the owner's playlists, only when their latest message asks for that change. `name`: a playlist from
+    music_library (for create, the new playlist's short name, never a sentence). `songs`: titles, each with its artist
+    when known ("Title – Artist"). create: a new playlist, with songs if given; add: songs to the end; remove: songs;
+    move: songs[0] to `position` (1 = first); rename: to `new_name`; delete. Apple Music playlists can only gain songs.
+    Making and deleting a playlist wait for the owner's tap on Hub's Playlists page; the rest happen at once, with Undo
+    there for a day."""
+    from ...engine import catalog
+    from . import brain
+    turn = ctx.deps
+    turn.again = True                   # the model says what happened, in a sentence, from what came back
+    if turn.searched or turn.opened or turn.strangers:      # strangers' words in view: nothing changes
+        return {'refused': READ_MAIL if turn.searched or turn.opened else
+                'Hub read mail, the calendar or school for this request, so it changed nothing. Ask for that by itself.'}
+    if do in PLAYLIST_VERBS and not PLAYLIST_VERBS[do].search(turn.text):
+        return {'refused': f'The owner’s latest message doesn’t ask to {do} anything on a playlist, so nothing was changed.'}
+    result = catalog.edit_playlist(turn.login, do, name, songs, new_name, position, said=turn.text)
+    if 'needs_tap' in result:           # the older chat's card; in the app the proposal waits on the Playlists page
+        result = {'needs_tap': PLAYLIST_TAP[do]}
+    if not ({'refused', 'unavailable', 'error'} & set(result)):
+        brain.forget_playlists()        # the house lines name the playlists as they are now
+    return result
+
+
+# The owner's own words must ask for the edit itself, not just name a playlist ("play my dinner playlist").
+PLAYLIST_VERBS = {'add': re.compile(r'\b(add|put|include|throw in|stick)\b', re.I),
+                  'remove': re.compile(r'\b(remove|take|drop|delete|get rid of|cut)\b', re.I),
+                  'move': re.compile(r'\b(move|put|first|last|top|bottom|reorder|swap|earlier|later)\b', re.I),
+                  'rename': re.compile(r'\b(rename|call it|name it|change (?:the|its) name)\b', re.I),
+                  'delete': re.compile(r'\b(delete|get rid of|remove)\b', re.I),
+                  'create': re.compile(r'\b(make|create|start|new|build)\b', re.I)}
+
+
+# ---- Hub's own records: the trip, what its AI costs, the inbox's size, and the devices on the network ----
+
+def hub_info(ctx: RunContext[Turn], what: Literal['trip', 'ai_spend', 'inbox_counts', 'network_devices'],
+             name: str | None = None) -> dict:
+    """Read one of Hub's own records to answer a question about it. trip: the trip plan's dates and whether flights
+    are chosen. ai_spend: what Hub's AI has cost this month against each limit, and how its runs went. inbox_counts:
+    how many messages were in the inbox, and unread, each recent day. network_devices: the devices on the home
+    network and the mesh, online or not, band and speed; with `name` (part of a device's name), the matching devices
+    in detail. Read-only."""
+    from ... import people
+    from ...engine import catalog
+    turn = ctx.deps
+    turn.again = True
+    owners = people.sees(turn.login, people.DEFAULT)
+    if what in ('ai_spend', 'inbox_counts') and not owners:
+        return dict(catalog.NOT_YOURS)
+    if what == 'trip':
+        return catalog.trip_lookup()
+    if what == 'ai_spend':
+        return catalog.spend_lookup()
+    if what == 'inbox_counts':
+        return catalog.inbox_lookup()
+    return catalog.network_devices_lookup(name=name)
 
 
 # ---- the one conversation: what Hub keeps of it, and starting over ----
+
+ABOUT_THE_CONVERSATION = re.compile(r'\b(summary|what do you (remember|know|keep)|our (conversation|chat)|this (conversation|chat))\b', re.I)
 
 def conversation(ctx: RunContext[Turn], do: Literal['show', 'fresh']) -> dict:
     """This person's one conversation with Hub (it keeps going; there is no other chat). show: what Hub keeps of it,
@@ -367,18 +469,25 @@ def conversation(ctx: RunContext[Turn], do: Literal['show', 'fresh']) -> dict:
     from . import thread
     turn = ctx.deps
     if turn.login is None:
-        return _say(turn, 'Ask from your phone or laptop.')
+        return _miss(turn, 'Ask from your phone or laptop.', why='refused')
     if do == 'fresh':
         if not thread.asked_fresh(turn.text):
             return _again(turn, 'Their message doesn’t ask to start over, so nothing changed.')
         thread.start_fresh(turn.login)
         return _say(turn, 'Starting fresh. Earlier messages stay on screen, but Hub won’t carry them into what comes next. '
                           'What you asked Hub to remember stays.', {'kind': 'thread', 'fresh': True})
+    # What Hub keeps is for the model to answer from, not the answer: "what was that playlist you made me?" may
+    # land here, and a stock sentence about the summary is no answer to it (2026-11-18).
+    turn.again = True
     kept = thread.summary(turn.login)
-    if not kept:
-        return _say(turn, 'Hub is going by your last few messages; there’s no summary of anything before them yet.')
-    return _say(turn, 'Here’s what Hub keeps of our conversation before your last few messages:\n' + kept,
-                {'kind': 'thread', 'fresh': False})
+    if kept and ABOUT_THE_CONVERSATION.search(turn.text) and not any(c.get('kind') == 'thread' for c in turn.cards):
+        # Asked what Hub keeps: the summary word for word, as the person may always read it (thread.py).
+        _say(turn, 'Here’s what Hub keeps of our conversation before your last few messages:\n' + kept,
+             {'kind': 'thread', 'fresh': False})
+    return {'summary': kept or '(none yet: the conversation is short enough that the recent turns in <earlier> are all of it)',
+            'recent_turns_given': len(thread.recent(turn.login)),
+            'note': 'Answer their question from this and <earlier>. If neither holds it, say plainly that Hub has no '
+                    'record of it, and offer what Hub can do instead.'}
 
 
 # ---- remembering, Kitchen, and reading mail, the calendar and school ----
@@ -389,7 +498,7 @@ def remember(ctx: RunContext[Turn], note: str, together: list[str] | None = None
     the note says some rooms' speakers are one space and always play together, those rooms."""
     turn = ctx.deps
     if turn.login is None:
-        return _say(turn, 'Ask Hub to remember things from your phone or laptop.')
+        return _miss(turn, 'Ask Hub to remember things from your phone or laptop.', why='refused')
     try:
         zone = _speakers(together, read.snapshot()) if together else []
         number = turns.remember(note, turn.text, zone, login=turn.login)
@@ -398,7 +507,7 @@ def remember(ctx: RunContext[Turn], note: str, together: list[str] | None = None
     except control.Refused as error:
         return _again(turn, error)
     except broker.HomeDown:
-        return _say(turn, 'The house isn’t answering, so Hub couldn’t check those rooms. Nothing was kept.')
+        return _miss(turn, 'The house isn’t answering, so Hub couldn’t check those rooms. Nothing was kept.')
     kept = next(n['note'] for n in turns.remembered(turn.login) if n['id'] == number)
     return _say(turn, 'Hub will remember that.', {'kind': 'memory', 'id': number, 'note': kept})
 
@@ -725,13 +834,13 @@ def _setup(turn, plan, args, action='house.setup'):
             return _say(turn, 'That one waits for your tap.', card)
         result = admin.carry_out(changes, login=turn.login, via=VIA)
     except NotNow as error:
-        return _say(turn, str(error))
+        return _miss(turn, str(error), why='refused')
     except admin.Already as error:
         return _say(turn, str(error))
     except control.Refused as error:
         return _again(turn, error)
     except broker.HomeDown:
-        return _say(turn, 'The house isn’t answering, so nothing was changed.')
+        return _miss(turn, 'The house isn’t answering, so nothing was changed.')
     from ..feed import feed
     feed.poke()
     done, missed = result['done'], result['unknown'] + result['not_sent']
@@ -853,5 +962,5 @@ def setting(ctx: RunContext[Turn], do: Literal['add', 'change', 'remove'],
     return _setup(ctx.deps, 'helper', {'do': do, 'kind': kind, 'name': name or '', 'fields': fields, 'new_name': new_name})
 
 
-ALL = (lights, scene, music, remember, conversation, groceries, kitchen, look_up, mail_search, mail_read, errands, errand, find, details, arrange, rooms, scene_setup, routine,
+ALL = (lights, scene, music, music_library, playlist, hub_info, remember, conversation, groceries, kitchen, look_up, mail_search, mail_read, errands, errand, find, details, arrange, rooms, scene_setup, routine,
        device, setting, integration, dashboard)

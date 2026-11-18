@@ -103,7 +103,10 @@ def test_start_fresh_only_on_the_persons_own_words_and_the_messages_stay(monkeyp
         turn = tools.Turn(text=words, login=ALEX)
         return tools.conversation(type('Ctx', (), {'deps': turn}), do), turn
     out, turn = use('what do you remember about our conversation?', 'show')
-    assert 'Old context.' in turn.said[0]
+    assert out['summary'] == 'Old context.' and out['recent_turns_given'] == 5      # for the model to answer from
+    assert turn.again and 'Old context.' in turn.said[0]       # word for word for the person, and the model still answers
+    out, turn = use('what was that playlist you made for me?', 'show')
+    assert turn.again and turn.said == []                      # not a stock sentence as the answer to another question
     out, turn = use('turn off the lights', 'fresh')
     assert 'not_done' in out and thread.summary(ALEX) == 'Old context.' and len(thread.recent(ALEX)) == 5
     out, turn = use("let's start fresh", 'fresh')
