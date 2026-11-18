@@ -4,7 +4,9 @@ Run with a Python 3.12 build environment containing build + pinned build tools.
 Dependencies use pip's normal index/cache, or PIP_NO_INDEX/PIP_FIND_LINKS offline.
 Outputs stay in fresh system scratch. The closed release directory contains only
 committed source archives, the verified wheel, a reviewed dependency wheelhouse,
-and its digest receipt, never runtime state.
+and its digest receipt, never runtime state. Only that directory and the receipt are
+kept: a run that fails leaves nothing, and one that passes removes its build, venv and
+test scratch (about 300 MB a run otherwise).
 """
 import argparse
 import hashlib
@@ -20,8 +22,22 @@ import tomllib
 import zipfile
 
 
+KEPT = ('release', 'verification.json')     # what a caller takes: the deployer copies release/, CI uploads both
+
+
 def run(*args, **kwargs):
     subprocess.run([str(x) for x in args], check=True, **kwargs)
+
+
+def _scratch_away(root):
+    """Remove everything under `root` but KEPT."""
+    for path in root.iterdir():
+        if path.name in KEPT:
+            continue
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
 
 
 def main():
@@ -37,6 +53,15 @@ def main():
         raise RuntimeError('Commit source changes before verifying; checkout must be clean.')
     root = Path(tempfile.mkdtemp(prefix='package-verification-')).resolve()
     print(f'VERIFICATION_ROOT={root}', flush=True)
+    try:
+        _verify(args, repo, commit, root)
+    except BaseException:
+        shutil.rmtree(root, ignore_errors=True)
+        raise
+    _scratch_away(root)
+
+
+def _verify(args, repo, commit, root):
     (root / 'home').mkdir()
     (root / 'install-home').mkdir()
     install_env = {'HOME': str(root / 'install-home'), 'PATH': str(Path(sys.executable).parent) + os.pathsep + os.defpath,
