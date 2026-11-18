@@ -23,8 +23,10 @@ import re
 import threading
 import time
 import uuid
+from datetime import datetime
 
 from ... import store
+from ...home import PACIFIC
 from . import broker, control, read
 
 Refused = control.Refused
@@ -60,6 +62,8 @@ PRIVATE = re.compile(r'token|password|secret|credential|latitude|longitude|gps|l
                      r'ip_address|serial|user_id|address', re.I)
 # Words written outside the house (a song's title, an update's notes): a model about to change the house isn't shown them.
 OUTSIDE = re.compile(r'^(media_(title|artist|album_name|album_artist|series_title|channel|playlist|content_id)|release_(summary|notes)|title)$')
+# A moment as Home Assistant writes it, in UTC ("2026-01-05T19:09:55.123456+00:00"): a scene's state, last_triggered.
+STAMP = re.compile(r'^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d+)?)?([+-]\d\d:\d\d|Z)$')
 # What a card says under its lines, by why it waits.
 WHY = {'delete': 'This removes it. Undo can put it back for a day.',
        'many': 'One request, many changes. Undo puts them all back.',
@@ -295,10 +299,21 @@ def room(said, w):
     raise Refused(f'Which room? {rooms}' if loose else f'There is no room called “{_clip(said, 60)}”. The rooms are: {rooms}.')
 
 
+def _local(value):
+    """A moment as the household's clock says it ("Jan 5, 11:09 AM"), so a model never reads out UTC; anything that
+    isn't one, as it is."""
+    if isinstance(value, str) and STAMP.match(value):
+        try:
+            return datetime.fromisoformat(value.replace('Z', '+00:00')).astimezone(PACIFIC).strftime('%b %-d, %-I:%M %p')
+        except ValueError:
+            pass
+    return value
+
+
 def _shown(value, most=160):
     """One attribute as a model may see it: short, and plain data."""
     if isinstance(value, str):
-        return value[:most]
+        return _local(value)[:most]
     if isinstance(value, (bool, int, float)) or value is None:
         return value
     if isinstance(value, (list, tuple)):
@@ -325,7 +340,7 @@ def _brief(thing, w):
     if thing['area']:
         out['room'] = room_name(thing['area'], w)
     if thing['domain'] not in NAMES_ONLY:
-        out['state'] = 'off in Home Assistant' if thing['disabled'] else thing['state']
+        out['state'] = 'off in Home Assistant' if thing['disabled'] else _local(thing['state'])
     if thing['hidden']:
         out['hidden'] = True
     return out

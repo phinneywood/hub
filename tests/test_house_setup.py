@@ -144,6 +144,18 @@ def test_what_a_model_is_shown_leaves_out_where_people_are_and_anything_secret(h
     assert [t['id'] for t in admin.detail('Hallway')['things']] == ['climate.hallway', 'light.hall_ceiling']
 
 
+def test_a_model_reads_home_assistants_moments_on_the_households_clock(house):
+    # A scene's state is when it last ran, and an automation says when it last fired, both in UTC.
+    house.states['scene.dinner']['state'] = '2026-01-05T19:09:55.123456+00:00'
+    house.states['automation.porch_at_sunset']['attributes']['last_triggered'] = '2026-07-04T03:30:00+00:00'
+    admin.forget()
+    assert admin.detail('dinner')['state'] == 'Jan 5, 11:09 AM'
+    assert {'name': 'Dinner', 'state': 'Jan 5, 11:09 AM'}.items() <= next(
+        f for f in admin.find(kind='scene')['found'] if f['name'] == 'Dinner').items()
+    assert admin.detail('porch at sunset')['attributes']['last_triggered'] == 'Jul 3, 8:30 PM'
+    assert admin.detail('thermostat')['state'] == 'heat'
+
+
 # ---- where things are and what they are called ----
 
 def test_a_light_moves_to_another_room_and_undo_puts_it_back(house):
