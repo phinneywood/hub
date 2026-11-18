@@ -19,7 +19,9 @@ Kitchen screen is the picture of the list on its way into the cart, with no seco
 
 The app is Hub's front door: `/` sends the browser to `/app/`, which opens on Ask, and the phone's home-screen icon
 opens it. `/app/#house` opens on the house. The
-older pages all still answer, listed under System; the old chat is at `/ask`. They wear the app's look (its palette and
+older pages all still answer, listed under System; the old chat is at `/ask`. Since 2026-11-18 the older pages are
+moving in (owner's ask): Calendar, Insights (as AI spend), Trip and School are dashboards (see “Dashboards”), and All
+tools and Settings open System, whose “How Hub checks itself” lists Status, Checks, Golden tests and Ask activity. They wear the app's look (its palette and
 typeface in `hub/static/style.css`, and the Evening or Day look chosen in System through `hub/static/look.js`) and carry
 the app's tabs and a System link, so an older page is one step from the app rather than a place of its own. To open on the chat again, the owner
 sets this in the private settings file (`household.json`):
@@ -647,14 +649,18 @@ found by a few letters in Ask, listed in System, and Today ends with one line fo
 - **Ask.** A question in a board's words (`private.TOPICS`: `pregnancy`, `network`) is answered with the board's
   `facts` beside it, and the board's headline and first numbers drawn under the answer (`{"kind": "board"}`), read
   from Hub for whoever is looking. Mail's questions keep Mail's own lookups.
-- **Who sees which.** Each board says (`sees`): pregnancy and network, the household's members; mail, the mailbox
-  owner. Never on the wall. The morning message's pool is unchanged during the assistant's 14-day test.
+- **Who sees which.** Each board says (`sees`): pregnancy, school, trip, network and AI spend, the household's members; mail and
+  calendar, the mailbox owner. Never on the wall. The morning message's pool is unchanged during the assistant's 14-day test.
 
 | Board | Reads | Shows |
 | --- | --- | --- |
 | Pregnancy | the due date (`"pregnancy": {"due": "YYYY-MM-DD"}` in `household.json`, or set on the board) | the week, size, trimester bar, days to go, what usually comes next (US schedule of visits, screenings, vaccines), a shared getting-ready list, visit cadence, month by month |
 | Network | the older Network page's overview (`hub/tools/network/pages.overview`), at most once a minute | up or down, speed and ping now, the day's uptime and drops, download and ping charts, what needs a look, busiest devices |
 | Mail | Hub's own sorting tables, the daily inbox size, the plan of inbox changes | counts, what needs you, the inbox over 30 days, by kind, Hub's cleanup, changes that need a check |
+| Calendar | the older Calendar page's reader (`hub/tools/calendar/read.week`, through the helper) | what is on today, the week's counts and clashes, the next seven days. Replaces that page: `/calendar` opens it |
+| School | the class guide as last published for the family (`preschool/publication.latest`) | the next 30 days of class dates (cancelled ones marked), the guide's topic pages and links; the class guide's own pages stay for reviewing it |
+| Trip | the saved trip (`hub/tools/trip/store.load`), read-only | the dates, nights and known cost of the chosen plan, the itinerary, what is still to decide, bookings, getting ready and links; changing the trip stays in its workspace at `/trip` |
+| AI spend | Hub's record of runs (`hub/insights.spend`) and the newest live check (`hub/golden/runner.latest`) | each monthly limit, cost and runs by kind over 30 days, Ask's last live check. Replaces the older Insights page: `/insights` opens it (its inbox charts were already on Mail, its network summary on Network) |
 
 | Address | What |
 | --- | --- |

@@ -44,7 +44,7 @@ class Check:
 # ---- Hub's own pages, asked of the running Hub ----
 
 SLOW_SECONDS = 8
-MAIN_PAGES = ('/', '/today', '/insights', '/tools', '/settings', '/engine', '/checks', '/house/music', '/house/changes',
+MAIN_PAGES = ('/', '/today', '/tools', '/settings', '/engine', '/checks', '/house/music', '/house/changes',
               '/house/assistant', '/house/player')
 
 

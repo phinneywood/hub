@@ -19,6 +19,7 @@ from hub.main import app
 from hub.tools.house import control, music
 
 from .test_ask import ORIGIN, OWNER, STRANGER, THREAD, ask, fictional
+from tests import built_app
 
 OWNER_WORDS = 'What was the trick with the Sunday playlist from alex@friends.example?'
 
@@ -225,7 +226,7 @@ def test_the_activity_page_is_signed_in_only_and_can_show_only_failed_turns(clie
     assert ok_id in every and failed_id in every and failed_id in failed and ok_id not in failed
     assert 'RuntimeError' in failed and 'Turn traceback' in failed
     assert 'trip plan' not in every and 'flights?' not in every
-    assert '/engine/ask-activity' in client.get('/settings', headers=OWNER).text
+    assert built_app.in_system('Ask activity', '/engine/ask-activity')
 
 
 def test_the_cli_prints_a_turn_or_the_last_turns_and_never_creates_a_trace(client, monkeypatch, capsys, tmp_path):

@@ -10,7 +10,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from . import actions, bridge, config, delayed, luna, worker
 from .auth import NOT_YOURS, NotYours, account_owner, main_owner, require_owner
 from .bridge import BridgeError
-from .templating import mine, render
+from .templating import render
 from .tools import TOOLS
 
 HERE = Path(__file__).parent
@@ -241,23 +241,17 @@ def today_page(request: Request, snoozed: int = 0, home: str = ""):
                   greeting_text=greeting_text, date_text=date_text, **cards.page(request.headers.get("tailscale-user-login")))
 
 
-@app.get("/insights", response_class=HTMLResponse)
-def insights_page(request: Request):
-    from . import insights
-    return render(request, "insights.html", active="insights", **insights.page(request.headers.get("tailscale-user-login")))
+@app.get("/insights")
+def insights_page():
+    """The older Insights page is the AI spend board now; its inbox charts are on the Mail board."""
+    return RedirectResponse("/app/#board/spend", status_code=302)
 
 
-@app.get("/tools", response_class=HTMLResponse)
-def all_tools(request: Request):
-    """The secondary menu: every tool's own page."""
-    from .tools.house import read
-    return render(request, "tools.html", active="tools", listed=[t for t in mine(request, TOOLS) if t["slug"] != "ask"],
-                  elsewhere=read.elsewhere())
-
-
-@app.get("/settings", response_class=HTMLResponse)
-def settings(request: Request):
-    return render(request, "settings.html", active="settings")
+@app.get("/tools")
+@app.get("/settings")
+def all_tools():
+    """All tools and Settings were menus of pages; the app's System lists them now."""
+    return RedirectResponse("/app/#system", status_code=302)
 
 
 @app.post("/today/snooze")

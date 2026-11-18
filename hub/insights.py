@@ -1,17 +1,15 @@
-"""Insights: charts from numbers Hub already keeps. Read-only: no new source, no model, nothing written.
-
-Each chart is worked out here as plain geometry and drawn by the template as inline SVG, so the page
-needs no chart library and nothing from another site. Every chart carries its numbers as a table too.
+"""Hub's record of its own AI spend, worked out for the AI spend board (`hub/app/boards/spend.py`) and Ask's
+`ai_spend` lookup. Read-only: no new source, no model, nothing written. (The older Insights page it once drew is
+retired; `/insights` opens the board.)
 """
-from datetime import date, timedelta
-from math import ceil, floor, log10
+from datetime import timedelta
+from math import floor, log10
 
 from . import home
 
 W, H = 360, 176                              # every chart's drawing space; the SVG scales to its card
 LEFT, RIGHT, TOP, BOTTOM = 40, 16, 14, 24
 PLOT_W, PLOT_H = W - LEFT - RIGHT, H - TOP - BOTTOM
-INBOX_DAYS = 60
 SPEND_DAYS = 30
 SERIES = (('overnight', 'Overnight review'), ('sort', 'Mail sorting'), ('chat', 'Ask Hub'))   # fixed order: colour follows the kind
 OTHER = 'Other'
@@ -42,56 +40,6 @@ def _short(day):
 
 def _y(value, low, high):
     return round(TOP + PLOT_H * (1 - (value - low) / (high - low)), 1)
-
-
-def inbox(history=None):
-    """Inbox size, one point per day Hub looked. A line: the job is change over time."""
-    from . import store
-    rows = [r for r in (store.inbox_history(INBOX_DAYS) if history is None else history) if isinstance(r['total'], int)]
-    if len(rows) < 2:
-        return {'has': False, 'now': rows[-1]['total'] if rows else None}
-    days = [date.fromisoformat(r['day']) for r in rows]
-    totals = [r['total'] for r in rows]
-    step = _nice((max(totals) - min(totals) or 2) * 1.3 / 2)
-    low = floor(min(totals) / step) * step
-    high = max(low + step, ceil(max(totals) / step) * step)
-    span = (days[-1] - days[0]).days
-    xs = [round(LEFT + PLOT_W * (d - days[0]).days / span, 1) for d in days]
-    ys = [_y(t, low, high) for t in totals]
-    edges = [LEFT] + [round((a + b) / 2, 1) for a, b in zip(xs, xs[1:])] + [W - RIGHT]
-    points = [{'x': x, 'y': y, 'left': edges[n], 'width': round(edges[n + 1] - edges[n], 1),
-               'tip': f'{_short(d)}\n{r["total"]:,} in inbox' + (f'\n{r["unread"]:,} unread' if isinstance(r['unread'], int) else '')}
-              for n, (x, y, d, r) in enumerate(zip(xs, ys, days, rows))]
-    change = totals[-1] - totals[0]
-    falling = ys[-2] < ys[-1]                # the line comes down into the last point, so its label goes underneath
-    return {'has': True, 'now': totals[-1], 'unread': rows[-1]['unread'], 'change': change, 'span': span,
-            'change_text': f'{change:+,}' if change else 'No change', 'since': _short(days[0]),
-            'ticks': [{'y': _y(low + step * n, low, high), 'label': _compact(low + step * n)}
-                      for n in range(round((high - low) / step) + 1)],
-            'line': 'M' + ' L'.join(f'{x} {y}' for x, y in zip(xs, ys)), 'points': points, 'end': points[-1],
-            'end_label': f'{totals[-1]:,}', 'end_label_y': round(ys[-1] + (16 if falling else -9), 1), 'first_day': _short(days[0]), 'last_day': _short(days[-1]),
-            'rows': [{'day': _short(d), 'total': r['total'], 'unread': r['unread']} for d, r in zip(days, rows)][::-1]}
-
-
-BAR, ROW, LABELS = 14, 28, 152               # the bars chart: bar thickness, row height, room for the names
-
-
-def mail():
-    """What is sitting in the inbox, by the kind the last sort gave it. Bars: comparing sizes of named groups."""
-    from .tools.gmail import triage
-    seen = triage.picture()
-    if not seen['synced_at']:
-        return {'has': False}
-    counts = [(triage.NAMES['needs'], len(seen['needs']))]
-    counts += [(entry['name'], len(entry['open'])) for entry in seen['kinds'].values()]
-    counts = [(name, n) for name, n in counts if n]
-    if not counts:
-        return {'has': False, 'empty': True}
-    room, top = W - LABELS - 44, max(n for _, n in counts)
-    bars = [{'name': name, 'count': n, 'y': 6 + ROW * at, 'width': max(2, round(room * n / top, 1))}
-            for at, (name, n) in enumerate(counts)]
-    return {'has': True, 'bars': bars, 'height': 6 + ROW * len(bars), 'total': sum(n for _, n in counts),
-            'x': LABELS, 'bar': BAR, 'needs': len(seen['needs'])}
 
 
 def _meter(label, spent, cap, covers):
@@ -153,29 +101,5 @@ def spend(now=None):
             'legend': [{'series': order.index(name) + 1, 'name': name} for name in shown],
             'meters': [_meter('Overnight review and mail sorting', shared, overnight.MONTH_COST_CAP, 'The shared monthly limit'),
                        _meter('Ask Hub', asked, chat.MONTH_COST_CAP, 'The chat’s own monthly limit')],
-            'rows': [{**summary[name], 'cost': money(summary[name]['cost'])} for name in shown],
+            'rows': [{**summary[name], 'dollars': summary[name]['cost'], 'cost': money(summary[name]['cost'])} for name in shown],
             'runs': sum(s['runs'] for s in summary.values()), 'failed': sum(s['failed'] for s in summary.values())}
-
-
-def _soft(build):
-    try:
-        return build()
-    except Exception:  # noqa: BLE001 - one broken source must not take the page down
-        return {'has': False, 'failed': True}
-
-
-def page(login=None):
-    """Everything the Insights page shows. The two inbox charts are one person's mail (the bridge's main Google
-    account), so they are drawn only for a login that may see it (hub/people.py); for anyone else, None."""
-    from . import cards, people
-    from .tools.network import pages as network
-    try:
-        net = network.summary()
-    except Exception:  # noqa: BLE001
-        net = None
-    from .golden import runner as golden
-    theirs = people.sees(login, people.DEFAULT)
-    return {'inbox': _soft(inbox) if theirs else None, 'mail': _soft(mail) if theirs else None, 'spend': _soft(spend), 'network': net,
-            'golden': _soft(lambda: golden.latest() or {'has': False}),
-            'asks': {key: cards.askable('insight:' + key) for key in ('inbox', 'mail', 'spend', 'network')},
-            'w': W, 'h': H, 'left': LEFT, 'right': W - RIGHT, 'floor_y': TOP + PLOT_H}

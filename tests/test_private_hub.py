@@ -6,9 +6,6 @@ from preschool.support import config as school_config, store as school_preferenc
 
 def test_one_dashboard_links_to_private_preschool_without_external_service():
     client = TestClient(app)
-    page = client.get('/tools')
-    assert page.status_code == 200 and 'href="/preschool"' in page.text
-    assert 'separate service' not in page.text
     assert client.get('/preschool', follow_redirects=False).status_code == 303
     assert client.get('/preschool', headers={'Tailscale-User-Login':'other@example.invalid'}).status_code == 403
     assert client.get('/preschool/static/preschool.css').status_code == 200

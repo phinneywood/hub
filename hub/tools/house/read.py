@@ -482,10 +482,6 @@ def attention(found, now=None):
     return sorted(out, key=lambda x: x[0] != 'bad')
 
 
-ELSEWHERE = (('ha_url', 'Home Assistant', 'home-assistant', 'Devices, rooms, automations and dashboards.'),
-             ('music_url', 'Music Assistant', 'music-assistant', 'Speakers, the queue, the library and playlists.'))
-
-
 def links():
     """Where Home Assistant and Music Assistant open for the owner, from the private settings file
     (household.json, section "home": "ha_url", "music_url"; the older "assistant_url" still counts for
@@ -535,11 +531,3 @@ def opens():
         found['music_url'] = '/house/player'
     found.pop('music_api', None)
     return found
-
-
-def elsewhere():
-    """Home Assistant and Music Assistant as All tools entries, each {'name', 'icon', 'description', 'href'},
-    only those whose address is set. Inside Hub when the door is set up, else a new tab."""
-    found = opens()
-    return [{'name': name, 'icon': icon, 'description': words, 'href': found[key]}
-            for key, name, icon, words in ELSEWHERE if key in found]

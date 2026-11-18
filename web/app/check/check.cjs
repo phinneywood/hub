@@ -584,6 +584,10 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await partner.waitForSelector('a.row.free[href="/trip"]', { timeout: 6000 });
     const olderPages = await partner.locator("a.row.free").evaluateAll((links) => links.map((a) => a.getAttribute("href")));
     expect(!olderPages.includes("/gmail") && !olderPages.includes("/calendar"), "the partner was offered the owner’s Gmail or Calendar: " + olderPages.join(" "));
+    expect((await partner.locator('.block:has(h2:text-is("How Hub checks itself")) .row b').allInnerTexts()).join("|") === "Status|Checks|Golden tests|Ask activity",
+      "System did not list how Hub checks itself");
+    const oldMenu = await partner.goto(base + "/settings");
+    expect(new URL(partner.url()).hash === "#system" && oldMenu.ok(), "the older Settings address did not open System: " + partner.url());
     const olderGmail = await partner.goto(base + "/gmail");
     expect(olderGmail.status() === 200 && (await partner.textContent("main h1")).trim() === "Not yours to open", "the older Gmail page opened for the partner");
     // ... and Ask searches none of it for the partner
@@ -627,7 +631,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await stage("reset");
     await openPage("Dashboards");
     expect(await saysSoon("Dashboards"), "the Dashboards page: " + await says());
-    expect(await until(() => document.querySelectorAll(".wrap .rows .row b").length === 3), "the owner did not get three dashboards");
+    expect(await until(() => document.querySelectorAll(".wrap .rows .row b").length === 7), "the owner did not get seven dashboards");
     await page.locator(".wrap .rows .row", { hasText: "Pregnancy" }).first().click();
     expect(await saysSoon("Week 15: about the size of an apple"), "the pregnancy board: " + await says());
     expect(new URL(page.url()).hash === "#board/pregnancy", "a board has no address of its own: " + page.url());
@@ -654,7 +658,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     if (phone) await page.goto(base + "/app/#board/network");
     else {          // on a wide screen the rail lists each dashboard under Ask and House: one click opens it
       const listed = await page.locator(".rail .railboards .rlink:not(.head)").allInnerTexts();
-      expect(listed.join("|") === "Pregnancy|Network|Mail", "the rail's dashboards: " + listed.join("|"));
+      expect(listed.join("|") === "Pregnancy|Calendar|School|Trip|Network|Mail|AI spend", "the rail's dashboards: " + listed.join("|"));
       await page.locator('.rail .railboards .rlink:text-is("Network")').click();
     }
     expect(await saysSoon("Internet is up"), "the network board: " + await says());
@@ -665,11 +669,32 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await saysSoon("2 emails need you"), "the mail board: " + await says());
     expect(await page.locator('[data-block="kinds"] .bbar').count() > 0, "the mail board drew no bars");
     await page.waitForTimeout(300); await shot("16d-board-mail");
+    // The older Calendar and Insights pages are boards now: their addresses open them.
+    await page.goto(base + "/calendar");
+    expect(await until(() => location.hash === "#board/calendar"), "the older Calendar address did not open the board: " + page.url());
+    expect(await until(() => document.querySelectorAll('[data-block="today"] .row, [data-block="week"] .row').length > 0), "the calendar board listed nothing this week");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the calendar board scrolls sideways");
+    await page.waitForTimeout(300); await shot("16f-board-calendar");
+    await page.goto(base + "/insights");
+    expect(await until(() => location.hash === "#board/spend"), "the older Insights address did not open the AI spend board: " + page.url());
+    expect(await until(() => document.querySelector(".say")?.textContent.startsWith("Within limits in")), "the AI spend board: " + await says());
+    expect(await page.locator('[data-block="month"] .btile').count() === 2, "the AI spend board did not show both limits");
+    await page.waitForTimeout(300); await shot("16g-board-spend");
+    // The trip and the class guide have boards; their own pages stay as the places to change them.
+    await page.goto(base + "/app/#board/trip");
+    expect(await until(() => / in \d+ days$|tomorrow$|on now$/.test(document.querySelector(".say")?.textContent ?? "")), "the trip board: " + await says());
+    expect(await page.locator('[data-block="edit"] a[href="/trip"]').count() === 1, "the trip board did not lead to the trip workspace");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the trip board scrolls sideways");
+    await page.waitForTimeout(300); await shot("16h-board-trip");
+    await page.goto(base + "/app/#board/school");
+    expect(await until(() => document.querySelector('[data-block="more"] a[href="/preschool/"]') !== null), "the school board did not lead to the class guide: " + await says());
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the school board scrolls sideways");
+    await page.waitForTimeout(300); await shot("16i-board-school");
     quiet = true;       // the mail board is the owner's: the partner is told no
     const partnerBoard = await page.evaluate(() => fetch("/app/api/board/mail", { headers: { "tailscale-user-login": "casey@example.com" } }).then((r) => r.status));
     const partnerList = await page.evaluate(() => fetch("/app/api/boards", { headers: { "tailscale-user-login": "casey@example.com" } }).then((r) => r.json()).then((b) => b.boards.map((x) => x.id).join("|")));
     quiet = false;
-    expect(partnerBoard === 404 && partnerList === "pregnancy|network", `the partner's dashboards: ${partnerList}, mail ${partnerBoard}`);
+    expect(partnerBoard === 404 && partnerList === "pregnancy|school|trip|network|spend", `the partner's dashboards: ${partnerList}, mail ${partnerBoard}`);
     await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")');
     await page.fill("#askq", "how far along are we?");
     await page.keyboard.press("Enter");

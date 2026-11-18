@@ -173,6 +173,6 @@ def test_tmux_windows_and_claude_beneath_them(monkeypatch):
 
 def test_dev_is_in_all_tools_but_not_a_card_on_today(world):
     client = TestClient(app)
-    assert 'href="/dev"' in client.get('/tools').text
+    assert client.get('/dev').status_code == 200          # its own page, reached from System's older pages no longer: by address
     today = client.get('/today').text
     assert 'href="/dev"' not in today and 'windows in progress' not in today

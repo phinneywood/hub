@@ -244,10 +244,14 @@ export function Rail() {
   );
 }
 
-const MAILBOX = ["/gmail", "/calendar"];     // one person's Google account: listed only for them
-const OLDER = [["Ask, the chat", "/ask"], ["Today, the cards", "/today"], ["Kitchen, the older page", "/kitchen"], ["Mail, the older page", "/gmail"], ["Calendar", "/calendar"],
-  ["Preschool", "/preschool/"], ["Trip", "/trip"], ["Bike + bus", "/mobility"], ["Network", "/network"], ["Insights", "/insights"],
-  ["Settings and checks", "/settings"]] as const;
+const MAILBOX = ["/gmail"];     // one person's Google account: listed only for them
+const OLDER = [["Ask, the chat", "/ask"], ["Today, the cards", "/today"], ["Kitchen, the older page", "/kitchen"], ["Mail, the older page", "/gmail"],
+  ["Class guide, review", "/preschool/"], ["Trip workspace", "/trip"], ["Bike + bus", "/mobility"]] as const;
+// How Hub checks itself: the pages that were under Settings, each a tool for finding out why something failed.
+const CHECKS = [["Status", "/status", "Whether each connection is working, and the model checks"],
+  ["Checks", "/checks", "Small tests of the real house, mail, music and model, with each one’s history"],
+  ["Golden tests", "/golden", "Real requests run through Ask as a dry run, and how the last run went"],
+  ["Ask activity", "/engine/ask-activity", "Each Ask turn’s lookups, changes, outcomes and errors"]] as const;
 const LOOKS: [Look, string][] = [["auto", "Automatic"], ["dusk", "Evening"], ["day", "Day"]];
 
 export function System() {
@@ -295,6 +299,13 @@ export function System() {
             <button type="button" role="radio" aria-checked={look.value === value} class={"choice" + (look.value === value ? " on" : "")}
               key={value} onClick={() => (look.value = value)}>{name}</button>
           ))}
+        </div>
+      </section>
+      <section class="block">
+        <h2>How Hub checks itself</h2>
+        <div class="rows">
+          {CHECKS.map(([name, href, what]) =>
+            <a class="row free" href={href} key={href}><div class="row-main"><b>{name}</b><span>{what}</span></div></a>)}
         </div>
       </section>
       <section class="block">

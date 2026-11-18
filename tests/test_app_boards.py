@@ -12,10 +12,11 @@ from fastapi.testclient import TestClient
 from hub import config, store
 from hub.app import boards, today
 from hub.app.ask import private, tools
-from hub.app.boards import network, pregnancy
+from hub.app.boards import calendar, network, pregnancy, school, spend
 from hub.main import app
 
 client = TestClient(app)
+REAL_WEEK = calendar._week
 ALEX = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
 CASEY = {'origin': 'http://testserver', 'tailscale-user-login': 'casey@example.com'}
 STRANGER = {'origin': 'http://testserver', 'tailscale-user-login': 'someone@example.com'}
@@ -32,6 +33,10 @@ def household(monkeypatch):
     from hub import home
     monkeypatch.setattr(home, 'today', lambda: ON)
     monkeypatch.setattr(network, 'read', lambda: OVERVIEW)
+    monkeypatch.setattr(calendar, '_week', lambda now: ([], 0, None))
+    monkeypatch.setattr(spend, '_spend', lambda: SPEND)
+    monkeypatch.setattr(spend, '_checked', lambda: None)
+    monkeypatch.setattr(school, '_guide', lambda: GUIDE)
 
 
 OVERVIEW = {
@@ -48,6 +53,19 @@ OVERVIEW = {
               {'title': 'External packet loss', 'current': '0.0 %', 'graph': {}}],
     'top': [{'name': 'Living room TV', 'download_text': '25 Mbit/s', 'upload_text': '1 Mbit/s'}],
 }
+
+
+SPEND = {'month': 'September', 'meters': [
+    {'label': 'Overnight review and mail sorting', 'spent': '$1.20', 'cap': '$5.00', 'percent': 24, 'state': 'ok', 'words': ''},
+    {'label': 'Ask Hub', 'spent': '$6.10', 'cap': '$10.00', 'percent': 61, 'state': 'ok', 'words': ''}],
+    'rows': [{'name': 'Ask Hub', 'runs': 40, 'failed': 1, 'calls': 52, 'dollars': 8.1, 'cost': '$8.10'}]}
+
+
+GUIDE = {'events': [{'date': '2026-09-10', 'title': 'Picture day', 'start_time': '09:00', 'location': 'Room 2', 'status': 'confirmed'},
+                    {'date': '2026-09-14', 'title': 'Field trip', 'status': 'cancelled'},
+                    {'date': '2026-12-01', 'title': 'Too far ahead'}],
+         'pages': [{'slug': 'drop-off', 'title': 'Drop-off', 'body': 'Made up.'}],
+         'resources': [{'title': 'Lunch menu', 'details': '', 'url': 'https://school.example/menu'}]}
 
 
 def _block(found, block_id):
@@ -101,14 +119,14 @@ def test_without_a_due_date_it_asks_for_one(household):
 def test_no_pregnancy_section_means_no_board(household):
     (config.DATA_DIR / 'household.json').write_text(json.dumps({'people': [
         {'name': 'Alex', 'logins': ['me@example.com'], 'accounts': ['default']}]}))
-    assert [b['id'] for b in boards.listing('me@example.com')] == ['network', 'mail']
+    assert [b['id'] for b in boards.listing('me@example.com')] == ['calendar', 'school', 'trip', 'network', 'mail', 'spend']
 
 
 # ---- who sees which ----
 
 def test_who_sees_which_board(household):
-    assert [b['id'] for b in boards.listing('me@example.com')] == ['pregnancy', 'network', 'mail']
-    assert [b['id'] for b in boards.listing('casey@example.com')] == ['pregnancy', 'network']        # mail is Alex's
+    assert [b['id'] for b in boards.listing('me@example.com')] == ['pregnancy', 'calendar', 'school', 'trip', 'network', 'mail', 'spend']
+    assert [b['id'] for b in boards.listing('casey@example.com')] == ['pregnancy', 'school', 'trip', 'network', 'spend']        # mail and calendar are Alex's
     assert boards.listing('someone@example.com') == [] and boards.listing(None) == []
     assert client.get('/app/api/board/mail', headers=CASEY).status_code == 404
     assert client.get('/app/api/board/pregnancy', headers=STRANGER).status_code in (403, 404)    # Hub lets them in at all?
@@ -224,3 +242,67 @@ def test_ask_is_given_the_facts_and_draws_the_board(household):
     tools.shown(turn, {'network', 'pregnancy'})
     tools.shown(turn, {'network'})
     assert turn.cards == [{'kind': 'board', 'board': 'network'}, {'kind': 'board', 'board': 'pregnancy'}]
+
+
+# ---- the calendar and AI spend boards (the older Calendar and Insights pages) ----
+
+def test_the_calendar_board_reads_the_week_the_older_page_did(household, monkeypatch):
+    from datetime import datetime, timedelta
+    from hub import home
+    from hub.tools.calendar import read
+    now = datetime.now(home.PACIFIC)
+    soon = now + timedelta(hours=1)
+    later = now + timedelta(days=2)
+    events = [{'title': 'Synthetic dentist', 'day': soon.date(), 'last_day': soon.date(), 'start': soon, 'end': soon + timedelta(hours=1),
+               'all_day': False, 'location': 'Main St', 'busy': True},
+              {'title': 'Synthetic standup', 'day': soon.date(), 'last_day': soon.date(), 'start': soon, 'end': soon + timedelta(minutes=30),
+               'all_day': False, 'location': '', 'busy': True},
+              {'title': 'Synthetic trip', 'day': later.date(), 'last_day': later.date(), 'start': None, 'end': None,
+               'all_day': True, 'location': '', 'busy': False}]
+    monkeypatch.setattr(calendar, '_week', REAL_WEEK)            # the real reader, over a stand-in helper
+    monkeypatch.setattr(read, 'week', lambda now: events)
+    found = boards.picture('calendar', 'me@example.com')
+    today_rows = _block(found, 'today')['rows']
+    if soon.date() == now.date():
+        assert found['say'].startswith('Next: Synthetic') and {r['title'] for r in today_rows} == {'Synthetic dentist', 'Synthetic standup'}
+        assert all(r['tone'] == 'warn' for r in today_rows)              # they clash
+    assert _block(found, 'numbers')['tiles'][2] == {'value': '1', 'label': 'clash', 'tone': 'warn'}
+    assert boards.picture('calendar', 'casey@example.com') is None       # one person's calendar
+    monkeypatch.setattr(read, 'week', lambda now: (_ for _ in ()).throw(read.SignInNeeded()))
+    assert boards.picture('calendar', 'me@example.com')['say'] == 'Calendar needs signing in again'
+    assert calendar.line('me@example.com', ON) is None
+
+
+def test_the_spend_board_and_its_line(household, monkeypatch):
+    found = boards.picture('spend', 'casey@example.com')
+    assert found['say'] == 'Within limits in September' and spend.line('casey@example.com', ON) is None
+    assert _block(found, 'kinds')['bars'] == [{'label': 'Ask Hub', 'value': 8.1, 'text': '$8.10'}]
+    assert _block(found, 'runs')['rows'][0]['sub'] == '40 runs, 52 model calls, 1 didn’t finish'
+    near = dict(SPEND, meters=[SPEND['meters'][0], dict(SPEND['meters'][1], state='warn', words='Close to the limit.')])
+    monkeypatch.setattr(spend, '_spend', lambda: near)
+    assert boards.picture('spend', 'me@example.com')['say'] == 'Ask Hub: close to the limit'
+    assert spend.line('me@example.com', ON)['tone'] == 'warn'
+
+
+def test_the_older_addresses_open_the_boards(household):
+    for old, new in (('/calendar', '/app/#board/calendar'), ('/insights', '/app/#board/spend')):
+        moved = client.get(old, headers=ALEX, follow_redirects=False)
+        assert moved.status_code == 302 and moved.headers['location'] == new
+
+
+def test_the_school_board_reads_the_published_guide(household):
+    found = boards.picture('school', 'casey@example.com')
+    assert found['say'] == 'Next: Picture day, Tomorrow'
+    rows = _block(found, 'dates')['rows']
+    assert [r['title'] for r in rows] == ['Picture day', 'Cancelled: Field trip'] and rows[1]['tone'] == 'warn'
+    assert _block(found, 'topics')['rows'] == [{'title': 'Drop-off', 'href': '/preschool/guide/drop-off'}]
+    assert _block(found, 'numbers')['tiles'][2]['value'] == '1'
+
+
+def test_the_trip_board_reads_the_saved_trip_and_leads_to_its_workspace(household):
+    found = boards.picture('trip', 'casey@example.com')               # the invented starter trip, in a throwaway folder
+    assert found['say'].startswith('Port Ellery & Larch Valley in ') and found['sub'].endswith('Planning, not booked.')
+    assert _block(found, 'plan')['tiles'][0] == {'value': '4', 'label': 'nights, Port Ellery'}
+    assert 'Find welcome dinner venue and start time' in [r['title'] for r in _block(found, 'decide')['rows']]
+    assert 'Prefer the Wednesday move' not in [r['title'] for r in _block(found, 'decide')['rows']]
+    assert _block(found, 'edit')['rows'][0]['href'] == '/trip'

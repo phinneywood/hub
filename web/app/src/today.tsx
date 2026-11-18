@@ -16,7 +16,7 @@ import { daySays, daySub, partOfDay } from "./words";
 const HERE: Record<string, string> = {
   "/gmail": "#mail", "/kitchen": "#kitchen", "/engine": "#engine", "/engine#improvements": "#engine",
   "/engine/notes": "#engine", "/engine/recipes": "#engine", "/app/#versions": "#versions", "/app/#health": "#health",
-  "/house/changes": "#changes", "/house/playlists": "#changes", "/gmail/plan": "#mailsettings", "/gmail/delayed": "#mailsettings", "/gmail/backlog": "#mailsettings",
+  "/house/changes": "#changes", "/house/playlists": "#changes", "/calendar": "#board/calendar", "/insights": "#board/spend", "/gmail/plan": "#mailsettings", "/gmail/delayed": "#mailsettings", "/gmail/backlog": "#mailsettings",
 };
 export const inApp = (href: string) => HERE[href] ?? href;
 const HERE_ALREADY = new Set(["/app/#today", "#today"]);       // a need about something this screen shows needs no link

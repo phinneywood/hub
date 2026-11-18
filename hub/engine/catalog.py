@@ -13,7 +13,7 @@ UNANSWERED = 3
 PRESCHOOL_DAYS = 14
 
 # Where a suggestion may point. The model names a source; Hub picks the page.
-PAGES = {'gmail': ('/gmail', 'Open Gmail'), 'calendar': ('/calendar', 'Open calendar'), 'preschool': ('/preschool/', 'Class guide'), 'trip': ('/trip', 'Open trip'),
+PAGES = {'gmail': ('/gmail', 'Open Gmail'), 'calendar': ('/app/#board/calendar', 'Open calendar'), 'preschool': ('/app/#board/school', 'School'), 'trip': ('/app/#board/trip', 'Open trip'),
          'network': ('/network', 'Details'), 'house': ('/house/changes', 'Home changes'), 'hub': ('/engine', 'Open')}
 
 
@@ -1001,13 +1001,13 @@ SOURCES = [
                            '/gmail', 'Open Gmail', mail_lookup),
                     Lookup('inbox_trend', 'Inbox size', 'The inbox count Hub notes each day it looks.',
                            'How many messages were in the inbox, and how many unread, on each of the last 30 days. Counts only.',
-                           '/insights', 'Open Insights', inbox_lookup))),
+                           '/app/#board/mail', 'Open the Mail board', inbox_lookup))),
     Source('calendar', 'Calendar', 'Your main Google calendar for the next 7 days, through the read-only helper.',
            'Titles, times and places of up to 40 events. Never descriptions or guest lists.',
            items=(today.calendar,), evidence=calendar_evidence, account=people.DEFAULT,
            lookups=(Lookup('calendar_week', 'Calendar', 'Your main Google calendar for the next 7 days.',
                            'Titles, times and places of up to 40 events. Never descriptions or guest lists.',
-                           '/calendar', 'Open calendar', calendar_lookup),)),
+                           '/app/#board/calendar', 'Open calendar', calendar_lookup),)),
     Source('preschool', 'Preschool', 'The reviewed class guide Hub already keeps.',
            'Dates, titles, times and places for the next two weeks. No names.',
            items=(today.preschool,), evidence=preschool_evidence),
@@ -1027,7 +1027,7 @@ SOURCES = [
     Source('trip', 'Trip', 'The trip plan saved in Hub.', 'Trip dates and whether flights are chosen.',
            items=(today.trip,), evidence=trip_evidence,
            lookups=(Lookup('trip_status', 'Trip', 'The trip plan saved in Hub.', 'Trip dates and whether flights are chosen.',
-                           '/trip', 'Open trip', trip_lookup),)),
+                           '/app/#board/trip', 'Open trip', trip_lookup),)),
     Source('network', 'Network', 'Internet and device readings from Home Assistant.',
            'The one-line status, how many devices are online, and the names of up to 5 you expect online that aren’t. '
            'To Ask Hub when you ask: device names, their status, band, Deco and speed. Never MAC addresses.',
@@ -1075,7 +1075,7 @@ SOURCES = [
                     Lookup('ai_spend', 'AI spend', 'Hub’s record of its own model runs.',
                            'This month’s cost against each limit, and for the last 30 days how many runs of each kind '
                            'finished, their model calls and cost. Counts and dollars only, never text.',
-                           '/insights', 'Open Insights', spend_lookup))),
+                           '/app/#board/spend', 'Open AI spend', spend_lookup))),
 ]
 
 ACTIONS = [
