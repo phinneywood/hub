@@ -717,6 +717,19 @@ def mail_settings(request: Request):
     return mailrules.picture()
 
 
+@router.get('/api/mail-settings/quiet')
+def mail_settings_quiet(request: Request):
+    """The next loud sender to decide about (the older Quiet page's card), for the owner only."""
+    from .. import bridge
+    from . import mailrules
+    if _not_theirs(request):
+        return {'ok': True, 'connected': False}
+    try:
+        return {'ok': True, **mailrules.quiet()}
+    except bridge.BridgeError:
+        return _refuse('Gmail isn’t answering just now.', 503)
+
+
 @router.post('/api/mail-settings/{do}')
 def mail_settings_tap(do: str, request: Request, body: dict = Body(default={})):
     """A tap on Mail settings, {"key": ..., "value": ...}: through the older Mail pages' own handlers."""

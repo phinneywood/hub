@@ -72,6 +72,39 @@ def picture():
     }
 
 
+def quiet():
+    """The next loud sender to decide about, as the older Quiet page's card showed it: how many of theirs are in the
+    inbox, how much is unread, the last three subjects, and whether a filter already skips the inbox for them. Asks
+    the Gmail helper (counts, three subjects, the filters); subjects are shown to the owner only. {'done': True} when
+    every loud sender in the sample is decided."""
+    from email.utils import parseaddr
+
+    from .. import bridge, senders
+    from ..tools.gmail import common, missions
+    decided = missions.decided_senders()
+    todo, sample = common.sender_queue(decided, senders.ranked(common.overview()))
+    later = sum(1 for i in store.items() if i['decision'] == 'later')
+    progress = {'reviewed': len(decided), 'left': len(todo), 'later': later, 'sample': sample.get('sample_size')}
+    if not todo:
+        return {'done': True, **progress}
+    sender, sampled = todo[0]
+    query = senders.inbox_query(sender)
+    count = bridge.get('/gmail/count', ttl=300, query=query, max=senders.COUNT_CAP)
+    recent = bridge.get('/gmail/search', ttl=300, query=query, limit=3).get('messages', [])
+    rules = bridge.get('/gmail/filters', limit=100).get('filters', [])
+    signals = missions.card_signals(sender, count['count'], count['exact'])
+    return {'done': False, 'sender': sender, 'name': parseaddr(recent[0]['from'])[0] if recent else '', 'count': count['count'],
+            'exact': bool(count['exact']), 'unread_share': signals['unread_share'], 'sampled': sampled,
+            'covered': bool(senders.covered(sender, rules)),
+            'recent': [{'subject': m.get('subject') or '(no subject)', 'unread': 'UNREAD' in (m.get('labels') or [])} for m in recent],
+            **progress}
+
+
+QUIET_SAID = {'filter_archive': 'In your plan: skip the inbox from now on, and archive what’s there.',
+              'archive': 'In your plan: archive what’s there.', 'filter': 'In your plan: skip the inbox for new mail.',
+              'keep': 'Kept in the inbox.', 'later': 'Left for later.'}
+
+
 def _went(reply):
     """Read an older handler's redirect: its query says when something wasn't done."""
     query = parse_qs(urlsplit(reply.headers.get('location', '')).query)
@@ -117,6 +150,15 @@ def tap(do, key='', value=None):
             raise Refused('Changes are paused, so nothing was checked.')
         _went(missions.delayed_run_now())
         return 'Checking the rules now.'
+    if do == 'quiet':
+        from .. import senders
+        value = value if isinstance(value, dict) else {}
+        decision = str(value.get('decision') or '')
+        if not senders.valid_sender(key) or decision not in senders.DECISIONS:
+            raise Refused(NOT_DONE['no'])
+        missions.decide(sender=key, decision=decision, count=max(int(value.get('count') or 0), 0), exact=int(bool(value.get('exact', True))),
+                        display_name=str(value.get('name') or '')[:200])
+        return QUIET_SAID[decision]
     if do == 'backlog':
         _went(inbox.backlog_start())
         return 'The backlog clear is in your plan.'

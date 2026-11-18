@@ -191,6 +191,21 @@ patch.setattr(mail_worker, 'start', lambda: None)
 # Ask's mail search and read: a made-up mailbox where the bridge would answer, with one sender AI is off for.
 from tests import mail_world  # noqa: E402
 mail_world.install(patch)
+# Quiet your loudest senders, in Mail settings: one made-up loud sender until it is decided (the plan keeps the choice).
+from hub.app import mailrules as mail_settings  # noqa: E402
+
+
+def _made_up_quiet():
+    decided = {i['sender'] for i in mail_plan.items()}
+    if 'deals@example.com' in decided:
+        return {'done': True, 'reviewed': 1, 'left': 0, 'later': 0, 'sample': 500}
+    return {'done': False, 'sender': 'deals@example.com', 'name': 'Example Deals', 'count': 214, 'exact': True, 'unread_share': 97,
+            'sampled': 40, 'covered': False, 'recent': [{'subject': 'This week only', 'unread': True}, {'subject': 'Last chance', 'unread': True},
+                                                        {'subject': 'New arrivals', 'unread': False}],
+            'reviewed': 0, 'left': 1, 'later': 0, 'sample': 500}
+
+
+patch.setattr(mail_settings, 'quiet', _made_up_quiet)
 MAIL_WRITES = mail_world.install_writes(patch)      # and Ask's mail changes, after the tap: kept here, never sent
 mail_plan.set_ai_blocked(mail_world.OFF, True)
 engine_notes.propose('The porch light goes off at midnight', 'remember that the porch light goes off at midnight', login='me@example.com')
@@ -399,6 +414,7 @@ def stage(what: str):
         day.school += todos()
         errands_world.again(week)
         MAIL_WRITES.clear()
+        mail_plan.reset_later()             # the loud sender put off in Mail settings comes back
         with mailchange._db() as conn:      # Ask's mail cards
             conn.execute('delete from ask_mail_waiting')
         with admin._db() as conn:           # the record of setup changes, and the cards that wait

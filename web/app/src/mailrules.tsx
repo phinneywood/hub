@@ -22,6 +22,56 @@ function Item({ item, act, locked }: { item: PlanItem; act?: [string, string]; l
   );
 }
 
+// ---- quiet your loudest senders, one at a time (the older Quiet page's card). Each choice goes into the plan above. ----
+
+interface Quiet {
+  ok: true; done: boolean; reviewed: number; left: number; later: number; sender?: string; name?: string; count?: number; exact?: boolean;
+  unread_share?: number | null; covered?: boolean; recent?: { subject: string; unread: boolean }[];
+}
+
+function QuietCard({ locked, after }: { locked: boolean; after: () => void }) {
+  const [q, setQ] = useState<Quiet | null>(null);
+  const [problem, setProblem] = useState("");
+  const [busy, setBusy] = useState(false);
+  const read = () => api.get<Quiet | { error: string }>("mail-settings/quiet").then(
+    (found) => { if ("error" in found) setProblem(found.error); else { setProblem(""); setQ(found); } },
+    () => setProblem("Gmail isn’t answering just now."));
+  useEffect(() => { void read(); }, []);
+  const decide = async (decision: string) => {
+    if (!q?.sender) return;
+    setBusy(true);
+    const answer = await api.post("mail-settings/quiet", { key: q.sender, value: { decision, count: q.count, exact: q.exact, name: q.name } });
+    say(answer.error ?? answer.said ?? "Done");
+    await read();
+    setBusy(false);
+    after();
+  };
+  if (problem) return <p class="quiet-line">{problem}</p>;
+  if (!q) return <p class="quiet-line">Finding your loudest sender…</p>;
+  if (q.done) return <p class="quiet-line">Every loud sender is decided{q.later ? `, with ${q.later} left for later` : ""}.</p>;
+  const many = `${n(q.count ?? 0)}${q.exact ? "" : "+"}`;
+  const reads = q.unread_share != null && q.unread_share <= 20 && (q.count ?? 0) >= 5;
+  const off = locked || busy;
+  return (
+    <div class="quietcard">
+      <p class="sub">{q.reviewed} decided · {q.left} left in this batch</p>
+      <div class="ctl-name"><b>{q.name || q.sender}</b>{q.name && <span>{q.sender}</span>}
+        <span>{many} in the inbox{q.unread_share != null ? `, ${q.unread_share}% unread` : ""}</span></div>
+      <div class="rows">{(q.recent ?? []).map((m, i) => <div class="row free" key={i}><div class="row-main"><span>{m.unread ? "● " : ""}{m.subject}</span></div></div>)}</div>
+      {q.covered && <p class="sub">A filter already skips the inbox for this sender, but these are still here.</p>}
+      <div class="btns">
+        {q.covered
+          ? <button type="button" class={"btn" + (reads ? " ghost" : " go")} disabled={off} onClick={() => void decide("archive")}>Archive these {many}</button>
+          : <button type="button" class={"btn" + (reads ? " ghost" : " go")} disabled={off} onClick={() => void decide("filter_archive")}>Skip the inbox, and archive {many}</button>}
+        {!q.covered && <button type="button" class="btn ghost" disabled={off} onClick={() => void decide("filter")}>New mail only</button>}
+        <button type="button" class={"btn" + (reads ? " go" : " ghost")} disabled={off} onClick={() => void decide("keep")}>Keep</button>
+        <button type="button" class="btn ghost" disabled={off} onClick={() => void decide("later")}>Later</button>
+      </div>
+      <p class="quiet-line">Choices go into your plan; nothing changes in Gmail until you apply it. Labels, 30-day rules and Luna’s advice are on <a href="/gmail/quiet">the older page</a>.</p>
+    </div>
+  );
+}
+
 let tapIt: (what: string, key: string | number, value?: unknown) => Promise<void> = async () => {};
 
 export function MailSettings() {
@@ -154,10 +204,13 @@ export function MailSettings() {
           )}
 
           <section class="block">
+            <h2>Quiet your loudest senders</h2>
+            <QuietCard locked={locked} after={() => void load()} />
+          </section>
+          <section class="block">
             <h2>More ways to clear the inbox</h2>
             <p class="sub">These open Hub’s older Mail pages, until each moves in here.</p>
             <div class="rows">
-              <a class="row free" href="/gmail/quiet"><div class="row-main"><b>Quiet your loudest senders</b><span>One at a time{plan.later ? `, with ${plan.later} parked for later` : ""}</span></div></a>
               <a class="row free" href="/gmail/sweep"><div class="row-main"><b>Clean up in bulk</b><span>Mail over a year old, old Promotions, old unread</span></div></a>
               <a class="row free" href="/gmail/health"><div class="row-main"><b>Tidy filters</b><span>Broken, duplicate and unused filters</span></div></a>
             </div>

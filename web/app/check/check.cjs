@@ -648,6 +648,12 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.body.textContent.includes("news@example.com")), "Mail settings didn't show the plan");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Mail settings scrolls sideways");
     await page.waitForTimeout(300); await shot("12b-mail-settings");
+    // Quiet your loudest senders moved in from the older page: one sender at a time, each choice into the plan
+    expect(await until(() => document.querySelector(".quietcard")?.textContent.includes("Example Deals")), "Mail settings did not offer the loudest sender");
+    expect((await page.locator(".quietcard .row-main span").allInnerTexts()).length === 3, "the loudest sender's three subjects were not shown");
+    await page.locator('.quietcard .btn:text-is("Later")').click();
+    expect(await until(() => document.querySelector(".toast span")?.textContent === "Left for later."), "Later did not say so");
+    expect(await until(() => document.body.textContent.includes("Every loud sender is decided")), "the card did not move on after a choice");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Mail settings: " + (await small()).join(", "));
     await tap(".uplink");
     expect(await saysSoon("emails need you", 3000) || await saysSoon("email needs you", 1000) || true, "back to Mail");
