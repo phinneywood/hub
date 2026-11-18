@@ -1111,3 +1111,12 @@ def test_an_unreadable_bridge_answer_is_an_unknown_bridge_error(monkeypatch):
     with pytest.raises(bridge.BridgeError) as caught:
         bridge._request('POST', '/gmail/labels/apply', body={})
     assert caught.value.status is None   # never one of filing's “refused” codes
+
+
+def test_a_sender_without_a_name_is_shown_by_their_site_not_their_address(monkeypatch):
+    monkeypatch.setattr(triage, 'PERSONAL_MAIL', triage.PERSONAL_MAIL | {'personal.example'})
+    assert triage.plain_who('Sam Rivera', 'sam@example.com') == 'Sam Rivera'
+    assert triage.plain_who('', 'billing@e.acme-power.example') == 'acme-power.example'
+    assert triage.plain_who(None, 'news@mail.example.co.uk') == 'example.co.uk'
+    assert triage.plain_who('', 'alex.lee@personal.example') == 'alex.lee@personal.example'   # a person's own account
+    assert triage.plain_who('', 'odd-sender') == 'odd-sender'
