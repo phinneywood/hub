@@ -109,3 +109,15 @@ export function partOfDay(at: string): string {
   const hour = new Date(at).getHours();
   return hour < 12 ? "Today" : hour < 17 ? "This afternoon" : "This evening";
 }
+
+/** A family of scenes: this many or more sharing a name before "·" (a light bridge's presets, "Window light ho·Window amber 1"
+ * and 19 more) are shown as one, so the scenes people use stay in view. */
+export const FAMILY = 4;
+export const familyOf = (name: string) => { const cut = name.indexOf("·"); return cut > 0 ? name.slice(0, cut).trim() : ""; };
+export function familySizes(scenes: { name: string }[]): Map<string, number> {
+  const sizes = new Map<string, number>();
+  for (const s of scenes) { const f = familyOf(s.name); if (f) sizes.set(f, (sizes.get(f) ?? 0) + 1); }
+  for (const [f, n] of sizes) if (n < FAMILY) sizes.delete(f);
+  return sizes;
+}
+

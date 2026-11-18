@@ -6,7 +6,7 @@ import { inApp, NeedRow, SlotRow } from "./today";
 import { go, me, runScene, running, seen, trouble } from "./state";
 import type { Day, House, Slot } from "./types";
 import { Icon } from "./ui";
-import { daySays, daySub, houseSays, when } from "./words";
+import { daySays, daySub, familyOf, familySizes, houseSays, when } from "./words";
 
 /** The top of Ask, as at the top of a conversation: who you are talking to, and whether it can hear you. */
 export function ChatHead() {
@@ -77,6 +77,7 @@ export function NeedsCard({ most }: { most: number }) {
 
 /** The house in a line: how many rooms are lit, a tiny plan, and the scenes. Opens House. What plays is on the bar below. */
 export function HouseCard({ now }: { now: House }) {
+  const families = familySizes(now.scenes);
   const rooms = Object.values(now.rooms).filter((room) => !room.outside).slice(0, 12);
   return (
     <section class="now house-now" aria-label="The house">
@@ -88,9 +89,12 @@ export function HouseCard({ now }: { now: House }) {
       </button>
       {now.scenes.length > 0 && (
         <div class="chips">
-          {now.scenes.map((s) => (
+          {now.scenes.filter((s) => !families.has(familyOf(s.name))).map((s) => (
             <button type="button" key={s.id} class={"chip" + (s.on ? " on" : "") + (running.value === s.id ? " busy" : "")} aria-pressed={s.on}
               onClick={() => void runScene(s)}>{s.name}</button>
+          ))}
+          {[...families].map(([f, n]) => (          // a family of presets: one chip, opening them on House
+            <button type="button" key={"family-" + f} class="chip family" onClick={() => go("house")}>{f} · {n}</button>
           ))}
         </div>
       )}

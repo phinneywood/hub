@@ -204,6 +204,16 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await says() === "The house is dark.", "All off did not hold");
     await tap(".toast button");
     expect(await saysSoon("Two rooms are lit."), "Undo did not bring the lights back");
+    // A bridge's presets fold into one chip that opens them, so the scenes people use stay in view; on a wide screen
+    // the rooms come first and the scenes under them.
+    const family = page.locator(".scene.family").locator("visible=true");
+    const kin = () => page.evaluate(() => [...document.querySelectorAll(".scene.kin")].filter((b) => b.offsetParent).length);
+    expect(await family.count() === 1 && (await family.innerText()).startsWith("Window glow") && await kin() === 0, "a family of presets was not one chip");
+    await family.click();
+    expect(await until(() => [...document.querySelectorAll(".scene.kin")].filter((b) => b.offsetParent).length === 4), "the family chip did not open its four scenes");
+    await family.click();
+    if (!phone) expect(await page.evaluate(() => { const scenes = [...document.querySelectorAll(".scenes")].find((s) => s.offsetParent);
+      return !!scenes && scenes.getBoundingClientRect().top > document.querySelector(".plan").getBoundingClientRect().top; }), "on a wide screen the scenes were above the rooms");
 
     // ---- keep the house as it stands as a scene ----
     await tap(".scene.add"); await page.waitForSelector(".sheet.in");

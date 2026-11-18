@@ -7,7 +7,7 @@ import { able, forgetNote } from "./asking";
 import { boards } from "./boards";
 import type { Floor, House, Room } from "./types";
 import { Bars, Icon } from "./ui";
-import { clock, houseSays, list, musicSays, playingIn, when } from "./words";
+import { clock, familyOf, familySizes, houseSays, list, musicSays, playingIn, when } from "./words";
 
 const HOLD_MS = 430;        // how long a finger rests on a room before it opens
 const TIP = "hub.tip";
@@ -126,6 +126,37 @@ function Skeleton() {
   );
 }
 
+/** The scenes, one tap each. A family of a bridge's presets ("Window light ho·Window amber 1" … 20 of them) is one chip
+ * that opens them, so the scenes people use stay in view. `where`: above the rooms (a phone) or below them (a wide
+ * screen, where the rooms come first); the stylesheet shows one of the two. */
+function Scenes({ now, where }: { now: House; where: "top" | "below" }) {
+  const [open, setOpen] = useState("");
+  const sizes = familySizes(now.scenes);
+  const folded = (name: string) => { const f = familyOf(name); return sizes.has(f) ? f : ""; };
+  const drawn = new Set<string>();
+  return (
+    <div class={"scenes " + where}>
+      {now.scenes.map((s) => {
+        const f = folded(s.name);
+        const chip = (
+          <button type="button" class={"scene" + (s.on ? " on" : "") + (running.value === s.id ? " busy" : "") + (f ? " kin" : "")} key={s.id}
+            aria-pressed={s.on} onClick={() => void runScene(s)}>{f ? s.name.slice(s.name.indexOf("·") + 1).trim() : s.name}</button>
+        );
+        if (!f) return chip;
+        const head = drawn.has(f) ? null : (
+          <button type="button" class={"scene family" + (open === f ? " open" : "")} key={"family-" + f} aria-expanded={open === f}
+            onClick={() => setOpen(open === f ? "" : f)}>{f}<small>{sizes.get(f)}</small></button>
+        );
+        drawn.add(f);
+        return open === f ? [head, chip] : head;
+      })}
+      <button type="button" class="scene add" aria-label="Keep the house as it is now as a scene" onClick={() => (sheet.value = { kind: "keep" })}>
+        <Icon name="plus" />
+      </button>
+    </div>
+  );
+}
+
 export function Home() {
   const now = seen.value;
   let tipped = true;
@@ -137,17 +168,10 @@ export function Home() {
       <Trouble />
       <h1 class="say">{houseSays(now)}</h1>
       <p class="sub">{musicSays(now.music)}</p>
-      <div class="scenes">
-        {now.scenes.map((s) => (
-          <button type="button" class={"scene" + (s.on ? " on" : "") + (running.value === s.id ? " busy" : "")} key={s.id}
-            aria-pressed={s.on} onClick={() => void runScene(s)}>{s.name}</button>
-        ))}
-        <button type="button" class="scene add" aria-label="Keep the house as it is now as a scene" onClick={() => (sheet.value = { kind: "keep" })}>
-          <Icon name="plus" />
-        </button>
-      </div>
+      <Scenes now={now} where="top" />
       {!tipped && <p class="tip">Tap a room to switch its lights. Tap its ⋯, or hold it, for everything in the room.</p>}
       <Plan now={now} />
+      <Scenes now={now} where="below" />
       {now.facts.length > 0 && (
         <div class="facts">
           {now.facts.map((f) => <div class={"fact" + (f.tone ? " " + f.tone : "")} key={f.label}><span>{f.label}</span><b>{f.value}</b></div>)}
