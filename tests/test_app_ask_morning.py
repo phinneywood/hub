@@ -180,3 +180,13 @@ def test_a_first_opening_whose_sources_didnt_answer_isnt_kept_as_a_day_with_noth
     assert today.gather([(Future(), None), (broke, None)], accounts={people.DEFAULT}, missed=missed) == []
     assert missed == ['late', 'broke']
 
+
+def test_a_long_line_ends_at_a_whole_sentence_or_word():
+    """2026-11-18: a morning line stopped mid-word ("…Also lo…")."""
+    two = 'The side door lock’s battery is flat and it stopped answering this morning. Also look at the back door, which reported low earlier.'
+    assert morning._clip(two) == 'The side door lock’s battery is flat and it stopped answering this morning.'
+    one = 'A single long sentence that keeps going without any stop so it has to be cut somewhere sensible near the end of the line there'
+    said = morning._clip(one)
+    assert said.endswith('…') and len(said) <= morning.LINE and one.startswith(said[:-1]) and one[len(said) - 1] == ' '
+    assert morning._clip('Short and sweet.') == 'Short and sweet.'
+

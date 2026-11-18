@@ -100,9 +100,17 @@ def _clock(now=None):
 
 
 def _clip(text):
+    """At most LINE characters. A longer line ends at its last whole sentence that fits, or else at a whole word:
+    never mid-word ("Also lo…")."""
     from ...engine import judge
     text = ' '.join(judge.scrub(str(text or '')).split())
-    return text if len(text) <= LINE else text[:LINE - 1].rstrip() + '…'
+    if len(text) <= LINE:
+        return text
+    cut = text[:LINE - 1]
+    stop = max(cut.rfind('. '), cut.rfind('! '), cut.rfind('? '))
+    if stop >= LINE // 3:
+        return cut[:stop + 1]
+    return cut.rsplit(' ', 1)[0].rstrip(',;:') + '…'
 
 
 def _sentence(*parts):

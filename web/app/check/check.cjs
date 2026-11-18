@@ -275,6 +275,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     const lastAnswer = () => page.locator(".turn .answer").last().innerText().catch(() => "(nothing)");
     await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")'); await page.waitForSelector(".askpage");
     expect(await until(() => document.querySelector(".prompts .prompt.usual")?.textContent === "Dim the living room to 30"), "what is often asked around now was not offered");
+    expect((await page.locator(".prompts .prompt.place").allInnerTexts()).join("|") === "Today|Kitchen", "Today and Kitchen were not a tap away at the start");
+    expect(await page.locator(".askpage .greet .greet-more").count() === 1, "the greeting counted what needs you with no way to it");
     await page.waitForTimeout(300); await shot("6a-ask-open");
     await page.locator(".prompts .prompt.usual").first().click();
     expect(await answered("The living room is at 30%."), "one tap on a habit did not do it: " + await lastAnswer());
@@ -284,6 +286,12 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect((await page.locator(".sug").first().innerText()).startsWith("Living room"), "typing did not find the room");
     await page.locator('.sug [role="switch"]').first().click();
     expect(await until(() => fetch("/app/api/home").then((r) => r.json()).then((h) => !h.rooms["living-room"].on)), "the switch in the list did not switch the room");
+    // A page's first few letters and Return open the page; nothing goes to the model.
+    const turnsBefore = await page.locator(".turn").count();
+    await page.fill("#askq", "Kitc"); await page.keyboard.press("Enter");
+    expect(await until(() => location.hash === "#kitchen"), "Return on Kitc did not open Kitchen: " + page.url());
+    await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")'); await page.waitForSelector(".askpage");
+    expect(await page.locator(".turn").count() === turnsBefore && (await page.inputValue("#askq")) === "", "Return sent Kitc to the model");
 
     // ---- Ask: say it, and Hub does it and says so ----
     // The field sends only once the request before it has finished, so wait for that as a person would.
