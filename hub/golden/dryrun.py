@@ -57,7 +57,11 @@ class Ledger:
     # ---- Home Assistant: lay recorded changes over what is read ----
 
     def _apply(self, domain, service, data):
-        entity = data.get('entity_id')
+        named = data.get('entity_id')
+        for entity in named if isinstance(named, list) else [named]:    # a room's lamps go to Home Assistant together
+            self._apply_one(domain, service, entity, data)
+
+    def _apply_one(self, domain, service, entity, data):
         with self._lock:
             state = self._overlay.setdefault(entity, {'attributes': {}})
             if service in ('turn_on', 'turn_off') and domain in ('light', 'switch', 'fan'):

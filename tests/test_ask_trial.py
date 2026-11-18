@@ -244,3 +244,16 @@ def test_a_request_still_going_when_the_trial_must_end_is_cut_off_and_says_nothi
     monkeypatch.setattr(trial, 'run', lambda kind='setup', within=None: result)
     with pytest.raises(checks.Skipped, match='Inconclusive'):
         checks.ask()
+
+
+def test_the_dry_run_lays_a_rooms_lamps_switched_together_over_the_house(house):
+    """2026-11-18: after a deploy, "turn off the <room> lights" failed with a TypeError in a room with two lamps on: Hub
+    switches them in one request, and the dry run could only lay one lamp at a time over what it reads."""
+    lamps = ['light.kitchen_ceiling', 'light.kitchen_pendants']
+    with dryrun.layer() as ledger:
+        done = control.several([(lamps, 'off', None)], login='me@example.com', via='ask', taps=False)
+        found = control.devices(control.read.snapshot(fresh=True))
+    assert done['not_sent'] == [] and len(done['done']) == 2
+    assert [c['data']['entity_id'] for c in ledger.changes] == [lamps]
+    assert [found[lamp]['state'] for lamp in lamps] == ['off', 'off'] and house.sent == []
+
