@@ -6,7 +6,7 @@ import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import * as api from "./api";
 import { Days, Hours, OvernightBlock, Sky, aboutTomorrow, addToList, adding } from "./brief";
-import { look, me } from "./state";
+import { go, look, me } from "./state";
 import type { Day, Need } from "./types";
 import { ToastLine } from "./ui";
 
@@ -162,6 +162,7 @@ function Night({ day, moment }: { day: Day | null; moment: Date }) {
   const name = next.toLocaleDateString("en-US", { weekday: "long" });
   return (
     <div class="wall asleep" style={shift(moment)}>
+      <Done />
       <div class="wnight">
         <p class="wclock">{time}<small>{half}</small></p>
         {sky && (
@@ -171,6 +172,9 @@ function Night({ day, moment }: { day: Day | null; moment: Date }) {
     </div>
   );
 }
+
+/** On a phone, where the wall is only being looked at, a way back to System. The kitchen iPad never shows it. */
+const Done = () => <button type="button" class="wdone" onClick={() => go("system")}>Done</button>;
 
 export function Wall() {
   useEffect(() => {
@@ -192,6 +196,7 @@ export function Wall() {
       <div class="wall" style={shift(moment)}>
         <div class="wcol wtime"><p class="wclock">{time}<small>{half}</small></p><p class="wdate">{date}</p></div>
         <div class="wcol"><p class="wquiet">{away.value ? "Can’t reach Hub. The wall tries again every minute." : "Reading the day…"}</p></div>
+        <Done />
       </div>
     );
   }
@@ -209,6 +214,7 @@ export function Wall() {
   );
   return (
     <div class={"wall" + (away.value ? " stale" : "")} style={shift(moment)}>
+      <Done />
       <div class="wcol wtime">
         <p class="wclock">{time}<small>{half}</small></p>
         <p class="wdate">{date}</p>

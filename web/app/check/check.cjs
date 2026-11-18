@@ -968,6 +968,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.evaluate(() => document.documentElement.dataset.theme) === "day", "choosing Day did not change the look");
     await tap('.choice:text-is("Automatic")');
     expect(await page.evaluate(() => document.documentElement.dataset.theme) === (options.colorScheme === "dark" ? "dusk" : "day"), "Automatic did not follow the device");
+    if (phone) {      // the wall, opened on a phone to look at it, has a way back
+      await tap('.row:has-text("The wall")');
+      expect(await until(() => { const done = document.querySelector(".wdone"); return !!done && getComputedStyle(done).display !== "none"; }),
+        "the wall on a phone had no way back");
+      await tap(".wdone");
+      expect(await systemSays(), "Done on the wall did not go back to System: " + await says());
+    }
     expect(await page.locator('.row:has-text("A new version is ready")').count() === 1, "System didn't say a version is waiting");
     await tap('.row:has-text("A new version is ready")');
     expect(await saysSoon("Versions"), "Versions: " + await says());

@@ -1183,3 +1183,10 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
   .viewer { padding: 18px 90px 22px; }
   .sheet.tall:has(.chat) { height: 80dvh; }
 }
+/* The wall opened on a phone: a way back. Never on the kitchen iPad's wide screen. */
+.wdone { display: none; }
+@media (max-width: 700px) {
+  .wdone { display: block; position: fixed; top: calc(env(safe-area-inset-top) + 8px); right: 12px; z-index: 5; min-height: 44px; padding: 0 16px;
+    border-radius: 22px; background: color-mix(in oklab, var(--ink) 12%, transparent); color: inherit; font-size: var(--t-s); }
+}
+
