@@ -182,6 +182,17 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await dimmed && await plugged, "Hub did not answer the dimmer and the plug");
     await page.keyboard.press("Escape");
     expect(await until(() => !document.querySelector(".sheet")), "Escape did not put the sheet away");
+    if (phone) {      // a touch screen has no hover: each room shows its way in, and a tap on it opens the room without switching it
+      const more = page.locator(`${room("kitchen")} .room-more`);
+      expect(await more.evaluate((el) => getComputedStyle(el).display !== "none" && Number(getComputedStyle(el).opacity) > 0),
+        "a phone shows no way into a room");
+      const lit = await says();
+      await more.tap();
+      await page.waitForSelector(".sheet.in");
+      expect((await page.textContent(".sheet h1")).trim() === "Kitchen" && await says() === lit, "the room's ⋯ did not open it, or it switched the lights");
+      await page.keyboard.press("Escape");
+      expect(await until(() => !document.querySelector(".sheet")), "Escape did not put the room away");
+    }
 
     // ---- a scene, and all off ----
     await tap('.scene:text-is("Movie night")');

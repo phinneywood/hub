@@ -7,7 +7,7 @@
     "record-build.mjs": "0d1ca0afe2544a3dd8c957be6a95cb5eafeed4daad8a9f68d4f315126e9537d8",
     "src/activity.tsx": "77377995178139cbc7345f3b8327dc0fe67600069fb45f0e7d4080a7207c125b",
     "src/api.ts": "3bbcdf56ea56a32d698e88a66b2577a1ae7bf61ddc3bf27b672dd0bcca0d3b6b",
-    "src/app.css": "1f86356a74b7ab3eeb690f18ef16597e153838ea62a513588b80a66766ae1b0c",
+    "src/app.css": "c008170eef3520f207371192287933de35f3cc07300d21744a57abf40bca3cf7",
     "src/archive.tsx": "993994ff04cf1aaea78741e6bc6dbc7ffae3d0f2bee29b7223c6387f6b296cfb",
     "src/ask.tsx": "ea60e833f7976f53e414f6b07ba6bc41b5cb969000bba5464a2f17bd2e2d7539",
     "src/asking.ts": "6b7b38f1b73d1eadc8763967b41f4849e21924198491473008baba8b6f6aa203",
@@ -24,7 +24,7 @@
     "src/main.tsx": "c4369221a8a70fbc7089654f3f10dc7aa860b6eb2a58ff67ce05adb55e970cc3",
     "src/now.tsx": "31ae374009fb379571fcff55e5c28dfc2d0d57e922bfb7e22860eec1b76476e2",
     "src/photos.tsx": "3f23e83dbb1fb6dcf9a126ee73770cdbf43ee1dbf3686818484ec8c603a0e84a",
-    "src/screens.tsx": "062f60e10b2bd61d74f8fd7f3ef113b29894763616624bd4b1bcf9e0249a60f0",
+    "src/screens.tsx": "8ad7aa35435171ebdcc7778ff142f36b24e26b7c16cb7802511cd250845729d8",
     "src/sheets.tsx": "938fd1b4de42cb155602fe36e7cb059294fb1562d41179f54edabb98a403de3c",
     "src/state.ts": "cf3d70b2e4a5cd2fc24aa1bbbae22d5c4d6dfc5f83e9f095b0aad540b63eaf66",
     "src/today.tsx": "3b5d2379ddfad8ed98b44a99aeb713beee52d9ed7cb0245708ced6a5237e380d",
@@ -37,7 +37,7 @@
     "src/words.ts": "dfcfa37638ad8ab6347f8a66f30cabf7e6619c00e828ac7da8ebc41b2b944117"
   },
   "built": {
-    "app.css": "91cabdfd180fa94497abf10c7ef08e1604b989fc1fed1135335169981b89c160",
-    "app.js": "c40215804bb13584e4e34be80502128979f0b9a891b5faa3d8736211489dba72"
+    "app.css": "7bc5cbb76860d7dc8b87ba8a93d28a3c58ce60dc2d7134f854624f03bc4e6c8f",
+    "app.js": "ccb6105743f35254a4157f5bd42ae913d37c478d157da257a4b44986fea3fbce"
   }
 }

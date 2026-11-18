@@ -146,13 +146,13 @@ export function Home() {
           <Icon name="plus" />
         </button>
       </div>
+      {!tipped && <p class="tip">Tap a room to switch its lights. Tap its ⋯, or hold it, for everything in the room.</p>}
       <Plan now={now} />
       {now.facts.length > 0 && (
         <div class="facts">
           {now.facts.map((f) => <div class={"fact" + (f.tone ? " " + f.tone : "")} key={f.label}><span>{f.label}</span><b>{f.value}</b></div>)}
         </div>
       )}
-      {!tipped && <p class="tip">Tap a room to switch its lights. Hold it for everything in the room.</p>}
     </div>
   );
 }
