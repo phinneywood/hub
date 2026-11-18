@@ -206,9 +206,9 @@ function RailBoards() {
   const here = view.value === "board" ? boardId.value : "";
   return (
     <div class="railboards">
-      <button type="button" class={"tab" + (view.value === "boards" ? " on" : "")} onClick={() => go("boards")}>Dashboards</button>
+      <button type="button" class={"rlink head" + (view.value === "boards" ? " on" : "")} onClick={() => go("boards")}>Dashboards</button>
       {list.map((b) => (
-        <button type="button" key={b.id} class={"tab sub" + (here === b.id ? " on" : "")} aria-current={here === b.id ? "page" : undefined}
+        <button type="button" key={b.id} class={"rlink" + (here === b.id ? " on" : "")} aria-current={here === b.id ? "page" : undefined}
           onClick={() => go("board", b.id)}>{b.name}</button>
       ))}
     </div>

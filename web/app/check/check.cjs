@@ -626,12 +626,12 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.locator('.btns .btn:text-is("Done")').click();
     if (phone) await page.goto(base + "/app/#board/network");
     else {          // on a wide screen the rail lists each dashboard under Ask and House: one click opens it
-      const listed = await page.locator(".rail .railboards .tab.sub").allInnerTexts();
+      const listed = await page.locator(".rail .railboards .rlink:not(.head)").allInnerTexts();
       expect(listed.join("|") === "Pregnancy|Network|Mail", "the rail's dashboards: " + listed.join("|"));
-      await page.locator('.rail .railboards .tab.sub:text-is("Network")').click();
+      await page.locator('.rail .railboards .rlink:text-is("Network")').click();
     }
     expect(await saysSoon("Internet is up"), "the network board: " + await says());
-    if (!phone) expect(await page.locator('.rail .railboards .tab.sub.on').innerText() === "Network", "the rail did not mark the open dashboard");
+    if (!phone) expect(await page.locator('.rail .railboards .rlink.on').innerText() === "Network", "the rail did not mark the open dashboard");
     expect(await page.locator('[data-block="download"] polyline').count() === 1, "the network board drew no download line");
     await page.waitForTimeout(300); await shot("16c-board-network");
     await page.goto(base + "/app/#board/mail");
