@@ -6,6 +6,9 @@ keeps the list, picks each product from the household's own purchase history in 
 the shop. Hub adds nothing and keeps nothing: this file asks, shapes the answer for the screen, and passes taps
 on with the signed-in member's login. No model is called here.
 
+Kitchen may fill two carts: Fred Meyer's, and Costco Same-Day's once the household switched it on there. Each item
+says its store; a member can move a thing to the other store, and the Costco cart is only ever added to.
+
 What is here is private household data: products, prices, and notes about who eats what. It is drawn on the
 Kitchen screen and on Ask's cards for signed-in members. None of it is ever given to Ask's model: Ask's own
 sentences about the list say how many things and the member's own words, nothing more (hub/app/ask/tools.py).
@@ -20,6 +23,10 @@ MOST_ADDED = 20             # things added by one request
 MOST_OF_ONE = 24            # how many of one thing
 STATES = ('pick', 'ready', 'adding', 'cart', 'unavailable', 'unknown', 'removing')
 SHOP = 'https://www.fredmeyer.com/'
+MAIN = 'fredmeyer'
+# Each store Kitchen knows: its name, and where its own links and cart are. Anything else is the main shop.
+STORES = {'fredmeyer': ('Fred Meyer', SHOP, SHOP + 'cart'),
+          'costco': ('Costco', 'https://sameday.costco.com/', 'https://sameday.costco.com/store/costco/storefront')}
 OLD = 'Kitchen on this Mac is an older version without the list. Restart the kitchen service to update it.'
 AWAY = 'Kitchen isn’t answering right now.'
 
@@ -40,11 +47,21 @@ def _number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
+def _store(value):
+    """A store Kitchen named, or the main shop for anything else (an older Kitchen names none)."""
+    return value if value in STORES else MAIN
+
+
+def _link(store, url):
+    """A product link only when it points at that store's own site."""
+    return url if isinstance(url, str) and url.startswith(STORES[_store(store)][1]) else ''
+
+
 def _option(o):
     return {'product': _clip(o.get('product')), 'size': _clip(o.get('size'), 60), 'why': _clip(o.get('why'), 12),
             'times': o.get('times') if isinstance(o.get('times'), int) else 0, 'last': _clip(o.get('last'), 10),
-            'price': _clip(o.get('price'), 12), 'url': o['url'] if str(o.get('url') or '').startswith(SHOP) else '',
-            'note': _clip(o.get('note'), 160)}
+            'price': _clip(o.get('price'), 12), 'url': _link(o.get('store'), o.get('url')),
+            'note': _clip(o.get('note'), 160), 'store': _store(o.get('store'))}
 
 
 def _item(i):
@@ -55,6 +72,7 @@ def _item(i):
             'times': i.get('times') if isinstance(i.get('times'), int) else 0, 'last': _clip(i.get('last'), 10),
             'price': _clip(i.get('price'), 12), 'about': _clip(i.get('about'), 160),
             'state': i.get('state') if i.get('state') in STATES else 'unknown', 'left': bool(i.get('left')),
+            'store': _store(i.get('store')), 'how': _clip(i.get('how'), 12),
             'options': [_option(o) for o in i.get('options') or () if isinstance(o, dict) and o.get('product')][:8]}
 
 
@@ -97,6 +115,7 @@ def picture():
                            for line in seen.get('lines') or () if isinstance(line, dict)][:80],
                  'subtotal': _number(seen.get('subtotal')), 'when': _clip(seen.get('when'), 120), 'at': _number(seen.get('at'))} if seen else None,
         'practice': bool((found.get('cart') or {}).get('practice')),
+        'stores': _stores((found.get('cart') or {}).get('stores')),
         'due': [{'name': _clip(d.get('name'), 100), 'product': _clip(d.get('product')), 'every': d.get('every'), 'days': d.get('days')}
                 for d in found.get('due') or () if isinstance(d, dict)][:6],
         'ideas': {'at': ideas.get('at'), 'recipes': [r for r in ideas.get('recipes') or () if isinstance(r, dict)][:3]} if ideas else None,
@@ -107,6 +126,13 @@ def picture():
         'history': {'orders': (found.get('history') or {}).get('orders') or 0, 'newest': _clip((found.get('history') or {}).get('newest'), 10),
                     'stale': bool((found.get('history') or {}).get('stale'))},
         'working': _clip(found.get('busy'), 12) or ('queued' if found.get('queued') else '')}
+
+
+def _stores(named):
+    """The household's stores as Kitchen names them, each with Hub's own link to its cart. An older Kitchen names
+    none: then it is the main shop alone."""
+    ids = [s.get('id') for s in named or () if isinstance(s, dict) and s.get('id') in STORES]
+    return [{'id': store, 'name': STORES[store][0], 'cart': STORES[store][2]} for store in dict.fromkeys([MAIN] + ids)]
 
 
 def written(text):
@@ -168,14 +194,17 @@ def tap(do, body, login):
         return (f'{names[0]} {are(names)} on the list' if len(names) == 1 else f'{len(names)} things are on the list'), found
     if do == 'remove':
         gone = remove(body.get('id'), login)
+        if gone['how'] == 'kept':           # Kitchen never takes anything out of the Costco cart
+            return f'{gone["name"]} {are([gone["name"]])} off the list. It stays in the {STORES[gone["store"]][0]} cart', {'item': gone}
         return f'{gone["name"]} {are([gone["name"]])} off the list' + (', and coming out of the cart' if gone['state'] == 'removing' else ''), {'item': gone}
     if do == 'pick':
         product = _clip(body.get('product'))
         if not product:
             raise Refused('Pick a product.')
+        store = _store(body.get('store'))
         found = _ask('POST', f'/items/{int(body.get("id"))}/pick', {
             'login': login, 'product': product, 'size': _clip(body.get('size'), 60), 'price': _clip(body.get('price'), 12),
-            'url': body['url'] if str(body.get('url') or '').startswith(SHOP) else ''})
+            'url': _link(store, body.get('url')), **({'store': store} if body.get('store') in STORES else {})})
         # A pick made because the shop was out of their product is for this order; their own stays their own.
         said = 'Picked. Hub will choose it next time too' if found.get('kept', True) else 'Picked for this order. Your usual stays your usual'
         return said, {'item': _item(found['item'])}
@@ -186,6 +215,12 @@ def tap(do, body, login):
         item = _item(_ask('POST', f'/items/{int(body.get("id"))}/qty', {'login': login, 'qty': number})['item'])
         back = item['state'] == 'ready' and body.get('carted') is True          # it was in the cart: the cart is set to the new number next
         return f'{item["name"]}: {item["qty"]}' + (', waiting for the cart again' if back else ''), {'item': item}
+    if do == 'store':
+        if body.get('store') not in STORES:
+            raise Refused('Pick one of your stores.')
+        item = _item(_ask('POST', f'/items/{int(body.get("id"))}/store', {'login': login, 'store': body['store']})['item'])
+        where = STORES[item['store']][0]
+        return (f'{item["name"]}: {where}' + (', pick its product there' if item['state'] == 'pick' else '')), {'item': item}
     if do == 'keep':
         return 'Kept in the cart', {'item': _item(_ask('POST', f'/items/{int(body.get("id"))}/keep', {'login': login})['item'])}
     if do == 'fill':

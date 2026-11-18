@@ -151,14 +151,18 @@ export interface Mail {
 }
 
 // Kitchen, as Hub sends it (hub/app/kitchen.py): the list, each thing's product and where it stands. Data to show.
-export interface Option { product: string; size: string; why: string; times: number; last: string; price: string; url: string; note: string }
+export interface Option { product: string; size: string; why: string; times: number; last: string; price: string; url: string; note: string;
+  store?: string }
+export interface Store { id: string; name: string; cart: string }       // a shop Kitchen fills a cart at
 export interface Item {
   id: number; name: string; qty: number; asked: number | null; source: string; by: string; note: string; product: string; size: string; why: string;
   times: number; last: string; price: string; about: string; left: boolean; options: Option[];
   state: "pick" | "ready" | "adding" | "cart" | "unavailable" | "unknown" | "removing";
+  store?: string; how?: string;     // which store's cart it goes in (an older Hub sends none: the main shop)
 }
 export interface Shop {
   ok: true; items: Item[]; plan: Plan | null; order: Order | null; practice: boolean; auto: boolean; wait: number; working: string;
+  stores?: Store[];
   cart: { lines: { product: string; size: string; qty: number; price: number | null }[]; subtotal: number | null; when: string; at: number | null } | null;
   due: { name: string; product: string; every: number; days: number }[]; ideas: { at: number; recipes: Recipe[] } | null;
   reminders: { state: "on" | "away" | "off"; count: number | null; at: number | null; why: string; wanted: boolean };

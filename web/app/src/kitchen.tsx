@@ -7,7 +7,7 @@ import { useEffect, useState } from "preact/hooks";
 import { get, post } from "./api";
 import { Top } from "./screens";
 import { go, say, sheet, view } from "./state";
-import type { CartResult, Item, KitchenMessage, Option, Order, Plan, Recipe, Shop, ShopAway } from "./types";
+import type { CartResult, Item, KitchenMessage, Option, Order, Plan, Recipe, Shop, ShopAway, Store } from "./types";
 import { Icon, SheetFrame, Switch } from "./ui";
 
 const QUICK = 3000;         // how often to look while something is on its way into the cart
@@ -256,6 +256,35 @@ function kitchenSub(now: Shop): string {
 
 // ---- the list ----
 
+const MAIN = "fredmeyer";
+/** A product with its size, unless its name already ends with it (Costco writes the size into the name). */
+const sized = (product: string, size: string) => (size && !product.toLowerCase().endsWith(size.toLowerCase()) ? `${product}, ${size}` : product);
+/** The household's stores: the main shop alone until Kitchen names another. */
+const storesOf = (now: Shop | ShopAway | null): Store[] => (now && now.ok && now.stores?.length ? now.stores : []);
+/** The store's name, said only for a thing that goes somewhere other than the main shop. */
+function elsewhere(item: { store?: string }): string {
+  if (!item.store || item.store === MAIN) return "";
+  return storesOf(shop.value).find((s) => s.id === item.store)?.name ?? "";
+}
+
+/** Which store's cart a thing goes in, with one tap to move it to another. Only for what isn't in a cart yet. */
+function StorePick({ item }: { item: Item }) {
+  const stores = storesOf(shop.value);
+  const [busy, setBusy] = useState(false);
+  if (stores.length < 2 || !["pick", "ready", "unavailable"].includes(item.state)) return null;
+  const here = item.store ?? MAIN;
+  const move = async (to: string) => { setBusy(true); await act("store", { id: item.id, store: to }); setBusy(false); };
+  return (
+    <div class="ctl acts store-pick">
+      <div class="ctl-name"><b>Store</b><span>Hub chose where you buy it most lately.</span></div>
+      <div class="pills" role="group" aria-label={`Which store for ${item.name}`}>
+        {stores.map((s) => <button type="button" key={s.id} class={"pill" + (s.id === here ? " go" : "")} aria-pressed={s.id === here}
+          disabled={busy || s.id === here} onClick={() => void move(s.id)}>{s.name}</button>)}
+      </div>
+    </div>
+  );
+}
+
 function ItemRow({ item, plain }: { item: Item; plain?: boolean }) {
   const covers = item.asked !== null && item.asked !== item.qty && Boolean(item.product);      // a pack that covers the number asked for
   const cls = "row tick item" + (item.state === "cart" ? " on" : "") + (item.state === "adding" || item.state === "removing" ? " going" : "")
@@ -265,13 +294,14 @@ function ItemRow({ item, plain }: { item: Item; plain?: boolean }) {
       <span class="ring"><Icon name="check" /></span>
       <span class="row-main">
         <b>{item.name}{(item.qty > 1 || covers) && <i class="qty"> × {item.qty}{covers ? ` (for ${item.asked})` : ""}</i>}</b>
-        <span>{item.product ? item.product + (item.size ? ", " + item.size : "") : "No product yet"}</span>
+        <span>{item.product ? sized(item.product, item.size) : "No product yet"}{elsewhere(item) && <i class="store-tag"> · {elsewhere(item)}</i>}</span>
       </span>
       <span class="row-q">{STANDS[item.state]}</span>
     </>
   );
   if (plain) return <div class={cls}>{inside}</div>;
-  const read = [item.name + (item.qty > 1 ? `, ${item.qty}` : ""), item.product || "no product yet", STANDS[item.state]].join(". ");
+  const read = [item.name + (item.qty > 1 ? `, ${item.qty}` : ""), item.product || "no product yet", elsewhere(item) && "at " + elsewhere(item),
+    STANDS[item.state]].filter(Boolean).join(". ");
   return <button type="button" class={cls} aria-label={read} onClick={() => (sheet.value = { kind: "item", id: item.id })}>{inside}</button>;
 }
 
@@ -288,7 +318,9 @@ function OptionRow({ option, busy, onPick }: { option: Option; busy: boolean; on
 /** A thing on the list that needs a person: nothing like it was bought before, or the shop doesn't have it. */
 function PickBlock({ item }: { item: Item }) {
   const [busy, setBusy] = useState(false);
-  const pick = async (o: Option) => { setBusy(true); await act("pick", { id: item.id, product: o.product, size: o.size, url: o.url, price: o.price }); setBusy(false); };
+  const pick = async (o: Option) => {
+    setBusy(true); await act("pick", { id: item.id, product: o.product, size: o.size, url: o.url, price: o.price, store: o.store }); setBusy(false);
+  };
   return (
     <div class="pickblock">
       <b class="pick-t">{item.name}{item.qty > 1 && <i class="qty"> × {item.qty}</i>}</b>
@@ -314,7 +346,8 @@ function LeftRow({ item }: { item: Item }) {
 /** How many of a thing: one more, one fewer. What is already in the cart is set to the new number at the next fill. */
 function HowMany({ item }: { item: Item }) {
   const [busy, setBusy] = useState(false);
-  const fixed = item.state === "adding" || item.state === "removing";
+  // What is in another store's cart stays as it went in: Hub never changes that cart.
+  const fixed = item.state === "adding" || item.state === "removing" || (item.state === "cart" && elsewhere(item) !== "");
   const set = async (qty: number) => { setBusy(true); await act("qty", { id: item.id, qty, carted: item.state === "cart" }); setBusy(false); };
   const covers = item.asked !== null && item.asked !== item.qty
     ? `You asked for ${item.asked}. ${item.qty === 1 ? "One pack covers" : `${NUMBERS[item.qty] ?? item.qty} packs cover`} that.` : "";
@@ -336,7 +369,7 @@ export function ItemSheet({ item }: { item: Item }) {
   const still = item.state === "adding" || item.state === "removing";
   const pick = async (o: Option) => {
     setBusy(true);
-    if (await act("pick", { id: item.id, product: o.product, size: o.size, url: o.url, price: o.price })) sheet.value = null;
+    if (await act("pick", { id: item.id, product: o.product, size: o.size, url: o.url, price: o.price, store: o.store })) sheet.value = null;
     setBusy(false);
   };
   const each = price(item.price);
@@ -354,16 +387,21 @@ export function ItemSheet({ item }: { item: Item }) {
         </div>
       )}
       {item.product && <HowMany item={item} />}
+      <StorePick item={item} />
       {can && item.options.length > 0 && <h2>{item.product ? "Or one of these" : "Pick one"}</h2>}
       {can && item.options.map((o) => <OptionRow option={o} busy={busy} onPick={() => void pick(o)} key={o.product} />)}
       {can && item.options.length > 0 && <p class="quiet-line">{item.state === "unavailable"
         ? "A pick here is for this order. Your usual stays your usual." : "Hub will choose your pick next time too."}</p>}
-      {item.state === "cart" && <p class="quiet-line">To change the product, take it out and add it again.</p>}
-      {item.state === "unknown" && <p class="quiet-line">Hub couldn’t confirm this went in. Read the cart, under The cart, and Hub will know.</p>}
+      {item.state === "cart" && (elsewhere(item)
+        ? <p class="quiet-line">Hub only ever adds to the {elsewhere(item)} cart. Taking it off the list leaves it there.</p>
+        : <p class="quiet-line">To change the product, take it out and add it again.</p>)}
+      {item.state === "unknown" && (elsewhere(item)
+        ? <p class="quiet-line">Hub couldn’t confirm this went in the {elsewhere(item)} cart. Look in that cart on its own site; take it off the list here once you know.</p>
+        : <p class="quiet-line">Hub couldn’t confirm this went in. Read the cart, under The cart, and Hub will know.</p>)}
       <div class="btns">
         <button type="button" class="btn risk" disabled={busy || still}
           onClick={() => { setBusy(true); void act("remove", { id: item.id }).then(() => { sheet.value = null; }); }}>
-          {item.state === "cart" || item.state === "unknown" ? "Take it out of the cart" : "Take it off the list"}</button>
+          {(item.state === "cart" || item.state === "unknown") && !elsewhere(item) ? "Take it out of the cart" : "Take it off the list"}</button>
       </div>
     </SheetFrame>
   );
@@ -435,7 +473,8 @@ function Planned({ after, again }: { after: number; again: preact.JSX.Element })
 }
 
 const PLAN_WORDS: Record<string, string> = { approved: "Adding to the cart", done: "Added to the cart", dismissed: "Dismissed",
-  superseded: "Replaced by a newer plan", expired: "Expired", unknown: "Not confirmed: check the cart" };
+  superseded: "Replaced by a newer plan", expired: "Expired", unknown: "Not confirmed: check the cart",
+  failed: "Not started: Kitchen couldn’t reach the Mac’s own Chrome" };
 
 export function PlanCard({ plan, status }: { plan: Plan; status?: { status: string; decided_by?: string | null } }) {
   const now = status ?? plan;
@@ -670,9 +709,11 @@ function Older({ said }: { said: string }) {
 function Cart({ now }: { now: Shop }) {
   const seen = now.cart;
   const carted = now.items.some((i) => i.state === "cart") || (seen?.lines.length ?? 0) > 0;
+  const stores = storesOf(now);
   return (
     <section class="block">
-      <h2>The cart</h2>
+      <h2>{stores.length > 1 ? "Your carts" : "The cart"}</h2>
+      {stores.length > 1 && <p class="quiet-line">Read and checkout are for the {stores[0]?.name} cart. Hub only adds to {stores.slice(1).map((s) => s.name).join(" and ")}’s: check out on its own site.</p>}
       {seen ? <CartLines seen={seen} /> : <p class="quiet">Hub hasn’t read the cart’s own page yet. The list says what Hub put in.</p>}
       <div class="btns tight">
         <button type="button" class="btn ghost" disabled={now.working === "cartread"} onClick={() => void act("read")}>
@@ -680,6 +721,9 @@ function Cart({ now }: { now: Shop }) {
         {carted && !now.order && <button type="button" class="btn go" disabled={now.working === "review"} onClick={() => void act("order")}>
           {now.working === "review" ? "Reading checkout" : "Check out"}</button>}
       </div>
+      {stores.length > 1 && <div class="pills store-carts">
+        {stores.map((s) => <a class="pill" key={s.id} href={safe(s.cart)} target="_blank" rel="noopener noreferrer">Open the {s.name} cart</a>)}
+      </div>}
     </section>
   );
 }

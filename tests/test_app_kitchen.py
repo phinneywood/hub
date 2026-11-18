@@ -101,6 +101,36 @@ def test_a_pick_a_removal_and_the_switch(kitchen):
     assert tap('remove', id=999).json() == {'error': 'That item isn’t waiting on the list any more.'}
 
 
+def test_each_thing_says_its_store_and_can_be_moved_to_the_other(kitchen):
+    assert [s['id'] for s in picture()['stores']] == ['fredmeyer', 'costco']
+    towels = tap('add', text='paper towels').json()['added'][0]
+    assert (towels['store'], towels['product']) == ('costco', 'Bulk Barn Paper Towels, 12 Rolls')
+    assert by_name()['eggs']['store'] == 'fredmeyer'
+    moved = tap('store', id=towels['id'], store='fredmeyer').json()
+    assert moved['said'] == 'paper towels: Fred Meyer, pick its product there' and moved['item']['state'] == 'pick'
+    assert kitchen.calls[-1] == ('POST', f'/items/{towels["id"]}/store', {'login': 'me@example.com', 'store': 'fredmeyer'})
+    assert tap('store', id=towels['id'], store='elsewhere').json() == {'error': 'Pick one of your stores.'}
+    back = tap('store', id=towels['id'], store='costco').json()['item']
+    assert (back['store'], back['state']) == ('costco', 'ready')
+
+
+def test_what_is_in_the_costco_cart_stays_there_when_it_leaves_the_list(kitchen):
+    towels = tap('add', text='paper towels').json()['added'][0]
+    tap('fill')
+    assert by_name()['paper towels']['state'] == 'cart'
+    assert tap('remove', id=towels['id']).json()['said'] == 'paper towels are off the list. It stays in the Costco cart'
+
+
+def test_an_older_kitchen_names_no_store_and_links_only_go_to_each_stores_own_site(kitchen, monkeypatch):
+    real = kitchen._state
+    monkeypatch.setattr(kitchen, '_state', lambda: {**real(), 'cart': {'seen': None, 'practice': True},
+                                                    'items': [{k: v for k, v in i.items() if k != 'store'} for i in real()['items']]})
+    seen = picture()
+    assert [s['id'] for s in seen['stores']] == ['fredmeyer'] and {i['store'] for i in seen['items']} == {'fredmeyer'}
+    assert shop._option({'product': 'x', 'store': 'costco', 'url': 'https://www.fredmeyer.com/p/1'})['url'] == ''
+    assert shop._option({'product': 'x', 'store': 'costco', 'url': 'https://sameday.costco.com/x'})['url'] == 'https://sameday.costco.com/x'
+
+
 def test_how_many_is_a_tap_and_a_number_written_counts_single_things(kitchen):
     eggs = tap('add', text='6 eggs, 3 avocados').json()
     assert eggs['ok'] and [(i['name'], i['qty'], i['asked']) for i in eggs['changed']] == [('eggs', 1, 6)]       # a dozen covers six
