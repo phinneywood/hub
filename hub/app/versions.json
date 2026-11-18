@@ -1,8 +1,19 @@
 [
  {
   "sha": null,
-  "from": "e1fa0d0cdcfc48dc6b331e4fb2f8a094c2d9fcc3",
+  "from": "26c128b96d4e63d17a315f80e953a7c6dc41ed26",
   "live": null,
+  "title": "Older pages become dashboards",
+  "changes": [
+   "Calendar and AI spend are dashboards now; the older Calendar and Insights pages open them.",
+   "Trip and School are dashboards too; the trip workspace and the class guide stay for changing them.",
+   "All tools and Settings now open System, which lists Status, Checks, Golden tests and Ask activity."
+  ]
+ },
+ {
+  "sha": "26c128b96d4e63d17a315f80e953a7c6dc41ed26",
+  "from": "e1fa0d0cdcfc48dc6b331e4fb2f8a094c2d9fcc3",
+  "live": "2026-11-18T17:52:59Z",
   "title": "House health, steered from Ask",
   "changes": [
    "House health, under System, shows what the house’s caretaker sees: what needs you, last night, each part of the house over seven days, ways to make the house sturdier, and batteries.",
