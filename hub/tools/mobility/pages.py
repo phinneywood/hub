@@ -26,6 +26,23 @@ def page(request, **context):
     return render(request, "mobility/home.html", active="mobility", **defaults)
 
 
+def limited_search(origin, destination, kind="bike", departure="", max_ride=25):
+    """One route search, shared by this page and Ask: one at a time, and at most six an hour, since each costs
+    Google Maps calls. Raises google.MapsError with words for the person."""
+    if not _lock.acquire(blocking=False):
+        raise google.MapsError("Another route search is running. Please wait for it to finish.")
+    try:
+        now = time.monotonic()
+        while _searches and now - _searches[0] > 3600:
+            _searches.popleft()
+        if len(_searches) >= 6:
+            raise google.MapsError("Six-search hourly safety limit reached. Please try later.")
+        _searches.append(now)
+        return planner.search(origin, destination, kind, departure, max_ride)
+    finally:
+        _lock.release()
+
+
 @router.get("", response_class=HTMLResponse)
 def home(request: Request):
     return page(request)
@@ -47,29 +64,18 @@ def search(request: Request, origin: str = Form(..., max_length=240), destinatio
             raise google.MapsError("Start and destination are the same. Choose two different places.")
     except google.MapsError as exc:
         return page(request, **values, problem=str(exc))
-    if not _lock.acquire(blocking=False):
-        return page(request, **values, problem="Another route search is running. Please wait for it to finish.")
     try:
-        now = time.monotonic()
-        while _searches and now - _searches[0] > 3600:
-            _searches.popleft()
-        if len(_searches) >= 6:
-            return page(request, **values, problem="Six-search hourly safety limit reached. Please try later.")
-        _searches.append(now)
+        result = limited_search(origin, destination, kind, departure, max_ride)
+    except google.MapsError as exc:
+        return page(request, **values, problem=str(exc))
+    notice = None
+    if remember == "yes":
         try:
-            result = planner.search(origin, destination, kind, departure, max_ride)
-        except google.MapsError as exc:
-            return page(request, **values, problem=str(exc))
-        notice = None
-        if remember == "yes":
-            try:
-                places.save(origin, destination)
-                notice = "Trip shortcut saved on this Mac. You can reverse it or forget it below."
-            except OSError:
-                notice = "Routes are ready, but the trip shortcut could not be saved."
-        return page(request, **values, result=result, notice=notice)
-    finally:
-        _lock.release()
+            places.save(origin, destination)
+            notice = "Trip shortcut saved on this Mac. You can reverse it or forget it below."
+        except OSError:
+            notice = "Routes are ready, but the trip shortcut could not be saved."
+    return page(request, **values, result=result, notice=notice)
 
 
 @router.post("/forget")

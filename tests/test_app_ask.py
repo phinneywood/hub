@@ -189,6 +189,33 @@ def test_hubs_own_records_are_read_for_the_owner_and_the_spend_is_theirs_alone(h
     assert 'not_yours' in tools.hub_info(type('Ctx', (), {'deps': turn}), 'ai_spend')
 
 
+def test_bike_and_bus_plans_through_the_older_pages_limit_and_gives_the_model_times_not_addresses(monkeypatch):
+    from hub.app.ask import tools
+    from hub.tools.mobility import google, pages, places, planner
+    asked = []
+    route = {'departure': '8:05 AM', 'arrival': '8:41 AM', 'minutes': 36, 'ride_minutes': 9, 'walk_minutes': 3, 'wait_minutes': 4,
+             'lines': ['44'], 'transfers': 0, 'vs_bus': 12, 'warnings': [],
+             'steps': [{'start': '8:05 AM', 'title': 'Ride to Made-up St stop', 'minutes': 9}, {'start': '8:18 AM', 'title': 'Bus 44', 'minutes': 20}]}
+
+    def search(origin, destination, kind, departure, max_ride):
+        asked.append((origin, destination, kind, departure, max_ride))
+        return {'routes': [route], 'date': 'Thu, Mar 4', 'limited': False}
+    monkeypatch.setattr(planner, 'search', search)
+    monkeypatch.setattr(places, 'load', lambda: {'origin': '1 Saved Way', 'destination': '2 Usual Ave'})
+    monkeypatch.setattr(pages, '_searches', __import__('collections').deque())
+    ctx = type('Ctx', (), {'deps': tools.Turn(text='how do I bike and bus to work?', login='me@example.com')})
+    found = tools.bike_bus(ctx)
+    assert asked == [('1 Saved Way', '2 Usual Ave', 'bike', '', 25)]                 # the saved trip, when none is said
+    assert found['routes'][0]['buses'] == ['44'] and found['routes'][0]['minutes_saved_vs_bus_alone'] == 12
+    assert 'Saved Way' not in str(found) and 'Usual Ave' not in str(found)          # the addresses stay with Google
+    for _ in range(5):
+        tools.bike_bus(ctx, destination='Made-up Library')
+    assert tools.bike_bus(ctx, destination='Made-up Library') == {'not_done': 'Six-search hourly safety limit reached. Please try later.'}
+    monkeypatch.setattr(planner, 'search', lambda *a: (_ for _ in ()).throw(google.MapsError('Choose two different places.')))
+    monkeypatch.setattr(pages, '_searches', __import__('collections').deque())
+    assert tools.bike_bus(ctx, destination='x') == {'not_done': 'Choose two different places.'}
+
+
 def test_a_question_about_the_conversation_goes_back_to_the_model_not_a_stock_sentence(house):
     answer, cards, end = ask('what was that playlist you made for me?')
     assert answer.startswith('Hub has no record of that in our conversation.') and len(SEEN) == 2
@@ -591,7 +618,7 @@ def test_the_real_route_thinks_acts_once_and_stops(world, monkeypatch):
     body = json.loads(request.content)
     assert str(request.url) == 'https://api.anthropic.com/v1/messages' and body['model'] == 'claude-sonnet-5-5' and body['stream'] is True
     assert body['thinking'] == {'type': 'adaptive'} and body['output_config'] == {'effort': 'high'}
-    assert [tool['name'] for tool in body['tools']] == ['lights', 'scene', 'music', 'music_library', 'playlist', 'hub_info', 'remember', 'conversation', 'groceries', 'kitchen', 'look_up', 'mail_search', 'mail_read', 'errands',
+    assert [tool['name'] for tool in body['tools']] == ['lights', 'scene', 'music', 'music_library', 'playlist', 'hub_info', 'bike_bus', 'remember', 'conversation', 'groceries', 'kitchen', 'look_up', 'mail_search', 'mail_read', 'errands',
                                                        'errand', 'find', 'details', 'arrange', 'rooms', 'scene_setup', 'routine', 'device',
                                                        'setting', 'integration', 'dashboard', 'house_health', 'caretaker']
     assert body['system'][-1]['cache_control']['type'] == 'ephemeral' and 'cache_control' in body['tools'][-1]
