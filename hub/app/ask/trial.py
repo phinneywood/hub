@@ -8,9 +8,9 @@ unlocking and the shopping list.
 
 Hub's tests run Ask with a stand-in for the model, so they prove everything under the model and nothing about it.
 This is the other half. A few plain requests are made up from the house as it is (a lamp and two rooms, an
-automation, something that locks), put to Ask with the real model, and run behind the dry-run layer
-(hub/golden/dryrun.py): reads see the real house, every change is written down and none is sent, and the record
-of changes and the cards that wait go to a scratch file. Each request has one right outcome, checked here in code.
+automation, something that locks, and the house's caretaker where it runs), put to Ask with the real model, and run behind the dry-run layer
+(hub/golden/dryrun.py): reads see the real house, every change is written down and none is sent (a request for
+the caretaker never reaches its queue), and the record of changes and the cards that wait go to a scratch file. Each request has one right outcome, checked here in code.
 
 What was asked and what Ask did with it is kept in Hub's private data folder (`ask-trial.json`, owner-only) for
 whoever looks into a failure. What the check itself says holds counts, never names.
@@ -21,7 +21,7 @@ import os
 import time
 from contextlib import suppress
 
-from ... import config, home
+from ... import caretaker, config, home
 from ...engine import state
 from ...tools.house import admin, broker
 from . import brain, route, turns
@@ -186,6 +186,22 @@ def _answered(seen, who):
     return '' if seen['said'] else 'There was no answer.'
 
 
+def _healthy(seen, who):
+    """A question about the house's health is answered in words: nothing changed, nothing asked of the caretaker."""
+    if seen['changes'] or {'confirm', 'care'} & set(seen['cards']):
+        return 'A question changed something.'
+    return '' if seen['said'] else 'It didn’t answer.'
+
+
+def _paused(seen, who):
+    """One request for the caretaker, a pause of sixty minutes, and nothing else."""
+    asks = [c for c in seen['changes'] if c['to'] == 'caretaker']
+    if len(asks) != 1 or len(seen['changes']) != 1:
+        return 'The caretaker wasn’t asked.' if not asks else 'More than the caretaker was asked.'
+    note = asks[0]['data'] if isinstance(asks[0]['data'], dict) else {}
+    return '' if (note.get('do'), note.get('target')) == ('pause', '60') else 'The caretaker wasn’t asked to pause for an hour.'
+
+
 def requests(who, kind='setup'):
     """(a short name, what is asked, the check of what Ask did), for each request of this set the house can be asked."""
     if kind == 'core':
@@ -204,6 +220,9 @@ def requests(who, kind='setup'):
         verb = 'Unlock' if who['locks']['domain'] == 'lock' else 'Disarm'
         out.append(('unlock', f'{verb} the {who["locks_said"]}', _waited))
     out.append(('list', 'Add bananas to the shopping list', _listed))
+    if who.get('caretaker'):            # the house's caretaker runs here: a question for it, and one thing to ask of it
+        out.append(('health', 'How is the house doing?', _healthy))
+        out.append(('pause', 'Pause the caretaker for an hour', _paused))
     return out
 
 
@@ -313,6 +332,7 @@ def run(kind='setup', within=None):
         who = cast(admin.world(fresh=True))
     except broker.HomeDown:
         raise Stopped('The house can’t be read, so there is nothing to ask about.') from None
+    who['caretaker'] = caretaker.set_up() and (caretaker.folder() / 'queue').is_dir()
     asked = requests(who, kind)
     keep, save = brain.KIND, turns.save
     started, kept = _spent(), []

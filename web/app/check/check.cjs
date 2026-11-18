@@ -379,6 +379,29 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => [...document.querySelectorAll(".turn .answer")].pop()?.textContent.startsWith("Which one? Ceiling (Entry), Ceiling (Guest room)")),
       "a name that fits several lamps was not asked about: " + await lastAnswer());
 
+    // ---- Ask: the house's caretaker. Asked about, a drill played under the answer, a restart left on a card ----
+    await askFor("How's the house?");
+    expect(await answered("One thing needs you."), "Ask did not answer from House health: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelector('.care-under .row-act')?.textContent === "Open House health"),
+      "an answer about the house's health did not end with Open House health");
+    await askFor("Run the hub drill");
+    expect(await answered("Starting the drill: an update leaves Hub stopped."), "Ask did not start the drill: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelector(".care-under .care-drill b")?.textContent.startsWith("Drill finished"), null, 25000),
+      "the drill didn't play through under the answer");
+    expect(await until(() => [...[...document.querySelectorAll(".turn")].pop().querySelectorAll(".care-drill p")].some((p) => p.textContent.includes("start Hub again"))),
+      "the drill didn't show its steps under the answer");
+    await page.waitForTimeout(300); await shot("6g-ask-drill");
+    await askFor("Restart Home Assistant");
+    expect(await answered("That one waits for your tap."), "restarting Home Assistant did not wait for a tap: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".wait .wait-t")].pop()?.textContent === "Restart Home Assistant?"), "the caretaker's card did not ask about the restart");
+    expect((await page.locator(".wait .btn.go").last().innerText()) === "Restart", "the restart card's button didn't say Restart");
+    await page.waitForTimeout(300); await shot("6h-ask-restart-card");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on the caretaker's card: " + (await small()).join(", "));
+    await page.locator(".wait .btn.ghost").last().click();
+    expect(await until(() => [...document.querySelectorAll(".wait .took span")].pop()?.textContent === "Left as it was."), "Not now did not put the caretaker's card away");
+    expect(await page.evaluate(() => fetch("/app/api/health").then((r) => r.json()).then((h) => h.needs.some((n) => n.title === "Sonos keeps failing"))),
+      "the restart was asked for without a tap");
+
     // ---- Ask: the shopping list. One assistant: the list is worked here, and its cards are drawn here ----
     await askFor("Add sponges and dragon fruit to the list");
     expect(await answered("Sponges and dragon fruit are on the list. One thing needs a product picked below."), "Ask did not add to the list: " + await lastAnswer());
@@ -827,6 +850,33 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await saysSoon("What happened in the house"), "Back from Changes: " + await says());
     await tap(".uplink");
     expect(await saysSoon("The house is answering."), "Back from Activity: " + await says());
+    // ---- House health: the caretaker's night, what it watches, a drill, and the one thing that needs a tap ----
+    expect(await until((sel) => document.querySelectorAll(sel).length === 1, phone ? ".who.care" : ".rail .foot .tab.care"),
+      "the top button didn't turn amber for what needs you");
+    await tap('.row:has-text("House health")');
+    expect(await until(() => document.querySelector(".say")?.textContent.includes("One thing needs you") ||
+      document.querySelector(".say")?.textContent.includes("waits for the morning")), "House health: " + await says());
+    expect(await until(() => document.body.textContent.includes("Sonos keeps failing")), "House health didn't list what needs you");
+    expect(await page.locator('.care-need .btn.go:has-text("Restart Home Assistant")').count() === 1, "no Restart Home Assistant on the item that asks for it");
+    expect(await page.locator(".care-row, .care-fine").count() === 14, "House health didn't list every system");
+    expect(await page.locator('.care-row[data-system="home_assistant"]').count() === 1, "the system with trouble wasn't a full row");
+    await tap('.care-fine[data-system="hue"]');
+    expect(await until(() => document.querySelectorAll(".care-history .care-days .care-dot").length === 7), "a system's history didn't show seven days");
+    expect(await page.locator(".care-week .care-day").count() === 7, "House health didn't show the last seven days as a strip");
+    expect(await until(() => document.querySelector(".care-week + .care-headline")?.textContent.startsWith("This week:")), "no line for the week");
+    await tap('.care-week .care-day:has(small:not(:empty))');
+    expect(await until(() => document.querySelectorAll(".care-open .care-line").length > 0), "a tapped day didn't show its lines");
+    await page.waitForTimeout(300); await shot("7e-health");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on House health: " + (await small()).join(", "));
+    expect(await page.locator('.quiet-line:has-text("Ask can pause the caretaker or run a drill.")').count() === 1, "House health didn't say Ask steers the caretaker");
+    expect(await page.locator('.care-acts .row-act:has-text("Pause until I resume")').count() === 1, "House health lost its one brake, Pause");
+    expect(await page.locator('.scene:has-text("Hub stops"), .care-acts .btn.go:has-text("Run the drill")').count() === 0, "House health still has the drill controls");
+    await tap('.care-need .btn.go:has-text("Restart Home Assistant")');
+    expect(await until(() => !document.body.textContent.includes("Sonos keeps failing"), null, 12000), "Restart Home Assistant didn't clear the item");
+    expect(await until(() => document.querySelectorAll(".who.care, .rail .foot .tab.care").length === 0, null, 12000),
+      "the top button stayed amber after the last thing was sorted");
+    await tap(".uplink");
+    expect(await saysSoon("The house is answering."), "Back from House health: " + await says());
     await tap('.row:has-text("Engine")');
     expect(await saysSoon("Engine"), "Engine: " + await says());
     expect(await until(() => document.body.textContent.includes("Always tell me about school mail")), "Engine didn't list what Hub follows");

@@ -1,8 +1,19 @@
 [
  {
   "sha": null,
-  "from": "c5a42a88dc02114871fc2efcadd3acc2dca93023",
+  "from": "e1fa0d0cdcfc48dc6b331e4fb2f8a094c2d9fcc3",
   "live": null,
+  "title": "House health, steered from Ask",
+  "changes": [
+   "House health, under System, shows what the house’s caretaker sees: what needs you, last night, each part of the house over seven days, ways to make the house sturdier, and batteries.",
+   "Ask answers “how’s the house?” from it and steers it: pause or resume it, run a drill, try a fix again, or mark a problem sorted. Restarting Home Assistant and leaving a problem alone still wait for your tap on the card.",
+   "What the caretaker hands you shows on Today and in the morning message, and the button at the top turns amber until it’s sorted."
+  ]
+ },
+ {
+  "sha": "e1fa0d0cdcfc48dc6b331e4fb2f8a094c2d9fcc3",
+  "from": "c5a42a88dc02114871fc2efcadd3acc2dca93023",
+  "live": "2026-11-18T17:06:17Z",
   "title": "Hub can update itself, and Undo puts the last update back",
   "changes": [
    "Once switched on, Hub puts a new version live by itself when its checks pass, goes back by itself if a check fails after the switch, and tells you on your phone.",

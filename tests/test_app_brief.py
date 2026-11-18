@@ -4,8 +4,6 @@ brief said aloud. A made-up house and day throughout (tests/app_world.py, tests/
 calendar, mailbox or model is reached."""
 import json
 import subprocess
-import sys
-import types
 from datetime import datetime
 
 import pytest
@@ -278,18 +276,17 @@ def test_a_slow_or_broken_part_is_left_out_on_time(world, monkeypatch):
 def test_the_caretakers_overnight_note_is_shown_when_one_is_installed(world, monkeypatch):
     at(MORNING, monkeypatch, world)
     assert screen.picture(MORNING, login=OWNER)['overnight'] is None
-    made_up = types.ModuleType('hub.caretaker')
-    made_up.note = lambda: {'headline': 'A quiet night: two things fixed themselves.', 'needs': 0, 'lines': [
+    from hub import caretaker               # the caretaker's own note, as hub/caretaker.py reads it from its folder
+    monkeypatch.setattr(caretaker, 'note', lambda: {'headline': 'A quiet night: two things fixed themselves.', 'needs': 0, 'lines': [
         {'text': 'The upstairs lights came back after Hub reloaded their bridge at 2:14 am.', 'tone': 'fixed'},
         {'text': 'The internet dropped for four minutes at 3 am and came back by itself.', 'tone': 'by_itself'},
-        {'text': '<script>', 'tone': 'something else'}, 'not a line']}
-    monkeypatch.setitem(sys.modules, 'hub.caretaker', made_up)
+        {'text': '<script>', 'tone': 'something else'}, 'not a line']})
     found = screen.picture(MORNING, login=OWNER)['overnight']
     assert found == {'head': 'A quiet night: two things fixed themselves.', 'needs': 0, 'lines': [
         {'text': 'The upstairs lights came back after Hub reloaded their bridge at 2:14 am.', 'tone': 'fixed'},
         {'text': 'The internet dropped for four minutes at 3 am and came back by itself.', 'tone': 'by_itself'},
         {'text': '<script>', 'tone': 'info'}]}
-    made_up.note = lambda: None
+    monkeypatch.setattr(caretaker, 'note', lambda: None)
     assert screen.picture(MORNING, login=OWNER)['overnight'] is None
 
 

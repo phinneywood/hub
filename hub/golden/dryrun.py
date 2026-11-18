@@ -1,6 +1,6 @@
 """The dry-run layer: Hub's real checks run, the intended change is written down, and nothing is sent.
 
-Every way Ask can change something leaves Hub through one of three doors, and this layer stands in each:
+Every way Ask can change something leaves Hub through one of these doors, and this layer stands in each:
 
   Home Assistant   broker._exchange, after broker.act has run its own allowlist check (broker._checked); and, for
                    the setup door, after broker.setup_write, setup_save, setup_call and setup_reload have run theirs
@@ -10,6 +10,8 @@ Every way Ask can change something leaves Hub through one of three doors, and th
                    owner's words and picked the errands they named
   Morning          morning.act and morning.switch (hub/app/ask/morning.py): a typed answer to the morning message,
                    or switching what it covers, after the words were matched to today's numbered things
+  The caretaker    caretaker._leave, after caretaker.ask has checked the request: the note is written down here
+                   and never reaches the caretaker's queue
 
 Reads go through untouched, so a golden run sees the real house, library and lists. A change that passes
 Hub's checks is recorded in `Ledger.changes` and answered as if it had worked; one that fails them is
@@ -40,7 +42,8 @@ COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'music_librar
                'remember': 'note', 'conversation': 'thread', 'groceries': 'kitchen', 'kitchen': 'kitchen',
                'look_up': 'read', 'mail_search': 'read', 'mail_read': 'read', 'errands': 'read', 'errand': 'errands', 'find': 'read', 'details': 'read', 'arrange': 'setup',
                'rooms': 'setup', 'scene_setup': 'setup', 'routine': 'setup', 'device': 'setup', 'setting': 'setup',
-               'integration': 'setup', 'dashboard': 'setup'}
+               'integration': 'setup', 'dashboard': 'setup',
+               'house_health': 'read', 'caretaker': 'caretaker'}
 DRY_ID = -1                     # the message number a held-back Kitchen hand-off is given
 
 
@@ -133,6 +136,7 @@ def layer(house_writes=False, recipes=()):
     `recipes`: (name, steps) pairs a scenario starts with, saved in the scratch database after the usual checks."""
     from ..app.ask import morning, thread
     from ..app.errands import picture as errand_picture, taps as errand_taps
+    from .. import caretaker
     from ..engine import notes, recipes as recipe_book
     from ..tools.house import admin, broker, control, music
     from ..tools.kitchen import client
@@ -142,7 +146,8 @@ def layer(house_writes=False, recipes=()):
              'control_db': control._db, 'music_db': music._db, 'notes_db': notes._db, 'admin_db': admin._db,
              'note': notes.propose, 'playlist': music.propose, 'recipes_db': recipe_book._db, 'recipe': recipe_book.propose,
              'errand_tap': errand_taps.tap, 'compose': errand_picture.set_compose, 'fresh': thread.start_fresh,
-             'morning_act': morning.act, 'morning_switch': morning.switch}
+             'morning_act': morning.act, 'morning_switch': morning.switch,
+             'care': caretaker._leave}
 
     def exchange(message, timeout):
         path, method = str(message.get('path', '')), message.get('method')
@@ -194,6 +199,9 @@ def layer(house_writes=False, recipes=()):
         ledger.add('kitchen', f'{method} {path.split("?")[0]}', body)
         return 200, {'id': DRY_ID}
 
+    def care(request):          # a request for the house's caretaker: checked by Hub already, and held back here
+        ledger.add('caretaker', str(request.get('do')), request)
+
     def note(text, said, *, login, zone=()):
         found = saved['note'](text, said, login=login, zone=zone)
         ledger.add('proposal', 'note', {'text': found['text'], 'zone': found['zone']})
@@ -227,7 +235,7 @@ def layer(house_writes=False, recipes=()):
         ledger.add('morning', 'watch' if on else 'stop watching', {'kinds': list(kinds)})
 
     with tempfile.TemporaryDirectory(prefix='hub-golden-') as folder:
-        broker._exchange, music._send, client.call = exchange, send, kitchen
+        broker._exchange, music._send, client.call, caretaker._leave = exchange, send, kitchen, care
         music._settle = lambda playlist_id, want: 'done'     # nothing was sent, so there is nothing to read back
         if not house_writes:      # live house writes keep Hub's own change log, so Undo puts them back
             control._db = _with_schema(_scratch_db(Path(folder)), control.SCHEMA)
@@ -246,6 +254,7 @@ def layer(house_writes=False, recipes=()):
         finally:
             broker._exchange, music._send, music._settle, client.call = (
                 saved['broker'], saved['music_send'], saved['settle'], saved['kitchen'])
+            caretaker._leave = saved['care']
             control._db, music._db, notes._db, admin._db = saved['control_db'], saved['music_db'], saved['notes_db'], saved['admin_db']
             admin.forget()
             notes.propose, music.propose = saved['note'], saved['playlist']

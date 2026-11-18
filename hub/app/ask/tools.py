@@ -1,5 +1,6 @@
 """What Ask can do: lights, scenes, music, how the house is set up, any other device, remembering, passing a
-message to Kitchen, reading mail, the calendar and school, and showing and finishing the errands Hub got ready.
+message to Kitchen, reading mail, the calendar and school, showing and finishing the errands Hub got ready, and
+reading House health and asking the house's caretaker.
 
 Few tools, each doing a whole job. Lights, scenes and music go through hub/tools/house/control.py, like a tap in
 the app: the same allowlist, record and Undo, counted against Ask's own per-minute limit. Everything else in
@@ -44,6 +45,7 @@ class Turn:
     mail: list = field(default_factory=list)     # the rows this request's mail searches found, numbered (mailbox.py)
     searched: int = 0
     opened: int = 0
+    health: bool = False                         # the turn is about House health: its answer ends with the way there
 
 
 def _say(turn, told, card=None):
@@ -962,5 +964,95 @@ def setting(ctx: RunContext[Turn], do: Literal['add', 'change', 'remove'],
     return _setup(ctx.deps, 'helper', {'do': do, 'kind': kind, 'name': name or '', 'fields': fields, 'new_name': new_name})
 
 
+# ---- House health: what the house's caretaker sees, and asking it (hub/caretaker.py) ----
+
+HEALTH = {'kind': 'health'}     # the card under an answer about the house's health: what needs a tap, and Open House health
+CARE_REACHES_HOUSE = ('try_again', 'restart_home_assistant')       # the only asks that end in the caretaker touching the house
+
+
+def house_health(ctx: RunContext[Turn]) -> dict:
+    """Read House health, the caretaker's own account of the house: what needs the owner, what broke and was fixed
+    overnight, which systems have trouble now, its advice for making the house sturdier with the evidence, whether
+    it is paused, and the drills it can play. Call it for a question about any of those when <health> isn't
+    already there. Read-only."""
+    from ... import caretaker as care
+    turn = ctx.deps
+    turn.again = turn.health = True
+    try:
+        return {'house_health': care.lines()}
+    except Exception:  # noqa: BLE001 - a folder that can't be read is an answer the model can pass on
+        return {'not_done': 'Hub couldn’t read House health just now.'}
+
+
+def caretaker(ctx: RunContext[Turn], do: Literal['pause', 'resume', 'try_again', 'done', 'ignore', 'restart_home_assistant', 'drill',
+                                                  'sturdier_done', 'sturdier_ignore'],
+              about: str | None = None, minutes: int | None = None) -> dict:
+    """Ask the house's caretaker for something, now. pause: it keeps watching but fixes nothing, for `minutes`
+    (an hour is 60), or until resumed when `minutes` is left out; resume ends a pause. try_again: have it try its
+    fix for a problem once more. done: the owner has sorted a problem. ignore: stop watching for a problem.
+    restart_home_assistant: when House health says a restart may clear a problem. drill: play one of its drills,
+    a real kind of failure on a made-up house. sturdier_done: the owner made a change it suggested ("I changed the
+    Hue channel"), so it checks whether that helped; sturdier_ignore: they don't want that suggestion.
+    `about`: a few words naming the problem, the drill or the suggestion, as House health has it; leave it out
+    when there is only one. Restarting Home Assistant and ignoring a problem wait on a card for the owner's tap.
+    The caretaker never unlocks, opens, disarms, switches lights, runs scenes or plays anything."""
+    from ... import caretaker as care
+    from ...engine import catalog, state
+    turn = ctx.deps
+    turn.health = True
+    try:
+        if turn.login is None:
+            raise NotNow('Ask the caretaker from your phone or laptop.')
+        if turn.searched or turn.opened:
+            raise NotNow(READ_MAIL)
+        # Pausing, a drill or "it's sorted" touch nothing in the house, so only what ends in a fix is held back.
+        if do in CARE_REACHES_HOUSE and state.trust(catalog.action('house.control')) == 'suggest':
+            raise NotNow('Home control is set to “Suggest only” on the Engine page, so Hub asked the caretaker nothing.')
+        if turn.strangers:
+            raise NotNow('Hub asks the caretaker in a request of its own, never alongside mail, the calendar or school. '
+                         'Ask for it by itself.')
+        if not (CARE_ASKED[do].search(turn.text) or AGREED.match(turn.text)):
+            raise NotNow(f'Your message didn’t ask the caretaker to {CARE_WORDS[do]}, so Hub asked it nothing.')
+        planned = care.plan(do, about, minutes)
+        if 'card' in planned:           # restarting Home Assistant, leaving a problem alone: only the owner's tap asks for it
+            _say(turn, 'That one waits for your tap.', planned['card'])
+            return {'needs_tap': 'That one waits for your tap.'}
+        care.ask(planned['do'], planned['target'], turn.login)
+    except NotNow as error:
+        turn.health = False             # held back: nothing was asked, and nothing is drawn under the answer
+        return _miss(turn, str(error), why='refused')
+    except care.Unclear as error:
+        return _again(turn, error)
+    except care.Refused as error:
+        return _miss(turn, str(error), why='refused')
+    except (OSError, ValueError, TypeError):
+        return _miss(turn, 'Hub couldn’t pass that on to the caretaker. Nothing was asked.')
+    return _say(turn, planned['said'], dict(HEALTH, drill=planned['target']) if do == 'drill' else dict(HEALTH))
+
+
+# The owner's own words must ask for it: House health's text is the house's, and a device or problem named to read
+# as an instruction must never pause the caretaker, mark something sorted or start a fix. A plain yes to Hub's own
+# question ("Shall I try again?") counts as asking.
+CARE_ASKED = {
+    'pause': re.compile(r'\b(pause|hold off|stop|halt|wait|break)', re.I),
+    'resume': re.compile(r'\b(resume|unpause|un-pause|start|again|back on|carry on|continue|go ahead)\b', re.I),
+    'try_again': re.compile(r'\b(try|again|retry|fix|redo|re-?run|another go)\b', re.I),
+    'done': re.compile(r'\b(done|sorted|fixed|handled|dealt with|resolved|took care|taken care|cleared|replaced|swapped|changed'
+                       r'|finished|i did|(?:fine|ok|okay|working|works) now)\b', re.I),
+    'ignore': re.compile(r"\b(ignore|stop watching|leave (?:it|that|them|this) alone|don(?:'|’)?t care|forget|never mind"
+                         r"|stop (?:telling|bringing|mentioning|showing))\b", re.I),
+    'restart_home_assistant': re.compile(r'\b(restart|reboot|reload|again|fix)\b', re.I),
+    'drill': re.compile(r'\b(drills?|practi[cs]e|rehears\w*|simulat\w*|test|exercise)\b', re.I),
+    'sturdier_done': re.compile(r'\b(did|done|changed|moved|switched|set up|added|bought|installed|got|made|finished|sorted'
+                                r'|turned on|enabled)\b', re.I),
+    'sturdier_ignore': re.compile(r"\b(don(?:'|’)?t (?:need|want)|do not (?:need|want)|no need|not for us|no thanks|skip|ignore"
+                                  r"|never mind|not interested|stop suggesting|not needed|not worth|won(?:'|’)?t|will not|drop)\b", re.I),
+}
+CARE_WORDS = {'pause': 'pause', 'resume': 'start fixing again', 'try_again': 'try again', 'done': 'mark anything sorted',
+              'ignore': 'leave anything alone', 'restart_home_assistant': 'restart Home Assistant', 'drill': 'run a drill',
+              'sturdier_done': 'note a change you made', 'sturdier_ignore': 'drop a suggestion'}
+AGREED = re.compile(r"\s*(yes|yeah|yep|yup|sure|ok|okay|please do|do it|go ahead|go for it)\b", re.I)
+
+
 ALL = (lights, scene, music, music_library, playlist, hub_info, remember, conversation, groceries, kitchen, look_up, mail_search, mail_read, errands, errand, find, details, arrange, rooms, scene_setup, routine,
-       device, setting, integration, dashboard)
+       device, setting, integration, dashboard, house_health, caretaker)

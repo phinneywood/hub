@@ -9,7 +9,10 @@ list a few more ("add sponges and milk to the list", "what's on the list", "orde
 morning"). Anything with "errands" in it shows the errands Hub got ready, and a few sentences finish one ("I paid the
 power bill", "the photo form can wait till tomorrow", "I don't need the dental cleaning", "the pumpkin goes on the
 list", "undo the power bill", "open my replies in Gmail"). "Search my mail for the plumber" searches the
-person's mail, and "open the first one" reads one it found. Anything else gets one sentence saying what Hub can do.
+person's mail, and "open the first one" reads one it found. For the house's caretaker it knows a question or two
+("how's the house?", "what broke last night?", "why does the reading lamp keep dropping off?"), answered from House
+health as Hub gave it, and a few things to ask of it ("pause the caretaker for an hour", "run the hub drill", "I
+changed the hue channel"). Anything else gets one sentence saying what Hub can do.
 """
 import json
 import re
@@ -73,6 +76,21 @@ ERRANDS = re.compile(r'\berrands?\b')
 SEARCH_MAIL = re.compile(r'^search my (?:mail|email) for (.+?)[.?!]?$', re.I)
 OPEN_MAIL = re.compile(r'^(?:open|read) (?:the )?(first|second|third|\d)(?: one| email)?\b', re.I)
 ORDINAL = {'first': 1, 'second': 2, 'third': 3}
+# The house's caretaker, as a few plain sentences: what to ask of it. Questions are answered from House health itself.
+HOURS = {'an hour': 60, 'half an hour': 30, 'two hours': 120, 'a day': 1440}
+CARE = [
+    (r'^pause the caretaker(?: for (an hour|half an hour|two hours|a day|\d+ minutes))?$',
+     lambda m: call('caretaker', do='pause', **({'minutes': HOURS.get(m[1].lower()) or int(m[1].split()[0])} if m[1] else {}))),
+    (r'^(?:resume|unpause|start) the caretaker(?: again)?$', lambda m: call('caretaker', do='resume')),
+    (r'^run (?:the |a )?(.+?) drill$', lambda m: call('caretaker', do='drill', about=m[1])),
+    (r'^i (?:changed|moved) the (hue (?:bridge.s )?(?:zigbee )?channel)$', lambda m: call('caretaker', do='sturdier_done', about='hue zigbee')),
+    (r'^we don.t need (?:a second place for )?(?:the )?(backups?)(?: suggestion)?$', lambda m: call('caretaker', do='sturdier_ignore', about='backups')),
+    (r'^(?:try|fix) (?:the )?(.+?) again$', lambda m: call('caretaker', do='try_again', about=m[1])),
+    (r'^(?:i fixed|i sorted) (?:the )?(.+?)$', lambda m: call('caretaker', do='done', about=m[1])),
+    (r'^(?:ignore|stop watching) (?:the )?(.+?)(?: problem)?$', lambda m: call('caretaker', do='ignore', about=m[1])),
+    (r'^(?:any trouble at home|read house health)$', lambda m: call('house_health')),
+]
+RESTART = re.compile(r'^restart home assistant$', re.I)
 EVERY = re.compile(rf'^every (evening|morning|day) at (\d{{1,2}}):(\d{{2}}),? turn (on|off) {THE}(.+)$', re.I)
 LIBRARY_ASKED = re.compile(r'\b(what playlists|playlists do (i|we) have|my playlists)\b')
 SPEND_ASKED = re.compile(r'\b(ai|model)\b.*\b(cost|spend|spent)\b')
@@ -158,10 +176,38 @@ def _lights(words, places):
     return call('lights', where=where, change='off' if re.search(r'\boff\b', words) else 'on')
 
 
-def _setup(spoken):
+def _health(spoken, account):
+    """What a model says from House health as Hub gave it: the line or two the question is about."""
+    lines = [line.removeprefix('- ') for line in account if line]
+    asked = ' '.join(spoken.lower().split())
+    why = re.match(r'why (?:does|do|is|are) (?:the |my )?(.+?) (?:keep|still|always)', asked)
+    if why:                     # the advice that names the thing asked about, or what needs the owner about it
+        words = {w.rstrip('s') for w in re.findall(r'[a-z]+', why[1])} - {'the', 'my', 'a', 'light', 'lamp'} or {w.rstrip('s') for w in re.findall(r'[a-z]+', why[1])}
+        for start in ('To make the house sturdier', 'Needs the owner', 'Trouble now'):
+            found = [line for line in lines if line.startswith(start) and any(w in line.lower() for w in words)]
+            if found:
+                return found[0].split(': ', 1)[1]
+        return 'House health says nothing about that.'
+    if re.search(r'\b(broke|went wrong|failed|last night|overnight)\b', asked):
+        start = next((n for n, line in enumerate(lines) if line.startswith(('Last night:', 'Tonight, from'))), None)
+        if start is not None:
+            night = [lines[start].split(': ', 1)[1]]
+            for line in account[start + 1:]:
+                if not line.startswith('- '):
+                    break
+                night.append(line.removeprefix('- '))
+            return ' '.join(night)
+    first = lines[0].removeprefix('House health: ') if lines else 'Hub can’t read House health.'
+    needing = [line.split(': ', 1)[1] for line in lines if line.startswith('Needs the owner')]
+    return ' '.join([first, *needing[:2]])
+
+
+def _setup(spoken, given=''):
     """The setup tool one of the few plain sentences means, or None."""
     plain = ' '.join(spoken.split()).rstrip('.?!')
-    for pattern, make in ERRAND + SETUP + LIST:
+    if RESTART.match(plain) and 'restarting Home Assistant may clear it' in given:
+        return call('caretaker', do='restart_home_assistant')      # the caretaker asks for it: it does it, and looks again
+    for pattern, make in CARE + ERRAND + SETUP + LIST:
         found = re.match(pattern, plain, re.I)
         if found:
             return make(found)
@@ -175,7 +221,7 @@ async def scripted(messages, info):
     back = [p for p in messages[-1].parts if p.part_kind == 'tool-return'] if messages[-1].kind == 'request' else []
     places = _places(words)
     given = [p.content for m in messages for p in m.parts if p.part_kind == 'user-prompt'][-1]
-    setup = _setup(spoken)
+    setup = _setup(spoken, given)
     if back and back[0].tool_name in ('mail_search', 'mail_read'):
         seen = back[0].content
         if 'not_yours' in seen:
@@ -216,6 +262,10 @@ async def scripted(messages, info):
         yield call('conversation', do='show')
     elif back and back[0].tool_name == 'look_up' or not back and '<data>' in given:
         yield 'From what Hub can see, ' + ('the dentist is Tuesday at three.' if back else 'two emails need you.')
+    elif back and back[0].tool_name == 'house_health' and 'house_health' in back[0].content:
+        yield _health(spoken, back[0].content['house_health'])
+    elif not back and not setup and '<health>' in given:      # a question about the house's health, with House health beside it
+        yield _health(spoken, given.split('<health>\n', 1)[1].split('\n</health>', 1)[0].split('\n'))
     elif back and back[0].tool_name == 'find' and back[0].content.get('found') and EVERY.match(' '.join(spoken.split()).rstrip('.')):
         # What a model does with what it found: write the automation with the id, in Home Assistant's own words.
         when, hour, minute, turn, what = EVERY.match(' '.join(spoken.split()).rstrip('.')).groups()

@@ -13,6 +13,7 @@ import { Versions } from "./versions";
 import { Engine } from "./engine";
 import { MailSettings } from "./mailrules";
 import { Activity } from "./activity";
+import { Health } from "./health";
 import { Changes } from "./changes";
 import { ItemSheet, Kitchen, shop, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
@@ -62,7 +63,7 @@ function Sheets() {
 
 function Screen() {
   const where = view.value;
-  return where === "home" ? <Ask home house={!wide.value} /> : where === "house" ? <Home /> : where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "today" ? <Today /> : where === "errands" ? <Errands /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : where === "boards" ? <BoardsScreen /> : where === "board" ? <BoardScreen /> : <Home />;
+  return where === "home" ? <Ask home house={!wide.value} /> : where === "house" ? <Home /> : where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "health" ? <Health /> : where === "today" ? <Today /> : where === "errands" ? <Errands /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : where === "boards" ? <BoardsScreen /> : where === "board" ? <BoardScreen /> : <Home />;
 }
 
 /** Beside the screen on a wide one: the house while Ask is in the middle, and Ask beside everything else. */
