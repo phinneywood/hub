@@ -521,6 +521,25 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await partner.waitForTimeout(300); await partner.screenshot({ path: `${out}/${name}-14d-errands-partner.png` });
     const partnerToday = await partner.evaluate(() => fetch("/app/api/today").then((r) => r.json()).then((t) => t.ready.cards.map((c) => c.title)));
     expect(partnerToday.length === 2 && partnerToday.every((t) => /pumpkin|photo order form/.test(t)), "the partner’s Today showed another’s errands: " + partnerToday.join("|"));
+    // ... Ask is the partner's own conversation: their own morning message, none of the owner's mail or bills in it,
+    // what they ask stays in theirs (and is still there when they come back), and the owner's is untouched
+    const ownerLast = async () => (await page.evaluate(() => fetch("/app/api/ask").then((r) => r.json()))).recent.map((t) => t.id).join(",");
+    const ownerBefore = await ownerLast();
+    await partner.goto(base + "/app/");
+    await partner.waitForSelector(".askpage .morning .row-main b", { timeout: 6000 }).catch(() => undefined);
+    const partnerMorning = (await partner.locator(".askpage .morning .row-main b").allInnerTexts()).join("|");
+    expect(partnerMorning.startsWith("Side door lock’s battery is flat."), "the partner’s morning message: " + partnerMorning);
+    expect(!/Sam Rivera|Lakeside Power/.test(partnerMorning), "the partner’s morning message had the owner’s mail or bills: " + partnerMorning);
+    await partner.fill("#askq", "dim the kitchen");
+    await partner.waitForFunction(() => document.querySelector("#askq")?.parentElement?.querySelector(".send.on") !== null, null, { timeout: 6000 }).catch(() => undefined);
+    await partner.keyboard.press("Enter");
+    const partnerAnswered = () => partner.waitForFunction(() => [...document.querySelectorAll(".turn .answer")].some((a) => a.textContent.startsWith("The kitchen is at")),
+      null, { timeout: 8000 }).then(() => true, () => false);
+    expect(await partnerAnswered(), "the partner’s Ask did not answer");
+    await partner.reload(); await partner.waitForSelector(".askpage");
+    expect(await partnerAnswered(), "the partner’s conversation did not keep their turn");
+    await partner.waitForTimeout(300); await partner.screenshot({ path: `${out}/${name}-6g-ask-partner.png` });
+    expect(await ownerLast() === ownerBefore, "the partner’s turn reached the owner’s conversation");
     // ... and the mail is the owner's alone: Mail and Mail settings say the partner's isn't connected and show none of
     // the owner's, System doesn't offer the older Gmail and Calendar pages, and opened anyway they say whose they are
     const partnerSays = (words) => partner.waitForFunction((w) => document.querySelector(".say")?.textContent.trim() === w, words, { timeout: 6000 })
