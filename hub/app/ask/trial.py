@@ -34,7 +34,7 @@ KINDS = ('setup', 'core')
 SPACING = 2.0                   # seconds between requests, so a trial doesn't run into the model's rate limit itself
 BUSY = ('rate_limit', 'overloaded', 'timeout', 'connection')    # failures of the model's service, not of Ask
 BACKOFF = (20.0, 60.0, 120.0)   # a request the model's service turned away is asked again after each of these waits
-TURN = 45.0                     # time one request may take: a wait is taken only if another request still fits after it
+TURN = 30.0                     # the least time worth starting a request in; each is cut off where the trial must end
 
 
 class Stopped(Exception):
@@ -248,9 +248,21 @@ async def _once(text, ledger, kept):
     return seen
 
 
+async def _bounded(text, ledger, kept, until):
+    """_once, cut off where the trial must end (`until`, a time.monotonic() value, or None): a turn may take the model
+    six trips of a minute each. Cut off, it is a timeout, which says nothing about Ask. None when no time is left."""
+    left = None if until is None else until - time.monotonic()
+    if left is not None and left < TURN:
+        return None
+    try:
+        return await asyncio.wait_for(_once(text, ledger, kept), left)
+    except asyncio.TimeoutError:
+        return {'tools': [], 'said': '', 'cards': [], 'status': 'failed', 'changes': [], 'used': [], 'problem': 'timeout'}
+
+
 async def _all(asked, who, ledger, started, kept, until=None):
-    """Each request in turn. `until` (a time.monotonic() value, or None) is when the trial must be done: a busy model
-    is waited for only while another request still fits before it."""
+    """Each request in turn, the whole trial done by `until` (a time.monotonic() value, or None): a busy model is waited
+    for only while another try still fits, and a try still going then is cut off."""
     out = []
     for at, (name, text, check) in enumerate(asked):
         if _spent() - started >= CAP:
@@ -258,13 +270,16 @@ async def _all(asked, who, ledger, started, kept, until=None):
             continue
         if at:
             await asyncio.sleep(SPACING)
-        seen = await _once(text, ledger, kept)
+        seen = await _bounded(text, ledger, kept, until)
         for wait in BACKOFF:            # turned away by the model's service: wait, longer each time, and ask again
-            if seen['problem'] not in BUSY or (until is not None and time.monotonic() + wait + TURN > until) \
+            if not seen or seen['problem'] not in BUSY or (until is not None and time.monotonic() + wait + TURN > until) \
                     or _spent() - started >= CAP:
                 break
             await asyncio.sleep(wait)
-            seen = await _once(text, ledger, kept)
+            seen = await _bounded(text, ledger, kept, until) or seen
+        if not seen:
+            out.append({'id': name, 'asked': text, 'ok': None, 'why': 'Left out: the trial ran out of time.', 'problem': 'timeout'})
+            continue
         if seen['problem'] in BUSY:     # busy every time it was asked: this says nothing about Ask, either way
             out.append({'id': name, 'asked': text, 'ok': None, 'why': 'Left out: the model was busy or out of reach.', **seen})
             continue

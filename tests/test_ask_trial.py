@@ -223,5 +223,24 @@ def test_a_request_the_model_turned_away_is_asked_again_and_counts_when_it_goes_
 def test_a_busy_model_is_waited_for_only_while_the_trial_has_time(house, monkeypatch):
     built = []
     monkeypatch.setattr(route, 'build', lambda http_client=None: built.append(1) or _busy(429))
-    result = trial.run('core', within=trial.TURN - 1)    # no time for a wait and another try
+    monkeypatch.setattr(trial, 'TURN', 0.5)
+    monkeypatch.setattr(trial, 'BACKOFF', (1, 1, 1))
+    result = trial.run('core', within=0.9)              # time for each first try, none for a wait and another
     assert len(result['busy']) == 4 and len(built) == 1 + 4
+
+
+def test_a_request_still_going_when_the_trial_must_end_is_cut_off_and_says_nothing_about_ask(house, monkeypatch):
+    import asyncio
+    import time
+
+    async def slow(text):
+        await asyncio.sleep(5)
+    monkeypatch.setattr(trial, '_ask', slow)
+    monkeypatch.setattr(trial, 'TURN', 0.1)
+    started = time.monotonic()
+    result = trial.run('core', within=0.3)
+    assert time.monotonic() - started < 2
+    assert (result['ran'], result['failed'], result['busy']) == (0, [], ['playlists', 'play', 'lights', 'weather'])
+    monkeypatch.setattr(trial, 'run', lambda kind='setup', within=None: result)
+    with pytest.raises(checks.Skipped, match='Inconclusive'):
+        checks.ask()
