@@ -1,8 +1,22 @@
 [
  {
   "sha": null,
-  "from": "12045ca99fa1ad1f643c525b3f8adcf1d071896f",
+  "from": "a2532210b0a39c5d416e5acae800b2b3eb079b9a",
   "live": null,
+  "title": "Ask answers what it’s asked, and Kitchen fills a Costco cart too",
+  "changes": [
+   "Ask knows your music library: ask “what playlists do I have?” and it names them, or “play my Dinner playlist” and it plays that one. Making or deleting a playlist still waits for your tap on the Playlists page.",
+   "Ask can look up Hub’s own records: the trip, what the AI has cost, how full the inbox is, and the devices on the network.",
+   "Ask answers the question instead of a stock line, may give a short list when you ask for one, and when it can’t do something it says so and names the closest thing it can.",
+   "Hub keeps a record of every Ask turn: what it used and whether it answered, got stuck or failed, so bad answers show up instead of passing as fine. When the model is busy, Ask says so.",
+   "After each deploy, Hub now checks this Ask itself: it lists your playlists, plays one, turns a room’s lights off and answers a weather question.",
+   "Kitchen: each thing on the list goes to Fred Meyer or Costco. Costco things say so on the list, and one tap on a thing’s Store row moves it. Your carts has a link to each store’s cart, and what went into the Costco cart stays as it went in."
+  ]
+ },
+ {
+  "sha": "a2532210b0a39c5d416e5acae800b2b3eb079b9a",
+  "from": "12045ca99fa1ad1f643c525b3f8adcf1d071896f",
+  "live": "2026-11-18T04:38:27Z",
   "title": "Dashboards: one page each for the pregnancy, the network and mail",
   "changes": [
    "Dashboards: a page for each part of the household, found by typing a few letters in Ask or from System. Arrange puts the blocks in your order and hides the ones you don’t want, for you only.",
