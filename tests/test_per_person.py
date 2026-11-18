@@ -88,13 +88,6 @@ def test_all_tools_lists_the_mail_and_calendar_only_for_alex():
     assert not {'/gmail', '/calendar'} & listed(CASEY) and '/trip' in listed(CASEY)
 
 
-def test_insights_draws_the_inbox_charts_only_for_alex(mailbox):
-    for who, theirs in ((ALEX, True), (CASEY, False), (None, False)):
-        page = client.get('/insights', headers=by(who)).text
-        assert ('Inbox size' in page) is theirs and ('What’s in the inbox' in page) is theirs, who
-        assert 'AI spend' in page and 'Golden tests' in page
-
-
 # ---- the app ----
 
 @pytest.fixture

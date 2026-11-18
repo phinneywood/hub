@@ -83,7 +83,7 @@ def test_overlap_today_or_tomorrow_becomes_an_item(helper, monkeypatch):
     monkeypatch.setattr(read, 'week', lambda now=None: events)
     monkeypatch.setattr(home, 'today', lambda: NOW.date())
     [item] = today.calendar()
-    assert item['tone'] == 'warn' and item['href'] == '/calendar' and 'Synthetic standup and Synthetic dentist' in item['why']
+    assert item['tone'] == 'warn' and item['href'] == '/app/#board/calendar' and 'Synthetic standup and Synthetic dentist' in item['why']
     monkeypatch.setattr(read, 'week', lambda now=None: (_ for _ in ()).throw(read.SignInNeeded()))
     assert today.calendar() == []
 
@@ -98,13 +98,9 @@ def test_evidence_sends_titles_times_and_places_only(helper, monkeypatch):
     assert catalog.source('calendar').evidence and 'calendar' in catalog.PAGES
 
 
-def test_page_lists_the_week_and_explains_a_lapsed_sign_in(helper):
-    page = TestClient(app).get('/calendar', headers=AS_OWNER)
-    assert page.status_code == 200 and 'The next seven days' in page.text
-    helper['fail'] = bridge.BridgeError('authorization may need renewal', 401)
-    assert 'phone-setup --calendar-auth' in TestClient(app).get('/calendar', headers=AS_OWNER).text
-    helper['fail'] = bridge.BridgeError('Gmail bridge is unreachable')
-    assert 'isn’t answering' in TestClient(app).get('/calendar', headers=AS_OWNER).text
+def test_the_older_page_opens_the_calendar_board(helper):
+    moved = TestClient(app).get('/calendar', headers=AS_OWNER, follow_redirects=False)
+    assert moved.status_code == 302 and moved.headers['location'] == '/app/#board/calendar'
 
 
 def test_an_event_runs_on_every_day_it_covers(monkeypatch):
@@ -116,8 +112,8 @@ def test_an_event_runs_on_every_day_it_covers(monkeypatch):
     overnight, late, retreat = read.week(NOW)
     assert str(late['last_day']) == '2026-03-04'   # ending at midnight stays on its own day
     today = NOW.date()
-    assert pages._covered(overnight, today) == [today]   # began yesterday, still shown under Today
-    assert pages._time(overnight, today) == 'Until 9:30 AM'
-    assert pages._covered(retreat, today) == [today, today + timedelta(days=1)]
-    assert pages._time(retreat, today) == 'All day'
-    assert pages._time(late, today) == '10 PM–12 AM'
+    assert pages.covered(overnight, today) == [today]   # began yesterday, still shown under Today
+    assert pages.clock(overnight, today) == 'Until 9:30 AM'
+    assert pages.covered(retreat, today) == [today, today + timedelta(days=1)]
+    assert pages.clock(retreat, today) == 'All day'
+    assert pages.clock(late, today) == '10 PM–12 AM'

@@ -51,8 +51,8 @@ def _db():
 
 
 def _boards():
-    from . import mail, network, pregnancy
-    return {b.ID: b for b in (pregnancy, network, mail)}
+    from . import calendar, mail, network, pregnancy, spend
+    return {b.ID: b for b in (pregnancy, calendar, network, mail, spend)}
 
 
 def board(board_id):

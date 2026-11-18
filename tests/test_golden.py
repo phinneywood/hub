@@ -277,16 +277,14 @@ def test_golden_page_and_run_button(monkeypatch):
     assert 'Golden tests' in client.get('/settings', headers=signed_in).text
 
 
-def test_insights_shows_the_latest_run(world, monkeypatch):
-    from fastapi.testclient import TestClient
+def test_the_spend_board_shows_the_latest_run(world, monkeypatch):
     from hub import luna
-    from hub.main import app
-    signed_in = {'tailscale-user-login': 'me@example.com'}
-    assert 'No live run yet' in TestClient(app).get('/insights', headers=signed_in).text
+    from hub.app.boards import spend
+    checks = lambda: next(b for b in spend.picture('me@example.com', None)['blocks'] if b['id'] == 'checks')  # noqa: E731
+    assert checks()['rows'] == []
     monkeypatch.setattr(luna, 'configured', lambda: True)
     runner.live(only=('what-needs-me-today',), model_for=_scripted_for)
-    page = TestClient(app).get('/insights', headers=signed_in).text
-    assert '1 of 1' in page and '/golden' in page
+    assert checks()['rows'][0]['sub'] == '1 of 1 passed'
 
 
 def test_a_card_that_misses_a_room_or_stays_quiet_is_caught(world):

@@ -647,14 +647,16 @@ found by a few letters in Ask, listed in System, and Today ends with one line fo
 - **Ask.** A question in a board's words (`private.TOPICS`: `pregnancy`, `network`) is answered with the board's
   `facts` beside it, and the board's headline and first numbers drawn under the answer (`{"kind": "board"}`), read
   from Hub for whoever is looking. Mail's questions keep Mail's own lookups.
-- **Who sees which.** Each board says (`sees`): pregnancy and network, the household's members; mail, the mailbox
-  owner. Never on the wall. The morning message's pool is unchanged during the assistant's 14-day test.
+- **Who sees which.** Each board says (`sees`): pregnancy, network and AI spend, the household's members; mail and
+  calendar, the mailbox owner. Never on the wall. The morning message's pool is unchanged during the assistant's 14-day test.
 
 | Board | Reads | Shows |
 | --- | --- | --- |
 | Pregnancy | the due date (`"pregnancy": {"due": "YYYY-MM-DD"}` in `household.json`, or set on the board) | the week, size, trimester bar, days to go, what usually comes next (US schedule of visits, screenings, vaccines), a shared getting-ready list, visit cadence, month by month |
 | Network | the older Network page's overview (`hub/tools/network/pages.overview`), at most once a minute | up or down, speed and ping now, the day's uptime and drops, download and ping charts, what needs a look, busiest devices |
 | Mail | Hub's own sorting tables, the daily inbox size, the plan of inbox changes | counts, what needs you, the inbox over 30 days, by kind, Hub's cleanup, changes that need a check |
+| Calendar | the older Calendar page's reader (`hub/tools/calendar/read.week`, through the helper) | what is on today, the week's counts and clashes, the next seven days. Replaces that page: `/calendar` opens it |
+| AI spend | Hub's record of runs (`hub/insights.spend`) and the newest live check (`hub/golden/runner.latest`) | each monthly limit, cost and runs by kind over 30 days, Ask's last live check. Replaces the older Insights page: `/insights` opens it (its inbox charts were already on Mail, its network summary on Network) |
 
 | Address | What |
 | --- | --- |

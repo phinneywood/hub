@@ -241,10 +241,10 @@ def today_page(request: Request, snoozed: int = 0, home: str = ""):
                   greeting_text=greeting_text, date_text=date_text, **cards.page(request.headers.get("tailscale-user-login")))
 
 
-@app.get("/insights", response_class=HTMLResponse)
-def insights_page(request: Request):
-    from . import insights
-    return render(request, "insights.html", active="insights", **insights.page(request.headers.get("tailscale-user-login")))
+@app.get("/insights")
+def insights_page():
+    """The older Insights page is the AI spend board now; its inbox charts are on the Mail board."""
+    return RedirectResponse("/app/#board/spend", status_code=302)
 
 
 @app.get("/tools", response_class=HTMLResponse)

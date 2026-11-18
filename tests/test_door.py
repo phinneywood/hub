@@ -241,7 +241,7 @@ def test_with_the_door_home_assistant_and_music_assistant_are_screens_of_hub():
     nav = client.get('/today', headers=SIGNED_IN).text
     assert 'href="/house/assistant">Home Assistant</a>' in nav and 'href="/house/player">Music Assistant</a>' in nav
     tools = client.get('/tools', headers=SIGNED_IN).text
-    assert 'href="/insights"' in tools and 'href="/house/assistant"' in tools and 'Opens in a new tab' not in tools
+    assert 'href="/app/#board/spend"' in tools and 'href="/house/assistant"' in tools and 'Opens in a new tab' not in tools
     assert client.get('/house', headers=SIGNED_IN, follow_redirects=False).headers['location'] == '/house/assistant'
     assert client.get('/house/assistant', headers={'tailscale-user-login': 'stranger@example.com'}).status_code == 403
 

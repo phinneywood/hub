@@ -198,7 +198,7 @@ def calendar():
     for first, second in read.overlaps(events, {now, now + timedelta(days=1)}):
         found.append(rec(f'calendar-clash-{first["day"]}-{first["title"]}-{second["title"]}', 'warn',
                          f'Two things at once: {read.label(second)}',
-                         f'{first["title"]} and {second["title"]} overlap.', href='/calendar', cta='See the day'))
+                         f'{first["title"]} and {second["title"]} overlap.', href='/app/#board/calendar', cta='See the day'))
     return found
 
 

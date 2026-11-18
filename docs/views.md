@@ -7,7 +7,7 @@ the detail screens behind these three.
 | --- | --- | --- | --- |
 | Ask | `/` and `/ask` | The read-only chat over the catalog's lookups (see “Ask Hub” in `engine.md`) | `hub/agent/`, `web/ask/` |
 | Today | `/today` | One card per decision from “Needs you”, then one card per tool | `hub/cards.py`, `hub/today.py`, `hub/home.py` |
-| Insights | `/insights` | Charts from numbers Hub already keeps, and the Network summary | `hub/insights.py`, `hub/tools/network/` |
+| Insights | `/insights` | Retired 2026-11-18: opens the AI spend board in the app (“Dashboards” in `app.md`) | `hub/app/boards/spend.py` |
 
 With the door set up (docs/door.md) the bar is **Ask**, **Today**, **Home** and **Music**: Home and Music are Home
 Assistant and Music Assistant themselves (`/house/assistant`, `/house/player`), and Insights is listed under All tools.
@@ -45,20 +45,9 @@ own question for that reference and the lookups that can answer it (`cards.TOPIC
 
 ## Insights charts
 
-Charts are worked out in `hub/insights.py` as plain numbers and drawn by the template as inline SVG:
-no chart library, no inline styles or scripts (Hub's content policy forbids them), nothing from
-another site. `hub/static/insights.js` only adds a tooltip; every value it shows is also on the page
-as a label or a table.
-
-- **Inbox size**: `inbox_history`, one reading per day Hub checked. A line on a true date axis.
-- **What's in the inbox**: the last sort's count of each kind. Bars, one colour.
-- **AI spend**: the engine's record of runs (`state.daily`): a meter per monthly limit, cost per day
-  stacked by kind of run, and a table of runs, runs that didn't finish, model calls and cost.
-- **Network**: the Network page's answer only (`network.pages.summary`): the verdict and the three
-  tiles, with a link to `/network`. Incidents, speed history, clients and source settings stay there.
-
-Series colours are in `hub/static/insights.css` (`--viz-*`), chosen for both light and dark and
-checked for colour-blind separation. A kind of run keeps its colour whatever else is on the chart.
+Retired 2026-11-18 (owner's ask to move every older page into the app). `/insights` opens the AI spend board;
+the inbox charts were already on the Mail board and the network summary on the Network board. `hub/insights.py`
+keeps only the spend figures the board and Ask's `ai_spend` lookup read.
 
 ## Checking the views in a browser
 

@@ -244,9 +244,9 @@ export function Rail() {
   );
 }
 
-const MAILBOX = ["/gmail", "/calendar"];     // one person's Google account: listed only for them
-const OLDER = [["Ask, the chat", "/ask"], ["Today, the cards", "/today"], ["Kitchen, the older page", "/kitchen"], ["Mail, the older page", "/gmail"], ["Calendar", "/calendar"],
-  ["Preschool", "/preschool/"], ["Trip", "/trip"], ["Bike + bus", "/mobility"], ["Network", "/network"], ["Insights", "/insights"],
+const MAILBOX = ["/gmail"];     // one person's Google account: listed only for them
+const OLDER = [["Ask, the chat", "/ask"], ["Today, the cards", "/today"], ["Kitchen, the older page", "/kitchen"], ["Mail, the older page", "/gmail"],
+  ["Preschool", "/preschool/"], ["Trip", "/trip"], ["Bike + bus", "/mobility"],
   ["Settings and checks", "/settings"]] as const;
 const LOOKS: [Look, string][] = [["auto", "Automatic"], ["dusk", "Evening"], ["day", "Day"]];
 
