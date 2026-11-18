@@ -238,6 +238,9 @@ def test_the_network_board(household):
     found = client.get('/app/api/board/network', headers=CASEY).json()
     assert found['say'] == 'Internet is up'
     assert [t['value'] for t in _block(found, 'now')['tiles']] == ['41.2 Mbit/s', '3.1 Mbit/s', '18.0 ms', '0.0 %']
+    # Plain words: what the house is moving now, and how "Right now" was checked.
+    assert _block(found, 'now')['title'] == 'Traffic now' and _block(found, 'now')['tiles'][0]['label'] == 'coming in'
+    assert _block(found, 'verdict')['small'] == 'Checked by reaching the internet from home'
     assert _block(found, 'day')['tiles'][0]['value'] == '99.71%'
     assert _block(found, 'download')['segments'] == ['2,170 718,60']
     assert _block(found, 'latency')['segments'] == []
