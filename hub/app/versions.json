@@ -1,8 +1,18 @@
 [
  {
   "sha": null,
-  "from": "7dabee7e22735b0df7857b7175e25bb356200a6c",
+  "from": "5d7988721c00f51ac905795ea87b4b0fa0bd14e9",
   "live": null,
+  "title": "Your career desk, in Ask",
+  "changes": [
+   "Career is a dashboard of your own: your thesis, your plan’s steps to tick, what you are writing, field notes and evidence. Nobody else sees it.",
+   "Ask can note something for your career in your own words, tick a step, look a topic up on the web for a field note with sources, or write a first draft. Hub never publishes, posts or applies for anything."
+  ]
+ },
+ {
+  "sha": "5d7988721c00f51ac905795ea87b4b0fa0bd14e9",
+  "from": "7dabee7e22735b0df7857b7175e25bb356200a6c",
+  "live": "2026-11-18T20:38:47Z",
   "title": "Hub’s builds leave less behind",
   "changes": [
    "Checking a new version of Hub no longer leaves a few hundred megabytes behind on the Mac each time."
