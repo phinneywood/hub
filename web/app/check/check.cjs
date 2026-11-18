@@ -861,7 +861,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap('.kitchen .pickblock .linkish:text-is("2 more choices")');
     expect(await until(() => document.querySelector(".sheet h1")?.textContent === "dish soap" && document.querySelectorAll(".sheet .opt").length === 3),
       "2 more choices did not open the sheet with all three");
-    await page.keyboard.press("Escape");
+    await tap('.sheet .x[aria-label="Close"]');
+    expect(await until(() => !document.querySelector(".sheet")), "the dish soap sheet did not close");
     await page.fill(".kadd .field", "sponges, 2 avocados");
     await page.keyboard.press("Enter");
     expect(await until(() => document.querySelectorAll(".kitchen .rows .row.item").length === 6), "typing on the list did not add to it");
