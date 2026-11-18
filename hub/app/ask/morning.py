@@ -33,6 +33,8 @@ from ... import home, people, store
 
 MORNING_HOUR = 5            # Ask opened from this hour on makes the day's message
 MOST = 3
+RETRY_SECONDS = 60          # nothing found while a source was late or broke: a later opening looks again, this long after
+_looked = {}                # person: when an opening last found nothing because a source didn't answer
 QUIET_DAYS = 30
 QUIET_AFTER = 2             # "not this" this many times for a low-stakes kind quiets it
 LINE = 120
@@ -146,9 +148,9 @@ def _gap(card, now):
     return (date.fromisoformat(on) - _clock(now).date()).days if on else None
 
 
-def _needs(login):
+def _needs(login, missed=None):
     from .. import today
-    needs, _, _ = today._list(people.accounts(login))      # cut to what this person may see (the brief, people.py)
+    needs, _, _ = today._list(people.accounts(login), missed)      # cut to what this person may see (the brief, people.py)
     found = []
     for n, need in enumerate(needs):
         kind = _kind(need['key'])
@@ -183,15 +185,18 @@ def _put_off(login, day):
                                                (_person(login), day))}
 
 
-def pool(login, now=None):
-    """Everything that could go in this person's morning message, most pressing first. Never raises."""
+def pool(login, now=None, missed=None):
+    """Everything that could go in this person's morning message, most pressing first. Never raises. `missed`, a list:
+    gets an entry for each source that was late or broke."""
     now = time.time() if now is None else now
     day = _clock(now).date().isoformat()
+    missed = [] if missed is None else missed
     found = []
-    for part in (lambda: _errands(login, now), lambda: _needs(login)):
+    for part in (lambda: _errands(login, now), lambda: _needs(login, missed)):
         try:
             found += part()
         except Exception:  # noqa: BLE001 - one source that can't be read must not keep the others from the message
+            missed.append('broke')
             continue
     off, later = _off(login, day), _put_off(login, day)
     found = [i for i in found if i['kind'] not in off and i['key'] not in later]
@@ -217,7 +222,13 @@ def message(login, now=None):
     try:
         if made(login, now, at_all=True):
             return None
-        chosen = pool(login, now)[:MOST]
+        if time.monotonic() - _looked.get(key, float('-inf')) < RETRY_SECONDS:
+            return None
+        missed = []
+        chosen = pool(login, now, missed)[:MOST]
+        if not chosen and missed:   # not known to be an empty day: a slow or broken source. A later opening looks again
+            _looked[key] = time.monotonic()
+            return None
         if not chosen:          # nothing to say today: not looked for again on every opening
             with closing(_db()) as conn, conn:
                 conn.execute('insert or ignore into app_ask_morning_day(person, day) values (?, ?)', (key, day))

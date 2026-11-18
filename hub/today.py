@@ -290,22 +290,26 @@ def collect(jobs, tiles=(), *, accounts):
     return gather(jobs, tiles, accounts=accounts)[:MAX_ITEMS]
 
 
-def gather(jobs, tiles=(), *, accounts):
+def gather(jobs, tiles=(), *, accounts, missed=None):
     """Every recommendation this person may see, most urgent first, without anything snoozed. Never raises.
 
     `accounts`: the accounts whose things they see (people.accounts(login)). An item read from anyone else's account
     is left out; the household's own (account None) are everyone's. The overnight review's suggestions and Hub's notes
-    on what it did by itself are the owner's: the review reads the owner's mail."""
+    on what it did by itself are the owner's: the review reads the owner's mail. `missed`, a list: gets one entry
+    for each source that didn't answer in time or broke, so a caller can tell an empty list from an unread one."""
     from . import people, store
     from .engine import state
+    missed = [] if missed is None else missed
     wait([job for job, _ in jobs], timeout=DEADLINE_SECONDS)
     found = list(from_tiles(tiles))
     for job, account in jobs:
         if not job.done():
+            missed.append('late')
             continue
         try:
             found += [{**item, 'account': account} for item in job.result()]
         except Exception:  # noqa: BLE001 - one broken source must not hide the others
+            missed.append('broke')
             continue
     try:
         day = home.today().isoformat()
