@@ -346,7 +346,8 @@ function LeftRow({ item }: { item: Item }) {
 /** How many of a thing: one more, one fewer. What is already in the cart is set to the new number at the next fill. */
 function HowMany({ item }: { item: Item }) {
   const [busy, setBusy] = useState(false);
-  const fixed = item.state === "adding" || item.state === "removing";
+  // What is in another store's cart stays as it went in: Hub never changes that cart.
+  const fixed = item.state === "adding" || item.state === "removing" || (item.state === "cart" && elsewhere(item) !== "");
   const set = async (qty: number) => { setBusy(true); await act("qty", { id: item.id, qty, carted: item.state === "cart" }); setBusy(false); };
   const covers = item.asked !== null && item.asked !== item.qty
     ? `You asked for ${item.asked}. ${item.qty === 1 ? "One pack covers" : `${NUMBERS[item.qty] ?? item.qty} packs cover`} that.` : "";
@@ -394,7 +395,9 @@ export function ItemSheet({ item }: { item: Item }) {
       {item.state === "cart" && (elsewhere(item)
         ? <p class="quiet-line">Hub only ever adds to the {elsewhere(item)} cart. Taking it off the list leaves it there.</p>
         : <p class="quiet-line">To change the product, take it out and add it again.</p>)}
-      {item.state === "unknown" && <p class="quiet-line">Hub couldn’t confirm this went in. Read the cart, under The cart, and Hub will know.</p>}
+      {item.state === "unknown" && (elsewhere(item)
+        ? <p class="quiet-line">Hub couldn’t confirm this went in the {elsewhere(item)} cart. Look in that cart on its own site; take it off the list here once you know.</p>
+        : <p class="quiet-line">Hub couldn’t confirm this went in. Read the cart, under The cart, and Hub will know.</p>)}
       <div class="btns">
         <button type="button" class="btn risk" disabled={busy || still}
           onClick={() => { setBusy(true); void act("remove", { id: item.id }).then(() => { sheet.value = null; }); }}>
@@ -470,7 +473,8 @@ function Planned({ after, again }: { after: number; again: preact.JSX.Element })
 }
 
 const PLAN_WORDS: Record<string, string> = { approved: "Adding to the cart", done: "Added to the cart", dismissed: "Dismissed",
-  superseded: "Replaced by a newer plan", expired: "Expired", unknown: "Not confirmed: check the cart" };
+  superseded: "Replaced by a newer plan", expired: "Expired", unknown: "Not confirmed: check the cart",
+  failed: "Not started: Kitchen couldn’t reach the Mac’s own Chrome" };
 
 export function PlanCard({ plan, status }: { plan: Plan; status?: { status: string; decided_by?: string | null } }) {
   const now = status ?? plan;

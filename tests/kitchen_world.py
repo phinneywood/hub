@@ -26,7 +26,7 @@ BUYS = {
 }
 # What they buy at the second store, Costco Same-Day, in the same shape: such a thing goes to Costco's cart.
 COSTCO = {
-    'paper towel': ('Bulk Barn Paper Towels, 12 Rolls', '12 rolls', 'history', 4, '2026-10-13', '22.99', 1, ''),
+    'paper towel': ('Bulk Barn Paper Towels, 12 Rolls', '12 rolls', 'history', 4, '2026-06-02', '22.99', 1, ''),
 }
 STORES = [{'id': 'fredmeyer', 'name': 'Fred Meyer', 'cart': 'https://www.fredmeyer.com/cart'},
           {'id': 'costco', 'name': 'Costco', 'cart': 'https://sameday.costco.com/store/costco/storefront'}]
