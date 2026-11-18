@@ -21,8 +21,10 @@ interface Block {
   big?: string; small?: string; tone?: string; progress?: number; marks?: { at: number; label: string }[];
   tiles?: Tile[]; rows?: Row[]; items?: Check[]; sub?: string; empty?: string; text?: string; view?: string;
   segments?: string[]; start?: string; end?: string; now?: string; top?: string; bars?: { label: string; value: number; text: string }[];
-  mark?: { at: number; label: string };
+  mark?: { at: number; label: string }; reads?: Read[];
 }
+/** One place on a line a finger can read: where it is across (0 to 1) and down (0 top, 1 bottom), and what it says. */
+interface Read { at: number; y: number; big: string; small: string }
 interface Setting { key: string; label: string; type: "date" | "text" | "switch"; value: string }
 interface Board { ok: true; id: string; name: string; say: string; sub: string; blocks: Block[]; hidden: { id: string; title: string }[];
   settings: Setting[] }
@@ -150,19 +152,36 @@ function Checks({ block, board }: { block: Block; board: string }) {
 
 function Line({ block }: { block: Block }) {
   const segments = block.segments ?? [];
+  const reads = block.reads ?? [];
+  const [held, setHeld] = useState<Read | null>(null);
   if (!segments.length) return <p class="quiet-line">{block.empty ?? "No history yet."}</p>;
+  // A line with reads answers a finger (or a pointer): the nearest place along it, said above the chart.
+  const read = (e: PointerEvent) => {
+    const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const at = Math.min(Math.max((e.clientX - box.left) / box.width, 0), 1);
+    let best = reads[0] ?? null;
+    for (const r of reads) if (best && Math.abs(r.at - at) < Math.abs(best.at - at)) best = r;
+    setHeld(best);
+  };
+  const live = reads.length > 0;
   return (
-    <figure class="bline">
-      {(block.now || block.top) && <figcaption><b>{block.now}</b><span>{block.top}</span></figcaption>}
-      <div class="bplot">
+    <figure class={"bline" + (live ? " live" : "")}>
+      {held ? <figcaption class="held"><b>{held.big}</b><span>{held.small}</span></figcaption>
+        : (block.now || block.top) && <figcaption><b>{block.now}</b><span>{block.top}</span></figcaption>}
+      <div class="bplot" {...(live ? {
+        onPointerDown: (e: PointerEvent) => { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); read(e); },
+        onPointerMove: (e: PointerEvent) => { if (e.buttons || e.pointerType === "mouse") read(e); },
+        onPointerLeave: (e: PointerEvent) => { if (e.pointerType === "mouse") setHeld(null); },
+      } : {})}>
         <svg viewBox="0 0 720 180" preserveAspectRatio="none" role="img" aria-label={block.title + (block.mark ? `. ${block.mark.label}` : "")}>
           {segments.map((points, n) => <polyline points={points} key={n} vector-effect="non-scaling-stroke" />)}
         </svg>
         {block.mark && (     // a place on the line, such as "You are here": its label stays on the side with room
           <i class={"bmark" + (block.mark.at > 0.6 ? " left" : "")} style={{ left: `${block.mark.at * 100}%` }}><small>{block.mark.label}</small></i>
         )}
+        {held && <i class="bdot" style={{ left: `${held.at * 100}%`, top: `${held.y * 100}%` }} />}
       </div>
-      <div class="baxis"><span>{block.start}</span><span>{block.end}</span></div>
+      <div class="baxis"><span>{block.start}</span>{live && <span class="bhint">{held ? "" : "Touch the line to read it"}</span>}<span>{block.end}</span></div>
     </figure>
   );
 }

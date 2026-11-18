@@ -224,6 +224,9 @@ def test_the_chance_of_a_live_birth_and_when_babies_come(household):
     assert born[3]['right'] == '57% · 95% by then' and born[0]['right'] == '9%' and born[4]['right'] == '5%'
     labour = _block(found, 'labour-curve')
     assert labour['now'] == 'About 4% on the day' and labour['mark']['label'] == 'Due Mar 4'
+    on_the_day = next(r for r in labour['reads'] if r['small'].startswith('The due date'))      # a finger can read any day
+    assert on_the_day['big'] == 'Thu, Mar 4: 4.2%' and on_the_day['small'].endswith('About 52% by the end of that day')
+    assert len(labour['reads']) == 43 and len(curve['reads']) == 73 and curve['reads'][4]['big'] == 'About 90 in 100'
     assert 'Tong et al., Obstet Gynecol 2008' in _block(found, 'odds-about')['text']
     facts = boards.facts('pregnancy', 'me@example.com')
     assert facts['chance_of_a_live_birth_on_average'].startswith('About 99 in 100') and len(facts['when_babies_are_born']) == 5
