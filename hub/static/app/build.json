@@ -7,7 +7,7 @@
     "record-build.mjs": "0d1ca0afe2544a3dd8c957be6a95cb5eafeed4daad8a9f68d4f315126e9537d8",
     "src/activity.tsx": "77377995178139cbc7345f3b8327dc0fe67600069fb45f0e7d4080a7207c125b",
     "src/api.ts": "5560e8374457364129af4ad01e52fa23e57be575a4e0f1b024ca265e8c7904a0",
-    "src/app.css": "1ad006d337a931b8c1ce837a90f09a29fe1224c29c9112a43edb948b82bf9dfb",
+    "src/app.css": "77e8681d398de216dbb7e8598c03d04000756e351bdc5049fe88469f85981f5e",
     "src/ask.tsx": "2d2502d6f9a908dc661d5623345d04c8670762cbe749a2adc624857b97cb0f58",
     "src/asking.ts": "7e6e30454703ce9df5025f22818ffb1f4f69eb7e8e20a8bd496787b7b275b058",
     "src/boards.tsx": "7ea651a966caf2b8d606eabcc32e680cfb815098fba98cc1d4d6d232485cebe3",
@@ -19,9 +19,9 @@
     "src/kitchen.tsx": "318e7b931458e8ba5682dadb93dcdf1042a3c9d55b0a67ed64955544484802cd",
     "src/mail.tsx": "0dd8f178e949aeab251480c9ac89db3f21c3000952ed1db2a66cf3fe834ff972",
     "src/mailrules.tsx": "55ef5fa538b196cb752bd4bc5e542b05fb29e4d8146e54dcdd57dbff7ba8f992",
-    "src/main.tsx": "137c20b2db068b5dc0de01ebe31c9952f852b69a2b0759e6da9659a0a3285301",
+    "src/main.tsx": "83c20c9e98293e8da76329742c69eace9d932daec9add5b473cc236cfacf8fb5",
     "src/now.tsx": "5259644a22edb36269d7451e7ac75d2e311a15f9b969758ac30b59e3ac3ba855",
-    "src/screens.tsx": "d03d177713de0e62f4362e4bc6e843342b2bc3068fb3664329c9a4f4f0f1e374",
+    "src/screens.tsx": "be68edcf68d167e7ed3b23aeabfd8d4ac2ea21f2533a8de379b8ff72c824d89f",
     "src/sheets.tsx": "938fd1b4de42cb155602fe36e7cb059294fb1562d41179f54edabb98a403de3c",
     "src/state.ts": "f115fbca333da33254911f6ada7c0dbe84315c453fc32607eb1302ffa7111888",
     "src/today.tsx": "6cddfac51f957a966d11cdb7c8e11ff23ec9c953e9daab826e3f18ac4c907777",
@@ -34,7 +34,7 @@
     "src/words.ts": "dfcfa37638ad8ab6347f8a66f30cabf7e6619c00e828ac7da8ebc41b2b944117"
   },
   "built": {
-    "app.css": "a360b287f24d59c53a0ceb1127f846e5cc568c1efa5138a49998a975e8aa16c4",
-    "app.js": "6428f1fcd24e3f9ab503dd128cab0b0a869b856153b225b4d6a7f9ba5ede505d"
+    "app.css": "892ad049ebb7260286b7c3c883d456cbdbe00f04ca324f186532eb132c1e1e68",
+    "app.js": "08fcfcbd2b23c1052958feb20338dc478010d690fbe213cb26d0d95a36a0e25a"
   }
 }

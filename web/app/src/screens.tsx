@@ -1,9 +1,10 @@
 // The screens: the house as a plan, the bar at the bottom, and System.
 import type { JSX } from "preact";
 import { useRef, useState } from "preact/hooks";
-import { go, house, look, me, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
+import { boardId, go, house, look, me, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
 import type { Look, View } from "./state";
 import { able, forgetNote } from "./asking";
+import { boards } from "./boards";
 import type { Floor, House, Room } from "./types";
 import { Bars, Icon } from "./ui";
 import { clock, houseSays, list, musicSays, playingIn, when } from "./words";
@@ -199,12 +200,28 @@ export function Dock() {
   );
 }
 
+/** The dashboards this person may open, under Ask and House on a wide screen: one click each. */
+function RailBoards() {
+  const list = boards.value ?? [];
+  const here = view.value === "board" ? boardId.value : "";
+  return (
+    <div class="railboards">
+      <button type="button" class={"tab" + (view.value === "boards" ? " on" : "")} onClick={() => go("boards")}>Dashboards</button>
+      {list.map((b) => (
+        <button type="button" key={b.id} class={"tab sub" + (here === b.id ? " on" : "")} aria-current={here === b.id ? "page" : undefined}
+          onClick={() => go("board", b.id)}>{b.name}</button>
+      ))}
+    </div>
+  );
+}
+
 export function Rail() {
   const fine = !trouble.value;
   return (
     <nav class="rail" aria-label="Hub">
       <div class="mark"><i />Hub</div>
-      <Tabs page={PAGES[view.value] !== "System"} />
+      <Tabs page={PAGES[view.value] !== "System" && PAGES[view.value] !== "Dashboards"} />
+      <RailBoards />
       <div class="foot">
         <button type="button" class={"tab" + (view.value === "system" || view.value === "versions" || view.value === "engine" || view.value === "changes" || view.value === "activity" ? " on" : "")} onClick={() => go("system")}>System</button>
         <p class="ok">{fine ? "The house is answering." : trouble.value === "hub" ? "Can’t reach Hub." : "The house isn’t answering."}</p>
