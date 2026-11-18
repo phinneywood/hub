@@ -16,8 +16,9 @@ Drives the real app in headless Chromium at phone width (390 px, evening and day
 - Ask offers what is often asked around now as a suggested message, does what is typed and says so in a sentence, draws the rooms
   or speakers it changed, puts a change back from under the answer, shows Kitchen's reply when it arrives,
   answers a question about the day from what Hub read, searches the owner's mail and draws the emails found
-  under the answer (each opening in Gmail), reads the first when told "open the first one" and marks it, and
-  remembers and forgets;
+  under the answer (each opening in Gmail), reads the first when told "open the first one" and marks it, puts
+  "archive the first one" on a card naming the email that changes nothing until it is tapped, archives it on the
+  tap and puts it back with the card's Undo, and remembers and forgets;
 - Ask moves a lamp to another room and puts it back, makes an automation, leaves unlocking a door, removing a
   room and disabling a thing on a card until it is tapped, does nothing when the card is put away, reloads an
   integration, and asks which one when a name fits several lamps;

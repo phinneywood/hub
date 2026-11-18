@@ -333,6 +333,17 @@ reading Gmail again; it takes the day's mail rows' place. Only a login that may 
 isn't carried into later requests; only that N emails were shown, by number. Nothing here changes Gmail, and a
 request that read mail changes nothing in the house or on the list either (`tools.READ_MAIL`): ask for that by itself.
 
+**Ask changes mail, after a tap** (`mailchange.py`; owner's choice 2026-11-18, week 2). `mail_change` archives emails,
+puts them back in the inbox, adds or takes off a label (a new one is made on the tap), or marks them read or unread,
+by their numbers from this request's search or the person's last mail card. The tool changes nothing: it keeps the
+proposal (`ask_mail_waiting`) and puts a card under the answer listing each email (who and the subject) and what will
+happen. Only the tap (`POST /app/api/mail/change/{id}/confirm`, from a signed-in device of the login that asked, which
+must still see the main Google account) sends it, through the bridge's `/gmail/labels/apply`, at most 8 emails a card.
+Undo on the card puts it back through `/gmail/undo` for a day. A card waits an hour, and a newer one replaces it. The
+person's own words must ask for a change (`tools.MAIL_VERBS`); an email asking for one is data. A refusal changes
+nothing; a result Gmail doesn't confirm is logged and the card says to check Gmail, never retried. The bridge has no
+delete, trash, send or forward path, so Ask can't do any of those: they stay in Gmail.
+
 **What a model never moves.** On a turn that has mail, the calendar or school in view (`<data>`, or a `look_up`),
 Ask changes nothing about the setup and unlocks nothing: words written by strangers are in the model's view on
 those turns. Lights and music still work, as before. Errands are changed on such turns only as the guard in

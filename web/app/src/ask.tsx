@@ -86,41 +86,51 @@ function Found({ now, text }: { now: House; text: string }) {
 }
 
 /** A change that waits for a tap: what would happen, and the two ways to answer. Typing "yes" does nothing;
- * only this button, on a signed-in device, makes the change. */
+ * only this button, on a signed-in device, makes the change. A card for the house (`setup`) is undone through the
+ * house's own Undo; one for mail (`mail/change`) through its own. */
 function ConfirmCard({ card }: { card: Card }) {
   const id = card.id ?? 0;
-  const [state, setState] = useState<"waiting" | "working" | "done" | "dismissed" | "gone">("waiting");
+  const base = card.path ?? "setup";
+  const [state, setState] = useState<"waiting" | "working" | "done" | "dismissed" | "gone" | "undone">("waiting");
   const [batch, setBatch] = useState<string | null>(null);
+  const [own, setOwn] = useState(false);          // a done change this card itself can put back (mail)
   const [said, setSaid] = useState("");
   useEffect(() => {           // opened again later: what became of the card
     let stopped = false;
-    fetch(`/app/api/setup/${id}`, { headers: { accept: "application/json" } })
-      .then((answer) => answer.json() as Promise<{ status: string; batch: string | null }>)
+    fetch(`/app/api/${base}/${id}`, { headers: { accept: "application/json" } })
+      .then((answer) => answer.json() as Promise<{ status: string; batch: string | null; undo?: boolean }>)
       .then((found) => {
         if (stopped || found.status === "waiting") return;
-        if (found.status === "done") setBatch(found.batch);
-        setState(found.status === "done" ? "done" : found.status === "dismissed" ? "dismissed" : "gone");
+        if (found.status === "done") { setBatch(found.batch); setOwn(found.undo === true); }
+        setState(found.status === "done" ? "done" : found.status === "dismissed" ? "dismissed" : found.status === "undone" ? "undone" : "gone");
       }, () => undefined);
     return () => { stopped = true; };
-  }, [id]);
+  }, [id, base]);
   const tap = async (choice: "confirm" | "dismiss") => {
     setState("working");
-    const answer = await post(`setup/${id}/${choice}`);
+    const answer = await post(`${base}/${id}/${choice}`);
     if (answer.error) {         // not done. A card that still waits (Hub was busy this minute) stays to be tapped again
-      const still = await fetch(`/app/api/setup/${id}`, { headers: { accept: "application/json" } })
+      const still = await fetch(`/app/api/${base}/${id}`, { headers: { accept: "application/json" } })
         .then((found) => found.json() as Promise<{ status?: string }>).catch(() => ({ status: "" }));
       if (still.status === "waiting") { say(answer.error); setState("waiting"); return; }
       setSaid(answer.error); setState("gone"); return;
     }
-    if (choice === "confirm") setBatch(answer.batch ?? null);
+    if (choice === "confirm") { setBatch(answer.batch ?? null); setOwn(answer.undo === true); }
+    if (answer.said && base !== "setup") say(answer.said);
     setState(choice === "confirm" ? "done" : "dismissed");
+  };
+  const putBack = async () => {
+    const answer = await post(`${base}/${id}/undo`);
+    if (answer.error) { say(answer.error); return; }
+    say(answer.said ?? "Put back");
+    setState("undone");
   };
   const open = state === "waiting" || state === "working";
   const back = batch !== null && undone.value.includes(batch);
   return (
     <div class={"wait" + (open ? "" : " settled")}>
       <b class="wait-t">{card.title}</b>
-      <p class="wait-cap">{open ? "After your tap" : state === "done" ? "Done" : "Not done"}</p>
+      <p class="wait-cap">{open ? "After your tap" : state === "done" || state === "undone" ? "Done" : "Not done"}</p>
       <ul class="wait-lines">{(card.lines ?? []).map((line) => <li key={line}>{line}</li>)}</ul>
       {open && (
         <>
@@ -133,7 +143,9 @@ function ConfirmCard({ card }: { card: Card }) {
         </>
       )}
       {state === "done" && (back ? <p class="took"><span>Put back as it was</span></p>
-        : batch ? <p class="took"><button type="button" onClick={() => void undo(batch)}>Undo</button></p> : null)}
+        : batch ? <p class="took"><button type="button" onClick={() => void undo(batch)}>Undo</button></p>
+        : own ? <p class="took"><button type="button" onClick={() => void putBack()}>Undo</button></p> : null)}
+      {state === "undone" && <p class="took"><span>Put back as it was</span></p>}
       {state === "dismissed" && <p class="took"><span>Left as it was.</span></p>}
       {state === "gone" && <p class="took"><span>{said || "This card isn’t waiting any more. Ask again."}</span></p>}
     </div>

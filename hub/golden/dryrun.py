@@ -19,7 +19,8 @@ refused exactly as it would be live. Home Assistant reads are then shown with th
 over them, so a second turn ("play it in the kitchen as well") sees the music the first turn started.
 Undo records (house_changes, music_changes) and proposals waiting for the owner's tap (a note to save, a
 playlist to make) go to a scratch database, never Hub's own, so a dry run leaves nothing on the Home changes,
-Playlists or Notes pages. Proposals are recorded too, as `to: 'proposal'`: they change nothing until a tap.
+Playlists or Notes pages, and none in Ask's mail cards (a mail change waits for a tap that a dry run never gives).
+Proposals are recorded too, as `to: 'proposal'`: they change nothing until a tap.
 Recipes are read from that scratch database as well, so a scenario brings its own (`given`), made-up and
 checked like any other, and the owner's real recipes are neither used nor touched.
 
@@ -41,7 +42,7 @@ COVERED = {'home_control': 'home', 'play_music': 'home', 'edit_playlist': 'music
 COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'music_library': 'read', 'playlist': 'music', 'hub_info': 'read',
                'bike_bus': 'read',      # a route search: nothing is booked or unlocked
                'remember': 'note', 'conversation': 'thread', 'groceries': 'kitchen', 'kitchen': 'kitchen',
-               'look_up': 'read', 'mail_search': 'read', 'mail_read': 'read', 'errands': 'read', 'errand': 'errands', 'find': 'read', 'details': 'read', 'arrange': 'setup',
+               'look_up': 'read', 'mail_search': 'read', 'mail_read': 'read', 'mail_change': 'proposal', 'errands': 'read', 'errand': 'errands', 'find': 'read', 'details': 'read', 'arrange': 'setup',
                'rooms': 'setup', 'scene_setup': 'setup', 'routine': 'setup', 'device': 'setup', 'setting': 'setup',
                'integration': 'setup', 'dashboard': 'setup',
                'house_health': 'read', 'caretaker': 'caretaker'}
@@ -135,7 +136,7 @@ def layer(house_writes=False, recipes=()):
     and in Hub's own change log, so the runner can undo them right after the scenario's checks. Everything else
     (Music Assistant edits, Kitchen, notes, recipes, playlists to make) is still held back.
     `recipes`: (name, steps) pairs a scenario starts with, saved in the scratch database after the usual checks."""
-    from ..app.ask import morning, thread
+    from ..app.ask import mailchange, morning, thread
     from ..app.errands import picture as errand_picture, taps as errand_taps
     from .. import caretaker
     from ..engine import notes, recipes as recipe_book
@@ -148,7 +149,8 @@ def layer(house_writes=False, recipes=()):
              'note': notes.propose, 'playlist': music.propose, 'recipes_db': recipe_book._db, 'recipe': recipe_book.propose,
              'errand_tap': errand_taps.tap, 'compose': errand_picture.set_compose, 'fresh': thread.start_fresh,
              'morning_act': morning.act, 'morning_switch': morning.switch,
-             'care': caretaker._leave}
+             'care': caretaker._leave, 'mail_db': mailchange._db,
+             'mail_change': mailchange.propose}
 
     def exchange(message, timeout):
         path, method = str(message.get('path', '')), message.get('method')
@@ -218,6 +220,11 @@ def layer(house_writes=False, recipes=()):
         ledger.add('proposal', 'recipe', {'name': found['name'], 'steps': found['steps']})
         return found
 
+    def mail_change(login, do, rows, which, label=None):
+        found = saved['mail_change'](login, do, rows, which, label)
+        ledger.add('proposal', 'mail', {'do': do, 'emails': len(found['lines']), 'label': label})
+        return found
+
     def errand_tap(errand_id, do, body, login, now=None):
         ledger.add('errands', do, {'id': errand_id, **(body or {})})
         return 'Done', {}
@@ -248,6 +255,8 @@ def layer(house_writes=False, recipes=()):
         errand_taps.tap, errand_picture.set_compose = errand_tap, compose
         thread.start_fresh = fresh
         morning.act, morning.switch = morning_act, morning_switch
+        mailchange._db = _with_schema(_scratch_db(Path(folder)), mailchange.SCHEMA)
+        mailchange.propose = mail_change
         try:
             for name, steps in recipes:
                 recipe_book.keep(name, steps)
@@ -263,6 +272,7 @@ def layer(house_writes=False, recipes=()):
             errand_taps.tap, errand_picture.set_compose = saved['errand_tap'], saved['compose']
             thread.start_fresh = saved['fresh']
             morning.act, morning.switch = saved['morning_act'], saved['morning_switch']
+            mailchange._db, mailchange.propose = saved['mail_db'], saved['mail_change']
 
 
 def _with_schema(db, schema):

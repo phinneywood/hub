@@ -68,7 +68,11 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   off. Read "Ask" in `docs/app.md` first.
   Owner-approved (2026-11-17, "Mail week 1"): Ask may also search the person's own mail and read up to three emails
   it found in full (`hub/app/ask/mailbox.py`), read-only, for the person whose account it is. A request that read
-  mail changes nothing in the house or on the list. Changing mail from Ask comes later and waits for the owner's tap.
+  mail changes nothing in the house or on the list.
+  Owner-approved (2026-11-18, "Mail week 2"): Ask may propose archiving, labelling, moving back to the inbox and
+  marking read or unread the person's own emails it showed (`hub/app/ask/mailchange.py`); each change waits on a
+  card for that person's tap, which alone sends it through the bridge's label path, with Undo for a day. Never
+  delete, trash, send or forward.
   Owner-approved (2026-11-18, "Both in one go" after the Ask diagnosis): Ask is given the owner's playlist names in
   its house lines and may read the music library (`music_library`), edit playlists as the older chat did (making
   and deleting wait for the owner's tap), and read Hub's own records the older chat could (`hub_info`: the trip,
