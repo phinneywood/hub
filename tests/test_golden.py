@@ -12,7 +12,7 @@ from hub.agent import agent
 from hub.engine import catalog, state
 from hub.golden import checks, dryrun, runner, scenarios
 from hub.golden.scenarios import Say, Scenario, Use
-from tests import golden_world
+from tests import built_app, golden_world
 
 
 @pytest.fixture
@@ -274,8 +274,7 @@ def test_golden_page_and_run_button(monkeypatch):
     assert client.post('/golden/run', headers={**signed_in, 'origin': 'http://evil.example'}).status_code == 403
     reply = client.post('/golden/run', headers={**signed_in, 'origin': 'http://testserver'}, follow_redirects=False)
     assert reply.status_code == 303 and started == [([__import__('sys').executable, '-m', 'hub.golden', 'live'], str(config.DATA_DIR))]
-    from pathlib import Path
-    assert '"Golden tests", "/golden"' in (Path(__file__).parents[1] / 'web/app/src/screens.tsx').read_text()      # listed in the app's System
+    assert built_app.in_system('Golden tests', '/golden')
 
 
 def test_the_spend_board_shows_the_latest_run(world, monkeypatch):

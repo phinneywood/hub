@@ -11,7 +11,7 @@ from hub import bridge, config
 from hub.live import __main__ as cli
 from hub.live import checks, routes, runner
 from hub.tools.house import broker, control, music
-from tests import golden_world
+from tests import built_app, golden_world
 
 SIGNED_IN = {'tailscale-user-login': 'me@example.com'}
 LAMP = 'light.reading_lamp'
@@ -279,8 +279,7 @@ def test_the_checks_page_shows_history_and_starts_a_run_in_its_own_process(monke
     reply = client.post('/checks/run', headers={**SIGNED_IN, 'origin': 'http://testserver'}, follow_redirects=False)
     assert reply.status_code == 303
     assert started == [([sys.executable, '-m', 'hub.live', 'run', '--trigger', 'manual'], str(config.DATA_DIR))]
-    from pathlib import Path
-    assert '"Checks", "/checks"' in (Path(__file__).parents[1] / 'web/app/src/screens.tsx').read_text()      # listed in the app's System
+    assert built_app.in_system('Checks', '/checks')
 
 
 def test_a_failing_check_is_an_item_on_today_until_it_passes(monkeypatch):
