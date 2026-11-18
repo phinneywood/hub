@@ -652,7 +652,9 @@ Owner's rule (2026-11-17): every category in Hub works the same way. Ask knows i
 person shows in Ask or Today; and the category has one page of its own that the person can arrange. A dashboard is
 that page, written once for every category. Code: `hub/app/boards/` (one module per board), in the app
 `web/app/src/boards.tsx`. Address: `/app/#board/<id>`; `/app/#boards` lists the ones this person may open. They are
-found by a few letters in Ask, listed in System, and Today ends with one line for each.
+found by a few letters in Ask, listed in System, and Today ends with one line for each. On a laptop or iPad the left
+column lists each one under Ask and House; on a phone (owner's ask, 2026-11-18) the bar gets a third place, Dashboards,
+once the person has one, and it opens the list.
 
 - **Blocks.** A board is a list of blocks of a few kinds the app draws: `hero` (a big line, with an optional progress
   bar), `tiles` (numbers), `rows`, `checks` (a checklist), `line` (a chart, points in a 720 by 180 box), `bars` and

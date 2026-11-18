@@ -89,7 +89,9 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       "the field was not at the bottom of the screen");
     const sideways = () => page.evaluate(() => [...document.querySelectorAll(".ask-scroll")].some((box) => box.scrollWidth > box.clientWidth));
     expect(!(await sideways()), "the conversation is wider than the screen");
-    expect((await page.locator(phone ? ".tabs .tab" : ".rail .tab:not(.foot .tab)").allInnerTexts()).join("|") === "Ask|House", "the bar is not Ask and House");
+    const bar = phone ? "Ask|House|Dashboards" : "Ask|House";        // a phone has no column for the dashboards: the bar has them
+    expect(await until(([sel, want]) => [...document.querySelectorAll(sel)].map((t) => t.textContent).join("|") === want,
+      [phone ? ".tabs .tab" : ".rail .tab:not(.foot .tab)", bar]), "the bar is not " + bar);
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Ask: " + (await small()).join(", "));
     await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
     await page.waitForSelector(".plan"); await page.waitForTimeout(2000);      // the opening moment is over
@@ -166,11 +168,18 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect((await page.textContent(".sheet h1")).trim() === "Kitchen", "holding a room did not open it");
     expect(await says() === "Four rooms are lit.", "holding a room also switched it");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px in a room: " + (await small()).join(", "));
+    // The screen shows a change at once; Hub answers a moment later. The scene below must come after both answers,
+    // or it can run first and the dimmed kitchen lands on top of it ("Three rooms are lit").
+    const hubAnswers = (part) => page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname.startsWith("/app/api/" + part + "/"))
+      .then((r) => r.ok(), () => false);
+    const dimmed = hubAnswers("room");
     await page.locator('.sheet .dimmer input').fill("30");
     await page.locator('.sheet .dimmer input').dispatchEvent("change");
     expect(await until((sel) => document.querySelector(sel + " .room-num")?.textContent.trim() === "30%", room("kitchen")), "the dimmer did not dim the room");
+    const plugged = hubAnswers("device");
     await page.locator('.sheet [aria-label="Coffee maker"]').click();
     expect(await until(() => document.querySelector('.sheet [aria-label="Coffee maker"]')?.getAttribute("aria-checked") === "true"), "the plug did not switch on");
+    expect(await dimmed && await plugged, "Hub did not answer the dimmer and the plug");
     await page.keyboard.press("Escape");
     expect(await until(() => !document.querySelector(".sheet")), "Escape did not put the sheet away");
 
@@ -671,8 +680,12 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.locator('[data-block="numbers"] .down').click();
     expect(await until(() => document.querySelector(".bgrid > .block")?.dataset.block === "progress"), "Move down did not move it back");
     await page.locator('.btns .btn:text-is("Done")').click();
-    if (phone) await page.goto(base + "/app/#board/network");
-    else {          // on a wide screen the rail lists each dashboard under Ask and House: one click opens it
+    if (phone) {    // on a phone the bar has Dashboards: one tap lists them, one more opens one
+      await tap('.tabs .tab:text-is("Dashboards")');
+      expect(await saysSoon("Dashboards"), "the Dashboards tab did not open the list: " + await says());
+      expect(await page.locator('.tabs .tab.on').innerText() === "Dashboards", "the bar did not mark Dashboards");
+      await page.locator(".wrap .rows .row", { hasText: "Network" }).first().tap();
+    } else {          // on a wide screen the rail lists each dashboard under Ask and House: one click opens it
       const listed = await page.locator(".rail .railboards .rlink:not(.head)").allInnerTexts();
       expect(listed.join("|") === "Pregnancy|Money|Calendar|School|Trip|Network|Mail|AI spend", "the rail's dashboards: " + listed.join("|"));
       await page.locator('.rail .railboards .rlink:text-is("Network")').click();

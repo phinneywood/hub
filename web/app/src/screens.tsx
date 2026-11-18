@@ -187,20 +187,23 @@ function Playing() {
   );
 }
 
-// Two places: Ask, where Hub opens, and the house. A page Ask opened (Today, Mail, Kitchen, System) shows as a
+// Two places: Ask, where Hub opens, and the house (and on a phone, the dashboards). A page Ask opened (Today, Mail, Kitchen, System) shows as a
 // third word while it is open, so the bar always says where you are and the way back is one tap.
 const TABS = [["home", "Ask"], ["house", "House"]] as const;
 const PAGES: Partial<Record<View, string>> = { today: "Today", mail: "Mail", mailsettings: "Mail", kitchen: "Kitchen", system: "System",
   errands: "Today", versions: "System", engine: "System", changes: "System", activity: "System", boards: "Dashboards", board: "Dashboards" };
 
-function Tabs({ page }: { page?: boolean }) {
+// On a phone the bar also has Dashboards, once this person has one, since a phone has no column to list them in.
+function Tabs({ page, dash }: { page?: boolean; dash?: boolean }) {
   const open = PAGES[view.value];
+  const boarded = !!dash && (boards.value ?? []).length > 0;
   return (
     <>
       {TABS.map(([where, name]) => (
         <button type="button" key={where} class={"tab" + (view.value === where ? " on" : "")} onClick={() => go(where)}>{name}</button>
       ))}
-      {page && open && <span class="tab on page" aria-current="page">{open}</span>}
+      {boarded && <button type="button" class={"tab" + (open === "Dashboards" ? " on" : "")} onClick={() => go("boards")}>Dashboards</button>}
+      {page && open && !(boarded && open === "Dashboards") && <span class="tab on page" aria-current="page">{open}</span>}
     </>
   );
 }
@@ -209,7 +212,7 @@ export function Dock() {
   return (
     <div class="dock">
       <Playing />
-      <div class="tabs"><Tabs page /></div>
+      <div class="tabs"><Tabs page dash /></div>
     </div>
   );
 }
