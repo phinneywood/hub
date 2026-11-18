@@ -317,6 +317,17 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       return box.scrollHeight - box.scrollTop - box.clientHeight < 4 || (bubble && bubble.top >= r.top - 1 && bubble.top < r.top + 60); }),
       "Kitchen’s answer arrived out of view");
     await page.waitForTimeout(300); await shot("6c-ask-kitchen");
+    // A second question for Kitchen before it has answered the first: each answer lands under its own question.
+    await stage("kitchen-late-ids");
+    await askFor("what should we cook this weekend?");
+    expect(await answered("Kitchen is on it."), "Ask did not pass the first question to Kitchen: " + await lastAnswer());
+    await askFor("what should we cook for guests?");
+    expect(await answered("Kitchen is on it."), "Ask did not pass the second question to Kitchen: " + await lastAnswer());
+    expect(await until(() => { const two = [...document.querySelectorAll(".turn")].slice(-2);
+      return two.length === 2 && two.every((t) => t.querySelectorAll(".kitchen-says .kcard").length === 3 && !t.querySelector(".kitchen-says .work")); }, null, 15000),
+      "two Kitchen answers did not each land under their own question: "
+      + (await page.evaluate(() => [...document.querySelectorAll(".turn")].slice(-2).map((t) => t.querySelectorAll(".kcard").length).join(" and "))));
+    await stage("kitchen-in-order");
     await askFor("what needs me today?");
     expect(await answered("From what Hub can see, two emails need you."), "a question about the day was not answered from what Hub read: " + await lastAnswer());
     // Ask searches the person's own mail and reads one email it found; the emails are drawn under the answer, each

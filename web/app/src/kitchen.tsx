@@ -104,10 +104,14 @@ export function useAnswer(after: number): Answer {
         if (!answer.ok) throw new Error("Kitchen is away");
         const found = (await answer.json()) as { messages?: KitchenMessage[]; busy?: unknown; queued?: number } & Partial<Statuses>;
         if (stopped) return;
+        // A message Kitchen says answers this one is this one's, wherever it comes. One it doesn't say anything about
+        // counts until the next thing someone asked: Kitchen can take a second question before it answers the first.
         const theirs: KitchenMessage[] = [];
+        let next = false;
         for (const m of found.messages ?? []) {
-          if (m.role === "member") break;          // the next thing someone asked: its answer isn't this one's
-          theirs.push(m);
+          if (m.role === "member") { next = true; continue; }
+          if (m.reply_to !== undefined && m.reply_to !== null) { if (m.reply_to === after) theirs.push(m); continue; }
+          if (!next) theirs.push(m);
         }
         misses = 0;
         setReplies(theirs);
