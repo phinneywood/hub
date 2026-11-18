@@ -39,9 +39,10 @@ def written(day):
 
 
 def party_day(now):
-    """The party: the first Saturday at least three days off, so that its reply-by Thursday is still ahead."""
+    """The party: the first Saturday at least four days off, so that its reply-by Thursday is at least two days
+    ahead on every weekday. A reply due tomorrow would outrank the day's other things (on a Wednesday it did)."""
     ahead = (5 - now.weekday()) % 7
-    return on(now, ahead + 7 if ahead < 3 else ahead)
+    return on(now, ahead + 7 if ahead < 4 else ahead)
 
 
 def mail(now):
