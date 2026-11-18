@@ -93,6 +93,15 @@ CARE = [
 ]
 RESTART = re.compile(r'^restart home assistant$', re.I)
 CHANGE_MAIL = re.compile(r'^(archive|label|mark) (?:the )?(first|second|third|\d)(?: one| email)?(?: as (read|unread)| (.+?))?[.!]?$', re.I)
+# The career desk, as a few plain sentences.
+CAREER = [
+    (r'^(?:show|open) my (?:career )?desk$', lambda m: call('career', do='show')),
+    (r'^note for my career:? (.+)$', lambda m: call('career', do='note', words=m[1])),
+    (r'^(?:look into|research) (.+?)(?: for my career)?$', lambda m: call('career', do='research', words=m[1])),
+    (r'^draft (?:an? )?(?:essay|post|piece) (?:on|about) (.+)$', lambda m: call('career', do='draft', words=m[1])),
+    (r'^(?:tick|check) off (?:the )?(.+?)(?: step)?$', lambda m: call('career', do='tick', words=m[1])),
+    (r'^mark (?:the )?(.+?) (?:piece )?as (idea|draft|ready|published)$', lambda m: call('career', do='status', piece=m[1], status=m[2].lower())),
+]
 EVERY = re.compile(rf'^every (evening|morning|day) at (\d{{1,2}}):(\d{{2}}),? turn (on|off) {THE}(.+)$', re.I)
 LIBRARY_ASKED = re.compile(r'\b(what playlists|playlists do (i|we) have|my playlists)\b')
 SPEND_ASKED = re.compile(r'\b(ai|model)\b.*\b(cost|spend|spent)\b')
@@ -209,7 +218,7 @@ def _setup(spoken, given=''):
     plain = ' '.join(spoken.split()).rstrip('.?!')
     if RESTART.match(plain) and 'restarting Home Assistant may clear it' in given:
         return call('caretaker', do='restart_home_assistant')      # the caretaker asks for it: it does it, and looks again
-    for pattern, make in CARE + ERRAND + SETUP + LIST:
+    for pattern, make in CARE + ERRAND + SETUP + LIST + CAREER:
         found = re.match(pattern, plain, re.I)
         if found:
             return make(found)
@@ -224,7 +233,13 @@ async def scripted(messages, info):
     places = _places(words)
     given = [p.content for m in messages for p in m.parts if p.part_kind == 'user-prompt'][-1]
     setup = _setup(spoken, given)
-    if back and back[0].tool_name in ('mail_search', 'mail_read', 'mail_change'):
+    if not back and '"career_desk"' in given and not setup:
+        desk = json.loads(given.split('<data>\n', 1)[1].split('\n</data>', 1)[0])['career_desk']
+        steps = [step for section in desk.get('plan', ()) for step in section['open']]
+        yield f'From your desk, the next step is: {steps[0]}' if steps else 'From your desk: ' + desk.get('note', 'nothing is open.')
+    elif back and back[0].tool_name == 'career' and 'data' in back[0].content:
+        yield 'Your thesis: ' + back[0].content['data'].get('thesis', '')
+    elif back and back[0].tool_name in ('mail_search', 'mail_read', 'mail_change'):
         seen = back[0].content
         if 'not_yours' in seen:
             yield seen['not_yours']
@@ -266,7 +281,7 @@ async def scripted(messages, info):
         yield call('hub_info', what='ai_spend')
     elif not back and REMEMBERS.search(words):
         yield call('conversation', do='show')
-    elif back and back[0].tool_name == 'look_up' or not back and '<data>' in given:
+    elif back and back[0].tool_name == 'look_up' or not back and '<data>' in given and not setup:
         yield 'From what Hub can see, ' + ('the dentist is Tuesday at three.' if back else 'two emails need you.')
     elif back and back[0].tool_name == 'house_health' and 'house_health' in back[0].content:
         yield _health(spoken, back[0].content['house_health'])

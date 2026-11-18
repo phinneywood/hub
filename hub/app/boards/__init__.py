@@ -51,8 +51,8 @@ def _db():
 
 
 def _boards():
-    from . import calendar, mail, money, network, pregnancy, school, spend, trip
-    return {b.ID: b for b in (pregnancy, money, calendar, school, trip, network, mail, spend)}
+    from . import calendar, career, mail, money, network, pregnancy, school, spend, trip
+    return {b.ID: b for b in (pregnancy, money, career, calendar, school, trip, network, mail, spend)}
 
 
 def board(board_id):
@@ -168,6 +168,11 @@ def tick(login, board_id, item, done):
     if module is None or not _sees(module, login):
         raise Refused('That dashboard isn’t yours to change.')
     item = str(item or '')[:ID_CHARS]
+    if hasattr(module, 'tick_for'):           # a list that is this person's own, kept by the board (the career desk's plan)
+        try:
+            return module.tick_for(login, item, bool(done))
+        except module.Refused as error:
+            raise Refused(str(error)) from error
     if item not in getattr(module, 'TICKABLE', lambda: set())():
         raise Refused('Hub couldn’t find that on the list.')
     with closing(_db()) as conn, conn:

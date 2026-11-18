@@ -72,9 +72,10 @@ async def guard(request: httpx.Request):
         raise WrongRoute('Ask refused a request that was not on its one model route.')
 
 
-def client(transport=None):
-    """The only HTTP client Ask's model may use. `transport` is for tests; the guard stays on either way."""
-    return httpx.AsyncClient(follow_redirects=False, timeout=TIMEOUT, event_hooks={'request': [guard]}, transport=transport)
+def client(transport=None, timeout=TIMEOUT):
+    """The only HTTP client Ask's model may use (and the career desk's worker, hub/app/career/worker.py, which
+    takes longer). `transport` is for tests; the guard stays on either way."""
+    return httpx.AsyncClient(follow_redirects=False, timeout=timeout, event_hooks={'request': [guard]}, transport=transport)
 
 
 def ready():

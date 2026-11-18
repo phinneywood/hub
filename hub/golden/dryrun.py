@@ -47,7 +47,7 @@ COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'music_librar
                'integration': 'setup', 'dashboard': 'setup',
                'house_health': 'read', 'caretaker': 'caretaker',
                'money': 'read', 'what_if': 'read', 'money_budget': 'money', 'money_sort': 'money', 'money_goal': 'money',
-               'money_bill': 'money', 'money_account': 'money', 'money_plan': 'money'}
+               'money_bill': 'money', 'money_account': 'money', 'money_plan': 'money', 'career': 'career'}
 DRY_ID = -1                     # the message number a held-back Kitchen hand-off is given
 
 
@@ -142,6 +142,7 @@ def layer(house_writes=False, recipes=()):
     from ..app.errands import picture as errand_picture, taps as errand_taps
     from .. import caretaker
     from ..app.money import store as money
+    from ..app.career import desk, worker
     from ..engine import notes, recipes as recipe_book
     from ..tools.house import admin, broker, control, music
     from ..tools.kitchen import client
@@ -153,7 +154,8 @@ def layer(house_writes=False, recipes=()):
              'errand_tap': errand_taps.tap, 'compose': errand_picture.set_compose, 'fresh': thread.start_fresh,
              'morning_act': morning.act, 'morning_switch': morning.switch,
              'care': caretaker._leave, 'mail_db': mailchange._db,
-             'mail_change': mailchange.propose}
+             'mail_change': mailchange.propose,
+             'desk_write': desk._write, 'desk_job': worker.queue}
 
     def exchange(message, timeout):
         path, method = str(message.get('path', '')), message.get('method')
@@ -245,8 +247,16 @@ def layer(house_writes=False, recipes=()):
     def morning_switch(login, kinds, on):
         ledger.add('morning', 'watch' if on else 'stop watching', {'kinds': list(kinds)})
 
+    def desk_write(path, text):           # a note, a tick or a status on the career desk: held back, by file name only
+        ledger.add('career', 'write', {'file': Path(path).name})
+
+    def desk_job(login, kind, topic):       # a job for the desk's worker: never queued, never sent to the model
+        ledger.add('career', kind, {'topic': str(topic)[:300]})
+        return {'id': DRY_ID, 'kind': kind, 'topic': topic, 'status': 'waiting'}
+
     with tempfile.TemporaryDirectory(prefix='hub-golden-') as folder:
         broker._exchange, music._send, client.call, caretaker._leave = exchange, send, kitchen, care
+        desk._write, worker.queue = desk_write, desk_job
         music._settle = lambda playlist_id, want: 'done'     # nothing was sent, so there is nothing to read back
         if not house_writes:      # live house writes keep Hub's own change log, so Undo puts them back
             control._db = _with_schema(_scratch_db(Path(folder)), control.SCHEMA)
@@ -278,6 +288,7 @@ def layer(house_writes=False, recipes=()):
             morning.act, morning.switch = saved['morning_act'], saved['morning_switch']
             mailchange._db, mailchange.propose = saved['mail_db'], saved['mail_change']
             money._db = saved.get('money_db', money._db)
+            desk._write, worker.queue = saved['desk_write'], saved['desk_job']
 
 
 def _with_schema(db, schema):
