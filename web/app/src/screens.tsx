@@ -7,7 +7,7 @@ import { able, forgetNote } from "./asking";
 import { boards } from "./boards";
 import type { Floor, House, Room } from "./types";
 import { Bars, Icon } from "./ui";
-import { clock, familyOf, familySizes, houseSays, list, musicSays, playingIn, when } from "./words";
+import { clock, familyOf, familySizes, houseSays, list, musicSays, NUMBER_WORDS, playingIn, when } from "./words";
 
 const HOLD_MS = 430;        // how long a finger rests on a room before it opens
 const TIP = "hub.tip";
@@ -84,12 +84,20 @@ export function careCalls() {
   return !!care && care.set_up && (care.needs > 0 || !care.alive);
 }
 
+/** How many things House health lists as needing a look now (the same count as its own heading). */
+function careLook() {
+  const care = me.value.care;
+  return care && care.set_up ? care.look ?? care.needs : 0;
+}
+
+const things = (n: number) => `${NUMBER_WORDS[n] ?? n} thing${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} a look`;
+
 function careWords() {
   const care = me.value.care;
   if (!care || !care.set_up) return "The caretaker isn’t set up on this Mac yet";
   if (!care.alive) return care.looked;
-  if (care.needs) return care.needs === 1 ? "One thing needs you" : `${care.needs} things need you`;
-  return "All quiet. " + care.looked;
+  const waiting = careLook();
+  return waiting ? things(waiting) : "All quiet. " + care.looked;
 }
 
 export function Top() {
@@ -277,34 +285,37 @@ const OLDER = [["Ask, the chat", "/ask"], ["Today, the cards", "/today"], ["Kitc
 // How Hub checks itself: the pages that were under Settings, each a tool for finding out why something failed.
 const CHECKS = [["Status", "/status", "Whether each connection is working, and the model checks"],
   ["Checks", "/checks", "Small tests of the real house, mail, music and model, with each one’s history"],
-  ["Golden tests", "/golden", "Real requests run through Ask as a dry run, and how the last run went"],
+  ["Practice requests", "/golden", "Everyday requests put to Ask without changing anything, and how the last run went"],
   ["Ask activity", "/engine/ask-activity", "Each Ask turn’s lookups, changes, outcomes and errors"]] as const;
 const LOOKS: [Look, string][] = [["auto", "Automatic"], ["dusk", "Evening"], ["day", "Day"]];
 
 export function System() {
   const now = house.value;
   const links = me.value.links;
-  const says = trouble.value === "hub" ? "Can’t reach Hub." : trouble.value === "house" ? "The house isn’t answering." : "The house is answering.";
+  const care = me.value.care, waiting = careLook();
+  // System's first line follows House health: all good, or how many things need a look (its own count, which Today's matches).
+  const says = trouble.value === "hub" ? "Can’t reach Hub." : trouble.value === "house" ? "The house isn’t answering."
+    : care?.set_up && !care.alive ? "House health has stopped looking." : waiting ? things(waiting) + "." : "All good at home.";
   return (
     <div class="wrap">
       <Top />
       <Trouble />
       <h1 class="say">{says}</h1>
-      <p class="sub">{now ? `Last read at ${clock(now.at)}. ${now.lights_on === 1 ? "One light is" : now.lights_on + " lights are"} on.` : "Nothing read yet."}
+      <p class="sub">{now ? `Checked at ${clock(now.at)} · ${now.lights_on ? `${now.lights_on} light${now.lights_on === 1 ? "" : "s"} on` : "No lights on"}` : "Nothing read yet."}
         {trouble.value === "house" && why.value ? " " + why.value : ""}</p>
       <section class="block">
-        <h2>Under the hood</h2>
+        <h2>Settings and tools</h2>
         <div class="rows">
           <button type="button" class={"row free" + (careCalls() ? " lit care" : "")} onClick={() => go("health")}><div class="row-main"><b>House health</b><span>{careWords()}</span></div></button>
           {me.value.update && <button type="button" class="row free lit" onClick={() => go("versions")}><div class="row-main"><b>A new version is ready</b><span>Open it to deploy</span></div></button>}
           <button type="button" class="row free" onClick={() => go("boards")}><div class="row-main"><b>Dashboards</b><span>A page for each part of the household, arranged your way</span></div></button>
           <button type="button" class="row free" onClick={() => go("archive")}><div class="row-main"><b>Archive</b><span>Photos, documents, mail and chats, and each month’s best photos</span></div></button>
-          <button type="button" class="row free" onClick={() => go("activity")}><div class="row-main"><b>Activity</b><span>What happened in the house, from Home Assistant, Apple Home and Hub</span></div></button>
+          <button type="button" class="row free" onClick={() => go("activity")}><div class="row-main"><b>Activity</b><span>What happened in the house today</span></div></button>
           <a class="row free" href="#wall"><div class="row-main"><b>The wall</b><span>Today for the kitchen iPad, with a clock that dims at night. Open it there and add it to the Home Screen</span></div></a>
           {links.ha && <a class="row free" href={links.ha}><div class="row-main"><b>Home Assistant</b><span>Devices, rooms and automations</span></div></a>}
           {links.music && <a class="row free" href={links.music}><div class="row-main"><b>Music Assistant</b><span>The library, the queue and playlists</span></div></a>}
           <button type="button" class="row free" onClick={() => go("versions")}><div class="row-main"><b>Versions</b><span>What each release of Hub changed</span></div></button>
-          <button type="button" class="row free" onClick={() => go("engine")}><div class="row-main"><b>Engine</b><span>What you asked for, what Hub may do, what it costs</span></div></button>
+          <button type="button" class="row free" onClick={() => go("engine")}><div class="row-main"><b>Engine</b><span>What you asked Hub for, what it may do by itself, and what that costs</span></div></button>
         </div>
       </section>
       {(able.value?.remembers.length ?? 0) > 0 && (

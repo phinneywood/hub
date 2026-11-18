@@ -278,7 +278,7 @@ def test_a_journal_hub_cant_read_never_reads_as_all_quiet(house, folder):
     (folder.path / 'caretaker.db').write_bytes(b'not a journal at all' * 200)
     for name in ('caretaker.db-wal', 'caretaker.db-shm'):
         (folder.path / name).unlink(missing_ok=True)
-    assert caretaker.top() == {'set_up': True, 'alive': False, 'looked': caretaker.UNREADABLE, 'needs': 0}
+    assert caretaker.top() == {'set_up': True, 'alive': False, 'looked': caretaker.UNREADABLE, 'needs': 0, 'look': 0}
     shown = caretaker.picture()
     assert shown['unreadable'] and shown['headline'] == caretaker.UNREADABLE and caretaker.glance()['unreadable']
     assert caretaker.brief() == ['House health: ' + caretaker.UNREADABLE] and caretaker.lines() == [caretaker.UNREADABLE]
@@ -451,3 +451,17 @@ def test_a_turn_about_the_house_is_not_kept_as_private(house, folder):
 
 async def _collect(stream):
     return [event async for event in stream]
+
+
+def test_house_health_counts_what_it_lists(house, folder):
+    """2026-11-18: House health's heading said "One thing needs you" over two items, one of them for that screen only."""
+    before = caretaker.top()
+    now = datetime.now(timezone.utc) - timedelta(hours=1)
+    folder.incident('lock', 'house', 'A lock stopped answering', now, needs='Look at the lock.', today=1)
+    folder.incident('battery', 'house', 'A sensor battery is low', now, needs='Change its battery.', today=0)
+    top = caretaker.top()
+    assert (top['needs'] - before['needs'], top['look'] - before['look']) == (1, 2)    # Today gets one more; House health lists two
+    shown = caretaker.glance()
+    assert len([n for n in shown['needs'] if not n['held']]) == top['look']
+    assert shown['headline'].startswith(('One thing', 'Two things', 'Three things', 'Four things')[top['look'] - 1] + ' need')
+
