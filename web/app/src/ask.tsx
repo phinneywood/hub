@@ -1,5 +1,6 @@
 // Ask, the screen Hub opens to: a conversation with Hub, which speaks first with what needs you and the house.
 import { Fragment } from "preact";
+import type { VNode } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { health, healthAsk, post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, loadOlder, older, stop, talk } from "./asking";
@@ -337,15 +338,44 @@ function sessionStart(turns: Turn[]): number {
   return start;
 }
 
+const ITEM = /^\s*(?:[-*•]|\d+[.)])\s+(.*)$/;      // a line a model wrote as a list item
+
+/** A line's **bold** drawn bold; a stray mark is dropped, never shown. */
+function bolded(line: string) {
+  return line.split(/(\*\*[^*\n]+\*\*)/g).map((part, n) =>
+    part.length > 4 && part.startsWith("**") && part.endsWith("**") ? <b key={n}>{part.slice(2, -2)}</b> : part.replace(/\*\*/g, ""));
+}
+
+/** The answer as plain text, its marks taken out: for a folded turn and for screen readers. */
+const unmarked = (text: string) => text.replace(/\*\*/g, "").split("\n").map((line) => line.replace(ITEM, "$1")).join("\n");
+
+/** An answer as it reads: lines as lines, "- " and "1. " lines as a list, **bold** in bold. The marks never show. */
+function Said({ text }: { text: string }) {
+  const out: VNode[] = [];
+  let list: string[] = [];
+  const done = () => {
+    if (list.length) out.push(<ul class="said-list" key={out.length}>{list.map((item, n) => <li key={n}>{bolded(item)}</li>)}</ul>);
+    list = [];
+  };
+  for (const line of text.split("\n")) {
+    const item = ITEM.exec(line);
+    if (item) { list.push(item[1]!); continue; }
+    done();
+    out.push(<span class="said-line" key={out.length}>{bolded(line)}</span>);
+  }
+  done();
+  return <>{out}</>;
+}
+
 function TurnView({ turn, now, open, onOpen }: { turn: Turn; now: House; open: boolean; onOpen: () => void }) {
   // A change to the house says how long it took and can be put back. An answer needs neither.
   const batch = turn.cards.find((card) => card.batch)?.batch;
   const back = batch !== undefined && undone.value.includes(batch);
   if (!open) {         // an earlier turn: both bubbles, a line each, small; a tap opens it, and its Undo stays
-    const first = (turn.answer.split("\n")[0] ?? "").slice(0, 140);
+    const first = (unmarked(turn.answer).split("\n")[0] ?? "").slice(0, 140);
     return (
       <div class={"turn folded" + (back ? " back" : "") + (batch ? " undoable" : "")}>
-        <button type="button" class="fold" aria-expanded="false" aria-label={`${turn.asked}. Hub: ${turn.answer}`} onClick={onOpen}>
+        <button type="button" class="fold" aria-expanded="false" aria-label={`${turn.asked}. Hub: ${unmarked(turn.answer)}`} onClick={onOpen}>
           {turn.asked && <span class="fold-asked">{turn.asked}</span>}
           {first && <span class="fold-answer">{first}</span>}
         </button>
@@ -361,7 +391,7 @@ function TurnView({ turn, now, open, onOpen }: { turn: Turn; now: House; open: b
     <div class={"turn" + (back ? " back" : "")}>
       {turn.asked && <p class="asked">{turn.asked}</p>}
       {turn.waiting ? <p class="took waits">Waits for the last request to finish</p>
-        : <div class="hub">{shown ? <p class={"answer" + (shown.length > 160 ? " long" : "")}>{shown}</p>
+        : <div class="hub">{shown ? <div class={"answer" + (shown.length > 160 ? " long" : "")}><Said text={shown} /></div>
           : <span class="dots" role="status" aria-label="Hub is working"><i /><i /><i /></span>}</div>}
       {turn.busy && turn.doing && <p class="took">{turn.doing}</p>}
       {turn.cards.map((card, n) => <CardView card={card} now={now} said={turn.answer} key={n} />)}

@@ -476,6 +476,9 @@ button.row { text-align: left; }
 .asked { font-size: var(--t-s); color: var(--ink-3); }
 .answer { font-size: 21px; line-height: 1.28; margin-top: 8px; letter-spacing: -.005em; text-wrap: pretty; white-space: pre-line; }
 .answer.long, .says { font-size: var(--t-m); line-height: 1.42; letter-spacing: 0; }
+.said-line { display: block; min-height: 1em; }
+.said-list { margin: 4px 0; padding-left: 1.2em; white-space: normal; }
+.said-list li { margin: 2px 0; }
 .says { margin-top: 12px; white-space: pre-line; text-wrap: pretty; }
 .recipes { list-style: none; margin-top: 10px; padding: 0; border-top: 1px solid var(--line); }
 .recipes li { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; padding: 11px 0; border-bottom: 1px solid var(--line); }

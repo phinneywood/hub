@@ -454,6 +454,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     if (phone) expect((await small()).length === 0, "tap targets under 44 px in Ask: " + (await small()).join(", "));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Ask made the page scroll sideways");
     expect(!(await sideways()), "the conversation grew wider than the screen");
+    // A model's marks are drawn, never shown: **bold** in bold, "- " lines as a list.
+    await askFor("Give me the short version");
+    expect(await answered("Three things:"), "the short version: " + await lastAnswer());
+    const drawn = await page.locator(".turn").last().locator(".answer").evaluate((a) => ({ text: a.textContent, items: a.querySelectorAll("li").length,
+      bold: a.querySelector("b")?.textContent }));
+    expect(drawn.items === 3 && drawn.bold === "Milk" && !drawn.text.includes("**") && !/(^|\n)- /.test(drawn.text),
+      "an answer showed its marks: " + JSON.stringify(drawn));
     await page.fill("#askq", "");
     await tap(phone ? ".who" : ".rail .foot .tab");
     expect(await until(() => [...document.querySelectorAll(".block h2")].some((h) => h.textContent === "Hub remembers")), "System did not list what Hub remembers");
