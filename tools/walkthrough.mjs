@@ -89,6 +89,10 @@ for (const [vp, options] of VIEWPORTS) {
       if (r.right > W + 1 && !sideScroller(el) && out.wide.length < 8) out.wide.push(`${label(el)} right=${Math.round(r.right)}`);
     }
     const targets = [...document.querySelectorAll("button, a[href], input, select, textarea, [role=button], [role=switch], [role=radio], summary")].filter(vis);
+    // Under a bar only counts when no scroll brings it clear: it is pinned itself, or its scroller has run out of room.
+    // What an open sheet or its scrim covers is meant to be covered.
+    const pinned = (el) => { for (let q = el; q; q = q.parentElement) if (/(fixed|sticky)/.test(getComputedStyle(q).position)) return true; return false; };
+    const scroller = (el) => { for (let q = el.parentElement; q && q !== document.body; q = q.parentElement) { if (/(auto|scroll)/.test(getComputedStyle(q).overflowY) && q.scrollHeight > q.clientHeight + 1) return q; } return document.scrollingElement; };
     for (const el of targets) {
       const r = el.getBoundingClientRect();
       if (phone && Math.min(r.width, r.height) < 44 && out.small.length < 25) out.small.push(`${label(el)} ${Math.round(r.width)}x${Math.round(r.height)}`);
@@ -96,7 +100,13 @@ for (const [vp, options] of VIEWPORTS) {
         const cx = r.left + r.width / 2, cy = r.top + r.height / 2, hit = document.elementFromPoint(cx, cy);
         if (hit && !el.contains(hit) && !hit.contains(el)) {
           let p = hit, fixed = false; for (; p; p = p.parentElement) if (/(fixed|sticky)/.test(getComputedStyle(p).position)) { fixed = true; break; }
-          if (fixed && out.under.length < 10) out.under.push(`${label(el)} under ${label(p)}`);
+          if (!fixed || hit.closest('[aria-modal="true"]')) continue;
+          const b = p.getBoundingClientRect();
+          if (b.width >= W * 0.9 && b.height >= H * 0.9) continue;
+          const box = scroller(el), below = b.top + b.height / 2 > H / 2;
+          const room = below ? box.scrollHeight - box.clientHeight - box.scrollTop : box.scrollTop;
+          const need = below ? r.bottom - b.top : b.bottom - r.top;
+          if ((pinned(el) || need > room) && out.under.length < 10) out.under.push(`${label(el)} under ${label(p)}`);
         }
       }
     }
