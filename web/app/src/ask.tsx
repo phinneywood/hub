@@ -290,6 +290,7 @@ function CardView({ card, now }: { card: Card; now: House }) {
   if (card.kind === "groceries") return <GroceriesCard ids={card.items} all={card.all} cart={card.cart} since={card.since} />;
   if (card.kind === "errands" && card.ids) return <ErrandsCard ids={card.ids} />;
   if (card.kind === "board" && card.board) return <BoardCard id={card.board} />;
+  if (card.kind === "money") return <BoardCard id="money" fresh />;      // what a money answer or change touched, read again
   if (card.kind === "mail" && card.rows) return <MailRows rows={card.rows} opened={card.opened ?? []} />;
   if (card.kind === "memory" && card.id !== undefined) {
     const id = card.id;

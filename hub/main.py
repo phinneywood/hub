@@ -60,6 +60,8 @@ def startup():
     delayed.start()
     from .app import activity
     activity.start()    # reads Home Assistant's logbook and Apple Home's events every five minutes
+    from .app.money import sync as money
+    money.start()       # reads the banks members connected, twice a day (hub/app/money/sync.py)
 
 
 @app.get("/readyz")

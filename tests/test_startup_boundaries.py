@@ -54,5 +54,7 @@ def test_enabled_startup_preserves_existing_sequence_without_real_jobs(monkeypat
     monkeypatch.setattr(delayed, "start", lambda: calls.append("delayed"))
     from hub.app import activity
     monkeypatch.setattr(activity, "start", lambda: calls.append("activity"))
+    from hub.app.money import sync as money
+    monkeypatch.setattr(money, "start", lambda: calls.append("money"))
     main.startup()
-    assert calls == ["warm-cache-thread", "resume", "delayed", "activity"]
+    assert calls == ["warm-cache-thread", "resume", "delayed", "activity", "money"]

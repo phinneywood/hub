@@ -291,6 +291,23 @@ def mail_writes():
     return MAIL_WRITES
 
 
+# Money (hub/app/money/): the tests' made-up household's four months, moved to end on the demo's day, read from the
+# tests' stand-in for SimpleFIN Bridge. The owner connects "alex"'s banks and the partner "sam"'s; nothing leaves.
+import httpx  # noqa: E402
+
+from hub.app.money import simplefin as money_bridge, store as money_store, sync as money_sync  # noqa: E402
+from tests import money_world  # noqa: E402
+
+money_world.TODAY = EVENING.date()
+money_world.START = money_world.TODAY - timedelta(days=130)
+money_world.NOW = EVENING.timestamp()
+_bridge = money_world.Bridge()
+_real_client = money_bridge.client
+patch.setattr(money_bridge, 'client', lambda transport=None: _real_client(httpx.MockTransport(_bridge)))
+patch.setattr(money_store, 'now', lambda: EVENING.timestamp())
+money_sync.connect(money_world.token('alex'), 'me@example.com')
+money_sync.connect(money_world.token('sam'), 'casey@example.com')
+
 # For the browser check only: put the made-up house back as it started, make it stop answering, or take Ask
 # away as on a Hub where it isn't set up yet.
 @app.post('/demo/{what}')

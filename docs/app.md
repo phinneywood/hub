@@ -675,12 +675,28 @@ found by a few letters in Ask, listed in System, and Today ends with one line fo
 | School | the class guide as last published for the family (`preschool/publication.latest`) | the next 30 days of class dates (cancelled ones marked), the guide's topic pages and links; the class guide's own pages stay for reviewing it |
 | Trip | the saved trip (`hub/tools/trip/store.load`), read-only | the dates, nights and known cost of the chosen plan, the itinerary, what is still to decide, bookings, getting ready and links; changing the trip stays in its workspace at `/trip` |
 | AI spend | Hub's record of runs (`hub/insights.spend`) and the newest live check (`hub/golden/runner.latest`) | each monthly limit, cost and runs by kind over 30 days, Ask's last live check. Replaces the older Insights page: `/insights` opens it (its inbox charts were already on Mail, its network summary on Network) |
+| Money | Money's own tables (`hub/app/money/`), never a bank or a model on opening | what needs you, the month against the budget, checking now and its six-week low, spending by category, bills and paydays in the next two weeks, unsorted charges, goals, accounts and net worth, the long run, recent changes |
 
 | Address | What |
 | --- | --- |
 | `GET /app/api/boards` | The dashboards this person may open, with their line for today |
 | `GET /app/api/board/{id}` | One, in this person's order; 404 when it isn't theirs |
 | `POST /app/api/board/{id}/layout`, `/tick`, `/set` | `{"order", "hidden"}`; `{"item", "done"}`; `{"key", "value"}` |
+
+**Money** (`hub/app/money/`, board `hub/app/boards/money.py`). The household's bank, card, loan and investment
+accounts, read through SimpleFIN Bridge (read-only: Hub's client refuses anything but the token claim and
+`GET /accounts`, so Hub can never pay, transfer or trade) or from statement files (OFX, QFX, CSV). Owner's decisions
+(2026-11-16): shared, with private accounts (each member sees every shared account and the household's budget and
+plans; an account its owner marks private shows to the other only as its month-start total rounded to $100, and stays
+out of the household budget); and Ask's model gets what a money question needs from an allow-list (names, kinds,
+balances, the month, bills, cash ahead, goals, matching transactions with payees cleaned), never an account or card
+number, and nothing of a member who turned "Ask may use my money" off. Its settings are each member's own and are on
+the board only, never in Ask: the SimpleFIN setup token, which of their own accounts are private, and the Ask switch.
+Ask's tools: `money` and `what_if` read; `money_budget`, `money_sort`, `money_goal`, `money_bill`, `money_account` and
+`money_plan` change Hub's own record (with Undo, batch `m…`), refused on a request that had payees in view. Data:
+`money.db` and the access URLs in `money-access.json`, both owner-only in Hub's data folder. Readings: twice a day,
+at most 8 a day and one tap an hour. The wall and programs on the Mac (no login) see nothing; money is never in the
+morning push. Tests: `tests/test_app_money.py` on a made-up household (`tests/money_world.py`), which the demo uses too.
 
 A new board: a module in `hub/app/boards/` with `ID`, `NAME`, `WHAT`, `sees`, `picture`, `line` and `facts`, added to
 `_boards()`; a topic in `private.TOPICS` if Ask should hear it; tests and browser-check steps. Tests:

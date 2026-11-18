@@ -647,7 +647,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await stage("reset");
     await openPage("Dashboards");
     expect(await saysSoon("Dashboards"), "the Dashboards page: " + await says());
-    expect(await until(() => document.querySelectorAll(".wrap .rows .row b").length === 7), "the owner did not get seven dashboards");
+    expect(await until(() => document.querySelectorAll(".wrap .rows .row b").length === 8), "the owner did not get eight dashboards");
     await page.locator(".wrap .rows .row", { hasText: "Pregnancy" }).first().click();
     expect(await saysSoon("Week 15: about the size of an apple"), "the pregnancy board: " + await says());
     expect(new URL(page.url()).hash === "#board/pregnancy", "a board has no address of its own: " + page.url());
@@ -674,7 +674,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     if (phone) await page.goto(base + "/app/#board/network");
     else {          // on a wide screen the rail lists each dashboard under Ask and House: one click opens it
       const listed = await page.locator(".rail .railboards .rlink:not(.head)").allInnerTexts();
-      expect(listed.join("|") === "Pregnancy|Calendar|School|Trip|Network|Mail|AI spend", "the rail's dashboards: " + listed.join("|"));
+      expect(listed.join("|") === "Pregnancy|Money|Calendar|School|Trip|Network|Mail|AI spend", "the rail's dashboards: " + listed.join("|"));
       await page.locator('.rail .railboards .rlink:text-is("Network")').click();
     }
     expect(await saysSoon("Internet is up"), "the network board: " + await says());
@@ -706,11 +706,28 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.querySelector('[data-block="more"] a[href="/preschool/"]') !== null), "the school board did not lead to the class guide: " + await says());
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the school board scrolls sideways");
     await page.waitForTimeout(300); await shot("16i-board-school");
+    await page.goto(base + "/app/#board/money");      // Money: read from the made-up household's banks, never moved
+    expect(await until(() => / spent so far in [A-Z][a-z]+\.$/.test(document.querySelector(".say")?.textContent ?? ""), null, 3000), "the money board: " + await says());
+    expect(await page.locator('[data-block="month"] .bbar').count() > 0, "the money board drew no spending bars");
+    expect(await page.locator('[data-block="accounts"] .row', { hasText: "Net worth" }).count() === 1, "the money board has no net worth");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the money board scrolls sideways");
+    await page.waitForTimeout(300); await shot("16f-board-money");
+    await page.locator('.btns .btn:text-is("Arrange")').click();
+    const moneyAsk = page.locator(".bset", { hasText: "Ask may use my money" }).locator('[role="switch"]');
+    expect(await moneyAsk.getAttribute("aria-checked") === "true", "Money in Ask did not start on");
+    await moneyAsk.click();
+    expect(await until(() => document.querySelector('.bset [role="switch"][aria-label^="Ask may use"]')?.getAttribute("aria-checked") === "false"),
+      "the Money in Ask switch did not turn off");
+    await page.waitForTimeout(300); await shot("16g-board-money-settings");
+    await page.locator('.bset', { hasText: "Ask may use my money" }).locator('[role="switch"]').click();
+    expect(await until(() => document.querySelector('.bset [role="switch"][aria-label^="Ask may use"]')?.getAttribute("aria-checked") === "true"),
+      "the Money in Ask switch did not turn back on");
+    await page.locator('.btns .btn:text-is("Done")').click();
     quiet = true;       // the mail board is the owner's: the partner is told no
     const partnerBoard = await page.evaluate(() => fetch("/app/api/board/mail", { headers: { "tailscale-user-login": "casey@example.com" } }).then((r) => r.status));
     const partnerList = await page.evaluate(() => fetch("/app/api/boards", { headers: { "tailscale-user-login": "casey@example.com" } }).then((r) => r.json()).then((b) => b.boards.map((x) => x.id).join("|")));
     quiet = false;
-    expect(partnerBoard === 404 && partnerList === "pregnancy|school|trip|network|spend", `the partner's dashboards: ${partnerList}, mail ${partnerBoard}`);
+    expect(partnerBoard === 404 && partnerList === "pregnancy|money|school|trip|network|spend", `the partner's dashboards: ${partnerList}, mail ${partnerBoard}`);
     await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")');
     await page.fill("#askq", "how far along are we?");
     await page.keyboard.press("Enter");
