@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "479e1277b60d7ab869f9fba26c076a5ad2a6a452",
+  "from": "8f70857e56c3c50d2509c2c1c5c122b1395154ca",
   "live": null,
+  "title": "Ask tidies mail, after your tap",
+  "changes": [
+   "Ask can archive an email, put it back in the inbox, label it or mark it read or unread: it shows a card naming each email, and nothing changes until you tap it. Undo is on the card for a day."
+  ]
+ },
+ {
+  "sha": "8f70857e56c3c50d2509c2c1c5c122b1395154ca",
+  "from": "479e1277b60d7ab869f9fba26c076a5ad2a6a452",
+  "live": "2026-11-18T18:46:55Z",
   "title": "Ask plans trips by bike and bus",
   "changes": [
    "Ask plans trips by bike or Lime and bus: ask how to get somewhere."
