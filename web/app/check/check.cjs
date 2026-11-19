@@ -1160,7 +1160,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       "the light show's two choices under the answer");
     expect(await page.locator(".showcard").count() === 0, "a light show started before a tap");
     await page.waitForTimeout(300); await shot("10j-light-show-pick");
-    await tap('.showpick .row:has-text("Rainy Day")');
+    expect(await until(() => !document.querySelector(".toast"), null, 6000), "the last word stayed over the choices");
+    await tap('.showpick .row:has-text("Sunday Morning")');
     expect(await until(() => !!document.querySelector(".showcard"), null, 8000), "a tap on a choice did not start the light show");
     await askFor("end the light show");
     expect(await answered("The light show has ended."), "ending the light show from Ask: " + await lastAnswer());
