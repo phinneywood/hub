@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "07bfc18c52975392379c704191418bb097432fe6",
+  "from": "f158d708798b841d685167e4cca5f2cb5d83d5e3",
   "live": null,
+  "title": "Ask's message field stays in sight",
+  "changes": [
+   "On a phone, Ask’s message field stays above the music bar after the wall has been opened; it used to slip under it."
+  ]
+ },
+ {
+  "sha": "f158d708798b841d685167e4cca5f2cb5d83d5e3",
+  "from": "07bfc18c52975392379c704191418bb097432fe6",
+  "live": "2026-11-19T15:28:36Z",
   "title": "Light shows from Ask",
   "changes": [
    "Ask starts a light show when you ask for one with a playlist, album, artist or song. When your words could mean several, it shows them on a card and starts the one you tap.",

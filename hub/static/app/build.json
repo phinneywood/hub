@@ -21,10 +21,10 @@
     "src/kitchen.tsx": "4508cc858a4d8a14b7f400a66dac509059363ea73bf0810d242005fc07ff39b9",
     "src/mail.tsx": "0dd8f178e949aeab251480c9ac89db3f21c3000952ed1db2a66cf3fe834ff972",
     "src/mailrules.tsx": "6fd8697551c2ca9e4860167b55ad03aa8c9fbecd107404f5dcb3d0405fedcbe3",
-    "src/main.tsx": "c4369221a8a70fbc7089654f3f10dc7aa860b6eb2a58ff67ce05adb55e970cc3",
+    "src/main.tsx": "1ea8788f906c192a686c48701526f6f7b45293a0eca23628c87df51955067dae",
     "src/now.tsx": "ac71b14121e3fdf87c48c5d66745ea3773758503f449545e32060a076a117d9f",
     "src/photos.tsx": "3f23e83dbb1fb6dcf9a126ee73770cdbf43ee1dbf3686818484ec8c603a0e84a",
-    "src/screens.tsx": "98ed5f3f880200c564e4083a2ad8bb25ae230e7121aeee2789302048b0f73181",
+    "src/screens.tsx": "48acc82f3b68f1e974a596261c77775e01da76d459487c6f5b7e4febfe1952f3",
     "src/sheets.tsx": "938fd1b4de42cb155602fe36e7cb059294fb1562d41179f54edabb98a403de3c",
     "src/show.tsx": "049e4f59651a9de9644423d5e7bbe434de511b490482b7236c4e8032fd29c6ed",
     "src/state.ts": "4fd0b3ea6f7d5d5fb5864c9b8c205704dc0030d01cb6c5cd852f8e1815bd190b",
@@ -32,13 +32,13 @@
     "src/types.ts": "06a6da9ad795fa8b064245055c453a5b2eabb23491c0907256ac7bce747cb969",
     "src/ui.tsx": "a6c5c999328a70ed56c2f821e9801e573b383160a588af8c4a938f79ddc216e9",
     "src/versions.tsx": "75b4338afcde86cff9a1561c191176c66001e38ce365b5ac7262b5f6ce4757ed",
-    "src/viewport.ts": "63bba57ca9fa83d5e1b9db81eb97f8c402fba4eb67558735d481a51af039a2c5",
+    "src/viewport.ts": "6abbcfbf18fc8b2bd6df11c61e6920f450b6fe3f3fe2831049d3fc5056e60170",
     "src/vite-env.d.ts": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
     "src/wall.tsx": "039ef2262398f52128c69bbe4be5e8dbdd9083a52d4c1eb524558c0298a8c09c",
     "src/words.ts": "056b526214644773586d23da197603d2cc56a0848413c86313d712a5bb7c5384"
   },
   "built": {
     "app.css": "2592317d3ebe6d78321f0b5b4ff6790d79c077f7ee93e7335fa13474c4c72482",
-    "app.js": "d70736a540ac021d6badf8a29b5d1d14c22813c2ded4c8508f80b4f8bafe9ea0"
+    "app.js": "b95a274f07a011adcfcb26d73ed7b58d5edb654e31201b523309c797def3d9c5"
   }
 }
