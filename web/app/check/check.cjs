@@ -1136,6 +1136,23 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.querySelectorAll(".best .shot").length === 6), "the month's best is not on the Archive");
     expect(await until(() => document.querySelectorAll(".year-name").length === 2), "on this day in earlier years is missing");
     await page.waitForTimeout(300); await shot("10h-archive");
+
+    // ---- the light show: while one runs its card leads Ask; its lights move earlier or later, and End show ends it ----
+    await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")'); await page.waitForSelector(".askpage");
+    expect(await page.locator(".showcard").count() === 0, "a light show card with no show on");
+    await stage("show-on");
+    expect(await until(() => document.querySelector(".showcard .tune-text b")?.textContent === "First track", null, 8000),
+      "the light show card did not show what it plays");
+    const lights = () => page.textContent(".show-timing .ctl-name span");
+    expect((await lights()) === "In time", "the light show's timing: " + await lights());
+    await page.waitForTimeout(300); await shot("10i-light-show");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px with the light show card: " + (await small()).join(", "));
+    await tap('.show-timing .pill:text-is("Earlier")');
+    await tap('.show-timing .pill:text-is("Earlier")');      // quick taps add up: the card says where it wants the lights
+    expect(await until(() => document.querySelector(".show-timing .ctl-name span")?.textContent === "100 ms earlier"), "two taps on Earlier: " + await lights());
+    await tap('.showcard .end-show');
+    expect(await until(() => !document.querySelector(".showcard"), null, 8000), "End show left the light show card");
+    expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Light show ended"), "no word that the light show ended");
     await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
     await page.waitForSelector(".plan");
 

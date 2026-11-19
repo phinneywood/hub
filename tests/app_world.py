@@ -83,6 +83,40 @@ AUTOMATIONS = {
 }
 SCRIPTS = {'goodnight': {'alias': 'Goodnight', 'mode': 'single', 'sequence': [
     {'action': 'scene.turn_on', 'target': {'entity_id': 'scene.bedtime'}}, {'action': 'lock.lock', 'target': {'entity_id': 'lock.front_door'}}]}}
+# A made-up light show, only where it is asked for (the demo, the show's own tests): two scripts and a timing number
+# with the names Hub looks for, a switch that says the show is on, and the speaker that plays it.
+SHOW = {'start': 'script.party_lights_start', 'end': 'script.party_lights_end', 'timing': 'input_number.party_lights_timing',
+        'flag': 'input_boolean.party_lights', 'player': 'media_player.living'}
+
+
+def _show_parts(world, on, timing):
+    s = SHOW
+    world.states.update({
+        s['start']: {'entity_id': s['start'], 'state': 'off', 'attributes': {'friendly_name': 'Start light show', 'mode': 'restart'}},
+        s['end']: {'entity_id': s['end'], 'state': 'off', 'attributes': {'friendly_name': 'End light show', 'mode': 'single'}},
+        s['timing']: {'entity_id': s['timing'], 'state': str(float(timing)), 'attributes': {
+            'friendly_name': 'Light show timing', 'min': -1500.0, 'max': 1500.0, 'step': 50.0, 'unit_of_measurement': 'ms'}},
+        s['flag']: {'entity_id': s['flag'], 'state': 'on' if on else 'off', 'attributes': {'friendly_name': 'Party lights'}}})
+    world.configs['script'][s['start'].partition('.')[2]] = {
+        'alias': 'Start light show', 'mode': 'restart',
+        'fields': {'media_id': {'required': True, 'selector': {'text': {}}}, 'media_type': {'default': 'playlist'}},
+        'sequence': [{'if': [{'condition': 'state', 'entity_id': s['flag'], 'state': 'off'}],
+                      'then': [{'action': 'scene.create', 'data': {'scene_id': 'party_lights_before', 'snapshot_entities': ['light.living_floor_lamp']}}]},
+                     {'action': 'input_boolean.turn_on', 'target': {'entity_id': s['flag']}},
+                     {'action': 'music_assistant.play_media', 'target': {'entity_id': s['player']},
+                      'data': {'media_id': '{{ media_id }}', 'media_type': '{{ media_type }}', 'enqueue': 'replace'}}]}
+    world.configs['script'][s['end'].partition('.')[2]] = {
+        'alias': 'End light show', 'mode': 'single',
+        'sequence': [{'action': 'media_player.media_pause', 'target': {'entity_id': s['player']}},
+                     {'action': 'input_boolean.turn_off', 'target': {'entity_id': s['flag']}}]}
+
+
+def add_show(world, on=False, timing=0):
+    """Give the made-up house its light show, kept through reset(). `on`: a show is already running."""
+    world.with_show = True
+    _show_parts(world, on, timing)
+
+
 # The integrations the made-up Home Assistant has set up. One is not connecting; one is titled with an account.
 ENTRIES = [
     {'entry_id': 'entry0001bridge', 'domain': 'hue', 'title': 'Kitchen bridge', 'state': 'loaded', 'disabled_by': None, 'supports_unload': True},
@@ -196,6 +230,7 @@ ACCESSORIES = [
 class World:
     def __init__(self):
         self.sent, self.down, self.names = [], False, {}
+        self.with_show = False   # add_show(): the made-up light show, kept through reset()
         self.clock = None        # what "now" is to the weather and the sun; None: the real time
         self.logbook = []        # what Home Assistant's logbook answers, for the Activity screen
         self.setup = []          # every request that came through the setup door, in order
@@ -223,6 +258,8 @@ class World:
         self.board_configs = {'map': {'strategy': {'type': 'map'}}, 'wall-tablet': {'views': [
             {'title': 'Downstairs', 'path': 'downstairs', 'cards': [{'type': 'entities', 'entities': ['light.kitchen_ceiling']}]},
             {'title': 'Clock', 'path': 'clock', 'cards': [{'type': 'markdown', 'content': 'A card its owner wrote by hand'}]}]}}
+        if self.with_show:
+            _show_parts(self, False, 0)
 
     def _registry(self):
         for entity in self.states:      # anything that appeared since (a new scene, a helper) is in the registry too
@@ -256,12 +293,25 @@ class World:
             elif thing in self.states:
                 self.states[thing]['state'] = wanted.get('state', 'on')
 
+    def _show(self, start, variables):
+        """What the made-up show's scripts do: the switch on and its speaker playing, or the music paused and it off."""
+        self.states[SHOW['flag']]['state'] = 'on' if start else 'off'
+        for member in self._group(SHOW['player']):
+            self.states[member]['state'] = 'playing' if start else 'paused'
+            if start:
+                self.states[member]['attributes'].update(media_title='First track', media_artist='',
+                                                         media_album_name=self.names.get(variables.get('media_id'), ''))
+
     def _service(self, domain, service, data):
         named = data.get('entity_id', [])
         for entity in named if isinstance(named, list) else [named]:
             item = self.states[entity]
             attrs = item['attributes']
-            if domain == 'light' and service in ('turn_on', 'turn_off'):
+            if domain == 'script' and self.with_show and entity in (SHOW['start'], SHOW['end']):
+                self._show(entity == SHOW['start'], data.get('variables') or {})
+            elif domain == 'input_number' and service == 'set_value':
+                item['state'] = str(float(data['value']))
+            elif domain == 'light' and service in ('turn_on', 'turn_off'):
                 self._light(entity, service == 'turn_on', data.get('brightness_pct'))
             elif domain == 'fan' and service == 'set_percentage':
                 item['state'], attrs['percentage'] = ('on' if data['percentage'] else 'off'), data['percentage']

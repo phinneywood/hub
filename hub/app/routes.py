@@ -81,7 +81,8 @@ def _said(result):
         said = 'Sent, but the speaker isn’t playing.'
     feed.poke()
     return {'ok': bool(result['done']) and not result['not_sent'], 'said': said[:300],
-            'batch': result['batch'] if result['undo'] else None}
+            'batch': result['batch'] if result['undo'] else None,
+            **({'timing': result['timing']} if 'timing' in result else {})}      # the light show's, once it moved
 
 
 def _change(request, work):
@@ -293,6 +294,21 @@ def play(speaker: str, request: Request, body: dict = Body(...)):
             alone = any(m not in (anchor, *mates) for m in players[anchor]['members'])
         return control.change([anchor], 'play_media', query=str(body.get('uri') or '')[:300], kind=body.get('kind'),
                               label=str(body.get('name') or '')[:80], login=login, via='app', alone=alone, together=mates)
+    return _change(request, work)
+
+
+@router.post('/api/show/{do}')
+def show(do: str, request: Request, body: dict = Body(default={})):
+    """The light show's card: "end" ends the show; "timing" sets its lights {"value": 150} milliseconds earlier (or,
+    below 0, later) and answers with the timing as set (tools/house/lightshow.py)."""
+    from ..tools.house import lightshow
+
+    def work(login):
+        if do == 'end':
+            return lightshow.end(login=login, via='app')
+        if do == 'timing':
+            return lightshow.set_timing(body.get('value'), login=login, via='app')
+        raise control.Refused('The light show card can’t do that.')
     return _change(request, work)
 
 

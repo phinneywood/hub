@@ -229,6 +229,7 @@ def _colour_now(attrs):
 
 
 def _build(registry, states):
+    from . import lightshow       # it acts through control, which reads the house through here
     items = [s for s in states if isinstance(s, dict) and isinstance(s.get('entity_id'), str)]
     players_only = any(registry['entities'].get(s['entity_id'], {}).get('platform') == 'music_assistant'
                        for s in items if s['entity_id'].startswith('media_player.'))
@@ -253,7 +254,7 @@ def _build(registry, states):
             'room_floor': registry.get('room_floor', {}),
             'outside': _outside(items), 'openings': _openings(items, registry), 'buttons': _buttons(items, registry),
             'routines': _routines(items, registry), 'weather': _weathers(items), 'sun': _sun(items),
-            'batteries': _batteries(items, registry), 'read_at': datetime.now(home.PACIFIC)}
+            'batteries': _batteries(items, registry), 'show': lightshow.seen(items), 'read_at': datetime.now(home.PACIFIC)}
 
 
 def _number(value):

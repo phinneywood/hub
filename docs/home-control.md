@@ -76,6 +76,10 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   that can't show it is refused. The broker client allows at most one of `rgb_color`, `hs_color`, `xy_color` or
   `color_temp_kelvin` on `light.turn_on`, each within bounds, and Undo puts back the brightness and colour before.
   Effects, flashing and timed light shows are not allowed (see "Compared with the agents' home-control skill").
+  The music light show is Home Assistant's own: two scripts and a timing number that Hub finds by their names
+  ("Start light show", "End light show", "Light show timing"). Hub may run those two scripts, the start one only
+  with something Music Assistant found, and set that number within its range, and nothing else of theirs; it
+  records each without an Undo, because ending the show is the way back (`lightshow.py`, 2026-11-19).
   The owner can set the "Change lights, plugs, scenes and speakers" action to Suggest only on the Engine
   page, and then Ask changes nothing.
 - **"As well" means in sync** (2026-11-13). "Play it in the kitchen as well", "there too" or "in both" joins

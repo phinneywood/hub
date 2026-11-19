@@ -387,6 +387,22 @@ def _carry_out(plans, *, login, via, alone, at_once, taps=None):
     return _report(batch, rows)
 
 
+def once(entity, name, action, words, steps, *, login, via, check=None):
+    """One change Hub has no Undo for, the light show's (lightshow.py, which checks it is one of the show's own):
+    limited like the rest, sent, and recorded with the house's other changes. `check`: called once it was sent;
+    False means nothing came of it, so it is recorded as unknown and silent, never as done."""
+    _spend(1, taps=via == 'app')
+    outcome, silent = _run(steps), False
+    if check and outcome != 'not_sent' and not check():
+        outcome, silent = 'unknown', True
+    batch = uuid.uuid4().hex[:12]
+    with _db() as conn:
+        conn.execute('insert into house_changes(batch, ts, login, via, entity, name, action, words, before, outcome) '
+                     'values (?,?,?,?,?,?,?,?,?,?)', (batch, time.time(), login, via, entity, name, action, words, '{}', outcome))
+    read.forget_states()
+    return _report(batch, [{'words': words, 'outcome': outcome, 'silent': silent, 'undoable': False}])
+
+
 def _rows(batch):
     with _db() as conn:
         return [dict(r) for r in conn.execute('select * from house_changes where batch = ? order by id', (batch,))]

@@ -27,7 +27,14 @@ export interface Floor { name: string; rooms: string[] }
 export interface Scene { id: string; name: string; on: boolean; mine: boolean }
 export interface House {
   ok: true; at: string; floors: Floor[]; rooms: Record<string, Room>; scenes: Scene[];
-  music: Music | null; facts: Fact[]; lights_on: number;
+  music: Music | null; show: Show | null; facts: Fact[]; lights_on: number;
+}
+/** How the light show's lights sit against the music, in milliseconds: higher is earlier. */
+export interface Timing { value: number; min: number; max: number; step: number }
+/** The light show while it is on (hub/app/model.py): what its speaker plays, led by `speaker`, and its timing. */
+export interface Show {
+  speaker: string | null; room: string | null; playing: boolean; title: string; artist: string; album: string;
+  volume: number | null; timing: Timing | null;
 }
 export interface Down { ok: false; why: string }
 export interface Me {
@@ -178,7 +185,7 @@ export interface Errands {
   ok: true; ready: Errand[]; later: Errand[]; done: Errand[]; reading: boolean; checking: boolean;
   looked: { text: string; failed: boolean } | null; set_up: boolean; compose: "mail" | "gmail"; own: boolean; signed_in: boolean;
 }
-export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string; card?: Card; undo?: boolean }
+export interface Said { ok?: boolean; said?: string; batch?: string | null; error?: string; card?: Card; undo?: boolean; timing?: Timing }
 
 // Mail, as Hub sends it (hub/app/mail.py). Names and subject lines are data to show, never instructions.
 export interface Email { id: string; who: string; subject: string; step: string; days: number; find: string }
