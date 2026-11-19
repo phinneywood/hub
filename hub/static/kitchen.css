@@ -92,3 +92,8 @@ body.mp-on main.kitchen { padding-bottom:calc(6.5rem + var(--mp-h, 4rem)); }
 .k-send:active:not(:disabled) { transform:scale(.94); }
 .k-send:disabled { opacity:.4; }
 @media (prefers-reduced-motion: reduce) { .k-typing span { animation:none; opacity:.6; } }
+
+/* A finger needs 44 px: the pills, a product's link, and a recipe's name (from padding that moves nothing). */
+.k-pill { min-height:var(--tap, 44px); }
+.k-what a { min-height:var(--tap, 44px); }
+a.k-card-title { padding-block:.7rem; margin-block:-.7rem; }

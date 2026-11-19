@@ -107,3 +107,8 @@ body { margin: 0; }
   .family-site .reader-body .event { grid-template-columns: 10.5rem minmax(0, 1fr); column-gap: 16px; }
   .family-site .reader-body .event-date { font-size: .85rem; }
 }
+
+/* A finger needs 44 px: the page links, each fold's opener, and on a phone a link in a list (padding that moves nothing). */
+.family-site nav a { min-width: 44px; min-height: 44px; }
+.family-site summary { min-height: 44px; box-sizing: border-box; }
+@media (max-width: 700px) { .family-site li > a:not([class]) { padding-block: 14px; } }

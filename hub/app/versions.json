@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "5a28751583e1800f91e2d6a9a8674eb9cb85f18d",
+  "from": "d92bb1f838f48f65f427dfeed1afaf3a2e790196",
   "live": null,
+  "title": "Easier to tap on a phone",
+  "changes": [
+   "Every button, tab and link Hub shows on a phone is at least 44 points tall, a finger’s width, on the older pages too: Ask’s folded messages, a recipe’s name, the older Today, Kitchen, Mail, Trip, Bike + bus and class guide pages."
+  ]
+ },
+ {
+  "sha": "d92bb1f838f48f65f427dfeed1afaf3a2e790196",
+  "from": "5a28751583e1800f91e2d6a9a8674eb9cb85f18d",
+  "live": "2026-11-19T02:27:35Z",
   "title": "Fewer false alarms after an update",
   "changes": [
    "The look over Hub after each update no longer flags things scrolled out of view inside a box, or the wall’s slow drift that keeps the kitchen iPad from burning in."

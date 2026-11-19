@@ -11,3 +11,6 @@
 .trip-tabs button:hover{color:var(--fg);background:var(--card)}
 .trip-tabs button[aria-current=page]{background:var(--card);color:var(--fg);font-weight:600}
 @media(max-width:700px){.trip-tabs{top:calc(var(--shell-h,56px) + 44px)}}
+/* A finger needs 44 px: the tabs, the quieter buttons, and on a phone a link in a card's line. */
+.trip-tabs button{min-height:44px}.secondary{min-height:44px}
+@media(max-width:700px){.trip-card div>a:not([class]){padding-block:14px}}
