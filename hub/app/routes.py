@@ -300,10 +300,19 @@ def play(speaker: str, request: Request, body: dict = Body(...)):
 @router.post('/api/show/{do}')
 def show(do: str, request: Request, body: dict = Body(default={})):
     """The light show's card: "end" ends the show; "timing" sets its lights {"value": 150} milliseconds earlier (or,
-    below 0, later) and answers with the timing as set (tools/house/lightshow.py)."""
+    below 0, later) and answers with the timing as set. "start" is a tap on one of Ask's choices for a show,
+    {"handle": "#1a2b3c"}: only something a lookup found lately, never words (tools/house/lightshow.py)."""
     from ..tools.house import lightshow
+    from ..tools.house import music as library
 
     def work(login):
+        if do == 'start':
+            handle = str(body.get('handle') or '')[:20]
+            found = library.recall(handle) if handle.startswith('#') else None
+            if not found:
+                raise control.Refused('Hub doesn’t remember that choice any more. Ask for the light show again.')
+            shown = f'{found["name"]} – {found["artist"]}' if found['artist'] and found['kind'] != 'playlist' else found['name']
+            return lightshow.start(found['uri'], found['kind'], shown, login=login, via='app')
         if do == 'end':
             return lightshow.end(login=login, via='app')
         if do == 'timing':

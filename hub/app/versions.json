@@ -1,8 +1,18 @@
 [
  {
   "sha": null,
-  "from": "fef8a90444a2a975997b0bfd2cf937e932bae988",
+  "from": "07bfc18c52975392379c704191418bb097432fe6",
   "live": null,
+  "title": "Light shows from Ask",
+  "changes": [
+   "Ask starts a light show when you ask for one with a playlist, album, artist or song. When your words could mean several, it shows them on a card and starts the one you tap.",
+   "Ask ends the show when you ask. Playing music never starts one."
+  ]
+ },
+ {
+  "sha": "07bfc18c52975392379c704191418bb097432fe6",
+  "from": "fef8a90444a2a975997b0bfd2cf937e932bae988",
+  "live": "2026-11-19T14:48:15Z",
   "title": "A light show card in Ask",
   "changes": [
    "While a light show is running, its card sits at the top of Ask: what it plays, pause and next, its volume, the lights a step earlier or later against the music, and End show.",

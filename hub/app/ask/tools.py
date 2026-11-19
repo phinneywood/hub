@@ -26,7 +26,7 @@ from typing import Literal
 from pydantic_ai import RunContext
 from typing_extensions import TypedDict
 
-from ...tools.house import admin, broker, control, music as library, nowplaying, plans, read, zones
+from ...tools.house import admin, broker, control, lightshow, music as library, nowplaying, plans, read, zones
 from .. import levels, model
 from .. import scenes as kept_scenes
 from ..words import are, counted, number, sentence, spoken
@@ -387,6 +387,54 @@ def music(ctx: RunContext[Turn], do: Literal['play', 'pause', 'resume', 'next', 
         return _again(turn, error)
     except library.MusicDown:
         return _miss(turn, 'Music Assistant isn’t answering, so nothing was played.')
+    except broker.HomeDown:
+        return _miss(turn, 'The house isn’t answering, so nothing was changed.')
+
+
+# ---- the light show: Home Assistant's own, music on its speaker with the lights following ----
+
+def _shown(item):
+    return f'{item["name"]} – {item["artist"]}' if item['artist'] else item['name']
+
+
+def light_show(ctx: RunContext[Turn], do: Literal['start', 'end'], what: list[str] | None = None,
+               kind: Literal['playlist', 'album', 'artist', 'track'] | None = None) -> dict:
+    """The music light show: Home Assistant plays music on its speaker, the lights follow it, and it puts them back
+    at the end. Only when the person asks for a light show; playing music (the music tool) never starts one.
+    start: `what` is one to three short searches, best first: a playlist's name, an artist, an album or a song. `kind`
+    only when they said which. When one thing plainly fits, the show starts; when several could, they pick from a card
+    under your answer and nothing starts until they tap, so say that. end: ends the show that is on."""
+    turn = ctx.deps
+    try:
+        _may_change(turn)
+        if do == 'end':
+            return _outcome(turn, lightshow.end(login=turn.login, via=VIA), 'The light show has ended.')
+        if not read.snapshot().get('show'):         # no pick card for a show that can't start
+            return _again(turn, 'Home Assistant has no light show Hub can run.')
+        if not library.ready():
+            return _miss(turn, 'Music Assistant isn’t set up in Hub, so Hub can’t look up what to play.')
+        reasons = []
+        for words in list(what or ())[:SEARCHES]:
+            try:
+                found = library.choices(words, kind)
+            except control.Refused as error:
+                reasons.append(str(error))
+                continue
+            if found['sure']:
+                item = found['items'][0]
+                result = lightshow.start(item['uri'], item['kind'], _shown(item), login=turn.login, via=VIA)
+                return _outcome(turn, result, f'The light show is on with {_shown(item)}.')
+            turn.said.append('Which one for the light show?')
+            turn.cards.append({'kind': 'showpick', 'items': [{k: c[k] for k in ('handle', 'name', 'artist', 'kind')}
+                                                             for c in found['items']]})
+            return {'needs_tap': 'The choices are on a card under the answer; the show starts when the person taps one.'}
+        return _again(turn, ' '.join(reasons) or 'Say what the light show should play.')
+    except NotNow as error:
+        return _miss(turn, str(error), why='refused')
+    except control.Refused as error:
+        return _again(turn, error)
+    except library.MusicDown:
+        return _miss(turn, 'Music Assistant isn’t answering, so no light show was started.')
     except broker.HomeDown:
         return _miss(turn, 'The house isn’t answering, so nothing was changed.')
 
@@ -1468,7 +1516,7 @@ def archive_tool(ctx: RunContext[Turn], do: Literal['best', 'on_this_day', 'read
 archive_tool.__name__ = 'archive'
 
 
-ALL = (lights, scene, music, music_library, playlist, hub_info, bike_bus, remember, conversation, groceries, kitchen, look_up, mail_search, mail_read, mail_change, errands, errand, find, details, arrange, rooms, scene_setup, routine,
+ALL = (lights, scene, music, light_show, music_library, playlist, hub_info, bike_bus, remember, conversation, groceries, kitchen, look_up, mail_search, mail_read, mail_change, errands, errand, find, details, arrange, rooms, scene_setup, routine,
        device, setting, integration, dashboard, house_health, caretaker, career, search, read_found, archive_tool)
 # Money (hub/app/money/ask.py): reading the household's accounts, and the changes a member can make to Hub's record of them.
 from ..money.ask import TOOLS as MONEY  # noqa: E402

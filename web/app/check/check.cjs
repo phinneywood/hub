@@ -1153,6 +1153,19 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap('.showcard .end-show');
     expect(await until(() => !document.querySelector(".showcard"), null, 8000), "End show left the light show card");
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Light show ended"), "no word that the light show ended");
+    // Ask starts one: words that fit two things bring a card, and nothing starts until a tap; Ask ends it too.
+    await askFor("light show with day");
+    expect(await answered("Which one for the light show?"), "Ask's light show question: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelectorAll(".showpick .row").length === 2),
+      "the light show's two choices under the answer");
+    expect(await page.locator(".showcard").count() === 0, "a light show started before a tap");
+    await page.waitForTimeout(300); await shot("10j-light-show-pick");
+    expect(await until(() => !document.querySelector(".toast"), null, 6000), "the last word stayed over the choices");
+    await tap('.showpick .row:has-text("Sunday Morning")');
+    expect(await until(() => !!document.querySelector(".showcard"), null, 8000), "a tap on a choice did not start the light show");
+    await askFor("end the light show");
+    expect(await answered("The light show has ended."), "ending the light show from Ask: " + await lastAnswer());
+    expect(await until(() => !document.querySelector(".showcard"), null, 8000), "the light show card stayed after Ask ended the show");
     await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
     await page.waitForSelector(".plan");
 

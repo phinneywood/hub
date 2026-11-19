@@ -396,6 +396,12 @@ export async function setShowTiming(value: number) {
   if (answered(answer, ["timing"], "") && answer.timing) hold("timing", { value: answer.timing.value }, SOUND_HOLD);
 }
 
+/** Start the light show with one of Ask's choices for it: a handle a lookup gave, never words. */
+export async function startShow(handle: string) {
+  const answer = await api.post("show/start", { handle });
+  answered(answer, [], answer.said ?? "Light show on");
+}
+
 /** End the show: Home Assistant stops its music and puts the lights back. */
 export async function endShow() {
   hold("show", { on: false }, SOUND_HOLD);

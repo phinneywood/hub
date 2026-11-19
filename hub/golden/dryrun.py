@@ -39,7 +39,7 @@ from pathlib import Path
 COVERED = {'home_control': 'home', 'play_music': 'home', 'edit_playlist': 'music', 'remember': 'proposal',
            'propose_recipe': 'proposal', 'run_recipe': 'home', 'kitchen': 'kitchen'}
 # Ask in the app: each tool, and the door its changes leave by ('read' for one that changes nothing).
-COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'music_library': 'read', 'playlist': 'music', 'hub_info': 'read',
+COVERED_APP = {'lights': 'home', 'scene': 'home', 'music': 'home', 'light_show': 'home', 'music_library': 'read', 'playlist': 'music', 'hub_info': 'read',
                'bike_bus': 'read',      # a route search: nothing is booked or unlocked
                'remember': 'note', 'conversation': 'thread', 'groceries': 'kitchen', 'kitchen': 'kitchen',
                'look_up': 'read', 'mail_search': 'read', 'mail_read': 'read', 'mail_change': 'proposal', 'errands': 'read', 'errand': 'errands', 'find': 'read', 'details': 'read', 'arrange': 'setup',
@@ -86,6 +86,8 @@ class Ledger:
                 state['state'] = 'paused'
             elif service == 'volume_set':
                 state['attributes']['volume_level'] = data['volume_level']
+            elif domain == 'input_number' and service == 'set_value':    # the light show's timing
+                state['state'] = str(float(data['value']))
             elif service == 'join':     # joins add to the leader's group; they don't replace it
                 group = list(state['attributes'].get('group_members') or [entity])
                 group += [m for m in data['group_members'] if m not in group]

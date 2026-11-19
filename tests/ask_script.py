@@ -109,6 +109,8 @@ REMEMBERS = re.compile(r'\b(what do you remember|our conversation|that playlist 
 SOUND = re.compile(r'\b(play|music|songs?|jazz|piano|playlist|pause|resume|skip|next|previous|quieter|louder|volume|too|as well)\b')
 LIGHTS = re.compile(r'\b(dim|turn|switch|lights?|lamps?|on|off)\b')
 FILLER = re.compile(r'\b(please|play|put on|some|a bit of|softly|quietly|music|in|on|the|speakers?|my|playlist)\b')
+SHOW_END = re.compile(r'\b(end|stop) the (light )?show\b')
+SHOW_START = re.compile(r'\blight show(?:,| with| to)\s+(.+?)[.!?]?$')
 ARCHIVE = re.compile(r'\b(photos?|pictures?|videos?|when did we|last time|invoice|receipt|warranty|show me|find)\b')
 ARCHIVE_FILLER = set('show me find the a an of at in on when did we last time what did say photos photo pictures videos our'.split())
 SYNONYMS = {'furnace': ['furnace service', 'HVAC maintenance', 'heating tune-up']}
@@ -379,6 +381,10 @@ async def scripted(messages, info):
             yield told if asks else 'Hub couldn’t do that. ' + told
     elif setup:
         yield setup
+    elif SHOW_END.search(words):        # the light show, before anything about lights or music can claim the words
+        yield call('light_show', do='end')
+    elif SHOW_START.search(words):
+        yield call('light_show', do='start', what=[SHOW_START.search(words).group(1)])
     elif re.search(r'\bbills?\b', words) and not back:
         yield call('errands', show='ready', about='bills')
     elif ERRANDS.search(words):

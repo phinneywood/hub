@@ -45,6 +45,7 @@ sets this in the private settings file (`household.json`):
 | `POST /app/api/music/{speaker}` | Play, pause, next, previous, a volume, a room in or out |
 | `GET /app/api/picks`, `POST /app/api/play/{speaker}` | The library's playlists, and playing one where music is on, or with `"here": true` in that speaker's room only |
 | `POST /app/api/show/end`, `POST /app/api/show/timing` | The light show's card: end the show, or set its lights `{"value": 150}` ms earlier (below 0, later), on the timing's own steps and within its range (`hub/tools/house/lightshow.py`) |
+| `POST /app/api/show/start` | A tap on one of Ask's choices for a light show: `{"handle": "#1a2b3c"}`, only something a lookup found lately, never words |
 | `POST /app/api/undo/{batch}` | Put a change back: lights and speakers, or a change to how the house is set up |
 | `GET /app/api/setup/{card}`, `POST /app/api/setup/{card}/confirm`, `.../dismiss` | A change that waits for a tap: what became of it, do it, or put it away (see “Setting up the house”) |
 | `GET /app/api/kitchen`, `POST /app/api/kitchen/{do}` | The shopping list with each thing's product and where it stands, and its taps: `add`, `remove`, `pick`, `keep`, `fill`, `read`, `order`, `auto`, `reminders` (see “Kitchen”) |

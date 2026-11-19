@@ -618,7 +618,7 @@ def test_the_real_route_thinks_acts_once_and_stops(world, monkeypatch):
     body = json.loads(request.content)
     assert str(request.url) == 'https://api.anthropic.com/v1/messages' and body['model'] == 'claude-sonnet-5-5' and body['stream'] is True
     assert body['thinking'] == {'type': 'adaptive'} and body['output_config'] == {'effort': 'high'}
-    assert [tool['name'] for tool in body['tools']] == ['lights', 'scene', 'music', 'music_library', 'playlist', 'hub_info', 'bike_bus', 'remember', 'conversation', 'groceries', 'kitchen', 'look_up', 'mail_search', 'mail_read', 'mail_change', 'errands',
+    assert [tool['name'] for tool in body['tools']] == ['lights', 'scene', 'music', 'light_show', 'music_library', 'playlist', 'hub_info', 'bike_bus', 'remember', 'conversation', 'groceries', 'kitchen', 'look_up', 'mail_search', 'mail_read', 'mail_change', 'errands',
                                                        'errand', 'find', 'details', 'arrange', 'rooms', 'scene_setup', 'routine', 'device',
                                                        'setting', 'integration', 'dashboard', 'house_health', 'caretaker', 'career', 'search', 'read', 'archive', 'money', 'what_if', 'money_budget',
                                                        'money_sort', 'money_goal', 'money_bill', 'money_account', 'money_plan']

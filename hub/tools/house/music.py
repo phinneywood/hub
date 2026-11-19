@@ -298,6 +298,50 @@ def pick(what, kind=None):
                   'an artist or a playlist name.')
 
 
+SHOW_ORDER = ('playlist', 'artist', 'album', 'track')     # "a light show, <a band>" means the band before its album
+CHOICES = 3
+
+
+def _choice(item, kind):
+    return {'handle': item['handle'], 'uri': item['uri'], 'name': item['name'], 'artist': item.get('artist', '') if kind != 'playlist' else '',
+            'kind': kind, 'mine': _mine(item['uri'])}
+
+
+def choices(what, kind=None):
+    """For the light show: up to three things the owner's words could mean, each remembered with its handle, and
+    whether one is plainly it: {'sure', 'items'}. Plainly it: what a lookup just showed by that handle or name, the
+    one playlist of theirs with exactly that name, the one thing whose name is exactly the words, or the only thing
+    found. Never radio: the show plays a playlist, album, artist or song. Refused when nothing matched; MusicDown
+    passes."""
+    words = _clip(what, 200)
+    if not words:
+        raise Refused('Say what the light show should play.')
+    kinds = (kind,) if kind in broker.SHOW_KINDS else SHOW_ORDER
+    known = recall(words, kind)
+    if known and known['kind'] in kinds:
+        return {'sure': True, 'items': [_choice(dict(known, handle=_handle(known['uri'])), known['kind'])]}
+    if words.startswith('#'):
+        raise Refused(f'Hub doesn’t remember “{words}” from a lookup. Look it up again with music_library.')
+    found = []
+    if 'playlist' in kinds:
+        own = [remember(dict(p, artist=''), 'playlist') for p in playlists(words) if broker.playable(p['uri'], 'playlist')]
+        exact = [p for p in own if p['name'].lower() == words.lower()]
+        if len(exact) == 1:
+            return {'sure': True, 'items': [_choice(exact[0], 'playlist')]}
+        found += [(p, 'playlist') for p in own]
+    hits = search(words, kinds, limit=CHOICES)
+    for k in kinds:
+        found += [(h, k) for h in sorted(hits.get(k, ()), key=lambda h: not _mine(h['uri'])) if h.get('handle')]
+    items = list({c['uri']: c for c in (_choice(i, k) for i, k in found)}.values())
+    if not items:
+        raise Refused(f'Nothing matched “{words}” in the library or Apple Music. Try a playlist’s name, an artist, '
+                      'an album or a song.')
+    exact = [c for c in items if c['name'].lower() == words.lower()]
+    if len(exact) == 1 or len(items) == 1:
+        return {'sure': True, 'items': exact[:1] or items[:1]}
+    return {'sure': False, 'items': (exact + [c for c in items if c not in exact])[:CHOICES]}
+
+
 def playlist_uri(name):
     """The library address of a playlist named exactly this, so it plays that one and not a search hit. Fail-soft."""
     if not ready():
