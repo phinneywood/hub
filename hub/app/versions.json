@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "dc02e072e2e540bfb0553cf6743717dcde6feaf7",
+  "from": "43177f0464f1fbb234f4799a5d70bdcbba4c27b1",
   "live": null,
+  "title": "A look over Hub after each update",
+  "changes": [
+   "After each update the Mac mini walks through every screen of Hub at phone and laptop size, only looking, and keeps a short note of anything hard to tap, hidden under a bar or failing. It never holds or undoes an update."
+  ]
+ },
+ {
+  "sha": "43177f0464f1fbb234f4799a5d70bdcbba4c27b1",
+  "from": "dc02e072e2e540bfb0553cf6743717dcde6feaf7",
+  "live": "2026-11-19T00:37:32Z",
   "title": "House and System, plainer",
   "changes": [
    "On a phone each room shows its way in, and a tap on it opens the room without switching its lights.",
