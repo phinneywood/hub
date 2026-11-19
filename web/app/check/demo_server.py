@@ -29,7 +29,8 @@ Ask works here too, on a stand-in for its model (tests/ask_script.py) that picks
 "pause", "movie night", "remember to start music softly", "what should we cook this week?", "what needs me today?",
 "add sponges and milk to the list", "what's on the list?", "order the groceries for tomorrow morning",
 "move the reading lamp to the bedroom", "remove the dining room", "unlock the front door",
-"every evening at 6:45 turn on the hallway light", "what errands are ready?".
+"every evening at 6:45 turn on the hallway light", "what errands are ready?", "light show with day" (two playlists fit:
+a card to choose from), "end the light show".
 The stand-in is only a script; how well Ask understands is the real model's job and can't be judged here.
 """
 import copy

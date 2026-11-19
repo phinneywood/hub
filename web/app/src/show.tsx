@@ -1,8 +1,9 @@
 // The light show's card, at the top of Ask while a show is on (hub/tools/house/lightshow.py): its music with play,
 // pause, next and volume, the lights moved earlier or later against it, and End show. The show's music is one of the
 // house's musics, so its buttons are the ones every music has.
+import { useState } from "preact/hooks";
 import { Sleeve } from "./screens";
-import { dragGroupVolume, endShow, seen, setGroupVolume, setShowTiming, streamPlay, streamSkip } from "./state";
+import { dragGroupVolume, endShow, seen, setGroupVolume, setShowTiming, startShow, streamPlay, streamSkip } from "./state";
 import type { Timing } from "./types";
 import { Icon, Slider } from "./ui";
 
@@ -53,6 +54,32 @@ function TimingRow({ timing }: { timing: Timing }) {
         <button type="button" class="pill" disabled={timing.value >= timing.max}
           onClick={() => void setShowTiming(timing.value + timing.step)}>Earlier</button>
       </div>
+    </div>
+  );
+}
+
+/** One of Ask's choices for a light show (hub/app/ask/tools.py light_show): what a lookup found, by its handle. */
+export interface ShowChoice { handle: string; name: string; artist: string; kind: string }
+const KINDS: Record<string, string> = { playlist: "Playlist", album: "Album", artist: "Artist", track: "Song" };
+
+/** When Ask isn't sure what the light show should play: one tap starts it with that one. While a show is on, there
+ * is nothing to choose, so an earlier card says so instead. */
+export function ShowPick({ items }: { items: ShowChoice[] }) {
+  const [busy, setBusy] = useState("");
+  if (seen.value?.show) return <p class="took">The light show is on.</p>;
+  const choose = async (choice: ShowChoice) => {
+    setBusy(choice.handle);
+    await startShow(choice.handle);
+    setBusy("");
+  };
+  return (
+    <div class="acard showpick" role="group" aria-label="Choose what the light show plays">
+      {items.map((choice) => (
+        <button type="button" class="row free" key={choice.handle} disabled={busy !== ""} onClick={() => void choose(choice)}>
+          <div class="row-main"><b>{choice.name}</b><span>{[KINDS[choice.kind], choice.artist].filter(Boolean).join(" · ")}</span></div>
+          <span class="pill show-start">{busy === choice.handle ? "Starting" : "Start"}</span>
+        </button>
+      ))}
     </div>
   );
 }

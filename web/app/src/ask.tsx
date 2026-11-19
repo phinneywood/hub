@@ -14,7 +14,8 @@ import { DrillProgress } from "./health";
 import { GroceriesCard, KitchenReply } from "./kitchen";
 import { ChatHead, DayRows, Greeting, HouseCard, NeedsCard } from "./now";
 import { RoomCell, spans } from "./screens";
-import { ShowCard } from "./show";
+import { ShowCard, ShowPick } from "./show";
+import type { ShowChoice } from "./show";
 import { inApp } from "./today";
 import { dragVolume, go, lookAtCare, loadPicks, picks, playPick, runScene, say, seen, setVolume, switchRoom, undo, undone } from "./state";
 import type { View } from "./state";
@@ -304,6 +305,7 @@ function CardView({ card, now, said = "" }: { card: Card; now: House; said?: str
     ) : null;
   }
   if (card.kind === "kitchen" && card.after !== undefined) return <KitchenReply after={card.after} />;
+  if (card.kind === "showpick") return <ShowPick items={(card.items ?? []) as ShowChoice[]} />;
   if (card.kind === "photos") {       // Hub's sentence heads the card only where the answer above doesn't already say it
     return <PhotoCard title={card.title && said.includes(card.title) ? undefined : card.title} items={(card.items ?? []) as ArchiveItem[]} search={card.search} />;
   }
