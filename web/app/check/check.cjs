@@ -987,12 +987,12 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await saysSoon("Versions"), "Versions: " + await says());
     expect(await until(() => document.querySelectorAll(".release").length > 2), "Versions listed no releases");
     // The newest few, and the rest one tap away.
-    const listed = () => page.locator(".release:not(.ready):not(.undo)").count();
-    const few = await listed();
+    const releases = () => page.locator(".release:not(.ready):not(.undo)").count();
+    const few = await releases();
     expect(few <= 6, `Versions listed ${few} releases before Earlier versions`);
     await tap('.more-btn:has-text("Earlier versions")');
     expect(await until(() => !document.querySelector(".more-btn")), "Earlier versions stayed");
-    expect(await listed() > few, "Earlier versions showed nothing more");
+    expect(await releases() > few, "Earlier versions showed nothing more");
     // A made-up update Hub made by itself an hour ago: Undo, until a request (this one, or an earlier run's) is queued.
     expect(await page.locator('.release.undo h2:text-is("Hub updated itself")').count() === 1, "Versions didn't offer Undo for the update Hub made by itself");
     if (await page.locator(".release.undo .btn").count()) {
