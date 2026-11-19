@@ -82,11 +82,13 @@ for (const [vp, options] of VIEWPORTS) {
     const label = (el) => (el.getAttribute("aria-label") || el.innerText || el.className || el.tagName).toString().trim().replace(/\s+/g, " ").slice(0, 50);
     const sideScroller = (el) => { for (let p = el.parentElement; p; p = p.parentElement) { const s = getComputedStyle(p); if (/(auto|scroll|hidden|clip)/.test(s.overflowX) && p !== document.body && p !== document.documentElement) return true; } return false; };
     const W = innerWidth, H = innerHeight;
-    const out = { overflow: document.documentElement.scrollWidth > W + 1 ? `page is ${document.documentElement.scrollWidth}px wide in ${W}px` : "", wide: [], small: [], tiny: [], under: [] };
+    // Wider than the screen only matters where a finger can scroll sideways (the wall clips its few pixels of drift).
+    const sideways = ![document.documentElement, document.body].some((e) => getComputedStyle(e).overflowX === "hidden");
+    const out = { overflow: sideways && document.documentElement.scrollWidth > W + 1 ? `page is ${document.documentElement.scrollWidth}px wide in ${W}px` : "", wide: [], small: [], tiny: [], under: [] };
     for (const el of document.querySelectorAll("body *")) {
       if (!vis(el)) continue;
       const r = el.getBoundingClientRect();
-      if (r.right > W + 1 && !sideScroller(el) && out.wide.length < 8) out.wide.push(`${label(el)} right=${Math.round(r.right)}`);
+      if (sideways && r.right > W + 1 && !sideScroller(el) && out.wide.length < 8) out.wide.push(`${label(el)} right=${Math.round(r.right)}`);
     }
     const targets = [...document.querySelectorAll("button, a[href], input, select, textarea, [role=button], [role=switch], [role=radio], summary")].filter(vis);
     // Under a bar only counts when no scroll brings it clear: it is pinned itself, or its scroller has run out of room.
@@ -104,6 +106,9 @@ for (const [vp, options] of VIEWPORTS) {
           const b = p.getBoundingClientRect();
           if (b.width >= W * 0.9 && b.height >= H * 0.9) continue;
           const box = scroller(el), below = b.top + b.height / 2 > H / 2;
+          // Scrolled out of its own box (Ask's conversation, say) it is out of sight, not under the bar beside the box.
+          const seen = box === document.scrollingElement ? null : box.getBoundingClientRect();
+          if (seen && (cy < seen.top || cy > seen.bottom)) continue;
           const room = below ? box.scrollHeight - box.clientHeight - box.scrollTop : box.scrollTop;
           const need = below ? r.bottom - b.top : b.bottom - r.top;
           if ((pinned(el) || need > room) && out.under.length < 10) out.under.push(`${label(el)} under ${label(p)}`);
