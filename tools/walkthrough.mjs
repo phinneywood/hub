@@ -78,7 +78,9 @@ for (const [vp, options] of VIEWPORTS) {
 
   // Audit what is on screen now: overflow, things under the fixed bars, small targets and small text.
   const audit = () => page.evaluate(({ phone }) => {
-    const vis = (el) => { const r = el.getBoundingClientRect(), s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0; };
+    // Inside a closed fold only the fold's own opener can be seen; the rest keeps a size but isn't drawn.
+    const folded = (el) => { for (let d = el.closest("details:not([open])"); d; d = d.parentElement?.closest("details:not([open])")) { if (el.closest("summary")?.parentElement !== d) return true; } return false; };
+    const vis = (el) => { const r = el.getBoundingClientRect(), s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && !folded(el); };
     const label = (el) => (el.getAttribute("aria-label") || el.innerText || el.className || el.tagName).toString().trim().replace(/\s+/g, " ").slice(0, 50);
     const sideScroller = (el) => { for (let p = el.parentElement; p; p = p.parentElement) { const s = getComputedStyle(p); if (/(auto|scroll|hidden|clip)/.test(s.overflowX) && p !== document.body && p !== document.documentElement) return true; } return false; };
     const W = innerWidth, H = innerHeight;
