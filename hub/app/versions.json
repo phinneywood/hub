@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "ce6288220acc374ceda88e87952658d63c2766f4",
+  "from": "5a28751583e1800f91e2d6a9a8674eb9cb85f18d",
   "live": null,
+  "title": "Fewer false alarms after an update",
+  "changes": [
+   "The look over Hub after each update no longer flags things scrolled out of view inside a box, or the wall’s slow drift that keeps the kitchen iPad from burning in."
+  ]
+ },
+ {
+  "sha": "5a28751583e1800f91e2d6a9a8674eb9cb85f18d",
+  "from": "ce6288220acc374ceda88e87952658d63c2766f4",
+  "live": "2026-11-19T02:02:38Z",
   "title": "Shorter pages, plainer words",
   "changes": [
    "Kitchen shows each thing that needs a pick with its likeliest product and “2 more choices”, and its button says “Pick · $4.79”.",
