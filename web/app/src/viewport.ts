@@ -27,9 +27,14 @@ export function watchViewport() {
   fit();
 }
 
-/** Keep --dockh at the height of the bar at the bottom, so what sits above it never hides under it. */
-export function watchDock() {
-  const dock = document.querySelector<HTMLElement>(".dock");
-  if (!dock || !("ResizeObserver" in window)) return;
-  new ResizeObserver(() => document.documentElement.style.setProperty("--dockh", `${dock.offsetHeight}px`)).observe(dock);
+/** Keep --dockh at the height of this bar at the bottom while it is on screen, so what sits above it never hides
+ * under it; returns the way to stop. Coming back from the wall makes the bar anew, so each one measures itself, and
+ * one that is gone or hidden says nothing: a height of 0 once put Ask's field under the next bar. */
+export function watchDock(dock: HTMLElement): () => void {
+  if (!("ResizeObserver" in window)) return () => undefined;
+  const sized = new ResizeObserver(() => {
+    if (dock.isConnected && dock.offsetHeight) document.documentElement.style.setProperty("--dockh", `${dock.offsetHeight}px`);
+  });
+  sized.observe(dock);
+  return () => sized.disconnect();
 }

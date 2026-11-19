@@ -981,6 +981,12 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
         "the wall on a phone had no way back");
       await tap(".wdone");
       expect(await systemSays(), "Done on the wall did not go back to System: " + await says());
+      // The wall takes the bar away and brings a new one back: Ask's field must still sit above it, not under it.
+      await tap('.tabs .tab:text-is("Ask")'); await page.waitForSelector(".askpage .composer");
+      expect(await until(() => { const field = document.querySelector(".askpage .composer")?.getBoundingClientRect(), bar = document.querySelector(".dock")?.getBoundingClientRect();
+        return !!field && !!bar && field.bottom <= bar.top + 1; }), "after the wall, Ask's message field is under the bar");
+      await tap(".who");
+      expect(await systemSays(), "back to System after Ask: " + await says());
     }
     expect(await page.locator('.row:has-text("A new version is ready")').count() === 1, "System didn't say a version is waiting");
     await tap('.row:has-text("A new version is ready")');

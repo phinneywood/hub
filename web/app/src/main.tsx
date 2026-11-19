@@ -23,7 +23,7 @@ import { BoardScreen, BoardsScreen, loadBoards, watchBoards } from "./boards";
 import { ChangeSheet, HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
 import { go, seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
-import { watchDock, watchViewport } from "./viewport";
+import { watchViewport } from "./viewport";
 
 const wideScreen = matchMedia("(min-width: 1040px)");
 const wide = signal(wideScreen.matches);
@@ -81,7 +81,6 @@ function App() {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); toAsk(); }
     };
     document.addEventListener("keydown", key);
-    watchDock();
     return () => document.removeEventListener("keydown", key);
   }, []);
   if (view.value === "wall") return <Wall />;         // the kitchen iPad: the brief alone, nothing to steer the house with

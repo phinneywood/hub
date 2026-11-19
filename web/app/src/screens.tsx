@@ -1,12 +1,13 @@
 // The screens: the house as a plan, the bar at the bottom, and System.
 import type { JSX } from "preact";
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { boardId, go, house, look, me, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
 import type { Look, View } from "./state";
 import { able, forgetNote } from "./asking";
 import { boards } from "./boards";
 import type { Floor, House, Room } from "./types";
 import { Bars, Icon } from "./ui";
+import { watchDock } from "./viewport";
 import { clock, familyOf, familySizes, houseSays, list, musicSays, NUMBER_WORDS, playingIn, when } from "./words";
 
 const HOLD_MS = 430;        // how long a finger rests on a room before it opens
@@ -241,8 +242,10 @@ function Tabs({ page, dash }: { page?: boolean; dash?: boolean }) {
 }
 
 export function Dock() {
+  const bar = useRef<HTMLDivElement>(null);
+  useEffect(() => (bar.current ? watchDock(bar.current) : undefined), []);
   return (
-    <div class="dock">
+    <div class="dock" ref={bar}>
       <Playing />
       <div class="tabs"><Tabs page dash /></div>
     </div>
