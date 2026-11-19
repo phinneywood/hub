@@ -21,7 +21,7 @@ The app is Hub's front door: `/` sends the browser to `/app/`, which opens on As
 opens it. `/app/#house` opens on the house. The
 older pages all still answer, listed under System; the old chat is at `/ask`. Since 2026-11-18 the older pages are
 moving in (owner's ask): Calendar, Insights (as AI spend), Trip and School are dashboards (see “Dashboards”), and All
-tools and Settings open System, whose “How Hub checks itself” lists Status, Checks, Golden tests and Ask activity. They wear the app's look (its palette and
+tools and Settings open System, whose “How Hub checks itself” lists Status, Checks, Practice requests (the golden tests) and Ask activity. They wear the app's look (its palette and
 typeface in `hub/static/style.css`, and the Evening or Day look chosen in System through `hub/static/look.js`) and carry
 the app's tabs and a System link, so an older page is one step from the app rather than a place of its own. To open on the chat again, the owner
 sets this in the private settings file (`household.json`):

@@ -81,6 +81,8 @@ def test_facts_are_the_alarm_the_locks_what_stands_open_and_the_weather(house):
     assert picture()['facts'][3]['value'] == '2 open'
     house.states['lock.front_door']['state'] = 'unlocked'
     assert picture()['facts'][1] == {'label': 'Front door lock', 'value': 'Unlocked', 'tone': 'warn'}
+    house.states['lock.front_door']['state'] = 'unavailable'        # 2026-11-18: House said "All shut" with a lock not answering
+    assert picture()['facts'][1] == {'label': 'Front door lock', 'value': 'Not answering', 'tone': 'warn'}
 
 
 def test_scenes_are_home_assistants_plus_all_off(house):

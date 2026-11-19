@@ -37,7 +37,7 @@ function dayDot(d: CareDay): CareDot {
 const troubled = (s: CareSystem) => s.state !== "ok" && s.state !== "off";
 
 function needLine(need: CareNeed) {
-  return [`Since ${need.since}`, need.held && "on Today from the morning", !need.today && "here only, not on Today"].filter(Boolean).join(" · ");
+  return [`Since ${need.since}`, need.held && "on Today from the morning"].filter(Boolean).join(" · ");
 }
 
 /** A drill as the caretaker plays it, step by step: on this screen and under Ask's answer. */

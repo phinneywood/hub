@@ -249,10 +249,11 @@ def top(now=None):
         return {'set_up': False, 'alive': watching, 'looked': words, 'needs': 0}
     try:
         waiting = len(needs(now))
+        listed = len(_now_needs(_open_needs(now, status() or {})))
     except JOURNAL_ERRORS as error:
         _unreadable(error)
-        return {'set_up': True, 'alive': False, 'looked': UNREADABLE, 'needs': 0}
-    return {'set_up': True, 'alive': watching, 'looked': words, 'needs': waiting}
+        return {'set_up': True, 'alive': False, 'looked': UNREADABLE, 'needs': 0, 'look': 0}
+    return {'set_up': True, 'alive': watching, 'looked': words, 'needs': waiting, 'look': listed}
 
 
 # ---- the health screen ----
@@ -358,6 +359,12 @@ def _open_needs(now, found):
     return out
 
 
+def _now_needs(open_needs):
+    """What House health lists as needing the owner now: every open item but those held for the morning. Its headline,
+    System's and Ask's count these, so a count always matches the list under it."""
+    return [n for n in open_needs if not n['held']]
+
+
 def _says(watching, looked, waiting, held):
     """The screen's headline: is it watching, and what needs the owner now."""
     if not watching:
@@ -425,7 +432,7 @@ def _glance(now, found):
         sub.append('It fixes what it safely can and tells you the rest.')
     answers = [{'id': r['id'], 'do': r['do'], 'status': r['status'], 'words': r['words']}
                for r in _rows("select * from requests where id like 'hub-%' order by received_at desc limit 10")]
-    return {'set_up': True, 'alive': watching, 'headline': _says(watching, looked, waiting, [n for n in open_needs if n['held']]),
+    return {'set_up': True, 'alive': watching, 'headline': _says(watching, looked, _now_needs(open_needs), [n for n in open_needs if n['held']]),
             'sub': ' '.join(sub), 'mode': mode, 'paused': bool(found.get('paused')), 'needs': open_needs, 'today': len(waiting),
             'drill': _drill(found, now), 'answers': answers}
 
@@ -592,7 +599,7 @@ def brief(now=None):
 def _brief(now, found):
     watching, looked = alive(now)
     open_needs = _open_needs(now, found)
-    first = 'House health: ' + _says(watching, looked, needs(now), [n for n in open_needs if n['held']])
+    first = 'House health: ' + _says(watching, looked, _now_needs(open_needs), [n for n in open_needs if n['held']])
     until = _until(found, now)
     if until:
         first += f' The caretaker is paused {until}: it keeps watching but fixes nothing.'
@@ -623,7 +630,7 @@ def _lines(now, found):
     watching, looked = alive(now)
     waiting = needs(now)
     open_needs = _open_needs(now, found)
-    out = ['House health: ' + _says(watching, looked, waiting, [n for n in open_needs if n['held']]),
+    out = ['House health: ' + _says(watching, looked, _now_needs(open_needs), [n for n in open_needs if n['held']]),
            looked if watching else 'The caretaker may have stopped; the Mac’s screen or Termius will say why.']
     until, mode = _until(found, now), found.get('mode')
     if until:

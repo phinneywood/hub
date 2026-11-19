@@ -36,7 +36,7 @@ export interface Me {
   mail?: boolean;           // whether the mail Hub reads is this person's own (hub/people.py)
 }
 // The house's caretaker, as Hub reads its folder (hub/caretaker.py).
-export interface Care { set_up: boolean; alive: boolean; looked: string; needs: number }
+export interface Care { set_up: boolean; alive: boolean; looked: string; needs: number; look?: number }      // needs: on Today; look: what House health lists
 export type CareState = "needs_you" | "fixing" | "watching" | "unknown" | "ok" | "off";
 export type CareDot = "needs_you" | "fixed" | "by_itself" | "ok" | "unknown";
 export interface CareNeed {

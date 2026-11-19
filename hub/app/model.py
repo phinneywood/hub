@@ -133,8 +133,10 @@ def _facts(found):
         if d['kind'] == 'alarm_control_panel':
             facts.append({'label': 'Alarm', 'value': 'Off' if d['state'] == 'disarmed' else d['label'],
                           'tone': 'bad' if d['state'] in ('triggered', 'pending') else ''})
+        elif d['state'] in ('unavailable', 'unknown'):      # a lock that stopped answering is never "fine" by silence
+            facts.append({'label': d['name'], 'value': 'Not answering', 'tone': 'warn'})
         else:
-            facts.append({'label': d['name'], 'value': d['label'], 'tone': 'warn' if d['open'] else ''})
+            facts.append({'label': d['name'], 'value': d['label'], 'tone': 'bad' if d['state'] == 'jammed' else 'warn' if d['open'] else ''})
     openings = found.get('openings') or {}
     if openings.get('count'):
         standing = openings['open']
@@ -142,7 +144,10 @@ def _facts(found):
         facts.append({'label': 'Doors and windows', 'value': value, 'tone': 'warn' if standing else ''})
     if found.get('outside'):
         facts.append({'label': 'Outside', 'value': found['outside'], 'tone': ''})
-    return facts[:6]
+    if len(facts) > 6:          # what needs a look is never the fact that is cut: plain ones go first, from the end
+        plain = [n for n, f in enumerate(facts) if not f['tone']][::-1][:len(facts) - 6]
+        facts = [f for n, f in enumerate(facts) if n not in plain]
+    return facts
 
 
 def _scenes(found, floors):

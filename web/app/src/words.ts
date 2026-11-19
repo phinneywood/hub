@@ -1,7 +1,7 @@
 // Hub speaks in sentences. These write them from the house as it is.
 import type { Day, House, Music, Slot } from "./types";
 
-const NUMBERS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
+export const NUMBER_WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
 // Rooms said the way people say them: "in the kitchen", "in the front yard". A room made only of these everyday
 // words is said that way; one with a name in it ("Robin’s room") keeps its name.
 const EVERYDAY = new Set(("kitchen living dining room bedroom office hallway hall bath bathroom porch yard basement garage "
@@ -27,7 +27,7 @@ export function houseSays(house: House): string {
   const lit = Object.values(house.rooms).filter((r) => r.on && !r.outside).length;
   if (lit === 0) return "The house is dark.";
   if (lit === 1) return "One room is lit.";
-  return `${NUMBERS[lit] ?? lit} rooms are lit.`;
+  return `${NUMBER_WORDS[lit] ?? lit} rooms are lit.`;
 }
 
 export function playingIn(music: Music): string[] {
@@ -67,7 +67,7 @@ export function ago(at: string, now = new Date()): string {
 }
 
 export function howMany(count: number, thing: string): string {
-  return `${NUMBERS[count] ?? count} ${thing}${count === 1 ? "" : "s"}`;
+  return `${NUMBER_WORDS[count] ?? count} ${thing}${count === 1 ? "" : "s"}`;
 }
 
 // ---- Today ----
@@ -89,7 +89,7 @@ function timed(slot: Slot): boolean {
 /** The headline: the next thing today, then how much needs you: the list, and the errands ready for a tap. */
 export function daySays(day: Day): string {
   const count = day.needs.length + day.more + (day.ready ? day.ready.cards.length + day.ready.more : 0);
-  const needs = count === 0 ? "Nothing needs you." : count === 1 ? "One thing needs you." : `${NUMBERS[count] ?? count} things need you.`;
+  const needs = count === 0 ? "Nothing needs you." : count === 1 ? "One thing needs you." : `${NUMBER_WORDS[count] ?? count} things need you.`;
   const next = day.today.find((slot) => slot.next);
   if (!next) return needs;
   return (next.time === "Now" ? `${next.title} is on now. ` : timed(next) ? `${next.title} is at ${saidTime(next)}. ` : "") + needs;
@@ -109,3 +109,15 @@ export function partOfDay(at: string): string {
   const hour = new Date(at).getHours();
   return hour < 12 ? "Today" : hour < 17 ? "This afternoon" : "This evening";
 }
+
+/** A family of scenes: this many or more sharing a name before "·" (a light bridge's presets, "Window glow·Amber 1"
+ * and 19 more) are shown as one, so the scenes people use stay in view. */
+export const FAMILY = 4;
+export const familyOf = (name: string) => { const cut = name.indexOf("·"); return cut > 0 ? name.slice(0, cut).trim() : ""; };
+export function familySizes(scenes: { name: string }[]): Map<string, number> {
+  const sizes = new Map<string, number>();
+  for (const s of scenes) { const f = familyOf(s.name); if (f) sizes.set(f, (sizes.get(f) ?? 0) + 1); }
+  for (const [f, n] of sizes) if (n < FAMILY) sizes.delete(f);
+  return sizes;
+}
+

@@ -85,6 +85,9 @@ _ready = Path(scratch) / 'releases'
                                                          'photos': {'dir': str(Path(scratch) / 'curator')},
                                                          'archive': {'owner': 'me@example.com'}, 'people': [
     {'name': 'Alex', 'logins': ['me@example.com'], 'accounts': ['default']}, {'name': 'Casey', 'logins': ['casey@example.com'], 'accounts': []}]}))
+# A light bridge's colour presets for one lamp, four of them: House shows them as one family chip that opens them.
+for _n in range(1, 5):
+    app_world.SCENES[f'scene.window_glow_amber_{_n}'] = (f'Window glow·Amber {_n}', {'light.living_shelves': 20 * _n})
 world = app_world.install(patch)
 
 # The Activity screen: a made-up evening in Home Assistant's logbook, and Apple Home through a stand-in HomeClaw.

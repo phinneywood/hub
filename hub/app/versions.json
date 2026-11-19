@@ -1,8 +1,20 @@
 [
  {
   "sha": null,
-  "from": "3c5a6955f6dbf28845f8a2c29726f756148f430e",
+  "from": "dc02e072e2e540bfb0553cf6743717dcde6feaf7",
   "live": null,
+  "title": "House and System, plainer",
+  "changes": [
+   "On a phone each room shows its way in, and a tap on it opens the room without switching its lights.",
+   "A light bridge’s many presets fold into one chip that opens them, and on a wide screen the rooms come first.",
+   "System says “All good at home.” or how many things need a look, and its sections have plain names.",
+   "A lock or door that stops answering shows “Not answering”, and the wall opened on a phone has a way back."
+  ]
+ },
+ {
+  "sha": "dc02e072e2e540bfb0553cf6743717dcde6feaf7",
+  "from": "3c5a6955f6dbf28845f8a2c29726f756148f430e",
+  "live": "2026-11-19T00:11:50Z",
   "title": "Ask, easier to read and to get around",
   "changes": [
    "Ask draws a model’s lists and bold words instead of showing their marks.",

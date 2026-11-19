@@ -182,6 +182,17 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await dimmed && await plugged, "Hub did not answer the dimmer and the plug");
     await page.keyboard.press("Escape");
     expect(await until(() => !document.querySelector(".sheet")), "Escape did not put the sheet away");
+    if (phone) {      // a touch screen has no hover: each room shows its way in, and a tap on it opens the room without switching it
+      const more = page.locator(`${room("kitchen")} .room-more`);
+      expect(await more.evaluate((el) => getComputedStyle(el).display !== "none" && Number(getComputedStyle(el).opacity) > 0),
+        "a phone shows no way into a room");
+      const lit = await says();
+      await more.tap();
+      await page.waitForSelector(".sheet.in");
+      expect((await page.textContent(".sheet h1")).trim() === "Kitchen" && await says() === lit, "the room's ⋯ did not open it, or it switched the lights");
+      await page.keyboard.press("Escape");
+      expect(await until(() => !document.querySelector(".sheet")), "Escape did not put the room away");
+    }
 
     // ---- a scene, and all off ----
     await tap('.scene:text-is("Movie night")');
@@ -193,6 +204,16 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await says() === "The house is dark.", "All off did not hold");
     await tap(".toast button");
     expect(await saysSoon("Two rooms are lit."), "Undo did not bring the lights back");
+    // A bridge's presets fold into one chip that opens them, so the scenes people use stay in view; on a wide screen
+    // the rooms come first and the scenes under them.
+    const family = page.locator(".scene.family").locator("visible=true");
+    const kin = () => page.evaluate(() => [...document.querySelectorAll(".scene.kin")].filter((b) => b.offsetParent).length);
+    expect(await family.count() === 1 && (await family.innerText()).startsWith("Window glow") && await kin() === 0, "a family of presets was not one chip");
+    await family.click();
+    expect(await until(() => [...document.querySelectorAll(".scene.kin")].filter((b) => b.offsetParent).length === 4), "the family chip did not open its four scenes");
+    await family.click();
+    if (!phone) expect(await page.evaluate(() => { const scenes = [...document.querySelectorAll(".scenes")].find((s) => s.offsetParent);
+      return !!scenes && scenes.getBoundingClientRect().top > document.querySelector(".plan").getBoundingClientRect().top; }), "on a wide screen the scenes were above the rooms");
 
     // ---- keep the house as it stands as a scene ----
     await tap(".scene.add"); await page.waitForSelector(".sheet.in");
@@ -635,7 +656,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await partner.waitForSelector('a.row.free[href="/trip"]', { timeout: 6000 });
     const olderPages = await partner.locator("a.row.free").evaluateAll((links) => links.map((a) => a.getAttribute("href")));
     expect(!olderPages.includes("/gmail") && !olderPages.includes("/calendar"), "the partner was offered the owner’s Gmail or Calendar: " + olderPages.join(" "));
-    expect((await partner.locator('.block:has(h2:text-is("How Hub checks itself")) .row b').allInnerTexts()).join("|") === "Status|Checks|Golden tests|Ask activity",
+    expect((await partner.locator('.block:has(h2:text-is("How Hub checks itself")) .row b').allInnerTexts()).join("|") === "Status|Checks|Practice requests|Ask activity",
       "System did not list how Hub checks itself");
     const oldMenu = await partner.goto(base + "/settings");
     expect(new URL(partner.url()).hash === "#system" && oldMenu.ok(), "the older Settings address did not open System: " + partner.url());
@@ -935,14 +956,25 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     quiet = false;
 
     // ---- System, and the look ----
+    // System's first line follows House health: all good, or how many things need a look.
+    const LOOKS_AT = /^(All good at home|(One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|\d+) things? needs? a look)\.$/;
+    const systemSays = () => until((re) => new RegExp(re).test(document.querySelector(".say")?.textContent.trim() ?? ""), LOOKS_AT.source);
     await tap(phone ? ".who" : ".rail .foot .tab");
-    expect(await saysSoon("The house is answering."), "System: " + await says());
+    expect(await systemSays(), "System: " + await says());
+    expect(/^Checked at \d{1,2}:\d\d [AP]M · (\d+ lights? on|No lights on)$/.test(await sub()), "System's second line: " + await sub());
     await page.waitForTimeout(300); await shot("7-system");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on System: " + (await small()).join(", "));
     await tap('.choice:text-is("Day")');
     expect(await page.evaluate(() => document.documentElement.dataset.theme) === "day", "choosing Day did not change the look");
     await tap('.choice:text-is("Automatic")');
     expect(await page.evaluate(() => document.documentElement.dataset.theme) === (options.colorScheme === "dark" ? "dusk" : "day"), "Automatic did not follow the device");
+    if (phone) {      // the wall, opened on a phone to look at it, has a way back
+      await tap('.row:has-text("The wall")');
+      expect(await until(() => { const done = document.querySelector(".wdone"); return !!done && getComputedStyle(done).display !== "none"; }),
+        "the wall on a phone had no way back");
+      await tap(".wdone");
+      expect(await systemSays(), "Done on the wall did not go back to System: " + await says());
+    }
     expect(await page.locator('.row:has-text("A new version is ready")').count() === 1, "System didn't say a version is waiting");
     await tap('.row:has-text("A new version is ready")');
     expect(await saysSoon("Versions"), "Versions: " + await says());
@@ -963,7 +995,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.waitForTimeout(300); await shot("7b-versions");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Versions: " + (await small()).join(", "));
     await tap(".uplink");
-    expect(await saysSoon("The house is answering."), "Back from Versions: " + await says());
+    expect(await systemSays(), "Back from Versions: " + await says());
     await tap('.row:has-text("Activity")');
     expect(await saysSoon("What happened in the house"), "Activity: " + await says());
     expect(await until(() => [...document.querySelectorAll(".ctl-name b")].some((b) => b.textContent.startsWith("Front door opened"))),
@@ -985,13 +1017,21 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap(".uplink");
     expect(await saysSoon("What happened in the house"), "Back from Changes: " + await says());
     await tap(".uplink");
-    expect(await saysSoon("The house is answering."), "Back from Activity: " + await says());
+    expect(await systemSays(), "Back from Activity: " + await says());
+    const systemLook = await says();
     // ---- House health: the caretaker's night, what it watches, a drill, and the one thing that needs a tap ----
     expect(await until((sel) => document.querySelectorAll(sel).length === 1, phone ? ".who.care" : ".rail .foot .tab.care"),
       "the top button didn't turn amber for what needs you");
     await tap('.row:has-text("House health")');
-    expect(await until(() => document.querySelector(".say")?.textContent.includes("One thing needs you") ||
+    expect(await until(() => document.querySelector(".say")?.textContent.includes("need") ||
       document.querySelector(".say")?.textContent.includes("waits for the morning")), "House health: " + await says());
+    // Its heading counts what it lists (bar what waits for the morning), and System said the same number.
+    const listed = await page.evaluate(() => [...document.querySelectorAll("section")].find((s) => s.querySelector("h2")?.textContent === "Needs you")
+      ?.querySelectorAll(".care-need").length ?? 0);
+    const morningOnes = await page.locator('.care-need .care-when:has-text("from the morning")').count();
+    const word = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"][listed - morningOnes] ?? String(listed - morningOnes);
+    expect(listed - morningOnes === 0 ? systemLook === "All good at home." : (await says()).startsWith(word + " thing") && systemLook.startsWith(word + " thing"),
+      `House health and System counted differently: "${await says()}" over ${listed - morningOnes}, and System "${systemLook}"`);
     expect(await until(() => document.body.textContent.includes("Sonos keeps failing")), "House health didn't list what needs you");
     expect(await page.locator('.care-need .btn.go:has-text("Restart Home Assistant")').count() === 1, "no Restart Home Assistant on the item that asks for it");
     expect(await page.locator(".care-row, .care-fine").count() === 14, "House health didn't list every system");
@@ -1012,7 +1052,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.querySelectorAll(".who.care, .rail .foot .tab.care").length === 0, null, 12000),
       "the top button stayed amber after the last thing was sorted");
     await tap(".uplink");
-    expect(await saysSoon("The house is answering."), "Back from House health: " + await says());
+    expect(await systemSays(), "Back from House health: " + await says());
     await tap('.row:has-text("Engine")');
     expect(await saysSoon("Engine"), "Engine: " + await says());
     expect(await until(() => document.body.textContent.includes("Always tell me about school mail")), "Engine didn't list what Hub follows");
@@ -1023,7 +1063,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       expect(await until(() => [...document.querySelectorAll(".ctl.two b")].some((b) => b.textContent.includes("porch light"))), "saving a note didn't list it");
     }
     await tap(".uplink");
-    expect(await saysSoon("The house is answering."), "Back from Engine: " + await says());
+    expect(await systemSays(), "Back from Engine: " + await says());
     await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
     await page.waitForSelector(".plan");
 
