@@ -314,22 +314,29 @@ function OptionRow({ option, busy, onPick }: { option: Option; busy: boolean; on
   return (
     <button type="button" class="opt" disabled={busy} onClick={onPick}>
       <span class="row-main"><b>{option.product}</b><span>{[option.size, why(option, true)].filter(Boolean).join(". ")}</span></span>
-      <span class="opt-pick">{each !== null ? money(each) : "Pick"}</span>
+      <span class="opt-pick">{each !== null ? `Pick · ${money(each)}` : "Pick"}</span>
     </button>
   );
 }
 
-/** A thing on the list that needs a person: nothing like it was bought before, or the shop doesn't have it. */
-function PickBlock({ item }: { item: Item }) {
+/** A thing on the list that needs a person: nothing like it was bought before, or the shop doesn't have it. `brief`:
+ * on Kitchen, where several can wait at once, only the likeliest product shows and the rest are on the thing's sheet. */
+function PickBlock({ item, brief }: { item: Item; brief?: boolean }) {
   const [busy, setBusy] = useState(false);
   const pick = async (o: Option) => {
     setBusy(true); await act("pick", { id: item.id, product: o.product, size: o.size, url: o.url, price: o.price, store: o.store }); setBusy(false);
   };
+  const shown = brief ? item.options.slice(0, 1) : item.options;
+  const more = item.options.length - shown.length;
   return (
     <div class="pickblock">
       <b class="pick-t">{item.name}{item.qty > 1 && <i class="qty"> × {item.qty}</i>}</b>
       <p class="pick-why">{pickWhy(item)}</p>
-      {item.options.map((o) => <OptionRow option={o} busy={busy} onPick={() => void pick(o)} key={o.product} />)}
+      {shown.map((o) => <OptionRow option={o} busy={busy} onPick={() => void pick(o)} key={o.product} />)}
+      {more > 0 && (
+        <button type="button" class="linkish" onClick={() => (sheet.value = { kind: "item", id: item.id })}>
+          {more === 1 ? "One more choice" : `${more} more choices`}</button>
+      )}
       <button type="button" class="linkish" disabled={busy} onClick={() => void act("remove", { id: item.id })}>Take it off the list</button>
     </div>
   );
@@ -788,7 +795,7 @@ export function Kitchen() {
           <h2>Needs you</h2>
           {waiting && <OrderCard order={now.order!} />}
           {now.plan && <PlanCard plan={now.plan} />}
-          {picks.map((i) => <PickBlock item={i} key={i.id} />)}
+          {picks.map((i) => <PickBlock item={i} brief key={i.id} />)}
           {unsure > 0 && (
             <div class="ctl acts check">
               <div class="ctl-name"><b>{count(unsure, "thing")} to check</b>

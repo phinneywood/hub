@@ -281,6 +281,9 @@ patch.setattr(private, 'answer', lambda text, topics=None: (
     {'tokens_in': 0, 'tokens_out': 0, 'cost': 0.0}))
 # A made-up Kitchen (tests/kitchen_world.py): a list with made-up products, a practice cart that fills a few seconds
 # after it is asked to, a cart plan waiting, and an assistant that takes a few seconds to answer.
+# Dish soap has three products to choose from: Kitchen shows the likeliest and folds the other two onto its sheet.
+kitchen_world.ALSO['dish soap'] = kitchen_world.ALSO['dish soap'] + [
+    ('Clear Springs Free and Clear Dish Soap', '25 fl oz', 'shop', 0, '', '4.99'), ('Store Brand Dish Soap', '24 fl oz', 'shop', 0, '', '2.99')]
 shop = kitchen_world.install(patch, takes=4.0)
 
 # Errands: the made-up week's mail and the class guide's two to-dos (added to the made-up guide), read once as the

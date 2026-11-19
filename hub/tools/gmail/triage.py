@@ -39,7 +39,10 @@ NEEDS_DAYS = 14                  # how long something that needs the owner stays
 KEEP_TEXT_DAYS = 14
 KEEP_DAYS = 60
 WAITING_DAYS = 2                 # after this, mail that needs the owner counts as someone waiting
-ASKED_FROM_DAYS = 3              # the owner's own questions: when silence starts to count
+# Where people keep their own mail: a sender here with no name is shown by address, never as "gmail.com".
+PERSONAL_MAIL = {'gmail.com', 'googlemail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'icloud.com',
+                 'me.com', 'mac.com', 'aol.com', 'proton.me', 'protonmail.com', 'comcast.net'}
+ASKED_FROM_DAYS = 3             # the owner's own questions: when silence starts to count
 ASKED_PER_RUN = 5
 
 LUNA_CALLS_PER_DAY = 6           # two per run: place what the rules couldn't, then word the next steps
@@ -706,6 +709,19 @@ def is_odd(row):
     return bool(row['kind'] == 'record' and row['odd'] and not row['ok'])
 
 
+def plain_who(name, sender):
+    """Who sent it, as a heading: the name the mail gives, else the sender's site ("billing@e.acme.example" is
+    "acme.example"), else, for mail from a personal account, the address."""
+    if name:
+        return name
+    domain = (sender or '').rpartition('@')[2].lower()
+    labels = domain.split('.')
+    if not domain or domain in PERSONAL_MAIL or len(labels) < 2:
+        return sender
+    keep = 3 if len(labels) > 2 and len(labels[-1]) == 2 and labels[-2] in ('co', 'com', 'org', 'net', 'ac', 'gov', 'edu') else 2
+    return '.'.join(labels[-keep:])
+
+
 def picture(now=None):
     """Everything the Gmail page, the home list and the overnight review need to know about the inbox."""
     now = time.time() if now is None else now
@@ -714,7 +730,7 @@ def picture(now=None):
     live = [r for r in rows if r['state'] == 'open']
     for row in rows:
         row['days'] = max(0, int((now - row['received']) // 86400))
-        row['who'] = row['name'] or row['sender']
+        row['who'] = plain_who(row['name'], row['sender'])
     needs = sorted((r for r in live if r['kind'] == 'needs'), key=lambda r: r['days'] < WAITING_DAYS)  # whoever is waiting comes first
     kinds = {}
     for kind in FILED + (UNSORTED,):

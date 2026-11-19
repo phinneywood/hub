@@ -42,6 +42,10 @@ def _line_block(block_id, title, card):
             'empty': 'No history for this in the last day.'}
 
 
+# How "Right now" was decided, in plain words (tools/network/pages.py names the source).
+CHECKED = {'External reachability': 'Checked by reaching the internet from home', 'Router WAN report': 'As the router reports it'}
+
+
 def picture(login, today):
     found = read()
     if not found.get('configured'):
@@ -55,10 +59,11 @@ def picture(login, today):
     up = summary.get('reliability')
     blocks = [
         {'id': 'verdict', 'title': 'Right now', 'kind': 'hero', 'big': found['facts'] or found['headline'],
-         'small': f"Measured by {found['summary_label'].lower()}", 'tone': _tone(found['tone'])},
-        {'id': 'now', 'title': 'Speed now', 'kind': 'tiles', 'tiles': [
-            {'value': cards.get('Download traffic', {}).get('current') or '—', 'label': 'download'},
-            {'value': cards.get('Upload traffic', {}).get('current') or '—', 'label': 'upload'},
+         'small': CHECKED.get(found['summary_label'], ''), 'tone': _tone(found['tone'])},
+        # What the house is moving now, not how fast the line can go: it rises and falls with use.
+        {'id': 'now', 'title': 'Traffic now', 'kind': 'tiles', 'tiles': [
+            {'value': cards.get('Download traffic', {}).get('current') or '—', 'label': 'coming in'},
+            {'value': cards.get('Upload traffic', {}).get('current') or '—', 'label': 'going out'},
             {'value': (cards.get('External latency', {}).get('current') or '—').replace('Not measured / unavailable', '—'), 'label': 'ping'},
             {'value': (cards.get('External packet loss', {}).get('current') or '—').replace('Not measured / unavailable', '—'), 'label': 'packet loss'}]},
         {'id': 'day', 'title': 'The last 24 hours', 'kind': 'tiles', 'tiles': [

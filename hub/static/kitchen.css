@@ -82,6 +82,9 @@ a.k-pill { text-decoration:none; text-align:center; }
   padding:.6rem max(1rem, env(safe-area-inset-left)) calc(.6rem + env(safe-area-inset-bottom));
   background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   border-top:1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+/* While music plays, the mini-player takes the foot of the screen: the message field sits on top of it. */
+body.mp-on .k-compose { bottom:var(--mp-h, 4rem); padding-bottom:.6rem; }
+body.mp-on main.kitchen { padding-bottom:calc(6.5rem + var(--mp-h, 4rem)); }
 .k-compose textarea { flex:1; max-width:46rem; margin-left:auto; font:inherit; font-size:1rem; line-height:1.35; padding:.65rem 1rem;
   border-radius:1.4rem; border:1px solid var(--line); box-shadow:var(--shadow); background:var(--surface); color:var(--fg); resize:none; max-height:9rem; }
 .k-send { width:44px; height:44px; padding:0; flex:none; margin-right:auto; border-radius:50%; border:0; background:var(--acc); color:var(--acc-fg);

@@ -856,6 +856,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.querySelector(".sheet h1")?.textContent === "coffee beans"), "one fewer did not make it one again");
     expect(await page.locator('.sheet .stepper button[aria-label="One fewer"]').isDisabled(), "one fewer was offered at one");
     await page.keyboard.press("Escape");
+    // A pick shows its likeliest product, priced on the button, and the other two on its sheet.
+    expect((await page.locator(".kitchen .pickblock .opt-pick").first().innerText()) === "Pick · $4.79", "a pick's button: " + await page.locator(".kitchen .pickblock .opt-pick").first().innerText());
+    await tap('.kitchen .pickblock .linkish:text-is("2 more choices")');
+    expect(await until(() => document.querySelector(".sheet h1")?.textContent === "dish soap" && document.querySelectorAll(".sheet .opt").length === 3),
+      "2 more choices did not open the sheet with all three");
+    await tap('.sheet .x[aria-label="Close"]');
+    expect(await until(() => !document.querySelector(".sheet")), "the dish soap sheet did not close");
     await page.fill(".kadd .field", "sponges, 2 avocados");
     await page.keyboard.press("Enter");
     expect(await until(() => document.querySelectorAll(".kitchen .rows .row.item").length === 6), "typing on the list did not add to it");
@@ -979,6 +986,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap('.row:has-text("A new version is ready")');
     expect(await saysSoon("Versions"), "Versions: " + await says());
     expect(await until(() => document.querySelectorAll(".release").length > 2), "Versions listed no releases");
+    // The newest few, and the rest one tap away.
+    const releases = () => page.locator(".release:not(.ready):not(.undo)").count();
+    const few = await releases();
+    expect(few <= 6, `Versions listed ${few} releases before Earlier versions`);
+    await tap('.more-btn:has-text("Earlier versions")');
+    expect(await until(() => !document.querySelector(".more-btn")), "Earlier versions stayed");
+    expect(await releases() > few, "Earlier versions showed nothing more");
     // A made-up update Hub made by itself an hour ago: Undo, until a request (this one, or an earlier run's) is queued.
     expect(await page.locator('.release.undo h2:text-is("Hub updated itself")').count() === 1, "Versions didn't offer Undo for the update Hub made by itself");
     if (await page.locator(".release.undo .btn").count()) {

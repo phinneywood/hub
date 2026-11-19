@@ -126,6 +126,8 @@
       parts.push(sheet);
     }
     bar.replaceChildren.apply(bar, parts);
+    // How tall the one line is, for what a page pins to its own foot (Kitchen's message field) to sit above it.
+    if (!open) document.documentElement.style.setProperty("--mp-h", bar.offsetHeight + "px");
   }
 
   // What plays or is paused in full; the silent speakers folded away under one line, so the screen stays short.

@@ -1,8 +1,21 @@
 [
  {
   "sha": null,
-  "from": "f4d721fff38d7d958fdcfe347fd1f3d4542288be",
+  "from": "ce6288220acc374ceda88e87952658d63c2766f4",
   "live": null,
+  "title": "Shorter pages, plainer words",
+  "changes": [
+   "Kitchen shows each thing that needs a pick with its likeliest product and “2 more choices”, and its button says “Pick · $4.79”.",
+   "Versions lists the newest six, with the rest one tap away.",
+   "Mail shows a sender with no name by their site, not their address.",
+   "The Network dashboard says “Traffic now” and how “Right now” was checked in plain words.",
+   "In the day look, highlighted titles are a readable amber, and the older Kitchen page’s message field sits above the music bar."
+  ]
+ },
+ {
+  "sha": "ce6288220acc374ceda88e87952658d63c2766f4",
+  "from": "f4d721fff38d7d958fdcfe347fd1f3d4542288be",
+  "live": "2026-11-19T01:32:37Z",
   "title": "Times from the house on your clock",
   "changes": [
    "When Ask says when a scene last ran or an automation last fired, it gives the time on the household’s clock, not in UTC."

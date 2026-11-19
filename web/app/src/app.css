@@ -52,6 +52,7 @@
   --alarm: #CF3F2C;
   --scrim: rgba(23, 32, 58, .34);
   --sun: #D18A00;
+  --lamp-ink: #8A5A00;   /* lamp light as words on paper: the yellow itself can't be read on a light ground */
 }
 
 * { box-sizing: border-box; margin: 0; }
@@ -633,8 +634,8 @@ body:has(.sheet.in) .toast.in { transform: translate(-50%, 0); }
 .release-list { margin: 8px 0 0; padding-left: 1.1em; color: var(--ink-2); max-width: 60ch; }
 .release-list li { margin-top: 4px; }
 .release-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.release.ready h2 { color: var(--lamp); }
-.row.lit .row-main b { color: var(--lamp); }
+.release.ready h2 { color: var(--lamp-ink, var(--lamp)); }
+.row.lit .row-main b { color: var(--lamp-ink, var(--lamp)); }
 .btns.tight { margin-top: 10px; }
 .field.raised { margin-top: 10px; background: var(--raised); }
 .warn-line { color: var(--alarm) !important; }

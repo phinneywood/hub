@@ -7,7 +7,7 @@
     "record-build.mjs": "0d1ca0afe2544a3dd8c957be6a95cb5eafeed4daad8a9f68d4f315126e9537d8",
     "src/activity.tsx": "77377995178139cbc7345f3b8327dc0fe67600069fb45f0e7d4080a7207c125b",
     "src/api.ts": "3bbcdf56ea56a32d698e88a66b2577a1ae7bf61ddc3bf27b672dd0bcca0d3b6b",
-    "src/app.css": "45fd59c2f10c58004b9404095492df2698c3a1ba0c949f1c877ffe09fea7884b",
+    "src/app.css": "759c8642b368a3e71201ec9f87c4137bee6c6cbb230378fa413b657d695d05e6",
     "src/archive.tsx": "993994ff04cf1aaea78741e6bc6dbc7ffae3d0f2bee29b7223c6387f6b296cfb",
     "src/ask.tsx": "ea60e833f7976f53e414f6b07ba6bc41b5cb969000bba5464a2f17bd2e2d7539",
     "src/asking.ts": "6b7b38f1b73d1eadc8763967b41f4849e21924198491473008baba8b6f6aa203",
@@ -18,7 +18,7 @@
     "src/engine.tsx": "238133ec39fe920358bda1f9da1c96501e38a0bd90955bd018fb94e0291700a6",
     "src/errands.tsx": "7f0ba79ac05a881cd112f8a6689da63b8e99bf489eeef9092a2bcedece390779",
     "src/health.tsx": "1b246b4953c6747dc3bd04caf88ccc441fe94858b6149a5499e4796ba8418d90",
-    "src/kitchen.tsx": "b43560d05ab214fec7378d11cb477a92f0e0b94ec999e119c528a074fe4a39da",
+    "src/kitchen.tsx": "4508cc858a4d8a14b7f400a66dac509059363ea73bf0810d242005fc07ff39b9",
     "src/mail.tsx": "0dd8f178e949aeab251480c9ac89db3f21c3000952ed1db2a66cf3fe834ff972",
     "src/mailrules.tsx": "6fd8697551c2ca9e4860167b55ad03aa8c9fbecd107404f5dcb3d0405fedcbe3",
     "src/main.tsx": "c4369221a8a70fbc7089654f3f10dc7aa860b6eb2a58ff67ce05adb55e970cc3",
@@ -30,14 +30,14 @@
     "src/today.tsx": "3b5d2379ddfad8ed98b44a99aeb713beee52d9ed7cb0245708ced6a5237e380d",
     "src/types.ts": "0556e0c6c5165bf673cc566696feced2c67b6b78e2ba7cd902204c067752a627",
     "src/ui.tsx": "a6c5c999328a70ed56c2f821e9801e573b383160a588af8c4a938f79ddc216e9",
-    "src/versions.tsx": "70dc7d7c31e46568eec6eee9d0b87b6d58b8260c39e6dc5068f23eb01593cefe",
+    "src/versions.tsx": "75b4338afcde86cff9a1561c191176c66001e38ce365b5ac7262b5f6ce4757ed",
     "src/viewport.ts": "63bba57ca9fa83d5e1b9db81eb97f8c402fba4eb67558735d481a51af039a2c5",
     "src/vite-env.d.ts": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
     "src/wall.tsx": "039ef2262398f52128c69bbe4be5e8dbdd9083a52d4c1eb524558c0298a8c09c",
     "src/words.ts": "056b526214644773586d23da197603d2cc56a0848413c86313d712a5bb7c5384"
   },
   "built": {
-    "app.css": "9b22376a8f2e35f025a9aa9dc283874b5752021ec4d8abcc7d1732ce80cb7c99",
-    "app.js": "832f0a5d660191f83cbca8c965bc13b45061bda295b81f65a1464864e6dbf21d"
+    "app.css": "a295348a9e22cf8b16e824b292bcd761ca4e9a781fc30f073f4ae27c27df5a0f",
+    "app.js": "f17f5654f1044d3562598ceb8d83a5c359eafeffb89be219e5c8967bf4e96c70"
   }
 }
