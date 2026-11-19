@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "d92bb1f838f48f65f427dfeed1afaf3a2e790196",
+  "from": "21e12f69d3e53e8e2c6b6e7fbead4e39afb74b5c",
   "live": null,
+  "title": "Nothing hidden counted",
+  "changes": [
+   "The look over Hub after each update no longer measures what a closed fold hides, and Trip’s links in an opened fold are easy to tap."
+  ]
+ },
+ {
+  "sha": "21e12f69d3e53e8e2c6b6e7fbead4e39afb74b5c",
+  "from": "d92bb1f838f48f65f427dfeed1afaf3a2e790196",
+  "live": "2026-11-19T03:16:57Z",
   "title": "Easier to tap on a phone",
   "changes": [
    "Every button, tab and link Hub shows on a phone is at least 44 points tall, a finger’s width, on the older pages too: Ask’s folded messages, a recipe’s name, the older Today, Kitchen, Mail, Trip, Bike + bus and class guide pages."
