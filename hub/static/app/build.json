@@ -7,9 +7,9 @@
     "record-build.mjs": "0d1ca0afe2544a3dd8c957be6a95cb5eafeed4daad8a9f68d4f315126e9537d8",
     "src/activity.tsx": "77377995178139cbc7345f3b8327dc0fe67600069fb45f0e7d4080a7207c125b",
     "src/api.ts": "3bbcdf56ea56a32d698e88a66b2577a1ae7bf61ddc3bf27b672dd0bcca0d3b6b",
-    "src/app.css": "0b756d25bcb3e967a7baa46502a8458f74a175fe4272a5559e7005a0e8886304",
+    "src/app.css": "a449eeb5609c755248482b4edf26cebcd2cb785c69a8d95a19a709e4ee0788ca",
     "src/archive.tsx": "993994ff04cf1aaea78741e6bc6dbc7ffae3d0f2bee29b7223c6387f6b296cfb",
-    "src/ask.tsx": "ea60e833f7976f53e414f6b07ba6bc41b5cb969000bba5464a2f17bd2e2d7539",
+    "src/ask.tsx": "d5e7a03ef4bc314e8166462a06a7de7925483d0aedc506b5f57d8169dab3f09d",
     "src/asking.ts": "6b7b38f1b73d1eadc8763967b41f4849e21924198491473008baba8b6f6aa203",
     "src/boards.tsx": "f3442ae4d0cca5fe962225e798bb700ac2156e07ba749bc036f8f26f69e44b90",
     "src/brief.tsx": "4feb40d304cf5933e37a44a6735032c78d198645d22b67b193e1ad687ecf43d2",
@@ -26,9 +26,10 @@
     "src/photos.tsx": "3f23e83dbb1fb6dcf9a126ee73770cdbf43ee1dbf3686818484ec8c603a0e84a",
     "src/screens.tsx": "98ed5f3f880200c564e4083a2ad8bb25ae230e7121aeee2789302048b0f73181",
     "src/sheets.tsx": "938fd1b4de42cb155602fe36e7cb059294fb1562d41179f54edabb98a403de3c",
-    "src/state.ts": "cf3d70b2e4a5cd2fc24aa1bbbae22d5c4d6dfc5f83e9f095b0aad540b63eaf66",
+    "src/show.tsx": "bcd3644bcfad148b7e09e8008a1b17c509df67493f0a29d64f316a20b9c30506",
+    "src/state.ts": "00f51a0007ca7f577a42b78db8e6fa619d4ce504bf613816d6ef91fc69b1e35e",
     "src/today.tsx": "3b5d2379ddfad8ed98b44a99aeb713beee52d9ed7cb0245708ced6a5237e380d",
-    "src/types.ts": "0556e0c6c5165bf673cc566696feced2c67b6b78e2ba7cd902204c067752a627",
+    "src/types.ts": "06a6da9ad795fa8b064245055c453a5b2eabb23491c0907256ac7bce747cb969",
     "src/ui.tsx": "a6c5c999328a70ed56c2f821e9801e573b383160a588af8c4a938f79ddc216e9",
     "src/versions.tsx": "75b4338afcde86cff9a1561c191176c66001e38ce365b5ac7262b5f6ce4757ed",
     "src/viewport.ts": "63bba57ca9fa83d5e1b9db81eb97f8c402fba4eb67558735d481a51af039a2c5",
@@ -37,7 +38,7 @@
     "src/words.ts": "056b526214644773586d23da197603d2cc56a0848413c86313d712a5bb7c5384"
   },
   "built": {
-    "app.css": "57c7f8f1ad89fe9302a2ab310436722e1eaa29c8e4a90ad3c8169dd74426de98",
-    "app.js": "f17f5654f1044d3562598ceb8d83a5c359eafeffb89be219e5c8967bf4e96c70"
+    "app.css": "c3155c5a58648589432843d3fbe9b39ecda4b109ddcb534accfa2d1799332656",
+    "app.js": "ccf7a1ddbc25238965fc740b29325d918e7ad2d72002d4458a899c5a8acde166"
   }
 }

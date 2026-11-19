@@ -1,8 +1,18 @@
 [
  {
   "sha": null,
-  "from": "21e12f69d3e53e8e2c6b6e7fbead4e39afb74b5c",
+  "from": "fef8a90444a2a975997b0bfd2cf937e932bae988",
   "live": null,
+  "title": "A light show card in Ask",
+  "changes": [
+   "While a light show is running, its card sits at the top of Ask: what it plays, pause and next, its volume, the lights a step earlier or later against the music, and End show.",
+   "On a laptop, Ask fits beside the house again, so its Send button is never cut off."
+  ]
+ },
+ {
+  "sha": "fef8a90444a2a975997b0bfd2cf937e932bae988",
+  "from": "21e12f69d3e53e8e2c6b6e7fbead4e39afb74b5c",
+  "live": "2026-11-19T04:01:14Z",
   "title": "Nothing hidden counted",
   "changes": [
    "The look over Hub after each update no longer measures what a closed fold hides, and Trip’s links in an opened fold are easy to tap."

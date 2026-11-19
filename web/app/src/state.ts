@@ -162,6 +162,10 @@ function settle(now: House) {
       const music = now.music;
       const stream = music?.speaker === id ? { playing: music.playing, volume: music.volume } : music?.also?.find((a) => a.speaker === id);
       agrees = !stream || (kind === "sp" ? stream.playing === h.on : near(stream.volume, h.value, 2));
+    } else if (kind === "show") {          // the light show ended
+      agrees = !now.show;
+    } else if (kind === "timing") {
+      agrees = !now.show?.timing || now.show.timing.value === h.value;
     } else if (kind === "own") {
       const speaker = now.music?.speakers.find((s) => s.id === id);
       agrees = !speaker || speaker.other || (speaker.in && now.music!.playing);
@@ -235,7 +239,16 @@ function overlay(now: House, holds: Record<string, Held>): House {
       if (sounds !== room.sounding) rooms[id] = { ...room, sounding: sounds };
     }
   }
-  return { ...now, rooms, music };
+  let show = now.show;
+  if (show) {      // the light show: ended, its music played or paused or turned up, its lights moved earlier or later
+    const main = show.speaker !== null && now.music?.speaker === show.speaker;
+    const playing = main ? holds["play"] : holds["sp:" + show.speaker], volume = holds["gv:" + show.speaker], timing = holds["timing"];
+    show = holds["show"]?.on === false ? null : {
+      ...show, playing: playing?.on ?? show.playing, volume: volume?.value ?? show.volume,
+      timing: show.timing && timing?.value !== undefined ? { ...show.timing, value: timing.value } : show.timing,
+    };
+  }
+  return { ...now, rooms, music, show };
 }
 
 /** The house as the app shows it: Hub's picture with the last taps laid over it. */
@@ -368,6 +381,25 @@ export function dragGroupVolume(leader: string, value: number) {
 export async function setGroupVolume(leader: string, value: number) {
   hold("gv:" + leader, { value }, SOUND_HOLD);
   answered(await api.post(`music/${encodeURIComponent(leader)}`, { action: "group_volume", value }), ["gv:" + leader], "");
+}
+
+// ---- the light show (hub/tools/house/lightshow.py): its music is one of the musics above ----
+
+/** Where the show's lights sit against the music, in milliseconds: higher is earlier. The card says where it wants
+ * them, never a step from where they were, so quick taps add up. */
+export async function setShowTiming(value: number) {
+  const timing = seen.value?.show?.timing;
+  if (!timing) return;
+  const wanted = Math.min(timing.max, Math.max(timing.min, value));
+  hold("timing", { value: wanted }, SOUND_HOLD);
+  const answer = await api.post("show/timing", { value: wanted });
+  if (answered(answer, ["timing"], "") && answer.timing) hold("timing", { value: answer.timing.value }, SOUND_HOLD);
+}
+
+/** End the show: Home Assistant stops its music and puts the lights back. */
+export async function endShow() {
+  hold("show", { on: false }, SOUND_HOLD);
+  answered(await api.post("show/end"), ["show"], "Light show ended");
 }
 
 /** Bring a room into that music: a quiet one, or one playing something else, which then leaves it. */

@@ -5,8 +5,8 @@ administrator token; Hub never sees it. The broker passes on whatever it is sent
 are two doors, and nothing else leaves Hub:
 
 - **The everyday door**: the reads in READS and ASKS and the actions in WRITES. Lights, power and speakers: what a
-  tap in the app or a plain request to Ask needs. Also the weather forecast (forecast()), the one service call that
-  only answers and changes nothing.
+  tap in the app or a plain request to Ask needs, and the light show's two scripts and timing number. Also the
+  weather forecast (forecast()), the one service call that only answers and changes nothing.
 - **The setup door** (owner decision, 2026-11-15: Ask may change anything in Home Assistant): the named commands in
   SETUP_READS and SETUP_WRITES, the scene, automation and script configs in CONFIGS, and services in
   SERVICE_DOMAINS, reloading an integration, and the dashboards a person made. Used only by admin.py, which records every change with the way
@@ -17,6 +17,7 @@ are two doors, and nothing else leaves Hub:
 Every request's data is checked before it is sent.
 """
 import json
+import math
 import re
 import socket
 
@@ -42,8 +43,11 @@ WRITES = {
     ('media_player', 'volume_set'): {'volume_level'},
     ('media_player', 'join'): {'group_members'}, ('media_player', 'unjoin'): set(),
     ('music_assistant', 'play_media'): {'media_id', 'media_type', 'enqueue'},
+    # The light show's two scripts and its timing number (lightshow.py finds which, by name; nothing else of theirs).
+    ('script', 'turn_on'): {'variables'}, ('input_number', 'set_value'): {'value'},
 }
-ENTITY = re.compile(r'^(light|switch|fan|scene|media_player)\.[a-z0-9_]{1,120}$')
+ENTITY = re.compile(r'^(light|switch|fan|scene|media_player|script|input_number)\.[a-z0-9_]{1,120}$')
+SHOW_KINDS = ('track', 'album', 'artist', 'playlist')      # what the light show's start script plays
 MEDIA_TYPES = {'track', 'album', 'artist', 'playlist', 'radio'}
 # A whole room in one request: lights, plugs and fans may be switched (and lights dimmed) several at a time.
 TOGETHER = ('light', 'switch', 'fan')
@@ -242,6 +246,14 @@ def _checked(domain, service, data):
         raise ValueError('Say what to play and what kind of thing it is.')
     if domain == 'music_assistant' and not playable(data['media_id'], data['media_type']):
         raise ValueError('Hub plays only a playlist, album, artist, song or station it found, never a description.')
+    if domain == 'script' and 'variables' in data:          # only what to play, and only something Music Assistant found
+        given = data['variables']
+        if not (isinstance(given, dict) and set(given) == {'media_id', 'media_type'} and given['media_type'] in SHOW_KINDS
+                and playable(given['media_id'], given['media_type'])):
+            raise ValueError('Hub plays only a playlist, album, artist or song it found, never a description.')
+    if domain == 'input_number' and not (isinstance(data.get('value'), (int, float)) and not isinstance(data['value'], bool)
+                                         and math.isfinite(data['value']) and abs(data['value']) <= 1e6):
+        raise ValueError('A number must be a number.')
     return data
 
 

@@ -126,6 +126,21 @@ def _music(found, homes):
                       'rooms': [homes.get(s['id']) or s['name'] for s in g['speakers'] if s['in']]} for g in others]}
 
 
+def _show(found, homes):
+    """The light show while it is on, for its card at the top of Ask: what its speaker plays, with the group that
+    plays it, and the timing. None while it is off or Home Assistant has none (tools/house/lightshow.py)."""
+    show = found.get('show')
+    if not show or not show['on']:
+        return None
+    now = nowplaying.state(show['player'], found)
+    timing = {k: show['timing'][k] for k in ('value', 'min', 'max', 'step')} if show['timing'] else None
+    if now.get('gone'):
+        return {'speaker': None, 'room': None, 'playing': False, 'title': '', 'artist': '', 'album': '', 'volume': None,
+                'timing': timing}
+    return {'speaker': now['leader'], 'room': homes.get(show['player']), 'playing': now['playing'], 'title': now['title'],
+            'artist': now['artist'], 'album': now['album'], 'volume': now['volume'], 'timing': timing}
+
+
 def _facts(found):
     """A few plain facts under the plan: the alarm, anything standing open, the temperature outside."""
     facts = []
@@ -173,7 +188,7 @@ def home(found, floors=None):
             'floors': _floors(rooms, found.get('room_floor') or {}, floors or {}),
             'rooms': {r['id']: r for r in rooms},
             'scenes': _scenes(found, floors),
-            'music': music, 'facts': _facts(found), 'lights_on': found['lights_on']}
+            'music': music, 'show': _show(found, homes), 'facts': _facts(found), 'lights_on': found['lights_on']}
 
 
 def down(error):

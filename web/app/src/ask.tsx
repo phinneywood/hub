@@ -14,6 +14,7 @@ import { DrillProgress } from "./health";
 import { GroceriesCard, KitchenReply } from "./kitchen";
 import { ChatHead, DayRows, Greeting, HouseCard, NeedsCard } from "./now";
 import { RoomCell, spans } from "./screens";
+import { ShowCard } from "./show";
 import { inApp } from "./today";
 import { dragVolume, go, lookAtCare, loadPicks, picks, playPick, runScene, say, seen, setVolume, switchRoom, undo, undone } from "./state";
 import type { View } from "./state";
@@ -533,6 +534,7 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
   return (
     <div class={"ask" + (home ? " askpage" : "")}>
       {home && <ChatHead />}
+      <ShowCard />
       <div class="ask-scroll" ref={scroll}>
         <div class="ask-said" aria-live="polite">
           {hidden.length > 0 ? (

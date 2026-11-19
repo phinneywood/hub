@@ -89,6 +89,8 @@ _ready = Path(scratch) / 'releases'
 for _n in range(1, 5):
     app_world.SCENES[f'scene.window_glow_amber_{_n}'] = (f'Window glow·Amber {_n}', {'light.living_shelves': 20 * _n})
 world = app_world.install(patch)
+# A made-up light show: its two scripts, its timing and the speaker it plays on. POST /demo/show-on starts one.
+app_world.add_show(world)
 
 # The Activity screen: a made-up evening in Home Assistant's logbook, and Apple Home through a stand-in HomeClaw.
 from hub.app import activity  # noqa: E402
@@ -438,6 +440,9 @@ def stage(what: str):
         world.accessories = copy.deepcopy(app_world.ACCESSORIES)
         at_hour('evening')
         care.reset()
+    elif what == 'show-on':             # a light show running, as if Ask had started it: its card shows at the top of Ask
+        world.names['apple_music://playlist/p.demo-show'] = 'Disco Nights'
+        world._show(True, {'media_id': 'apple_music://playlist/p.demo-show'})
     elif what in ('kitchen-late-ids', 'kitchen-in-order'):     # answers numbered after the next question, or straight after their own
         shop.late_ids = what == 'kitchen-late-ids'
     elif what in HOURS:
