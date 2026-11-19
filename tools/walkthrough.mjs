@@ -96,7 +96,8 @@ for (const [vp, options] of VIEWPORTS) {
     const pinned = (el) => { for (let q = el; q; q = q.parentElement) if (/(fixed|sticky)/.test(getComputedStyle(q).position)) return true; return false; };
     const scroller = (el) => { for (let q = el.parentElement; q && q !== document.body; q = q.parentElement) { if (/(auto|scroll)/.test(getComputedStyle(q).overflowY) && q.scrollHeight > q.clientHeight + 1) return q; } return document.scrollingElement; };
     for (const el of targets) {
-      const r = el.getBoundingClientRect();
+      // A box or a dot inside its label is tapped through the whole label.
+      const r = (el.tagName === "INPUT" && el.closest("label") || el).getBoundingClientRect();
       if (phone && Math.min(r.width, r.height) < 44 && out.small.length < 25) out.small.push(`${label(el)} ${Math.round(r.width)}x${Math.round(r.height)}`);
       if (r.top >= 0 && r.bottom <= H && r.left >= 0 && r.right <= W) {
         const cx = r.left + r.width / 2, cy = r.top + r.height / 2, hit = document.elementFromPoint(cx, cy);

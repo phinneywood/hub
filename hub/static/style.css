@@ -356,3 +356,13 @@ main.frame { flex:1; min-height:0; max-width:none; width:100%; margin:0; padding
   body:has(> main.frame) > header.shell nav.shell-nav { order:0; flex:1 1 auto; margin:.3rem 0; }
   body:has(> main.frame) .shell-nav a { padding:.35rem .3rem; min-height:34px; font-size:.86rem; }
 }
+
+/* A finger needs 44 px. A tile's headline and, on a phone, a link inside a line of text get it from padding that is
+   for the finger only: no line moves. */
+.skip { min-height:var(--tap); }
+.tabs a { min-height:var(--tap); }
+details.more > summary { min-height:var(--tap); box-sizing:border-box; }
+a.tile-headline { padding-block:.6rem; margin-block:-.05rem -.6rem; }
+@media (max-width:700px) {
+  main :is(p, li, small) > a:not([class]) { padding-block:14px; }
+}

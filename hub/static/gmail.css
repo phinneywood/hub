@@ -115,3 +115,7 @@ details.t-shelf .t-row:last-child { border-bottom:0; }
 details.more .t-trust { border-top:0; padding-top:0; }
 .t-undo { display:flex; justify-content:space-between; align-items:center; gap:.75rem; margin:.3rem 0; font-size:.92rem; }
 .t-points { margin:.4rem 0 1rem; padding-left:1.1rem; color:var(--mut); } .t-points li { margin:.3rem 0; }
+
+/* A finger needs 44 px: each sender's "what to do" opener, and the box beside a choice through its whole label. */
+details.t-fix > summary { display:flex; align-items:center; min-height:var(--tap, 44px); box-sizing:border-box; }
+label.check { display:inline-flex; align-items:center; gap:.45rem; min-height:var(--tap, 44px); }

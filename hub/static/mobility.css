@@ -157,3 +157,9 @@ body.loading main.mobility-main { opacity:1; }
   .mode-choice small, .mobility-route-overview p, .mobility-form-footer, .mobility-search-meta, .mobility-footer, .timeline-detail, .timeline-heading > span, .mobility-timeline time, .mobility-options-grid small, .mobility-comparisons a > span:last-child { font-size:.75rem; }
 }
 @media(prefers-reduced-motion:no-preference) { .mode-choice span, .mobility-search { transition:background .15s,border-color .15s; } }
+
+/* A finger needs 44 px: swapping the two places, the small text buttons, and "remember" through its whole label. */
+.mobility-swap { width:44px; height:44px; }
+.mobility-text-button { min-width:44px; min-height:44px; }
+.mobility-footer a { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; }
+.mobility-form .mobility-remember { min-height:44px; }
