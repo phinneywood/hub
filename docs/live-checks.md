@@ -106,3 +106,16 @@ evening) doesn't block a deploy, least of all the one that fixes it. `--gate-all
 3. In `tests/test_live.py`, show it passing on the made-up household and failing for the reason it exists.
 
 A new connection or a new kind of thing Hub can do gets a live check, as it gets golden scenarios.
+
+## The walkthrough
+
+`tools/walkthrough.mjs` looks over the live app the way a person would, at phone and laptop size: it opens Ask,
+House, each dashboard, Today, Mail, Kitchen and everything in System's menu, takes screenshots, and notes what is
+under a fixed bar, smaller than 44 px, too wide, or failing. Every request but a GET is aborted, so nothing in the
+house, mail or kitchen can change; with `SKIP_ASK` it doesn't even send its one question. It writes `audit.json`
+and a short `summary.md` beside the screenshots, which show the real household and stay on the Mac.
+
+The deployer runs it after each accepted deploy, in the background, never gating one, once the owner has set it up
+(home-ops `docs/HUB-DEPLOYER.md`). By hand: `PW_DIR=<folder with node_modules/playwright-core> node tools/walkthrough.mjs
+<out-folder> <hub-url>`; `ONLY=system,Today` runs part of it.
+
