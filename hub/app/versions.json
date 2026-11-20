@@ -1,8 +1,18 @@
 [
  {
   "sha": null,
-  "from": "8e3310f784c25ef2e632af2562c09958f45165f9",
+  "from": "4bf806da88bea5a90070bb9df928d43306ee6a21",
   "live": null,
+  "title": "Errands stay finished",
+  "changes": [
+   "Errands no longer puts back an errand Hub has just closed. When two looks overlapped, the older one could land last and show the errand as waiting again.",
+   "After Look again, “You replied” stays on screen if it was already showing, instead of being covered by “Looking”."
+  ]
+ },
+ {
+  "sha": "4bf806da88bea5a90070bb9df928d43306ee6a21",
+  "from": "8e3310f784c25ef2e632af2562c09958f45165f9",
+  "live": "2026-11-20T03:00:48Z",
   "title": "A weekly look at the house",
   "changes": [
    "On Sundays Hub reads the past week of the house’s activity and offers at most three ideas on Today and in the morning message: an automation that keeps failing or gets undone, a device that keeps dropping off, a light switched by hand at the same hour, an automation that never runs. It only suggests; nothing changes unless you ask."
