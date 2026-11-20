@@ -699,8 +699,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.waitForTimeout(300); await shot("14c-errand-opened");
     await stage("errands-replied");
     await tap('.btn:text-is("Look again")');
-    expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "You replied: RSVP to Jordan’s birthday party", null, 10000),
-      "the reply in sent mail did not close the errand");
+    const replyClosed = await until(() => document.querySelector(".toast span")?.textContent.trim() === "You replied: RSVP to Jordan’s birthday party", null, 10000);
+    expect(replyClosed, "the reply in sent mail did not close the errand: " + (replyClosed ? "" : await page.evaluate(() =>
+      fetch("/app/api/errands").then((r) => r.json()).then((d) => {      // what Hub had and what the screen said
+        const party = [...d.ready, ...d.done].find((e) => e.title.includes("Jordan"));
+        return `Hub has it ${party?.state}, reading ${d.reading}, checking ${d.checking}; the screen says ` +
+          `“${document.querySelector(".toast span")?.textContent.trim() ?? ""}”`;
+      }))));
     expect(await saysSoon("Five things are ready for your tap.", 3000), "the errand that was replied to stayed: " + await says());
     expect((await page.locator(".errands .block .row-main b").allInnerTexts()).includes("RSVP to Jordan’s birthday party"), "the errand replied to was not under Done lately");
     // Reads overlap (the busy look every few seconds, Look again's, a tap's): an answer to a read asked earlier that

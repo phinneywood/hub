@@ -37,6 +37,9 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/shots"
           NODE_PATH="$RUNNER_TEMP/pw/node_modules" node web/app/check/check.cjs "$RUNNER_TEMP/shots"
+      - name: Show the demo's log
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/demo.log"
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

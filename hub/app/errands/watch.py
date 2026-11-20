@@ -19,6 +19,7 @@ for its own errands (store.MAIN). A household errand (the class guide's) is neve
 calendar shows; a tap closes it, or its day passing. An account no one at home owns (store.mapped()) isn't read for
 proof: nobody could see what it closed.
 """
+import logging
 import re
 import threading
 import time
@@ -27,10 +28,13 @@ from datetime import date, datetime, time as clock, timedelta
 from ... import bridge, home
 from . import draft, links, store
 
+log = logging.getLogger('hub.errands')
+
 WATCH_READS = 10
 CHECK_EVERY = 6 * 3600
 STALE_DAYS = 21
 SOON_SECONDS = 90                # the screen asks for a look at most this often
+WAIT_SECONDS = 60                # Look again waits at most this long for a look already under way
 CONFIRMS = {
     'pay': r'payment|paid|receipt|thank you|confirm',
     'renew': r'renew|receipt|confirm|thank you|payment|welcome back',
@@ -182,13 +186,16 @@ def _proof(errand, now, reads):
     return (first if proven and all(kind in proven or kind in errand['steps'] for kind in steps) else None), first
 
 
-def run(now=None):
-    """Look for proof on every open errand, within WATCH_READS. Never raises; returns how many ended."""
-    if not _lock.acquire(blocking=False):
+def run(now=None, wait=False):
+    """Look for proof on every open errand, within WATCH_READS. Never raises; returns how many ended. A look already
+    under way is left to finish this one's work, unless `wait` (Look again): that look may have read the sent mail
+    before the reply was sent, so this one waits for it and then looks again."""
+    if not (_lock.acquire(timeout=WAIT_SECONDS) if wait else _lock.acquire(blocking=False)):
         return 0
     try:
         return _run(store.now() if now is None else now)
-    except Exception:  # noqa: BLE001 - what closed stays closed; the rest is looked at next time
+    except Exception as error:  # noqa: BLE001 - what closed stays closed; the rest is looked at next time
+        log.warning('errands look failed: %s', type(error).__name__)
         return 0
     finally:
         _lock.release()
