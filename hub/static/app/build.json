@@ -27,7 +27,7 @@
     "src/screens.tsx": "915d3ce2905a8335f4ea1b601cc78d42048231866a724fe78212ca1dd434cc8c",
     "src/sheets.tsx": "c1b62ad0fa13401aa7dd55d67f4c4d1ead49f28115e57e8b63cbbfe89ef516d1",
     "src/show.tsx": "6cc61909053892d208d7949c677501e4827ea5111db88ae779cccc1c0d68e126",
-    "src/state.ts": "9b0557f86891f3b69aad3b2ecbc720f46b63c741d58d38676261b1755a2c6868",
+    "src/state.ts": "b8a0fc0485fbc04c6e53e8fa53fa83368ebef4267bb5c8c6206ae1ec0265142d",
     "src/today.tsx": "3b5d2379ddfad8ed98b44a99aeb713beee52d9ed7cb0245708ced6a5237e380d",
     "src/types.ts": "349f653413547e4d793a6a4063b5ca214e2de0cdc622d1f6b774f66f64c87c9e",
     "src/ui.tsx": "083f27e286b07b5daa42c3a3be43b10ad1685d76e7a89c7ceaf4f82d04ebe74e",
@@ -39,6 +39,6 @@
   },
   "built": {
     "app.css": "27a35af968278a99b1980669b437159c6776c76b8f3448df4c477eb65a11b1bb",
-    "app.js": "0e68e34191295b8687739c1a0a7847d2f2acdc88bd5e7e947ec6e0f4acb19a6b"
+    "app.js": "a0019d79c22effbd1e055c7baad629b1052fb528acf3087758f8e3f5ec36e77d"
   }
 }

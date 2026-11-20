@@ -23,6 +23,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     let quiet = false;      // while the check itself cuts the line, failed requests are expected
     page.on("console", (m) => m.type() === "error" && !quiet && failures.push(`${name}: console: ${m.text()} ${m.location()?.url || ""}`));
     page.on("pageerror", (e) => failures.push(`${name}: page error: ${e}`));
+    const moves = [];      // where the app went, and when (ms): a page that leaves by itself shows its way out in the failure
+    page.on("framenavigated", (f) => { if (f === page.mainFrame()) moves.push(`${Date.now() % 100000} ${new URL(f.url()).hash || "/"}`); });
     page.on("request", (r) => hosts.add(new URL(r.url()).host));
     page.on("response", (r) => r.status() >= 400 && !quiet && failures.push(`${name}: ${r.status()} ${new URL(r.url()).pathname}`));
     const shot = (n) => page.screenshot({ path: `${out}/${name}-${n}.png` });
@@ -34,10 +36,13 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     const saysSoon = (text, ms) => until((t) => document.querySelector(".say")?.textContent.trim() === t, text, ms);
     const room = (id) => `.main .room[data-room="${id}"]`;
 
+    // A finger gets the laid-out size, not the painted one: a page or sheet still sliding into place can paint a 44 px
+    // button a fraction smaller for a moment, and that is no smaller target.
     const small = () => page.evaluate((least) => [...document.querySelectorAll("button, a, input, [role=switch], [role=button]")]
-      .map((el) => [el, el.getBoundingClientRect()]).filter(([el, r]) => r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden")
-      .filter(([, r]) => Math.min(r.width, r.height) < least)
-      .map(([el, r]) => `${(el.getAttribute("aria-label") || el.textContent || el.className).trim().slice(0, 30)} ${Math.round(r.width)}x${Math.round(r.height)}`), FINGER);
+      .map((el) => { const r = el.getBoundingClientRect(); return [el, r, el.offsetWidth || r.width, el.offsetHeight || r.height]; })
+      .filter(([el, r]) => r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden")
+      .filter(([, , w, h]) => Math.min(w, h) < least)
+      .map(([el, , w, h]) => `${(el.getAttribute("aria-label") || el.textContent || el.className).trim().slice(0, 30)} ${w}x${h}`), FINGER);
     const openPage = async (name) => {         // Today, Mail and Kitchen have no tab: Ask finds them by a few letters
       await tap(phone ? '.tabs .tab:text-is("Ask")' : '.rail .tab:text-is("Ask")');
       await page.fill("#askq", name.slice(0, 4));
@@ -571,6 +576,14 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.waitForSelector(".askpage", { timeout: 4000 }).then(() => true, () => false), "the browser’s back did not return from Today to Ask");
     await page.goForward();
     expect(await saysSoon("Dinner at home is at seven. Ten things need you."), "Today, again: " + await says());
+    // Two quick taps on the way back are one step back, never two: the second once went back again, out of Hub.
+    await page.evaluate(() => { const link = document.querySelector(".top .uplink"); link.click(); link.click(); });
+    expect(await page.waitForSelector(".askpage", { timeout: 4000 }).then(() => true, () => false), "two quick taps on Today’s way back did not land on Ask");
+    await page.waitForTimeout(800);
+    expect(new URL(page.url()).pathname === "/app/" && !new URL(page.url()).hash && await page.locator(".askpage").count() === 1,
+      "two quick taps on Today’s way back went back twice: " + page.url());
+    await page.goForward();
+    expect(await saysSoon("Dinner at home is at seven. Ten things need you."), "Today, after two quick taps back: " + await says());
     await page.locator('.row.need:has-text("Email from Sam Rivera") .tickbtn').click();
     expect(await saysSoon("Dinner at home is at seven. Nine things need you.", 3000), "a tick did not take the email off the list: " + await says());
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Marked as handled"), "a tick did not say what it did");
@@ -598,6 +611,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.waitForTimeout(300); await shot("14-errands");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Errands: " + (await small()).join(", "));
     const errand = (words) => page.locator(".errands .errand").filter({ hasText: words });
+    if (await page.evaluate(() => location.hash) !== "#errands") throw new Error(`Errands left by itself: ${moves.slice(-8).join(" → ")}`);
     // the one thing Hub does itself: the class guide's pumpkin goes on the shopping list, with Undo
     await errand("small pumpkin").locator(".btn.go").click();
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Small pumpkin is on the list"), "Add to the list did not say what it did");
