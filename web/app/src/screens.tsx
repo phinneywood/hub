@@ -1,7 +1,7 @@
 // The screens: the house as a plan, the bar at the bottom, and System.
 import type { JSX } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { back, boardId, cameFrom, go, house, look, me, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
+import { back, boardId, cameFrom, go, goHome, house, look, me, paletteChoice, PALETTES, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
 import type { Look, View } from "./state";
 import { able, forgetNote } from "./asking";
 import { boards } from "./boards";
@@ -9,6 +9,7 @@ import type { Floor, House, Room } from "./types";
 import { Bars, Icon } from "./ui";
 import { ShowChip, showable } from "./now";
 import { watchDock } from "./viewport";
+import { mood } from "./palette";
 import { clock, familyOf, familySizes, houseSays, list, musicSays, NUMBER_WORDS, playingIn, when } from "./words";
 
 const HOLD_MS = 430;        // how long a finger rests on a room before it opens
@@ -102,15 +103,16 @@ function careWords() {
   return waiting ? things(waiting) : "All quiet. " + care.looked;
 }
 
-// Where each page's back link leads: where it was opened from. The places in the bar have none.
+// Where each page's back link leads: where it was opened from. Home, the one place, has none.
 const UP: Partial<Record<View, [View, string]>> = {
-  today: ["home", "Ask"], mail: ["home", "Ask"], kitchen: ["home", "Ask"], system: ["home", "Ask"], archive: ["home", "Ask"],
+  ask: ["home", "Home"], house: ["home", "Home"], boards: ["home", "Home"],
+  today: ["home", "Home"], mail: ["home", "Home"], kitchen: ["home", "Home"], system: ["home", "Home"], archive: ["home", "Home"],
   errands: ["today", "Today"], mailsettings: ["mail", "Mail"], versions: ["system", "System"], engine: ["system", "System"],
   activity: ["system", "System"], health: ["system", "System"], changes: ["activity", "Activity"], board: ["boards", "Dashboards"],
 };
 
 /** The top of a screen: the way back (on a page opened from somewhere), or the day; and you, which opens System. */
-const NAMES: Partial<Record<View, string>> = { home: "Ask", house: "House", today: "Today", mail: "Mail", kitchen: "Kitchen", system: "System",
+const NAMES: Partial<Record<View, string>> = { home: "Home", ask: "Ask", house: "House", today: "Today", mail: "Mail", kitchen: "Kitchen", system: "System",
   activity: "Activity", boards: "Dashboards", archive: "Archive", errands: "Errands", health: "House health", versions: "Versions", engine: "Engine" };
 
 export function Top() {
@@ -237,37 +239,34 @@ function Playing() {
   );
 }
 
-// Two places: Ask, where Hub opens, and the house (and on a phone, the dashboards). A page Ask opened (Today, Mail, Kitchen, System) shows as a
-// third word while it is open, so the bar always says where you are and the way back is one tap.
-const TABS = [["home", "Ask"], ["house", "House"]] as const;
+// On a wide screen's rail: Home, where Hub opens, Ask and the house. A page opened from them (Today, Mail, Kitchen, System)
+// shows as a further word while it is open, so the rail always says where you are.
+const TABS = [["home", "Home"], ["ask", "Ask"], ["house", "House"]] as const;
 const PAGES: Partial<Record<View, string>> = { today: "Today", mail: "Mail", mailsettings: "Mail", kitchen: "Kitchen", system: "System",
   errands: "Today", versions: "System", engine: "System", changes: "System", activity: "System", boards: "Dashboards", board: "Dashboards" };
 
-// On a phone the bar also has Dashboards, once this person has one, since a phone has no column to list them in.
-// There the bar never changes shape: a page Ask opened marks Ask, and has its own way back at its top.
-function Tabs({ page, dash }: { page?: boolean; dash?: boolean }) {
+function Tabs({ page }: { page?: boolean }) {
   const open = PAGES[view.value];
-  const boarded = !!dash && (boards.value ?? []).length > 0;
-  const under = !page && !!open && open !== "Dashboards";
   return (
     <>
       {TABS.map(([where, name]) => (
-        <button type="button" key={where} class={"tab" + (view.value === where || (under && where === "home") ? " on" : "")}
-          aria-current={view.value === where ? "page" : undefined} onClick={() => go(where)}>{name}</button>
+        <button type="button" key={where} class={"tab" + (view.value === where ? " on" : "")}
+          aria-current={view.value === where ? "page" : undefined} onClick={() => (where === "home" ? goHome() : go(where))}>{name}</button>
       ))}
-      {boarded && <button type="button" class={"tab" + (open === "Dashboards" ? " on" : "")} onClick={() => go("boards")}>Dashboards</button>}
-      {page && open && !(boarded && open === "Dashboards") && <span class="tab on page" aria-current="page">{open}</span>}
+      {page && open && <span class="tab on page" aria-current="page">{open}</span>}
     </>
   );
 }
 
+/** The bar at the bottom of a phone: the way Home, in thumb reach, and what is playing. Home itself has every place
+ * on it as a tile (music too), so the bar steps aside there. On a wide screen only what is playing shows. */
 export function Dock() {
   const bar = useRef<HTMLDivElement>(null);
   useEffect(() => (bar.current ? watchDock(bar.current) : undefined), []);
   return (
-    <div class="dock" ref={bar}>
+    <div class={"dock" + (view.value === "home" ? " athome" : "")} ref={bar}>
       <div class="bar">
-        <div class="tabs"><Tabs dash /></div>
+        <button type="button" class="homebtn" onClick={goHome}><Icon name="home" />Home</button>
         <Playing />
       </div>
     </div>
@@ -362,6 +361,23 @@ export function System() {
           {LOOKS.map(([value, name]) => (
             <button type="button" role="radio" aria-checked={look.value === value} class={"choice" + (look.value === value ? " on" : "")}
               key={value} onClick={() => (look.value = value)}>{name}</button>
+          ))}
+        </div>
+        <div class="rows palettes" role="radiogroup" aria-label="Palette">
+          <button type="button" role="radio" aria-checked={paletteChoice.value === "auto"} class={"row free palette" + (paletteChoice.value === "auto" ? " on" : "")}
+            data-swatch="auto" onClick={() => (paletteChoice.value = "auto")}>
+            <span class="swatch" aria-hidden="true"><i /></span>
+            <div class="row-main"><b>Follows what’s going on</b>
+              <span>{paletteChoice.value === "auto" && mood.value ? `${mood.value.name} today, ${mood.value.why}` : "Clay for a celebration, Evergreen for time off, Dusk for an ordinary day"}</span></div>
+            {paletteChoice.value === "auto" && <Icon name="check" />}
+          </button>
+          {PALETTES.map(([value, name, what]) => (
+            <button type="button" role="radio" aria-checked={paletteChoice.value === value} class={"row free palette" + (paletteChoice.value === value ? " on" : "")}
+              key={value} data-swatch={value} onClick={() => (paletteChoice.value = value)}>
+              <span class="swatch" aria-hidden="true"><i /></span>
+              <div class="row-main"><b>{name}</b><span>{what}</span></div>
+              {paletteChoice.value === value && <Icon name="check" />}
+            </button>
           ))}
         </div>
       </section>

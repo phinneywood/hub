@@ -243,7 +243,14 @@ def picture(now=None, wall=False, login=None):
     found['note'] = brief.note(found) if theirs else None
     # A line for each dashboard this person may open (hub/app/boards/). Never on the wall: a dashboard is a person's.
     found['boards'] = [] if wall else _soft(lambda: _boards(login, now.date()), [])
+    # The palette the app wears today, the same for the whole household (mood.py).
+    found['mood'] = None if wall else _soft(lambda: _mood(now, theirs), None)
     return brief.family(found) if wall else found
+
+
+def _mood(now, theirs):
+    from . import mood
+    return mood.today(now, theirs)
 
 
 def _boards(login, day):

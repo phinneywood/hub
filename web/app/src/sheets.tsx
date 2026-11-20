@@ -296,7 +296,7 @@ export function ShowSheet() {
     setBusy(pick);
     const on = await startShow({ uri: pick.uri });
     setBusy(null);
-    if (on) { sheet.value = null; go("home"); }
+    if (on) { sheet.value = null; go("ask"); }
   };
   return (
     <SheetFrame title="Light show" sub="Pick the music. The lights follow it, and go back as they were when it ends.">

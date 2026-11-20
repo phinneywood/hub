@@ -8,6 +8,8 @@ import { spoken } from "./words";
 
 const KEEP = "hub.house";         // the last picture, so the app opens on something at once
 const LOOK = "hub.look";
+const PALETTE = "hub.palette";     // the palette chosen in System > The look, or "auto": Hub picks it (palette.ts)
+const SHOWN = "hub.palette.now";   // the palette on screen, so the next opening paints it at once (hub/static/look.js)
 const HOLD = 5000;                // how long a tap is believed before the house's own answer wins
 const SOUND_HOLD = 8000;          // speakers take longer to start, stop and join
 const DRAG_HOLD = 60000;
@@ -15,14 +17,21 @@ const ALL_OFF = "all-off";
 const SILENCE = 12000;            // Hub sends a beat every 5 s; this long without one and the line is taken for dead
 
 export type Look = "auto" | "dusk" | "day";
+export type Palette = "dusk" | "evergreen" | "clay" | "graphite";
+/** The four palettes, each with a night and a day (app.css): its name, and a few words on it for The look. */
+export type PaletteChoice = Palette | "auto";
+export const PALETTES: [Palette, string, string][] = [["dusk", "Dusk", "Navy evenings, warm paper days"], ["evergreen", "Evergreen", "Deep spruce and brass"],
+  ["clay", "Clay", "Terracotta and sand"], ["graphite", "Graphite", "Plain and quiet"]];
+const isPalette = (p: unknown): p is Palette => PALETTES.some(([id]) => id === p);
 export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "change"; speaker: string } | { kind: "keep" } | { kind: "show" }
   | { kind: "found"; id: string; source: ArchiveSource; page?: number | null; title?: string }
   | { kind: "viewer"; photos: ArchiveItem[]; at: number }
   | { kind: "item"; id: number } | { kind: "card"; card: Card } | { kind: "errand"; id: number; way?: number } | null;
 export type Trouble = "" | "hub" | "house";
 export interface Toast { text: string; batch: string | null; n: number; back?: () => void }
-// "home" is Ask, the screen Hub opens to; "house" is the plan of rooms; "wall" is the brief on the kitchen iPad.
-export type View = "home" | "house" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity"
+// "home" is the home screen Hub opens to, with a tile for each place; "ask" is the conversation with Hub; "house" is the
+// plan of rooms; "wall" is the brief on the kitchen iPad.
+export type View = "home" | "ask" | "house" | "today" | "mail" | "kitchen" | "system" | "versions" | "engine" | "mailsettings" | "changes" | "activity"
   | "errands" | "wall" | "boards" | "board" | "health" | "archive";
 
 function kept(): House | null {
@@ -43,13 +52,31 @@ function keptLook(): Look {
   }
 }
 
+function keptChoice(): PaletteChoice {
+  try {
+    const found = localStorage.getItem(PALETTE);
+    return isPalette(found) ? found : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
+function keptShown(): Palette {
+  try {
+    const found = localStorage.getItem(SHOWN);
+    return isPalette(found) ? found : "dusk";
+  } catch {
+    return "dusk";
+  }
+}
+
 export const house = signal<House | null>(kept());
 export const live = signal(false);            // a picture has arrived since the app opened
 export const trouble = signal<Trouble>("");   // "hub": can't reach Hub; "house": Hub can't reach the house
 export const why = signal("");
 export const me = signal<Me>({ signed_in: true, initial: "", versions: { js: "", css: "" }, links: { ha: null, music: null } });
 export const sheet = signal<Sheet>(null);
-const VIEWS: View[] = ["house", "today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "errands", "wall", "boards", "health", "archive"];
+const VIEWS: View[] = ["ask", "house", "today", "mail", "kitchen", "system", "versions", "engine", "mailsettings", "changes", "activity", "errands", "wall", "boards", "health", "archive"];
 // One dashboard is "#board/<id>" (hub/app/boards/): the view is "board", and which one is boardId.
 const BOARD = /^#board\/([a-z0-9-]{1,60})$/;
 const hashed = () => (location.hash === "#photos" ? "#archive" : location.hash.split("?")[0]);     // Photos is part of the Archive now
@@ -60,6 +87,9 @@ export const view = signal<View>(here());
 export const archiveQuery = signal(searched());     // what the Archive is searching for; in the address, so it can be opened again
 export const toast = signal<Toast | null>(null);
 export const look = signal<Look>(keptLook());
+export const paletteChoice = signal<PaletteChoice>(keptChoice());
+export const palette = signal<Palette>(keptShown());       // the one on screen: the choice, or Hub's pick (palette.ts)
+document.documentElement.dataset.palette = palette.value;    // at once, before anything is drawn
 export const picks = signal<Pick[] | null>(null);
 export const running = signal("");        // the scene being run, until the house answers
 
@@ -77,6 +107,35 @@ effect(() => {
   }
 });
 
+// ---- the palette: one of four, each with its night and its day (the look above) ----
+
+let painted = "";
+effect(() => {
+  const root = document.documentElement, shown = palette.value;
+  void look.value; void dark.value;          // the ground changes with the look too
+  if (painted && painted !== shown) {        // a change while open comes in slowly, as light does
+    root.classList.add("repaint");
+    window.setTimeout(() => root.classList.remove("repaint"), 1000);
+  }
+  painted = shown;
+  root.dataset.palette = shown;
+  try {
+    localStorage.setItem(SHOWN, shown);
+  } catch {
+    /* not remembered: the next opening starts in Dusk and changes */
+  }
+  const ground = getComputedStyle(root).getPropertyValue("--ground").trim();     // the phone's own bars match the ground
+  if (ground) document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => { m.content = ground; m.removeAttribute("media"); });
+});
+
+effect(() => {
+  try {
+    localStorage.setItem(PALETTE, paletteChoice.value);
+  } catch {
+    /* not remembered: Hub picks again next time */
+  }
+});
+
 // What a toast says is about the last thing done; a sheet that opens starts a new thing.
 let sheetOpen = false;
 effect(() => {
@@ -85,10 +144,10 @@ effect(() => {
   sheetOpen = open;
 });
 
-// The places in the bar. Going to one of them replaces where you were; going anywhere else (a page Ask opened, a
-// dashboard, System's pages) is a step in, so the phone's back gesture, the browser's Back and a page's own back link
-// all come out the way you went in.
-const PLACES: View[] = ["home", "house", "boards"];
+// Home is the one place: going there replaces where you were. Going anywhere else (Ask, House, a dashboard, a page one
+// of those opened) is a step in from it, so the phone's back gesture, the browser's Back, a page's own back link and the
+// Home button all come out the way you went in.
+const PLACES: View[] = ["home"];
 interface Step { hub: number; from?: View }
 
 /** What this app wrote into the history for the screen showing now: how many steps in, and from where. */
@@ -148,6 +207,18 @@ export function back(up: View) {
     stepping = window.setTimeout(stepped, STEP_MS);
     history.back();
   } else go(up);
+}
+
+/** The Home button: all the way out to the home screen in one go, back through the steps that led here (so Back
+ * afterwards doesn't walk into them again), or straight there when this page was opened directly. */
+export function goHome() {
+  if (stepping) return;
+  const steps = step().hub;
+  if (steps > 0) {
+    stepping = window.setTimeout(stepped, STEP_MS);
+    after = () => { if (view.value !== "home") go("home"); };      // a step in the history not of this app's making
+    history.go(-steps);
+  } else go("home");
 }
 
 // The back gesture, the browser's Back, or a link to "#mail": show what the address now says, once.

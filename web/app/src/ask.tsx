@@ -1,4 +1,4 @@
-// Ask, the screen Hub opens to: a conversation with Hub, which speaks first with what needs you and the house.
+// Ask, one tap from Home: a conversation with Hub, which speaks first with what needs you and the house.
 import { Fragment } from "preact";
 import type { JSX, VNode } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
@@ -41,7 +41,7 @@ const PAGES: [View, string, string][] = [
 
 /** The one page or dashboard a few typed letters name (one word, a name that starts with it, or is it), for Return to
  * open instead of sending the letters to the model ("Kitc"). Rooms, scenes and playlists are left to their own taps. */
-function onePlace(text: string): (() => void) | null {
+export function onePlace(text: string): (() => void) | null {
   const typed = text.trim().toLowerCase();
   if (typed.length < 2 || /\s/.test(typed)) return null;
   const pages = PAGES.filter(([, name]) => name.toLowerCase().startsWith(typed));
@@ -54,7 +54,7 @@ function onePlace(text: string): (() => void) | null {
 
 /** What a few letters reach without asking anything: rooms, scenes, playlists and pages, worked right in the list.
  * With nothing typed, nothing, except where Ask isn't set up: there, where the words will go. */
-function Found({ now, text }: { now: House; text: string }) {
+export function Found({ now, text }: { now: House; text: string }) {
   const has = (name: string) => name.toLowerCase().includes(text.toLowerCase());
   const set = able.value?.ready !== false;
   if (!text) {         // where Ask isn't set up, say where words go; otherwise the suggested questions say it

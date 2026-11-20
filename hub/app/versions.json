@@ -1,8 +1,20 @@
 [
  {
   "sha": null,
-  "from": "08e9d5889a418f619fcc6b79dbd5918f692cd3f4",
+  "from": "bd84498871ff2d0625e5eb9cee3efe3e241b934a",
   "live": null,
+  "title": "Hub opens on Home, dressed for the day",
+  "changes": [
+   "Hub now opens on a home screen: the time, a field to ask Hub or find anything, and a tile for the house, the music, today and the kitchen, each saying what is going on there now.",
+   "Every dashboard has a tile on Home with its line for today, so they are a glance away instead of a list. Arrange still puts them in your order.",
+   "Ask is one tap from Home, and anything typed on Home goes there. On a phone the bar at the bottom is now the way Home, beside what is playing.",
+   "Hub comes in four palettes now, each with an evening and a day: Dusk, Evergreen, Clay and Graphite. Hub picks one for the day from what is going on: Clay for a birthday, guests or a holiday, Evergreen for the weekend, a day without school or a trip, Dusk otherwise. Home says why. Prefer one? Pick it in System, under The look."
+  ]
+ },
+ {
+  "sha": "bd84498871ff2d0625e5eb9cee3efe3e241b934a",
+  "from": "08e9d5889a418f619fcc6b79dbd5918f692cd3f4",
+  "live": "2026-11-20T04:46:24Z",
   "title": "Hub says when something's left on far longer than usual",
   "changes": [
    "When a fan, a light, a plug or a speaker has been on far longer than it usually is, Today says so the same day, and so does the morning message. It only says so: switching it off is yours, and Not today puts the line away for the day."

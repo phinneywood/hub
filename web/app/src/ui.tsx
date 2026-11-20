@@ -23,6 +23,8 @@ const PATHS = {
   bag: <><path d="M5.5 8.5h13l-1 11h-11z" /><path d="M9 8.5V7a3 3 0 0 1 6 0v1.5" /></>,
   stop: <rect x="7" y="7" width="10" height="10" rx="2" />,
   right: <path d="M9.5 6l6 6-6 6" />,
+  home: <path d="M4.5 10.8 12 4.5l7.5 6.3V19a.8.8 0 0 1-.8.8H14.6v-5.3H9.4v5.3H5.3a.8.8 0 0 1-.8-.8z" />,
+  search: <><circle cx="11" cy="11" r="6.2" /><path d="M20 20l-4.6-4.6" /></>,
 };
 const SOLID = new Set(["more", "play", "pause", "next", "previous", "stop"]);
 

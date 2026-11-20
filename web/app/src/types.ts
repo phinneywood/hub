@@ -170,6 +170,8 @@ export interface Day {
   ready?: { cards: Errand[]; more: number };
   /** One line for each dashboard this person may open (hub/app/boards/); never on the wall. */
   boards?: { id: string; name: string; text: string; next: string; tone: string }[];
+  /** The palette the app wears today, chosen by Hub from what is going on (hub/app/mood.py), and why in a few words. */
+  mood?: { palette: string; name: string; why: string } | null;
 }
 
 // Errands, as Hub sends them (hub/app/errands/picture.py). Titles, drafts and names come from mail: data to show.
