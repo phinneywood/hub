@@ -100,8 +100,11 @@ def test_hows_the_house_is_answered_in_one_trip_with_what_needs_a_tap_under_it(h
     assert queued(folder) == [] and house.sent == [] and house.setup == []
 
 
-def test_what_broke_last_night_and_why_a_lamp_keeps_dropping(house, folder, monkeypatch):
+def test_what_broke_last_night_and_why_a_lamp_keeps_dropping(house, tmp_path, monkeypatch):
     morning = caretaker_world.local(datetime.now(timezone.utc).astimezone(home.PACIFIC).date(), 6, 30)
+    path = tmp_path / 'caretaker-morning'                         # the made-up night seen from 6:30 that morning, so
+    monkeypatch.setattr(config, 'CARETAKER_DIR', path)            # "last night" is the same night at any hour the tests run
+    folder = caretaker_world.night(path, now=morning, released=True)
     monkeypatch.setattr(caretaker, '_now', lambda: morning)
     answer, cards, _ = ask('What broke last night?')
     assert 'Hub stopped answering at 11:12 PM. The caretaker restarted it; it was back at 11:15 PM.' in answer

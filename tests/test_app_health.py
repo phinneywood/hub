@@ -220,7 +220,12 @@ def test_hub_only_reads_the_journal_and_the_status(folder):
             conn.execute("delete from incidents")
 
 
-def test_the_app_gets_the_count_for_the_top_button_and_the_screen(folder, house):
+def test_the_app_gets_the_count_for_the_top_button_and_the_screen(tmp_path, monkeypatch, house):
+    noon = at(0, 12, 0)                                            # seen at midday: nothing waits for the morning, at
+    path = tmp_path / 'caretaker-noon'                             # whatever hour the tests run
+    monkeypatch.setattr(config, 'CARETAKER_DIR', path)
+    caretaker_world.night(path, now=noon)
+    monkeypatch.setattr(caretaker, '_now', lambda: noon)
     home_now = client.get('/app/api/home').json()
     assert home_now['care']['set_up'] is True and home_now['care']['alive'] is True
     assert home_now['care']['needs'] == len(caretaker.needs())
