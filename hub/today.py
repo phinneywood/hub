@@ -236,7 +236,8 @@ def start():
     return [(home._pool.submit(check), account) for check, account in _checks()]
 
 
-NOT_REVIEWED = ('idea-',)   # the weekly house review's ideas: they reach Ask's model only, never the overnight review's
+# The weekly house review's ideas and what is left on: house names that reach Ask's model only, never the overnight review's.
+NOT_REVIEWED = ('idea-', 'house-left-on-')
 
 
 def rule_items():

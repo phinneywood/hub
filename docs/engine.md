@@ -241,6 +241,21 @@ They are kept from the overnight review (`today.rule_items` leaves them out). A 
 reading failed or is over an hour old, or Home Assistant can't be read, makes no review; the next morning tries
 again. The logbook records on and off, not dimming, so a light someone keeps dimming isn't seen.
 
+### Left on
+
+The owner asked (2026-11-19) that something like a fan left on all day gets noticed, the same day.
+`hub/engine/left_on.py`, one of the `house` source's items, says on Today when a fan, a light, a plug or a speaker
+has been on (or playing) far longer than it usually is, and so in the morning message as one of the house's own
+lines when it has crossed by then. "Usually" is that thing's own record in the house activity Hub keeps, one time a
+day (that day's longest, so motion blinks don't count): with 5 or more days on record, it is left on once it has been
+on for the longest of 6 hours, 1.5 times what it stays under three days in four, and that plus 3 hours. One forgotten
+night doesn't raise the bar for the next. A thing with fewer days on record (an always-on plug, a setting switch) is
+never said, nor a group of lights, a speaker following another in a group, or a hidden, disabled or setting entity.
+How long it has been on is Home Assistant's "last changed", or the logbook's earlier on when a restart or a drop
+offline of up to 15 minutes reset that. It only says so: switching it off is the person's, from Home or Ask, and
+"Not today" puts the line away for the day. Its lines stay out of the overnight review (`today.NOT_REVIEWED`). Rules
+only, no model; read again at most every five minutes, or sooner after Hub changes the house.
+
 ## Calendar
 
 `hub/tools/calendar/` reads the owner's main Google calendar for the next 7 days through the

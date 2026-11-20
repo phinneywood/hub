@@ -48,13 +48,20 @@ SAYS_PRESS = re.compile(r'\b(Single|Double|Triple|Long) press:\s*(.+?)(?=\s+(?:S
 
 _lock = threading.Lock()
 _cache = {'registry': None, 'registry_at': float('-inf'), 'snapshot': None, 'snapshot_at': float('-inf'),
-          'floors': None, 'floors_at': float('-inf'), 'presses': {}, 'presses_at': float('-inf')}
+          'floors': None, 'floors_at': float('-inf'), 'presses': {}, 'presses_at': float('-inf'),
+          'changed_at': float('-inf')}
 
 
 def forget_states():
     """After a change: the next read asks Home Assistant again."""
     with _lock:
-        _cache.update(snapshot=None, snapshot_at=float('-inf'))
+        _cache.update(snapshot=None, snapshot_at=float('-inf'), changed_at=time.monotonic())
+
+
+def changed_at():
+    """When Hub last changed the house or forgot what it read (time.monotonic()), for readings kept elsewhere."""
+    with _lock:
+        return _cache['changed_at']
 
 
 def clear_cache():
@@ -62,7 +69,8 @@ def clear_cache():
     from . import apple, weather
     with _lock:
         _cache.update(registry=None, registry_at=float('-inf'), snapshot=None, snapshot_at=float('-inf'),
-                      floors=None, floors_at=float('-inf'), presses={}, presses_at=float('-inf'))
+                      floors=None, floors_at=float('-inf'), presses={}, presses_at=float('-inf'),
+                      changed_at=time.monotonic())
     weather.forget()
     apple.forget()
 
