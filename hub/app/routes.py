@@ -437,6 +437,8 @@ def tick(request: Request, body: dict = Body(...)):
 # ---- Ask (hub/app/ask): say it, and Hub does it or answers ----
 
 _asking, _asking_lock = set(), __import__('threading').Lock()
+_turns = set()          # turns still running after their app went away: held here so they finish
+_log = __import__('logging').getLogger('hub.app.ask')
 
 
 @router.get('/api/ask')
@@ -491,15 +493,32 @@ async def ask(request: Request, body: dict = Body(...)):
             return _refuse('Hub is still on your last request.')
         _asking.add(login)
 
-    async def events():
-        try:
-            async for event in brain.run(text, login):
-                yield 'data: ' + json.dumps(event, separators=(',', ':')) + '\n\n'
-        finally:
-            with _asking_lock:
-                _asking.discard(login)
-
     if 'text/event-stream' in request.headers.get('accept', ''):
+        # The turn runs on its own, not inside the response: a phone that loses the connection partway (a locked
+        # screen, a weak signal) doesn't cut the turn off unsaved. It finishes and is kept, so the app can read the
+        # answer back, the next request has it as context, and a request sent meanwhile waits for it.
+        heard = asyncio.Queue()
+
+        async def turn():
+            try:
+                async for event in brain.run(text, login):
+                    heard.put_nowait(event)
+            except Exception as error:  # noqa: BLE001 - the app says the turn stopped; the log gets the kind, never words
+                _log.warning('ask turn stopped early: %s', type(error).__name__)
+                _log.debug('ask turn stopped early', exc_info=True)
+            finally:
+                with _asking_lock:
+                    _asking.discard(login)
+                heard.put_nowait(None)
+
+        going = asyncio.create_task(turn())
+        _turns.add(going)
+        going.add_done_callback(_turns.discard)
+
+        async def events():
+            while (event := await heard.get()) is not None:
+                yield 'data: ' + json.dumps(event, separators=(',', ':')) + '\n\n'
+
         return StreamingResponse(events(), media_type='text/event-stream', headers={'X-Accel-Buffering': 'no'})
     said, end = [], {}
     try:

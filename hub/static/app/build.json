@@ -10,7 +10,7 @@
     "src/app.css": "d11a3345f42049a7e2d5ca518f30171a1e811f7ff1a55006f832c54b828adea6",
     "src/archive.tsx": "993994ff04cf1aaea78741e6bc6dbc7ffae3d0f2bee29b7223c6387f6b296cfb",
     "src/ask.tsx": "300d664aa317a37ff305fa16ddecf53d1bd5d1085a191394b6263c971ec72586",
-    "src/asking.ts": "6b7b38f1b73d1eadc8763967b41f4849e21924198491473008baba8b6f6aa203",
+    "src/asking.ts": "c35da4809a49c52ab13a1ca8343a700b66a3a978179e1f028a695d1abb75431e",
     "src/boards.tsx": "f3442ae4d0cca5fe962225e798bb700ac2156e07ba749bc036f8f26f69e44b90",
     "src/brief.tsx": "4feb40d304cf5933e37a44a6735032c78d198645d22b67b193e1ad687ecf43d2",
     "src/changes.tsx": "1da3a5d20b77b432ca04c0acf41076519a526d1549519621387ad27908c914b9",
@@ -39,6 +39,6 @@
   },
   "built": {
     "app.css": "27a35af968278a99b1980669b437159c6776c76b8f3448df4c477eb65a11b1bb",
-    "app.js": "a22ce30e48b7ffb616afcc9ec0545724b3de4b3b05ff1dfb68adf900e7971d3d"
+    "app.js": "7828d93e40b6689824ca99973af7cc3809f32ac666121c10aabed9aba41dd06c"
   }
 }
