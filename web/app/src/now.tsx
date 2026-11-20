@@ -5,16 +5,20 @@ import { day } from "./day";
 import { inApp, NeedRow, SlotRow } from "./today";
 import { go, me, runScene, running, seen, trouble } from "./state";
 import type { Day, House, Slot } from "./types";
-import { Icon } from "./ui";
-import { daySays, daySub, familyOf, familySizes, houseSays, when } from "./words";
+import { talk } from "./asking";
+import { Bars, Icon } from "./ui";
+import { daySays, daySub, familyOf, familySizes, houseSays, list, playingIn, saysNext, when } from "./words";
 
 /** The top of Ask, as at the top of a conversation: who you are talking to, and whether it can hear you. */
 export function ChatHead() {
   const wrong = trouble.value === "hub" ? "Can’t reach Hub" : trouble.value === "house" ? "The house isn’t answering" : "";
+  const busy = talk.value.some((turn) => turn.busy);
+  // One clock for the line at the top and Hub's greeting, so "Thursday afternoon" never sits over "Good evening".
+  const at = day.value ? new Date(day.value.at) : undefined;
   return (
     <div class="top chathead">
-      <span class="hubmark" aria-hidden="true" />
-      <span class="chat-who"><b>Hub</b><span>{wrong || when()}</span></span>
+      <span class={"hubmark" + (busy ? " busy" : "") + (wrong ? " away" : "")} aria-hidden="true" />
+      <span class="chat-who"><b>Hub</b><span>{wrong || when(at)}</span></span>
       <button type="button" class={"who" + (trouble.value ? " bad" : "")} aria-label="System" onClick={() => go("system")}>{me.value.initial}</button>
     </div>
   );
@@ -34,7 +38,7 @@ export function Greeting() {
   const waiting = now ? now.needs.length + now.more : 0;
   return (
     <div class="hub greet">
-      <p class="greet-text">{hello(now ? new Date(now.at) : new Date())} {said}</p>
+      <p class="greet-text"><span class="hello">{hello(now ? new Date(now.at) : new Date())}</span> {said}</p>
       {sub && <p class="greet-sub">{sub}</p>}
       {waiting > 0 && <button type="button" class="greet-more" onClick={() => go("today")}>Open Today<Icon name="right" /></button>}
     </div>
@@ -52,7 +56,8 @@ export function NeedsCard({ most }: { most: number }) {
   if (!now) return null;
   const more = Math.max(0, now.needs.length - most) + now.more;
   const next = now.needs.length && most ? undefined : upNext(now);
-  if (!most) {      // the morning message in the conversation says what needs you; this keeps the day's next thing
+  if (!most) {      // the morning message in the conversation says what needs you; this keeps the day's next thing,
+    if (next && saysNext(now)) return null;      // unless Hub's greeting already said it, with Open Today under it
     return next ? (
       <section class="now" aria-label="Next">
         <div class="rows"><SlotRow slot={next} /></div>
@@ -79,10 +84,13 @@ export function NeedsCard({ most }: { most: number }) {
 export function HouseCard({ now }: { now: House }) {
   const families = familySizes(now.scenes);
   const rooms = Object.values(now.rooms).filter((room) => !room.outside).slice(0, 12);
+  const music = now.music?.playing ? now.music : null;
+  const where = music ? list(playingIn(music)) : "";
   return (
     <section class="now house-now" aria-label="The house">
       <button type="button" class="house-line" onClick={() => go("house")}>
-        <span class="house-words"><b>{houseSays(now)}</b></span>
+        <span class="house-words"><b>{houseSays(now)}</b>
+          {music && <span><Bars />{music.title ? `${music.title}${where ? " · " + where : ""}` : where}</span>}</span>
         <span class="tiny" aria-hidden="true">
           {rooms.map((room) => <i key={room.id} class={room.on ? "lit" : ""} style={room.on ? { opacity: 0.45 + 0.55 * (room.level / 100) } : undefined} />)}
         </span>

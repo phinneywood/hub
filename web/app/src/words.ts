@@ -87,6 +87,12 @@ function timed(slot: Slot): boolean {
 }
 
 /** The headline: the next thing today, then how much needs you: the list, and the errands ready for a tap. */
+/** Whether the day's sentence names the next thing (so nothing under it needs to say it again). */
+export function saysNext(day: Day): boolean {
+  const next = day.today.find((slot) => slot.next);
+  return !!next && (next.time === "Now" || timed(next));
+}
+
 export function daySays(day: Day): string {
   const count = day.needs.length + day.more + (day.ready ? day.ready.cards.length + day.ready.more : 0);
   const needs = count === 0 ? "Nothing needs you." : count === 1 ? "One thing needs you." : `${NUMBER_WORDS[count] ?? count} things need you.`;

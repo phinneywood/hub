@@ -1,5 +1,5 @@
 // Hub's app: Ask at the center, the house a tap away, kept live. Built into hub/static/app (see ../README.md).
-import { render } from "preact";
+import { Fragment, render } from "preact";
 import { useEffect } from "preact/hooks";
 import { signal } from "@preact/signals";
 import "./app.css";
@@ -38,7 +38,15 @@ function toAsk() {
   requestAnimationFrame(() => document.getElementById("askq")?.focus());
 }
 
+/** The sheet open now, made anew for each thing opened, so one going away never takes the next with it. */
 function Sheets() {
+  const open = sheet.value;
+  const drawn = <OpenSheet />;
+  const which = !open ? "" : open.kind + ":" + ("id" in open ? open.id : "speaker" in open ? open.speaker : "");
+  return <Fragment key={which}>{drawn}</Fragment>;
+}
+
+function OpenSheet() {
   const open = sheet.value, now = seen.value;
   if (open?.kind === "found") return <FoundSheet key={open.id} id={open.id} source={open.source} page={open.page} title={open.title} />;
   if (open?.kind === "viewer") return <Viewer photos={open.photos} at={open.at} />;
@@ -104,7 +112,8 @@ async function keepOnDevice() {
   await navigator.serviceWorker.register("/app/sw.js", { scope: "/app/" });
   const built = [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')].map((el) => el.href)
     .concat([...document.querySelectorAll<HTMLScriptElement>("script[src]")].map((el) => el.src));
-  const wanted = [new URL("/app/", location.href).href, new URL("/static/app/fonts/Jost.ttf", location.href).href, ...built];
+  const fonts = ["Jost.ttf", "Fraunces.woff2", "Fraunces-Italic.woff2"].map((f) => new URL("/static/app/fonts/" + f, location.href).href);
+  const wanted = [new URL("/app/", location.href).href, ...fonts, ...built];
   const cache = await caches.open("hub-app-1");
   for (const kept of await cache.keys()) {
     const same = wanted.find((url) => new URL(url).pathname === new URL(kept.url).pathname);

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "preact/hooks";
 import * as api from "./api";
 import { Top } from "./screens";
-import { go, me, say } from "./state";
+import { me, say } from "./state";
 import type { Engine as EngineData, EngineRun } from "./types";
 
 const DAY = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
@@ -45,7 +45,6 @@ export function Engine() {
   return (
     <div class="wrap">
       <Top />
-      <button type="button" class="uplink" onClick={() => go("system")}>System</button>
       <h1 class="say">Engine</h1>
       <p class="sub">{failed ? "Can’t reach Hub to read it." : !now ? "Reading…" : "What you asked Hub for, what it may do without asking, and what its models cost."}</p>
       {now && (

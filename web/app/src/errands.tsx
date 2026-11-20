@@ -268,7 +268,6 @@ export function Errands() {
   return (
     <div class={"wrap errands" + (errandsAway.value ? " offline" : "")}>
       <Top />
-      <button type="button" class="uplink" onClick={() => go("today")}>Today</button>
       {errandsAway.value && <div class="banner"><b>Can’t reach Hub</b><span>Showing errands as they were when Hub last answered.</span></div>}
       {now.looked?.failed && !now.reading && <div class="banner"><b>The last read didn’t finish</b><span>Hub will try again in the morning, or tap Look again.</span></div>}
       <h1 class="say">{errandsSay(now)}</h1>

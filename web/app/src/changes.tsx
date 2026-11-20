@@ -3,7 +3,7 @@
 import { useEffect, useState } from "preact/hooks";
 import * as api from "./api";
 import { Top } from "./screens";
-import { go, me, told } from "./state";
+import { me, told } from "./state";
 import type { Changes as ChangesData } from "./types";
 
 const WHEN = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
@@ -27,7 +27,6 @@ export function Changes() {
   return (
     <div class="wrap">
       <Top />
-      <button type="button" class="uplink" onClick={() => go("activity")}>Activity</button>
       <h1 class="say">Everything Hub changed</h1>
       <p class="sub">{failed ? "Can’t reach Hub to read it." : !found ? "Reading…"
         : "Lights, speakers, playlists and how the house is set up, newest first. Each can be undone for a day."}</p>

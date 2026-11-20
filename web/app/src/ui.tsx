@@ -30,6 +30,13 @@ export function Icon({ name }: { name: keyof typeof PATHS }) {
   return <svg class={SOLID.has(name) ? "ic solid" : "ic"} viewBox="0 0 24 24" aria-hidden="true">{PATHS[name]}</svg>;
 }
 
+/** The night drift: warm lamp colours flowing slowly left to right, breathing, behind the top of Ask
+ * and along the foot of the wall. It moves only by transform and opacity, so nothing is redrawn, and it stands still
+ * where motion is turned down. */
+export function Glow({ class: kind }: { class?: string }) {
+  return <div class={"glow" + (kind ? " " + kind : "")} aria-hidden="true"><i /></div>;
+}
+
 /** Three bars: music is playing here. */
 export function Bars() {
   return <span class="eq" role="img" aria-label="Playing"><i /><i /><i /></span>;
@@ -63,25 +70,83 @@ export function Slider(props: { value: number; label: string; sound?: boolean; d
   return <div class={"slim" + (props.sound ? " snd" : "") + (props.dim ? " off" : "")} style={style}><b />{input}</div>;
 }
 
-/** A sheet that rises over where you are. Escape, the dimmed area or the close button put it away. */
+/** A sheet that rises over where you are. Escape, the dimmed area, the close button or a finger pulling it down
+ * put it away, and it goes the way it came, down. */
 export function SheetFrame(props: { title?: string; sub?: string; tall?: boolean; children: ComponentChildren }) {
   const box = useRef<HTMLDivElement>(null);
+  const shade = useRef<HTMLDivElement>(null);
+  // A tap on the dimmed area closes the sheet only if it began there. A finger held on a room opens the room's sheet
+  // under it, and the click the browser sends when that finger lifts must not close what it just opened.
+  const pressed = useRef(false);
+  const close = () => {
+    const el = box.current;
+    if (!el || el.classList.contains("out")) return;
+    const mine = sheet.value;
+    el.classList.add("out");
+    el.classList.remove("in");
+    el.style.transform = "";
+    shade.current?.classList.remove("in");
+    window.setTimeout(() => { if (sheet.value === mine) sheet.value = null; }, 230);
+  };
   useEffect(() => {
     const frame = requestAnimationFrame(() => box.current?.classList.add("in"));
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape") sheet.value = null; };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     document.addEventListener("keydown", key);
     box.current?.focus();
-    return () => { cancelAnimationFrame(frame); document.removeEventListener("keydown", key); };
+    const el = box.current;
+    // Pulled down from its top edge (or anywhere, once it is scrolled to the top), the sheet follows the finger and
+    // goes when let go far enough or fast enough; otherwise it settles back. Sliders and fields keep their own drags.
+    let from = -1, at = 0, moved = 0, since = 0;
+    const down = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!el || !t || e.touches.length > 1) return;
+      const target = e.target as Element;
+      if (target.closest("input, textarea, select, .dimmer, .slim, .chips, .picks, .scenes")) return;
+      const top = el.getBoundingClientRect().top;
+      if (el.scrollTop > 0 && t.clientY - top > 64) return;
+      from = t.clientY; at = Date.now(); moved = 0;
+    };
+    const move = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!el || from < 0 || !t) return;
+      moved = Math.max(0, t.clientY - from);
+      if (moved > 0 && el.scrollTop <= 0) {
+        if (e.cancelable) e.preventDefault();
+        if (!since) { since = 1; el.classList.add("held"); }
+        el.style.transform = `translateY(${moved}px)`;
+      }
+    };
+    const up = () => {
+      if (!el || from < 0) return;
+      const fast = moved / Math.max(1, Date.now() - at) > 0.6;
+      el.classList.remove("held");
+      if (moved > 120 || (fast && moved > 40)) close();
+      else el.style.transform = "";
+      from = -1; since = 0;
+    };
+    el?.addEventListener("touchstart", down, { passive: true });
+    el?.addEventListener("touchmove", move, { passive: false });
+    el?.addEventListener("touchend", up);
+    el?.addEventListener("touchcancel", up);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", key);
+      el?.removeEventListener("touchstart", down);
+      el?.removeEventListener("touchmove", move);
+      el?.removeEventListener("touchend", up);
+      el?.removeEventListener("touchcancel", up);
+    };
   }, []);
   return (
     <>
-      <div class="scrim in" onClick={() => (sheet.value = null)} />
+      <div class="scrim in" ref={shade} onPointerDown={() => (pressed.current = true)}
+        onClick={() => { if (pressed.current) close(); pressed.current = false; }} />
       <div class={"sheet" + (props.tall ? " tall" : "")} role="dialog" aria-modal="true" aria-label={props.title ?? "Ask"} tabIndex={-1} ref={box}>
         <div class="grab" />
         {props.title !== undefined && (
           <div class="sheet-head">
             <div><h1>{props.title}</h1>{props.sub && <p>{props.sub}</p>}</div>
-            <button type="button" class="x" aria-label="Close" onClick={() => (sheet.value = null)}><Icon name="close" /></button>
+            <button type="button" class="x" aria-label="Close" onClick={close}><Icon name="close" /></button>
           </div>
         )}
         {props.children}

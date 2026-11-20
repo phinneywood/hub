@@ -5,7 +5,7 @@
   color-scheme: light dark;
   /* The app's palette and type (web/app/src/app.css), so the older pages look like the app until each moves in.
      Day by default; Evening under a dark device, or whichever look was chosen in the app's System screen. */
-  --bg:#E4EAF1; --surface:#FFFFFF; --card:#F3F6F9; --fg:#17203A; --mut:#4E5A78; --line:rgba(23,32,58,.12);
+  --bg:#F5EFE4; --surface:#FFFDF8; --card:#FAF5EC; --fg:#1E2030; --mut:#575466; --line:rgba(30,32,48,.11);
   --acc:#2D4A9A; --acc-fg:#ffffff; --acc-soft:#DDE5F4;
   --ok:#0B7A69; --warn:#8A5A00; --bad:#C23A28; --idle:#7F8AA5;
   --radius-sm:10px; --radius:14px; --radius-lg:20px;
@@ -19,17 +19,17 @@
 @font-face { font-family:"Jost"; src:url("/static/app/fonts/Jost.ttf") format("truetype"); font-weight:300 600; font-display:swap; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="day"]) {
-    --bg:#141C33; --surface:#1D2746; --card:#222E50; --fg:#EEF1F8; --mut:#AEB8D0; --line:rgba(238,241,248,.11);
-    --acc:#FFC56E; --acc-fg:#1B2540; --acc-soft:rgba(255,197,110,.16);
+    --bg:#0F1322; --surface:#1A2036; --card:#151A2C; --fg:#F4EFE6; --mut:#BDB6AC; --line:rgba(244,239,230,.10);
+    --acc:#FFC56E; --acc-fg:#2A1A0A; --acc-soft:rgba(255,197,110,.16);
     --ok:#7FE0CF; --warn:#FFC56E; --bad:#FF8372; --idle:#7986A6;
-    --shadow:none; --shadow-lift:0 12px 32px -10px rgba(0,0,0,.6); --seg-on:#2C3A63;
+    --shadow:none; --shadow-lift:0 12px 32px -10px rgba(0,0,0,.6); --seg-on:#262C44;
   }
 }
 :root[data-theme="dusk"] {
-  --bg:#141C33; --surface:#1D2746; --card:#222E50; --fg:#EEF1F8; --mut:#AEB8D0; --line:rgba(238,241,248,.11);
-  --acc:#FFC56E; --acc-fg:#1B2540; --acc-soft:rgba(255,197,110,.16);
+  --bg:#0F1322; --surface:#1A2036; --card:#151A2C; --fg:#F4EFE6; --mut:#BDB6AC; --line:rgba(244,239,230,.10);
+  --acc:#FFC56E; --acc-fg:#2A1A0A; --acc-soft:rgba(255,197,110,.16);
   --ok:#7FE0CF; --warn:#FFC56E; --bad:#FF8372; --idle:#7986A6;
-  --shadow:none; --shadow-lift:0 12px 32px -10px rgba(0,0,0,.6); --seg-on:#2C3A63;
+  --shadow:none; --shadow-lift:0 12px 32px -10px rgba(0,0,0,.6); --seg-on:#262C44;
 }
 
 * { box-sizing:border-box; }

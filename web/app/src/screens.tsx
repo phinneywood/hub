@@ -1,7 +1,7 @@
 // The screens: the house as a plan, the bar at the bottom, and System.
 import type { JSX } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { boardId, go, house, look, me, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
+import { back, boardId, cameFrom, go, house, look, me, play, runScene, running, seen, sheet, switchRoom, trouble, view, why } from "./state";
 import type { Look, View } from "./state";
 import { able, forgetNote } from "./asking";
 import { boards } from "./boards";
@@ -101,10 +101,25 @@ function careWords() {
   return waiting ? things(waiting) : "All quiet. " + care.looked;
 }
 
+// Where each page's back link leads: where it was opened from. The places in the bar have none.
+const UP: Partial<Record<View, [View, string]>> = {
+  today: ["home", "Ask"], mail: ["home", "Ask"], kitchen: ["home", "Ask"], system: ["home", "Ask"], archive: ["home", "Ask"],
+  errands: ["today", "Today"], mailsettings: ["mail", "Mail"], versions: ["system", "System"], engine: ["system", "System"],
+  activity: ["system", "System"], health: ["system", "System"], changes: ["activity", "Activity"], board: ["boards", "Dashboards"],
+};
+
+/** The top of a screen: the way back (on a page opened from somewhere), or the day; and you, which opens System. */
+const NAMES: Partial<Record<View, string>> = { home: "Ask", house: "House", today: "Today", mail: "Mail", kitchen: "Kitchen", system: "System",
+  activity: "Activity", boards: "Dashboards", archive: "Archive", errands: "Errands", health: "House health", versions: "Versions", engine: "Engine" };
+
 export function Top() {
+  const parent = UP[view.value], from = cameFrom();
+  // Back goes the way you came in: named after where that was, or after the page's own parent when opened directly.
+  const up: [View, string] | undefined = parent && (from && NAMES[from] ? [from, NAMES[from]!] : parent);
   return (
     <div class="top">
-      <span class="when">{when()}</span>
+      {up ? <button type="button" class="uplink" onClick={() => back(up[0])}><Icon name="right" />{up[1]}</button>
+        : <span class="when">{when()}</span>}
       <button type="button" class={"who" + (trouble.value ? " bad" : careCalls() ? " care" : "")} aria-label="System" onClick={() => go("system")}>{me.value.initial}</button>
     </div>
   );
@@ -205,10 +220,10 @@ function Playing() {
   const quiet = !music.playing;
   const title = music.title || (quiet ? "Nothing playing" : "Music");
   return (
-    <div class={"np" + (music.playing ? " live" : "")} role="button" tabIndex={0} aria-label="What is playing"
+    <div class={"np" + (music.playing ? " live" : "")} role="button" tabIndex={0} aria-label={`What is playing: ${title}`}
       onClick={() => (sheet.value = { kind: "playing" })}
       onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); sheet.value = { kind: "playing" }; } }}>
-      <Sleeve name={music.album || music.title} />
+      <span class="np-art"><Sleeve name={music.album || music.title} />{music.playing && <Bars />}</span>
       <div class="np-text">
         <b>{title}</b>
         <span>{music.playing ? <><Bars />{(list(where) || "Playing") + (elsewhere.length ? ` · also ${list(elsewhere)}` : "")}</>
@@ -227,13 +242,16 @@ const PAGES: Partial<Record<View, string>> = { today: "Today", mail: "Mail", mai
   errands: "Today", versions: "System", engine: "System", changes: "System", activity: "System", boards: "Dashboards", board: "Dashboards" };
 
 // On a phone the bar also has Dashboards, once this person has one, since a phone has no column to list them in.
+// There the bar never changes shape: a page Ask opened marks Ask, and has its own way back at its top.
 function Tabs({ page, dash }: { page?: boolean; dash?: boolean }) {
   const open = PAGES[view.value];
   const boarded = !!dash && (boards.value ?? []).length > 0;
+  const under = !page && !!open && open !== "Dashboards";
   return (
     <>
       {TABS.map(([where, name]) => (
-        <button type="button" key={where} class={"tab" + (view.value === where ? " on" : "")} onClick={() => go(where)}>{name}</button>
+        <button type="button" key={where} class={"tab" + (view.value === where || (under && where === "home") ? " on" : "")}
+          aria-current={view.value === where ? "page" : undefined} onClick={() => go(where)}>{name}</button>
       ))}
       {boarded && <button type="button" class={"tab" + (open === "Dashboards" ? " on" : "")} onClick={() => go("boards")}>Dashboards</button>}
       {page && open && !(boarded && open === "Dashboards") && <span class="tab on page" aria-current="page">{open}</span>}
@@ -246,8 +264,10 @@ export function Dock() {
   useEffect(() => (bar.current ? watchDock(bar.current) : undefined), []);
   return (
     <div class="dock" ref={bar}>
-      <Playing />
-      <div class="tabs"><Tabs page dash /></div>
+      <div class="bar">
+        <div class="tabs"><Tabs dash /></div>
+        <Playing />
+      </div>
     </div>
   );
 }

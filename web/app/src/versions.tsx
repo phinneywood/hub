@@ -3,7 +3,7 @@
 // For a day after an update (one Hub made by itself included) it offers Undo, which puts the version from before back.
 import { useEffect, useState } from "preact/hooks";
 import * as api from "./api";
-import { go, me } from "./state";
+import { me } from "./state";
 import { Top } from "./screens";
 import type { Deploy, Release, Releases, Undo } from "./types";
 
@@ -114,7 +114,6 @@ export function Versions() {
   return (
     <div class="wrap">
       <Top />
-      <button type="button" class="uplink" onClick={() => go("system")}>System</button>
       <h1 class="say">Versions</h1>
       <p class="sub">{failed ? "Can’t reach Hub to read the list." : !found ? "Reading…"
         : now ? `Running: ${now.title}.` : "Each release of Hub, newest first."}</p>
