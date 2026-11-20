@@ -642,6 +642,27 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       "the reply in sent mail did not close the errand");
     expect(await saysSoon("Five things are ready for your tap.", 3000), "the errand that was replied to stayed: " + await says());
     expect((await page.locator(".errands .block .row-main b").allInnerTexts()).includes("RSVP to Jordan’s birthday party"), "the errand replied to was not under Done lately");
+    // Reads overlap (the busy look every few seconds, Look again's, a tap's): an answer to a read asked earlier that
+    // arrives after a newer one is dropped, so it can't put back an errand Hub already closed. The first read is held
+    // back with what Hub said then; every later one is answered as if one more errand had finished since.
+    let reads = 0, release = null;
+    await page.route("**/app/api/errands", async (route) => {
+      const real = await route.fetch();
+      if (++reads === 1) { await new Promise((ok) => { release = ok; }); return route.fulfill({ response: real }); }
+      const newer = await real.json();
+      newer.ready = newer.ready.slice(1);
+      return route.fulfill({ response: real, json: newer });
+    });
+    const comeBack = async () => { await page.waitForTimeout(3200); await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange"))); };
+    await comeBack();
+    for (let i = 0; i < 40 && !release; i++) await page.waitForTimeout(100);
+    expect(!!release, "Errands did not read again on coming back to the app");
+    await comeBack();
+    expect(await saysSoon("Four things are ready for your tap.", 4000), "the newer read was not shown: " + await says());
+    release?.();
+    await page.waitForTimeout(1200);
+    expect(await says() === "Four things are ready for your tap.", "an older read landed after a newer one and put an errand back: " + await says());
+    await page.unroute("**/app/api/errands");
     await stage("reset");
     // the other person at home, whose own mail Hub doesn't read: the class guide's two only, in Errands, Today and Ask
     const partnerCtx = await browser.newContext({ ...options, extraHTTPHeaders: { "tailscale-user-login": "casey@example.com" } });

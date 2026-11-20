@@ -16,7 +16,7 @@
     "src/changes.tsx": "1da3a5d20b77b432ca04c0acf41076519a526d1549519621387ad27908c914b9",
     "src/day.ts": "aa38aeb6d468f5f2fd1dc95c8790f1e53479a2cc684e352caee8d9de36bb0736",
     "src/engine.tsx": "cce5cdec9dfa8bce129b68152e84a8a1fc11404abe821abcf80ee01aeafbbb4e",
-    "src/errands.tsx": "1ad25c880db03e71caacf7ea84cdaa7bc7689e09b604547f6cf92361a2c93e37",
+    "src/errands.tsx": "beeb212d363e82b79c33cb58a22bca3badca99e08b2a7b97b00e6e84c3a6ad84",
     "src/health.tsx": "6132ec3dfed85b564559e90d1a11ef10187de62380c5369b8eecd12a7778f52a",
     "src/kitchen.tsx": "4508cc858a4d8a14b7f400a66dac509059363ea73bf0810d242005fc07ff39b9",
     "src/mail.tsx": "0dd8f178e949aeab251480c9ac89db3f21c3000952ed1db2a66cf3fe834ff972",
@@ -39,6 +39,6 @@
   },
   "built": {
     "app.css": "27a35af968278a99b1980669b437159c6776c76b8f3448df4c477eb65a11b1bb",
-    "app.js": "a0019d79c22effbd1e055c7baad629b1052fb528acf3087758f8e3f5ec36e77d"
+    "app.js": "a22ce30e48b7ffb616afcc9ec0545724b3de4b3b05ff1dfb68adf900e7971d3d"
   }
 }
