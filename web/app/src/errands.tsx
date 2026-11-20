@@ -29,16 +29,24 @@ function keep(cards: Errand[]) {
 }
 
 let toldAt = 0;               // when the screen last said that Hub saw an errand finished
+const TOLD_MS = 3500;         // how long that stays on screen (a plain toast, ui.tsx)
+// Reads overlap: the busy look every few seconds, Look again's own, a tap's. Each is numbered as it is asked, and an
+// answer older than the list already shown is dropped, so a read asked before Hub closed an errand can't land after
+// one asked since and put the errand back.
+let asking = 0, shown = 0;
 
 /** Reads the errands again. True when it said that one finished. */
 export async function loadErrands(): Promise<boolean> {
   asked = Date.now();
+  const mine = ++asking;
   let told = false;
   clearTimeout(timer);
   try {
     const answer = await fetch("/app/api/errands", { headers: { accept: "application/json" } });
     if (!answer.ok) throw new Error("Hub is away");
     const found = (await answer.json()) as ErrandsData;
+    if (mine < shown) return false;         // a newer list is already on screen
+    shown = mine;
     const before = errands.value;
     if (before) {             // what Hub saw finished since the last look: told once
       const was = new Set(before.ready.map((e) => e.id));
@@ -48,23 +56,24 @@ export async function loadErrands(): Promise<boolean> {
     errands.value = found;
     errandsAway.value = false;
     keep([...found.ready, ...found.later, ...found.done]);
+    clearTimeout(timer);
     if ((found.reading || found.checking) && (view.value === "errands" || view.value === "today")) {
       timer = window.setTimeout(() => void loadErrands(), BUSY_EVERY);
     }
   } catch {
-    errandsAway.value = true;
+    if (mine >= shown) errandsAway.value = true;
   }
   return told;
 }
 
-/** Look again: a finished errand found by this read (or by a look already under way) is what the screen says,
- *  not "Looking", which would cover it. */
+/** Look again: a finished errand found by this read (or by a look already under way, or one still on screen from
+ *  just before the tap) is what the screen says, not "Looking", which would cover it. */
 async function lookAgain() {
   const at = Date.now();
   const answer = await send("read");
   const told = await loadErrands();
   if (answer.error) say(answer.error);
-  else if (!told && toldAt < at) say(answer.said ?? "Looking");
+  else if (!told && toldAt < at - TOLD_MS) say(answer.said ?? "Looking");
 }
 
 export function seeErrands(cards: Errand[]) {
