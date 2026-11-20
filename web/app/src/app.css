@@ -688,6 +688,12 @@ button.row { text-align: left; }
 .wait-lines { list-style: none; padding: 0; margin-top: 2px; }
 .wait-lines li { padding: 7px 0; border-bottom: 1px solid var(--line); font-size: var(--t-s); line-height: 1.35; text-wrap: pretty; }
 .wait-lines li:last-child { border-bottom: 0; }
+.wait-diff li { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; }
+.wait-diff .diff-name { flex: 1 0 100%; font-size: var(--t-xs); color: var(--ink-3); }
+.wait-diff .diff-was { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--ink-3); }
+.wait-diff .diff-to { color: var(--ink-3); }
+.wait-diff .diff-now { font-weight: 600; }
+.wait.settled .wait-diff .diff-was { text-decoration: none; }
 .wait-why { margin-top: 6px; font-size: var(--t-xs); color: var(--ink-3); text-wrap: pretty; }
 .wait.settled .wait-t, .wait.settled .wait-lines { color: var(--ink-2); }
 .wait .took { margin-top: 2px; }

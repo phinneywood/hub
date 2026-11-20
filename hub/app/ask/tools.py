@@ -934,6 +934,16 @@ def _question(plan, args, changes, why):
         return f'Disable {name}?' if len(changes) == 1 else f'Disable these {len(changes)}?'
     if why == 'hide':
         return f'Hide {name}?' if len(changes) == 1 else f'Hide these {len(changes)}?'
+    if why == 'review':
+        if len(changes) > 1:
+            return f'Make these {len(changes)} changes?'
+        what, words = changes[0]['kind'], changes[0]['words']
+        if words.endswith((' switched on', ' switched off')):
+            return f'Switch {words.rpartition(" ")[2]} {name}?'
+        was, renamed, _ = words.partition(' renamed ')
+        if renamed:
+            return f'Rename {was.removeprefix(what.capitalize()).strip()} to {name}?'
+        return f'Change {what} {name}?' if changes[0]['target'] != 'new' else f'Make {what} {name}?'
     if plan == 'arrange':           # a new name, a new room, or the return of something that guards the house
         was, renamed, new = changes[0]['words'].partition(' renamed ')
         return f'Rename {was} to {new}?' if renamed else f'Enable {name}?' if 'enabled again' in changes[0]['words'] else f'Move {name}?'
@@ -968,8 +978,10 @@ def _setup(turn, plan, args, action='house.setup'):
         changes = plans.PLANS[plan](admin.world(fresh=True), **args)
         why = admin.asks(changes)
         if why:
+            if plan == 'scene' and any(c.get('captured') for c in changes):     # the tap saves what the card showed
+                args = dict(args, frozen={k: v for c in changes for k, v in (c.get('captured') or {}).items()})
             card = admin.wait(_question(plan, args, changes, why), changes, plan, args, login=turn.login)
-            return _say(turn, 'That one waits for your tap.', card)
+            return _say(turn, 'Here’s the change. Nothing happens until you tap Approve.' if why == 'review' else 'That one waits for your tap.', card)
         result = admin.carry_out(changes, login=turn.login, via=VIA)
     except NotNow as error:
         return _miss(turn, str(error), why='refused')
@@ -1028,7 +1040,9 @@ def scene_setup(ctx: RunContext[Turn], do: Literal['save', 'rename', 'remove'], 
     """Make or change one of Home Assistant's scenes (to run one, use scene). save makes the scene, or changes
     the one of that name and leaves the rest of it as it was. `set`: what it should set, each a light, plug, fan
     or a room's lights, with on, off or a level from 1 to 100, and a colour by name if wanted. `as_now`: rooms or
-    lights to keep exactly as they are at this moment. `leave`: things to take out of the scene."""
+    lights to keep exactly as they are at this moment; ["everything in it"] keeps every light the scene already
+    has as it is now ("make this the new Movie night"). `leave`: things to take out of the scene. Every save, rename
+    or remove waits on a card with the scene before and after, for the owner's Approve."""
     return _setup(ctx.deps, 'scene', {'do': do, 'name': name, 'set': set, 'capture': as_now, 'leave': leave, 'new_name': new_name})
 
 
@@ -1040,7 +1054,8 @@ def routine(ctx: RunContext[Turn], kind: Literal['automation', 'script'], do: Li
     alias, description, sequence, mode. Under entity_id and area_id give ids, or names exactly as <house> has them
     ("bedroom floor lamp", "Kitchen"): Hub looks each id up and refuses a name that fits two things. To change one,
     read it with details first and send the whole config back with the change made. Clock times are the house's
-    local time. One that unlocks or opens a door waits for the owner's tap, and so does removing one."""
+    local time. Every save, rename, remove and on or off waits on a card that shows it before and after, for the
+    owner's Approve; run happens at once (one that unlocks or opens a door waits for the tap too)."""
     return _setup(ctx.deps, 'routine', {'kind': kind, 'do': do, 'name': name, 'config': config, 'new_name': new_name})
 
 

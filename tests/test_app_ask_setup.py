@@ -20,6 +20,7 @@ from tests.ask_script import SEEN
 
 client = TestClient(app)
 SIGNED_IN = {'origin': 'http://testserver', 'tailscale-user-login': 'me@example.com'}
+REVIEW = 'Here’s the change. Nothing happens until you tap Approve.'
 ON_THIS_MAC = {'origin': 'http://testserver'}        # a program on the Mac itself: no login
 
 
@@ -95,12 +96,49 @@ def test_what_is_already_so_is_said_without_a_second_trip(house):
     assert answer == 'Reading lamp is already in Living room.' and cards == [] and len(SEEN) == 1 and house.setup == []
 
 
+def approve(card):
+    """The owner's tap on Approve."""
+    done = client.post(f'/app/api/setup/{card["id"]}/confirm', headers=SIGNED_IN).json()
+    assert done['ok'], done
+    return done
+
+
 def test_a_scene_is_changed_by_name_and_a_new_one_keeps_a_room_as_it_is(house):
-    assert ask('In the dinner scene, set the island pendants to 30')[0] == 'Scene “Dinner” changed: Island pendants at 30%.'
+    answer, (card,), _ = ask('In the dinner scene, set the island pendants to 30')
+    assert answer == REVIEW and house.setup == []
+    assert card == {'kind': 'confirm', 'id': card['id'], 'title': 'Change scene Dinner?', 'do': 'Approve',
+                    'lines': ['Scene “Dinner” changed: Island pendants at 30%'],
+                    'why': 'Nothing changes until you tap Approve. Undo can put it back for a day.',
+                    'diff': [{'name': 'Island pendants', 'before': '70%', 'after': '30%'}]}
+    assert approve(card)['said'] == 'Scene “Dinner” changed: Island pendants at 30%'
     assert ask('dinner')[0] == 'Dinner is on.'
     assert picture()['rooms']['kitchen']['lights'][1]['level'] == 30
-    assert ask('save the living room as a scene called Reading')[0] == 'Scene “Reading” saved: living room as it is now.'
+    answer, (card,), _ = ask('save the living room as a scene called Reading')
+    assert (card['title'], card['diff']) == ('Make scene Reading?', [{'name': 'Floor lamp', 'before': '', 'after': '45%'},
+                                                                     {'name': 'Reading lamp', 'before': '', 'after': '40%'},
+                                                                     {'name': 'Shelf lights', 'before': '', 'after': 'off'}])
+    approve(card)
     assert 'Reading' in [s['name'] for s in picture()['scenes']]
+
+
+def test_make_this_the_new_scene_saves_what_the_card_showed_and_undo_puts_it_back(house):
+    """"Make this the new Dinner": the scene's own lights as they are now, shown before and after, saved only by
+    Approve, and saved as the card showed them even if a light moved before the tap."""
+    ask('dinner')
+    house.states['light.kitchen_pendants']['attributes']['brightness'] = 128        # dimmed a little by hand
+    before = json.loads(json.dumps(house.configs['scene']))
+    answer, (card,), _ = ask('make this the new dinner')
+    assert answer == REVIEW and house.configs['scene'] == before
+    assert card['title'] == 'Change scene Dinner?' and card['do'] == 'Approve'
+    assert card['diff'] == [{'name': 'Island pendants', 'before': '70%', 'after': '50%'}]
+    house.states['light.kitchen_pendants']['attributes']['brightness'] = 20          # moved again before the tap
+    done = approve(card)
+    (dinner,) = [c for c in house.configs['scene'].values() if c['name'] == 'Dinner']
+    assert dinner['entities']['light.kitchen_pendants']['brightness'] == 128
+    assert client.post('/app/api/undo/' + done['batch'], headers=SIGNED_IN).json()['ok']
+    assert house.configs['scene'] == before
+    answer, (card,), _ = ask('make this the new dinner')
+    assert client.post(f'/app/api/setup/{card["id"]}/dismiss', headers=SIGNED_IN).json()['ok'] and house.configs['scene'] == before
 
 
 def test_a_scene_is_run_by_the_words_that_single_it_out(house):
@@ -112,13 +150,21 @@ def test_a_scene_is_run_by_the_words_that_single_it_out(house):
 
 
 def test_an_automation_is_written_from_what_was_found_and_reads_back(house):
-    answer, cards, _ = ask('Every evening at 6:45 turn on the hallway light')
-    assert answer == 'Automation “Hallway ceiling on at 6:45 pm” made: at 6:45 pm, Ceiling (Hallway) on.' and len(SEEN) == 2     # looked, then wrote it
+    answer, (card,), _ = ask('Every evening at 6:45 turn on the hallway light')
+    assert answer == REVIEW and len(SEEN) == 2     # looked, then wrote it
+    assert (card['title'], card['do'], card['lines']) == ('Make automation Hallway ceiling on at 6:45 pm?', 'Approve',
+                                                          ['Automation “Hallway ceiling on at 6:45 pm” made: at 6:45 pm, Ceiling (Hallway) on'])
+    assert [row['name'] for row in card['diff']][:1] == ['Name'] and {'name': 'What it does', 'before': '',
+                                                                       'after': 'at 6:45 pm, Ceiling (Hallway) on'} in card['diff']
+    assert [c for c in house.configs['automation'].values() if c['alias'] == 'Hallway ceiling on at 6:45 pm'] == []
+    cards = [approve(card)]
     (kept,) = [c for c in house.configs['automation'].values() if c['alias'] == 'Hallway ceiling on at 6:45 pm']
     assert kept['triggers'] == [{'trigger': 'time', 'at': '18:45:00'}]
     assert kept['actions'] == [{'action': 'light.turn_on', 'target': {'entity_id': 'light.hall_ceiling'}}]
     assert ask('what does hallway ceiling on at 6:45 pm do?')[0] == 'Turns the hallway ceiling on every day.'
-    assert ask('turn the hallway ceiling on at 6:45 pm automation off')[0] == 'Automation “Hallway ceiling on at 6:45 pm” switched off.'
+    answer, (card,), _ = ask('turn the hallway ceiling on at 6:45 pm automation off')
+    assert (card['title'], card['diff']) == ('Switch off Hallway ceiling on at 6:45 pm?', [{'name': 'Runs', 'before': 'yes', 'after': 'no'}])
+    approve(card)
     client.post('/app/api/undo/' + cards[0]['batch'], headers=SIGNED_IN)
     assert 'Hallway ceiling on at 6:45 pm' not in [c['alias'] for c in house.configs['automation'].values()]
 
@@ -227,10 +273,10 @@ def test_setup_changes_are_on_activity_and_changes_with_undo(house):
     ask('lock the front door')
     house.states['lock.front_door']['state'] = 'unlocked'
     ask('lock the front door')
-    ask('turn the porch at sunset automation off')
+    approve(ask('turn the porch at sunset automation off')[1][0])
     rows = [e for e in client.get('/app/api/activity').json()['events'] if e['source'] == 'hub']
     assert [(e['kind'], e['what'], e['cause'], e['undo']) for e in rows] == [
-        ('routines', 'Automation “Porch at sunset” switched off', 'from Ask', True),
+        ('routines', 'Automation “Porch at sunset” switched off', 'from the app', True),     # Approve is a tap in the app
         ('security', 'Front door lock locked', 'from Ask', True),
         ('setup', 'Reading lamp moved from Living room to Bedroom', 'from Ask', True)]
     assert [e['what'] for e in client.get('/app/api/activity?kinds=setup').json()['events']] == ['Reading lamp moved from Living room to Bedroom']

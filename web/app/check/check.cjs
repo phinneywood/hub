@@ -494,8 +494,23 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.locator(".wait .btn.ghost").last().click();
     expect(await until(() => [...document.querySelectorAll(".wait .took")].pop()?.textContent === "Left as it was."), "Not now did not put the card away");
     expect(await page.evaluate(() => fetch("/app/api/home").then((r) => r.json()).then((h) => "dining" in h.rooms)), "the room was removed without a tap");
+    // A scene or automation change is proposed before and after; only Approve makes it, and Undo puts it back.
     await askFor("Every evening at 6:45 turn on the hallway light");
-    expect(await answered("Automation “Hallway ceiling on at 6:45 pm” made: at 6:45 pm, Ceiling (Hallway) on."), "Ask did not make the automation: " + await lastAnswer());
+    expect(await answered("Here’s the change. Nothing happens until you tap Approve."), "a new automation did not wait on a card: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".wait .wait-t")].pop()?.textContent === "Make automation Hallway ceiling on at 6:45 pm?"),
+      "the automation's card did not say what it makes");
+    expect((await page.locator(".wait .btn.go").last().innerText()) === "Approve", "the automation's card button didn't say Approve");
+    await page.locator(".wait .btn.go").last().click();
+    expect(await until(() => [...document.querySelectorAll(".wait")].pop()?.classList.contains("settled")), "Approve did not settle the automation's card");
+    await askFor("In the dinner scene, set the island pendants to 30");
+    expect(await answered("Here’s the change. Nothing happens until you tap Approve."), "a scene change did not wait on a card: " + await lastAnswer());
+    expect(await until(() => [...document.querySelectorAll(".wait-diff li")].pop()?.textContent === "Island pendants70%→30%"),
+      "the scene's card did not show before and after: " + await page.evaluate(() => [...document.querySelectorAll(".wait-diff li")].pop()?.textContent));
+    await page.waitForTimeout(300); await shot("6e2-ask-scene-card");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on a scene's card: " + (await small()).join(", "));
+    await page.locator(".wait .btn.go").last().click();
+    expect(await until(() => [...document.querySelectorAll(".wait")].pop()?.querySelector(".took button")), "the approved scene offered no Undo");
+    await page.locator(".wait .took button").last().click();
     await askFor("Disable the coffee maker");
     expect(await until(() => [...document.querySelectorAll(".wait .wait-t")].pop()?.textContent === "Disable Coffee maker?"), "disabling did not wait on a card");
     expect((await page.locator(".wait .btn.risk").last().innerText()) === "Disable", "the card that disables did not say so on its button");

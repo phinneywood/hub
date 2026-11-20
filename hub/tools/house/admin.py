@@ -73,7 +73,8 @@ WHY = {'delete': 'This removes it. Undo can put it back for a day.',
        'disable': 'It stops working everywhere in Home Assistant until it is enabled again. Undo can do that for a day.',
        'hide': 'Hub would stop showing it, and would no longer say when it is open. Undo can show it again for a day.',
        'house': 'This changes the whole house’s settings.',
-       'restart': 'Home Assistant will be away for about a minute. Lights and switches keep working by hand.'}
+       'restart': 'Home Assistant will be away for about a minute. Lights and switches keep working by hand.',
+       'review': 'Nothing changes until you tap Approve. Undo can put it back for a day.'}
 SCHEMA = """
 create table if not exists house_setup(
   id integer primary key autoincrement, batch text not null, ts real not null, login text, via text not null,
@@ -536,9 +537,24 @@ def _report(batch, rows):
             'undo': any(r['undoable'] and r['outcome'] != 'not_sent' for r in rows)}
 
 
+def _reviewed(c):
+    """Whether a change rewrites what the house does by itself: a scene's, automation's or script's config, or an
+    automation switched on or off. The owner decided (2026-11-20) that Ask proposes these on a card with a before
+    and after, and only the owner's Approve makes them. Running a scene or a routine is not a change to it."""
+    if c['kind'] not in ROUTINES:
+        return False
+    return any(isinstance(s, dict) and (s.get('config') in ROUTINES or s.get('call') in ('automation.turn_on', 'automation.turn_off'))
+               for s in c['steps'])
+
+
+def guard(changes):
+    """Why these changes would wait for a tap for the house's safety, or None: everything but `review`."""
+    return next((c['asks'] for c in changes if c['asks']), None) or ('many' if len(changes) > MANY else None)
+
+
 def asks(changes):
     """Why these changes must wait for a tap, or None. The whole rule."""
-    return next((c['asks'] for c in changes if c['asks']), None) or ('many' if len(changes) > MANY else None)
+    return guard(changes) or ('review' if any(_reviewed(c) for c in changes) else None)
 
 
 def carry_out(changes, *, login, via):
@@ -586,12 +602,19 @@ def wait(title, changes, plan, args, *, login):
     why = asks(changes) or 'many'
     lines = [c['words'] for c in changes][:24]
     with _db() as conn:
-        conn.execute("update house_setup_waiting set status = 'replaced' where status = 'waiting' and login is ?", (login,))
+        if why != 'review':         # a proposal never puts away another: one request may make several, each with its card
+            conn.execute("update house_setup_waiting set status = 'replaced' where status = 'waiting' and login is ? and why != 'review'",
+                         (login,))
         number = conn.execute('insert into house_setup_waiting(ts, login, title, lines, why, plan, args, steps) values (?,?,?,?,?,?,?,?)',
                               (time.time(), login, _clip(title, 160), json.dumps(lines), why, plan, json.dumps(args),
                                fingerprint(changes))).lastrowid
-    return {'kind': 'confirm', 'id': number, 'title': _clip(title, 160), 'lines': lines, 'why': WHY[why],
-            'do': {'delete': 'Remove', 'disable': 'Disable', 'restart': 'Restart'}.get(why, 'Do it')}
+    card = {'kind': 'confirm', 'id': number, 'title': _clip(title, 160), 'lines': lines, 'why': WHY[why],
+            'do': {'delete': 'Remove', 'disable': 'Disable', 'restart': 'Restart', 'review': 'Approve'}.get(why, 'Do it')}
+    diff = [dict(row, name=_clip((f'{c["name"]}: ' if len(changes) > 1 else '') + row['name'], 80), before=_clip(row['before'], 300),
+                 after=_clip(row['after'], 300)) for c in changes for row in c.get('diff') or ()]
+    if len(diff) > 24:
+        diff = diff[:23] + [{'name': 'And more', 'before': '', 'after': f'{len(diff) - 23} more changes'}]
+    return dict(card, diff=diff) if diff else card
 
 
 def waiting(number):
