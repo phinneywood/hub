@@ -69,7 +69,7 @@ export function ShowPick({ items }: { items: ShowChoice[] }) {
   if (seen.value?.show) return <p class="took">The light show is on.</p>;
   const choose = async (choice: ShowChoice) => {
     setBusy(choice.handle);
-    await startShow(choice.handle);
+    await startShow({ handle: choice.handle });
     setBusy("");
   };
   return (

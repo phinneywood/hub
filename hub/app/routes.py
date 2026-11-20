@@ -302,14 +302,19 @@ def play(speaker: str, request: Request, body: dict = Body(...)):
 def show(do: str, request: Request, body: dict = Body(default={})):
     """The light show's card: "end" ends the show; "timing" sets its lights {"value": 150} milliseconds earlier (or,
     below 0, later) and answers with the timing as set. "start" is a tap on one of Ask's choices for a show,
-    {"handle": "#1a2b3c"}: only something a lookup found lately, never words (tools/house/lightshow.py)."""
+    {"handle": "#1a2b3c"}, or on one of the playlists Hub offers (/api/picks), {"uri": ...}: only something a lookup
+    found lately, never words (tools/house/lightshow.py)."""
     from ..tools.house import lightshow
     from ..tools.house import music as library
 
     def work(login):
         if do == 'start':
-            handle = str(body.get('handle') or '')[:20]
+            handle, uri = str(body.get('handle') or '')[:20], str(body.get('uri') or '')[:300]
             found = library.recall(handle) if handle.startswith('#') else None
+            if not found and uri:       # one of the playlists the light show sheet offers, as /api/picks gave it
+                found = next(({**p, 'artist': ''} for p in picks()['picks'] if p['uri'] == uri), None)
+            if not found and uri:
+                raise control.Refused('Hub can’t find that playlist any more.')
             if not found:
                 raise control.Refused('Hub doesn’t remember that choice any more. Ask for the light show again.')
             shown = f'{found["name"]} – {found["artist"]}' if found['artist'] and found['kind'] != 'playlist' else found['name']

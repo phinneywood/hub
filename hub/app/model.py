@@ -188,7 +188,8 @@ def home(found, floors=None):
             'floors': _floors(rooms, found.get('room_floor') or {}, floors or {}),
             'rooms': {r['id']: r for r in rooms},
             'scenes': _scenes(found, floors),
-            'music': music, 'show': _show(found, homes), 'facts': _facts(found), 'lights_on': found['lights_on']}
+            'music': music, 'show': _show(found, homes), 'can_show': bool(found.get('show')), 'facts': _facts(found),
+            'lights_on': found['lights_on']}
 
 
 def down(error):

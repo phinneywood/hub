@@ -1202,6 +1202,21 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await askFor("end the light show");
     expect(await answered("The light show has ended."), "ending the light show from Ask: " + await lastAnswer());
     expect(await until(() => !document.querySelector(".showcard"), null, 8000), "the light show card stayed after Ask ended the show");
+    // And one tap away without words: the first of the house's chips under Hub's greeting (on a wide screen, after
+    // the scenes beside Ask) opens the light show's sheet, a playlist on it starts the show, and its card leads Ask.
+    const showGo = phone ? ".askpage .house-now .show-go" : ".side .scenes .show-go";
+    expect(await until((sel) => !!document.querySelector(sel), showGo, 6000), "no way to start a light show in sight");
+    await tap(showGo);
+    await page.waitForSelector(".sheet.in .pick");
+    expect((await page.textContent(".sheet h1")).trim() === "Light show", "the light show's sheet: " + await page.textContent(".sheet h1"));
+    await page.waitForTimeout(450); await shot("10k-light-show-sheet");
+    if (phone) expect((await small()).length === 0, "tap targets under 44 px on the light show's sheet: " + (await small()).join(", "));
+    await tap('.sheet .pick:has-text("Rainy Day")');
+    expect(await until(() => !document.querySelector(".sheet") && !!document.querySelector(".showcard"), null, 8000),
+      "a playlist on the light show's sheet did not start the show");
+    expect(await page.locator(showGo).count() === 0, "the way to start a light show stayed while one is on");
+    await tap('.showcard .end-show');
+    expect(await until(() => !document.querySelector(".showcard"), null, 8000), "End show left the light show card, after the sheet started it");
     await tap(phone ? '.tabs .tab:text-is("House")' : '.rail .tab:text-is("House")');
     await page.waitForSelector(".plan");
 

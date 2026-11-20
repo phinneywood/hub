@@ -28,6 +28,8 @@ export interface Scene { id: string; name: string; on: boolean; mine: boolean }
 export interface House {
   ok: true; at: string; floors: Floor[]; rooms: Record<string, Room>; scenes: Scene[];
   music: Music | null; show: Show | null; facts: Fact[]; lights_on: number;
+  /** Home Assistant has a light show Hub can start. */
+  can_show?: boolean;
 }
 /** How the light show's lights sit against the music, in milliseconds: higher is earlier. */
 export interface Timing { value: number; min: number; max: number; step: number }
