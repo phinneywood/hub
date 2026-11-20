@@ -309,7 +309,11 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.locator('.sheet [aria-label="Play something in Bedroom"]').click();
     await page.waitForSelector(".sheet.in .pick"); await page.waitForTimeout(450); await shot("5b-play-here");
     expect((await page.locator(".sheet-head p").first().innerText()).includes("plays on"), "playing in one room did not say the rest plays on");
+    // Hub reads the house again the moment it answers a change, and that reading carries the room's own music: the
+    // 400 ms count from Hub's answer, so a slow machine's round trip isn't held against it (the next reading is 1 s on).
+    const playedHere = hubAnswers("play");
     await page.locator('.sheet .pick:has-text("Rainy Day")').click();
+    expect(await playedHere, "Hub did not answer the room's own music");
     expect(await until(() => document.querySelector(".np-text span")?.textContent.includes("also Bedroom"), null, 400), "a room's own music did not show at once");
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Playing Rainy Day in the bedroom"), "a room did not play its own music");
     await page.waitForTimeout(1200);
