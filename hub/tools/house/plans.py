@@ -448,8 +448,50 @@ def _for_scene(said, w):
         return found
 
 
-def scene(w, do, name, set=None, capture=None, leave=None, new_name=None):     # noqa: A002 - "set" is the owner's word
-    """Save, change, rename or remove a Home Assistant scene."""
+WHOLE = {'*', 'everything in it'}
+SAID_KEYS = ('state', 'brightness', 'percentage', *sorted(broker.COLOURS))
+
+
+def _plain(kept):
+    """What a scene sets for one thing, only as far as it shows: on or off, how bright, and its colour."""
+    if isinstance(kept, str):
+        kept = {'state': kept}
+    return {k: kept[k] for k in SAID_KEYS if k in kept} if isinstance(kept, dict) else None
+
+
+def _level(kept):
+    """How a scene keeps one thing, in the owner's words: "off", "on", "65%"."""
+    if kept is None:
+        return 'not in it'
+    if kept.get('state') != 'on':
+        return 'off'
+    if isinstance(kept.get('percentage'), (int, float)):
+        return f'{int(kept["percentage"])}%'
+    if isinstance(kept.get('brightness'), (int, float)):
+        return f'{max(1, round(kept["brightness"] * 100 / 255))}%'
+    return 'on'
+
+
+def _scene_diff(before, after, w):
+    """One row per thing the change touches: what the scene set it to before, and after."""
+    rows = []
+    for entity in list(before) + [e for e in after if e not in before]:
+        old, new = _plain(before.get(entity)), _plain(after.get(entity))
+        if old == new:
+            continue
+        thing = w['things'].get(entity)
+        was, now = _level(old), _level(new)
+        if was == now and old and new:
+            colour = {k: old.get(k) for k in broker.COLOURS} != {k: new.get(k) for k in broker.COLOURS}
+            was, now = (was + ', old colour', now + ', new colour') if colour else \
+                (f'{was} ({old.get("brightness", old.get("percentage"))})', f'{now} ({new.get("brightness", new.get("percentage"))})')
+        rows.append({'name': admin.called(thing, w) if thing else str(entity)[:60], 'before': was if before else '', 'after': now})
+    return rows
+
+
+def scene(w, do, name, set=None, capture=None, leave=None, new_name=None, frozen=None):     # noqa: A002 - "set" is the owner's word
+    """Save, change, rename or remove a Home Assistant scene. `frozen`: what `capture` found when the card was
+    made, so the owner's tap saves what the card showed even if a light has moved since."""
     here = _routine_named(name, 'scene', w)
     if do in ('remove', 'rename'):
         if here is None:
@@ -464,9 +506,10 @@ def scene(w, do, name, set=None, capture=None, leave=None, new_name=None):     #
             raise Refused('Say the new name.') if not new else Already(f'It is already called {new}.')
         body = {**before, 'name': new}
         # A scene that opens the house is partly known by its name, as a lock is: a new name for it waits.
-        return [change('scene', here['id'], new, f'Scene {here["name"]} renamed {new}', [{'config': 'scene', 'id': key, 'body': body}],
-                       [{'config': 'scene', 'id': key, 'body': before}], asks='security' if scene_opens(here['id'], w) else None,
-                       after={'config': 'scene', 'id': key, 'body': body})]
+        return [dict(change('scene', here['id'], new, f'Scene {here["name"]} renamed {new}', [{'config': 'scene', 'id': key, 'body': body}],
+                            [{'config': 'scene', 'id': key, 'body': before}], asks='security' if scene_opens(here['id'], w) else None,
+                            after={'config': 'scene', 'id': key, 'body': body}),
+                     diff=[{'name': 'Name', 'before': here['name'], 'after': new}])]
     if do != 'save':
         raise Refused('Say save, rename or remove.')
     if here is not None:
@@ -478,12 +521,22 @@ def scene(w, do, name, set=None, capture=None, leave=None, new_name=None):     #
             raise Refused('Give the scene a name.')
         key, before = str(int(time.time() * 1000)), None
         body = {'id': key, 'name': title, 'entities': {}}
-    kept, said = dict(body.get('entities') or {}), []
+    kept, said, captured = dict(body.get('entities') or {}), [], {}
+    frozen = frozen if isinstance(frozen, dict) else {}
     for where in capture or ():
-        found = _for_scene(where, w)
+        if before is not None and admin._plainly(where) in WHOLE:
+            found = [w['things'][e] for e in kept if e in w['things'] and w['things'][e]['domain'] in SCENE_KINDS]
+            if not found:
+                raise Refused(f'Hub can’t read the lights in {title}. Say which rooms to keep as they are now.')
+            skipped = len(kept) - len(found)
+            label = 'everything in it' + (f' ({skipped} other thing{"s" if skipped != 1 else ""} left as saved)' if skipped else '')
+        else:
+            found = _for_scene(where, w)
+            label = admin.called(found[0], w) if len(found) == 1 else admin._clip(where, 40)
         for thing in found:
-            kept[thing['id']] = _as_now(thing)
-        said.append(f'{admin.called(found[0], w) if len(found) == 1 else admin._clip(where, 40)} as it is now')
+            now = frozen.get(thing['id'])
+            kept[thing['id']] = captured[thing['id']] = now if isinstance(now, dict) else _as_now(thing)
+        said.append(f'{label} as it is now')
     for item in set or ():
         if not isinstance(item, dict) or not item.get('thing'):
             raise Refused('Each thing in a scene needs its name, and on, off or a level.')
@@ -500,8 +553,9 @@ def scene(w, do, name, set=None, capture=None, leave=None, new_name=None):     #
         raise Already(f'{title} is already like that.')
     body['entities'] = kept
     words = (f'Scene “{title}” changed: ' if before else f'Scene “{title}” saved: ') + _listed(said)
-    return [change('scene', here['id'] if here else 'new', title, words, [{'config': 'scene', 'id': key, 'body': body}],
-                   [{'config': 'scene', 'id': key, 'body': before}], after={'config': 'scene', 'id': key, 'body': body})]
+    return [dict(change('scene', here['id'] if here else 'new', title, words, [{'config': 'scene', 'id': key, 'body': body}],
+                        [{'config': 'scene', 'id': key, 'body': before}], after={'config': 'scene', 'id': key, 'body': body}),
+                 diff=_scene_diff((before or {}).get('entities') or {}, kept, w), captured=captured)]
 
 
 # ---- automations and scripts ----
@@ -1175,8 +1229,9 @@ def routine(w, kind, do, name, config=None, new_name=None):
         _, kept = _kept(here['id'], w)
         why = 'unread' if kept is None else opens(kind, kept, w, frozenset({here['id']})) if do == 'on' \
             else 'security' if touches(kind, kept, w) or watches(kind, kept, w) else None
-        return [change(kind, here['id'], here['name'], f'Automation “{here["name"]}” switched {do}',
-                       [{'call': f'automation.turn_{do}', 'data': {'entity_id': here['id']}}], back, asks=why)]
+        return [dict(change(kind, here['id'], here['name'], f'Automation “{here["name"]}” switched {do}',
+                            [{'call': f'automation.turn_{do}', 'data': {'entity_id': here['id']}}], back, asks=why),
+                     diff=[{'name': 'Runs', 'before': 'yes' if here['state'] == 'on' else 'no', 'after': 'yes' if do == 'on' else 'no'}])]
     if do == 'run':
         key = here['id'].partition('.')[2] if kind == 'script' else here['config']
         kept = broker.setup_config(kind, key) if key else None
@@ -1194,9 +1249,10 @@ def routine(w, kind, do, name, config=None, new_name=None):
         if not new or new == here['name']:
             raise Refused('Say the new name.') if not new else Already(f'It is already called {new}.')
         body = {**before, 'alias': new}
-        return [change(kind, here['id'], new, f'{what} {here["name"]} renamed {new}', [{'config': kind, 'id': key, 'body': body}],
-                       [{'config': kind, 'id': key, 'body': before}], asks='security' if touches(kind, before, w) else None,
-                       after={'config': kind, 'id': key, 'body': body})]
+        return [dict(change(kind, here['id'], new, f'{what} {here["name"]} renamed {new}', [{'config': kind, 'id': key, 'body': body}],
+                            [{'config': kind, 'id': key, 'body': before}], asks='security' if touches(kind, before, w) else None,
+                            after={'config': kind, 'id': key, 'body': body}),
+                     diff=[{'name': 'Name', 'before': here['name'], 'after': new}])]
     if do != 'save':
         raise Refused('Say save, rename, remove, on, off or run.')
     if not isinstance(config, dict) or not config:
@@ -1223,8 +1279,23 @@ def routine(w, kind, do, name, config=None, new_name=None):
     line = says(kind, body, w)
     words = f'{what} “{title}” {"changed" if before else "made"}' + (f': {line}' if line else '')
     why = opens(kind, body, w) or ('security' if before is not None and (touches(kind, before, w) or watches(kind, before, w)) else None)
-    return [change(kind, here['id'] if here else 'new', title, words, [{'config': kind, 'id': key, 'body': body}],
-                   [{'config': kind, 'id': key, 'body': before}], asks=why, after={'config': kind, 'id': key, 'body': body})]
+    return [dict(change(kind, here['id'] if here else 'new', title, words, [{'config': kind, 'id': key, 'body': body}],
+                        [{'config': kind, 'id': key, 'body': before}], asks=why, after={'config': kind, 'id': key, 'body': body}),
+                 diff=_routine_diff(kind, before, body, w))]
+
+
+def _routine_diff(kind, before, after, w):
+    """Rows for a card: what the routine did before and does after, in Hub's words, and its description (the
+    record the owner reads in Hub), each only where it changed."""
+    rows = []
+    for label, read_it in (('Name', lambda b: admin._clip(b.get('alias'))), ('Description', lambda b: admin._clip(b.get('description'), 300)),
+                           ('What it does', lambda b: says(kind, b, w))):
+        was, now = (read_it(before) if before else ''), read_it(after)
+        if was != now and (was or now):
+            rows.append({'name': label, 'before': was or ('—' if before else ''), 'after': now or '—'})     # '' : new, nothing before
+    if before and not rows:         # changed in a way Hub's words don't show: a condition, a target's colour, a delay
+        rows.append({'name': 'Details', 'before': 'as it was', 'after': 'changed (open it in Home Assistant to see)'})
+    return rows
 
 
 # ---- devices beyond lights and speakers: any service the setup door lets through ----

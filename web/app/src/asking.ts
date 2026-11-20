@@ -9,7 +9,9 @@ export interface Card { kind: string; rooms?: string[]; speakers?: string[]; bat
   lines?: string[]; missed?: string[]; title?: string; why?: string; do?: string; items?: unknown[]; all?: boolean; cart?: boolean; since?: number;
   ids?: number[]; show?: string[]; things?: Thing[]; hint?: string; rows?: MailRow[]; opened?: number[]; board?: string;
   target?: string; button?: string; drill?: string;
-  path?: string; count?: number; search?: string; month?: string; years?: unknown[] }
+  path?: string; count?: number; search?: string; month?: string; years?: unknown[]; diff?: Diff[] }
+// One row of a proposed scene or automation change (hub/tools/house/admin.py wait()): what it was, and what it would be.
+export interface Diff { name: string; before: string; after: string }
 // One email a mail search found (hub/app/ask/mailbox.py): its number for "open the second one", and where it opens.
 export interface MailRow { n: number; who: string; subject: string; when: string; href: string; off: boolean }
 // One line of Hub's morning message (hub/app/ask/morning.py): its number, the sentence, and the one button it has.

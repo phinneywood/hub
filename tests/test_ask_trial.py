@@ -94,12 +94,17 @@ def test_each_wrong_outcome_is_told_apart(house):
     assert trial._moved(seen(cards=['confirm']), who) == 'It waited for a tap.'
     assert trial._read(seen(tools=['details']), who) == '' and trial._read(seen([move], tools=['details']), who) == 'A question changed something.'
     assert trial._read(seen(tools=['lights']), who) == 'It didn’t read the automation.'
-    save = lambda at, action: {'to': 'setup', 'what': 'POST /api/config/automation/config/1', 'data': {   # noqa: E731
-        'triggers': [{'trigger': 'time', 'at': at}], 'actions': [{'action': action, 'target': {'entity_id': who['lamp']['id']}}]}}
-    assert trial._made(seen([save('18:45:00', 'light.turn_on')]), who) == ''
-    assert trial._made(seen([save('06:45:00', 'light.turn_on')]), who) == 'The automation isn’t set for 6:45 in the evening.'
-    assert trial._made(seen([save('18:45:00', 'light.turn_off')]), who) == 'The automation doesn’t switch that lamp on.'
-    assert trial._made(seen(), who) == 'No automation was saved.'
+    # An automation is proposed on a card for the owner's Approve, and nothing is sent until then.
+    def proposed(at, action, kind='automation'):
+        config = {'triggers': [{'trigger': 'time', 'at': at}], 'actions': [{'action': action, 'target': {'entity_id': who['lamp']['id']}}]}
+        admin.wait('Make automation?', [], 'routine', {'kind': kind, 'do': 'save', 'name': 'x', 'config': config}, login='x')
+        return seen(cards=['confirm'])
+    assert trial._made(proposed('18:45:00', 'light.turn_on'), who) == ''
+    assert trial._made(proposed('06:45:00', 'light.turn_on'), who) == 'The automation isn’t set for 6:45 in the evening.'
+    assert trial._made(proposed('18:45:00', 'light.turn_off'), who) == 'The automation doesn’t switch that lamp on.'
+    assert trial._made(proposed('18:45:00', 'light.turn_on', kind='script'), who) == 'The card isn’t for saving an automation.'
+    assert trial._made(seen(), who) == 'No card was shown.'
+    assert trial._made(seen([move], cards=['confirm']), who) == 'It was saved without a tap.'
     assert trial._waited(seen(cards=['confirm']), who) == '' and trial._waited(seen(), who) == 'No card was shown.'
     assert trial._waited(seen([{'to': 'home', 'what': 'lock/unlock', 'data': {}}]), who) == 'It was done without a tap.'
     add = lambda items: {'to': 'kitchen', 'what': 'POST /items', 'data': {'items': items}}       # noqa: E731

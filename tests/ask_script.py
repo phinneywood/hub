@@ -50,6 +50,7 @@ SETUP = [
     (rf'^(?:remove|delete) {THE}(.+?) automation$', lambda m: call('routine', kind='automation', do='remove', name=m[1])),
     (rf'^in {THE}(.+?) scene,? set {THE}(.+?) to (\d+)', lambda m: call('scene_setup', do='save', name=m[1], set=[{'thing': m[2], 'level': int(m[3])}])),
     (rf'^save {THE}(.+?) as a scene called (.+)$', lambda m: call('scene_setup', do='save', name=m[2], as_now=[m[1]])),
+    (rf'^make this {THE}new (.+)$', lambda m: call('scene_setup', do='save', name=m[1], as_now=['everything in it'])),
     (r'^restart home assistant$', lambda m: call('device', action='homeassistant.restart')),
     (rf'^every (?:evening|morning|day) at (\d{{1,2}}):(\d{{2}}),? turn (on|off) {THE}(.+?)(?: lights?)?$', lambda m: call('find', words=m[4], kind='light')),
 ]

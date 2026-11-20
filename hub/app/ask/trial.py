@@ -121,11 +121,18 @@ def _read(seen, who):
 
 
 def _made(seen, who):
-    """One automation saved: a clock trigger at 6:45 in the evening, and the lamp switched on."""
-    saves = [c for c in _setup(seen['changes']) if c['what'].startswith('POST /api/config/automation/config/')]
-    if len(saves) != 1 or len(seen['changes']) != 1:
-        return 'It waited for a tap.' if seen['cards'].count('confirm') else 'No automation was saved.' if not saves else 'More than the automation was changed.'
-    body = saves[0]['data'] if isinstance(saves[0]['data'], dict) else {}
+    """One automation proposed on a card for the owner's Approve (owner decision 2026-11-20), nothing sent: a clock
+    trigger at 6:45 in the evening, and the lamp switched on."""
+    if seen['changes']:
+        return 'It was saved without a tap.'
+    if seen['cards'].count('confirm') != 1:
+        return 'No card was shown.'
+    with admin._db() as conn:
+        row = conn.execute("select plan, args from house_setup_waiting where status = 'waiting' order by id desc limit 1").fetchone()
+    args = json.loads(row['args']) if row else {}
+    if not row or row['plan'] != 'routine' or args.get('kind') != 'automation' or args.get('do') != 'save':
+        return 'The card isn’t for saving an automation.'
+    body = args.get('config') if isinstance(args.get('config'), dict) else {}
     triggers = json.dumps(body.get('triggers', body.get('trigger', [])))
     actions = json.dumps(body.get('actions', body.get('action', [])))
     if '18:45' not in triggers:

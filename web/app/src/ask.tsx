@@ -151,6 +151,10 @@ function ConfirmCard({ card }: { card: Card }) {
       <b class="wait-t">{card.title}</b>
       <p class="wait-cap">{open ? "After your tap" : state === "done" || state === "undone" ? "Done" : "Not done"}</p>
       <ul class="wait-lines">{(card.lines ?? []).map((line) => <li key={line}>{line}</li>)}</ul>
+      {card.diff?.length ? <ul class="wait-lines wait-diff">{card.diff.map((row, n) => (
+        <li key={n}><span class="diff-name">{row.name}</span>
+          {row.before && <><span class="diff-was">{row.before}</span><span class="diff-to" aria-label="becomes">→</span></>}<b class="diff-now">{row.after}</b></li>
+      ))}</ul> : null}
       {open && (
         <>
           <p class="wait-why">{card.why}</p>
