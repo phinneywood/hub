@@ -3,6 +3,7 @@ finish an errand, and the proof that closes one by itself. On a made-up week (te
 Kitchen (tests/kitchen_world.py): no mailbox, calendar, model, shop or kitchen service is reached."""
 import json
 import re
+import threading
 from contextlib import closing
 from datetime import date, datetime, time as clock, timedelta
 
@@ -418,6 +419,25 @@ def test_a_reply_seen_in_sent_mail_closes_the_errand_and_its_email(ready):
     assert (done['state'], done['how'], triage.get('e-party')['state']) == ('done', 'replied', 'done')
     assert picture.card(done)['ended'] == {'text': 'You replied', 'when': 'just now', 'seen': True}
     assert ready.searches[-1] == f'in:sent to:{HOST} newer_than:3d'
+
+
+def test_look_again_waits_for_a_look_under_way_then_looks_itself(ready):
+    """The screen starts a look of its own while an errand waits for proof. One still reading when the reply is sent
+    and Look again is tapped looked too early: Look again's look waits for it to finish, then looks again."""
+    party = by_title('Jordan')
+    tap(party, 'go', choice=1, step='mail')
+    assert watch._lock.acquire(blocking=False)          # the screen's look, under way before the reply
+    ready.replied(HOST, NOW.timestamp() + 60)
+    read.read_soon(transport=ready.luna)
+    threading.Timer(0.3, watch._lock.release).start()
+    read.wait(10)
+    assert (store.get(party['id'])['state'], store.get(party['id'])['how']) == ('done', 'replied')
+
+
+def test_a_look_that_fails_inside_says_what_failed_in_the_log(ready, monkeypatch, caplog):
+    monkeypatch.setattr(watch, '_run', lambda now: 1 / 0)
+    assert watch.run() == 0                             # never raises
+    assert 'errands look failed: ZeroDivisionError' in caplog.text
 
 
 def test_a_yes_closes_once_it_is_also_on_the_calendar_or_its_day_has_passed(ready, monkeypatch):

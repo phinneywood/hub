@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "e793d9a366e1d28364fd65405bdac046021640f1",
+  "from": "1811152fd075beb6cd203bf7dca3db71204cbab8",
   "live": null,
+  "title": "Look again closes an errand you just replied to",
+  "changes": [
+   "Tapping Look again right after sending a reply from your mail app now closes the errand. Before, a look Hub had started a moment earlier could make Look again skip its own, and the errand stayed open for a minute or more."
+  ]
+ },
+ {
+  "sha": "1811152fd075beb6cd203bf7dca3db71204cbab8",
+  "from": "e793d9a366e1d28364fd65405bdac046021640f1",
+  "live": "2026-11-20T19:27:51Z",
   "title": "Light shows play the songs that have a show",
   "changes": [
    "A light show now plays only songs that have a hand-made show. “Light show” on its own plays all of them in a shuffled order, naming one of them plays just that song, and for any other song Ask says it has no show yet and names the ones that do. The light show’s sheet lists those songs."

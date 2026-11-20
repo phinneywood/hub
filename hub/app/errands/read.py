@@ -298,7 +298,7 @@ def read_soon(transport=None, accounts=None):
     def work():
         from . import watch
         try:
-            watch.run()
+            watch.run(wait=True)        # after a look under way, which may have looked before the reply was sent
             run(transport, accounts=accounts)
         except Exception:  # noqa: BLE001 - the screen says the read didn't finish; the reason is not kept
             hub_store.log('errands read failed')
