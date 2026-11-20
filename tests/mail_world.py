@@ -6,11 +6,12 @@ must be in the email's sender, subject or text. Fictional people and places only
 """
 import re
 from email.utils import format_datetime
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
-from hub import bridge
+from hub import bridge, home
 
-NOW = datetime.now(timezone.utc)
+# Midday today, in the house's time: the newest email ("3 hours ago") is today's at whatever hour the tests run.
+NOW = datetime.combine(datetime.now(home.PACIFIC).date(), time(12, 0), tzinfo=home.PACIFIC).astimezone(timezone.utc)
 MAIL = [
     {'id': 'm-plumb-2', 'thread_id': 't-plumb', 'from': 'Riverside Plumbing <office@riverside-plumbing.example>',
      'subject': 'Re: Kitchen sink estimate', 'when': NOW - timedelta(hours=3),
