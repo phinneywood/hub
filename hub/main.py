@@ -190,7 +190,7 @@ def luna_test(request: Request):
 
 @app.get("/manifest.webmanifest")
 def manifest():
-    colour, start = ("#141C33", "/app/") if _app_in_front() else ("#3050c4", "/")     # the app's evening ground
+    colour, start = ("#0F1322", "/app/") if _app_in_front() else ("#3050c4", "/")     # the app's evening ground
     return JSONResponse({"name": "Hub", "short_name": "Hub", "start_url": start, "display": "standalone",
                          "background_color": colour, "theme_color": colour,
                          "icons": [{"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},

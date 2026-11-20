@@ -6,7 +6,7 @@
 import { useEffect, useState } from "preact/hooks";
 import * as api from "./api";
 import { Top } from "./screens";
-import { go, lookAtCare, me, told } from "./state";
+import { lookAtCare, me, told } from "./state";
 import type { CareDay, CareDot, CareDrill, CareNeed, CareState, CareSystem, Health as HealthData } from "./types";
 
 const STATE_WORDS: Record<CareState, string> = {
@@ -96,7 +96,6 @@ export function Health() {
   const head = (
     <>
       <Top />
-      <button type="button" class="uplink" onClick={() => go("system")}>System</button>
     </>
   );
   if (!found || !found.set_up || found.unreadable) {

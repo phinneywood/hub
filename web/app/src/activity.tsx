@@ -109,7 +109,6 @@ export function Activity() {
   return (
     <div class="wrap">
       <Top />
-      <button type="button" class="uplink" onClick={() => go("system")}>System</button>
       <h1 class="say">What happened in the house</h1>
       <p class="sub">{failed ? "Can’t reach Hub to read it." : !found ? "Reading…"
         : "From Home Assistant, Apple Home and Hub, newest first. Hub keeps 90 days."}</p>

@@ -85,27 +85,70 @@ effect(() => {
   sheetOpen = open;
 });
 
+// The places in the bar. Going to one of them replaces where you were; going anywhere else (a page Ask opened, a
+// dashboard, System's pages) is a step in, so the phone's back gesture, the browser's Back and a page's own back link
+// all come out the way you went in.
+const PLACES: View[] = ["home", "house", "boards"];
+interface Step { hub: number; from?: View }
+
+/** What this app wrote into the history for the screen showing now: how many steps in, and from where. */
+function step(): Step {
+  const state = history.state as Partial<Step> | null;
+  return { hub: typeof state?.hub === "number" ? state.hub : 0, from: state?.from };
+}
+
+function address(where: View, board = ""): string {
+  return where === "home" ? location.pathname : where === "board" ? "#board/" + board : "#" + where;
+}
+
+/** Write the move into the history: a step in remembers where it came from. */
+function remember(from: View, where: View, to: string) {
+  if (PLACES.includes(where)) history.replaceState({ hub: 0 }, "", to);
+  else if (where === from) history.replaceState(history.state, "", to);
+  else history.pushState({ hub: step().hub + 1, from } satisfies Step, "", to);
+}
+
 export function go(where: View, board = "") {
+  const from = view.value;
+  remember(from, where, address(where, board));
   if (where === "board") boardId.value = board;
   view.value = where;
   sheet.value = null;
   if (where === "archive") archiveQuery.value = "";
-  history.replaceState(null, "", where === "home" ? location.pathname : where === "board" ? "#board/" + board : "#" + where);
   window.scrollTo(0, 0);
   if (where === "system" || where === "today" || where === "health") void lookAtCare();     // the caretaker's count, fresh
 }
-window.addEventListener("hashchange", () => {
-  boardId.value = BOARD.exec(location.hash)?.[1] ?? boardId.value;
-  view.value = here();
-  archiveQuery.value = searched();
-});
+
+/** Where the screen showing now was opened from, when this app opened it. */
+export function cameFrom(): View | undefined {
+  return step().hub > 0 ? step().from : undefined;
+}
+
+/** A page's back link: one step back the way you came in, or straight to `up` when this page was opened directly
+ * (a link, the Home Screen), so Back never leaves Hub. */
+export function back(up: View) {
+  if (step().hub > 0) history.back();
+  else go(up);
+}
+
+// The back gesture, the browser's Back, or a link to "#mail": show what the address now says, once.
+const follow = () => {
+  const where = here(), board = BOARD.exec(location.hash)?.[1] ?? boardId.value, q = searched();
+  if (where === view.value && board === boardId.value && q === archiveQuery.value) return;
+  boardId.value = board;
+  view.value = where;
+  sheet.value = null;
+  archiveQuery.value = q;
+};
+window.addEventListener("hashchange", follow);
+window.addEventListener("popstate", follow);
 
 /** The Archive, searching for `q`: from Ask's cards ("See all"), the phone's search button, or a search typed there. */
 export function openArchive(q = "") {
+  remember(view.value, "archive", "#archive" + (q.trim() ? "?" + new URLSearchParams({ q: q.trim() }).toString() : ""));
   view.value = "archive";
   sheet.value = null;
   archiveQuery.value = q.trim();
-  history.replaceState(null, "", "#archive" + (q.trim() ? "?" + new URLSearchParams({ q: q.trim() }).toString() : ""));
   window.scrollTo(0, 0);
 }
 

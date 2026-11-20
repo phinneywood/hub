@@ -53,7 +53,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.waitForSelector(".askpage");
     expect(await opened, "Ask did not ask Hub for the conversation");
     await stage("reset");
-    await page.reload(); await page.waitForSelector(".askpage .now"); await page.waitForTimeout(2000);
+    await page.reload(); await page.waitForSelector(".askpage .greet-text"); await page.waitForTimeout(2000);
     await shot("0-ask");
     const greets = () => page.locator(".askpage .greet-text").innerText().catch(() => "(nothing)");
     expect(await until(() => document.querySelector(".askpage .greet-text")?.textContent.endsWith(" Dinner at home is at seven. Ten things need you.")),
@@ -70,8 +70,9 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(morning.length === 3 && morning[0].startsWith("Side door lock’s battery is flat.") && morning[1].startsWith("Pay the Lakeside Power bill.")
       && morning[2].startsWith("Email from Sam Rivera."), "Ask did not open on the morning message: " + morning.join("|"));
     expect(await page.locator(".askpage .now .row.need").count() === 0, "what needs you was said twice: as rows and in the morning message");
-    expect((await page.locator(".askpage .now-more").first().innerText()).trim() === "Open Today",
+    expect((await page.locator(".askpage .greet-more").first().innerText()).trim() === "Open Today",
       "the rest of what needs you was not a tap away");
+    expect(await page.locator(".askpage .now .row").count() === 0, "the day's next thing was said twice: in the greeting and on a card under it");
     if (phone) {      // the conversation sits whole above the bar, and stays there when an iPhone reports the visible area moved
       const fits = () => page.evaluate(() => {
         const ask = document.querySelector(".askpage").getBoundingClientRect(), field = document.querySelector(".composer").getBoundingClientRect();
@@ -99,7 +100,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await says() === "Four rooms are lit.", "the house sentence: " + await says());
     expect(await sub() === "“Paper Lanterns” is playing in the kitchen and the living room.", "the music sentence: " + await sub());
     expect(await page.locator(".main .room").count() === 12, "twelve rooms on the plan");
-    expect((await page.locator(".floor").allInnerTexts()).join("|") === "Downstairs|Upstairs|Outside", "three floors, ground floor first");
+    expect((await page.locator(".floor").allTextContents()).join("|") === "Downstairs|Upstairs|Outside", "three floors, ground floor first");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "the page scrolls sideways");
     expect(await page.evaluate(() => document.fonts.check('500 17px "Jost"')), "the typeface did not load");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Home: " + (await small()).join(", "));
@@ -190,8 +191,19 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
       await more.tap();
       await page.waitForSelector(".sheet.in");
       expect((await page.textContent(".sheet h1")).trim() === "Kitchen" && await says() === lit, "the room's ⋯ did not open it, or it switched the lights");
-      await page.keyboard.press("Escape");
-      expect(await until(() => !document.querySelector(".sheet")), "Escape did not put the room away");
+      // A finger pulling the sheet down by its top follows it down, and let go far enough the sheet goes.
+      await page.waitForTimeout(450);
+      const head = await page.locator(".sheet.in .sheet-head h1").boundingBox();
+      const pull = await ctx.newCDPSession(page);
+      const from = { x: head.x + 20, y: head.y + head.height / 2 };
+      await pull.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [from] });
+      for (let dy = 24; dy <= 216; dy += 24) {
+        await pull.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: from.x, y: from.y + dy }] });
+        await page.waitForTimeout(16);
+      }
+      await pull.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      expect(await until(() => !document.querySelector(".sheet")), "pulling the room down did not put it away");
+      expect(await says() === lit, "pulling the room down switched the lights");
     }
 
     // ---- a scene, and all off ----
@@ -244,7 +256,8 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await sub() === "The house is quiet.", "Pause did not hold");
     await tap(".np-play");
     expect(await until(() => document.querySelector(".sub")?.textContent.includes("is playing")), "Play did not start it again");
-    await page.locator(".np").click({ position: { x: 120, y: 20 } });
+    expect(await page.locator(".dock .bar .tabs + .np").count() === 1, "what is playing does not sit on the bar beside the tabs");
+    await page.locator(".np .np-art").click();
     await page.waitForSelector(".sheet.in"); await page.waitForSelector(".pick"); await page.waitForTimeout(450); await shot("5-music");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px in the music sheet: " + (await small()).join(", "));
     await page.locator('.sheet [aria-label="Dining joins “Paper Lanterns”"]').click();
@@ -262,7 +275,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Playing Rainy Day in the bedroom"), "a room did not play its own music");
     await page.waitForTimeout(1200);
     expect((await sub()).includes("Something else is playing in the bedroom"), "the main music did not play on beside the bedroom: " + await sub());
-    await page.locator(".np").click({ position: { x: 120, y: 20 } });
+    await page.locator(".np .np-art").click();
     await page.waitForSelector(".sheet.in"); await page.waitForTimeout(450); await shot("5c-two-rooms");
     // One card for each music: the main one first, the bedroom's own after it, each with its own play and pause.
     expect(await page.locator(".sheet .tune").count() === 2, "the music sheet did not show a card for each music");
@@ -532,7 +545,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect((await page.locator(".row.need .row-main b").allInnerTexts()).join("|")
       === "Side door lock’s battery is flat|Email from Sam Rivera|Approve the grocery cart|Email from Maple Street Dental",
       "what needs you: the flat lock first, then the longest wait");
-    expect((await page.locator(".block h2").allInnerTexts()).join("|")
+    expect((await page.locator(".block h2").allTextContents()).join("|")
       === "Needs you|Ready for your tap|This evening|Tomorrow|Tomorrow’s weather|The house|This week at school|Lisbon|Dashboards", "Today’s sections, in order");
     expect(await until(() => document.querySelector(".brief-note")?.textContent.startsWith("Alex is away tomorrow")), "the note from Ask’s model was not shown");
     expect((await page.locator(".houserow .state").allInnerTexts()).join("|") === "Not responding|Locked|Locked|Disarmed|Closed", "the house: " +
@@ -547,6 +560,17 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Today scrolls sideways");
     await page.waitForTimeout(300); await shot("10-today");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Today: " + (await small()).join(", "));
+    // A page opened from Ask says so at its top and goes back there; the browser's own back and forward agree.
+    const uplink = async () => (await page.locator(".top .uplink").innerText().catch(() => "(none)")).trim();
+    expect(await uplink() === "Ask", "Today did not offer the way back to Ask: " + await uplink());
+    await tap(".top .uplink");
+    expect(await page.waitForSelector(".askpage", { timeout: 4000 }).then(() => true, () => false), "Today’s way back did not return to Ask");
+    await page.goForward();
+    expect(await saysSoon("Dinner at home is at seven. Ten things need you."), "forward did not return to Today: " + await says());
+    await page.goBack();
+    expect(await page.waitForSelector(".askpage", { timeout: 4000 }).then(() => true, () => false), "the browser’s back did not return from Today to Ask");
+    await page.goForward();
+    expect(await saysSoon("Dinner at home is at seven. Ten things need you."), "Today, again: " + await says());
     await page.locator('.row.need:has-text("Email from Sam Rivera") .tickbtn').click();
     expect(await saysSoon("Dinner at home is at seven. Nine things need you.", 3000), "a tick did not take the email off the list: " + await says());
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Marked as handled"), "a tick did not say what it did");
@@ -568,7 +592,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await saysSoon("Six things are ready for your tap."), "Errands’ sentence: " + await says());
     expect((await sub()).endsWith("Nothing is sent, paid or booked until you do it."), "Errands’ second line: " + await sub());
     expect(await page.locator(".errands .errand").count() === 6, "Errands did not show the six errands");
-    expect((await page.locator(".errands .block h2").allInnerTexts()).join("|") === "Done lately|Replies open in", "Errands’ sections, in order");
+    expect((await page.locator(".errands .block h2").allTextContents()).join("|") === "Done lately|Replies open in", "Errands’ sections, in order");
     expect((await page.locator(".errands .block .row-main b").allInnerTexts()).join("|") === "Water bill pays itself", "a bill that pays itself was not under Done lately");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Errands scrolls sideways");
     await page.waitForTimeout(300); await shot("14-errands");
@@ -583,7 +607,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     // everything about one errand: its ways, their steps and the words drafted
     await errand("Jordan’s birthday party").locator(".er-t").click();
     expect(await until(() => document.querySelector(".sheet.in .er-way h2")?.textContent === "Yes, we’ll come"), "the errand did not open");
-    expect((await page.locator(".sheet .er-way h2").allInnerTexts()).join("|") === "Yes, we’ll come|Can’t make it", "the errand did not offer both ways");
+    expect((await page.locator(".sheet .er-way h2").allTextContents()).join("|") === "Yes, we’ll come|Can’t make it", "the errand did not offer both ways");
     expect((await page.locator(".sheet .er-step b").allInnerTexts()).join("|") === "Reply to Jamie Chen|Add to calendar|Reply to Jamie Chen", "the steps of each way");
     expect((await page.locator(".sheet .er-draft").first().innerText()).includes("We’d love to come to Jordan’s party."), "the drafted reply was not shown");
     await page.waitForTimeout(400); await shot("14b-errand");
@@ -636,6 +660,12 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     const partnerAnswered = () => partner.waitForFunction(() => [...document.querySelectorAll(".turn .answer")].some((a) => a.textContent.startsWith("The kitchen is at")),
       null, { timeout: 8000 }).then(() => true, () => false);
     expect(await partnerAnswered(), "the partner’s Ask did not answer");
+    // An answer about one room ends in its dimmer, to set it right there.
+    expect(await partner.locator(".turn .ask-dim .dimmer input").count() === 1, "the answer about the kitchen had no dimmer under it");
+    await partner.locator(".turn .ask-dim .dimmer input").fill("55");
+    await partner.locator(".turn .ask-dim .dimmer input").dispatchEvent("change");
+    expect(await partner.waitForFunction(() => document.querySelector(".turn .ask-dim .dimmer-num")?.textContent.trim() === "55%", null, { timeout: 4000 })
+      .then(() => true, () => false), "the dimmer under the answer did not set the kitchen");
     await partner.reload(); await partner.waitForSelector(".askpage");
     expect(await partnerAnswered(), "the partner’s conversation did not keep their turn");
     await partner.waitForTimeout(300); await partner.screenshot({ path: `${out}/${name}-6g-ask-partner.png` });
@@ -679,7 +709,7 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await saysSoon("Two emails need you."), "Mail’s sentence: " + await says());
     expect((await page.locator(".wrap.mail .row.need .row-main b").allInnerTexts()).join("|") === "Sam Rivera|Maple Street Dental|Saturday plans?",
       "Mail: the emails that need you, the longest wait first, then the unanswered question");
-    expect((await page.locator(".wrap.mail .block h2").allInnerTexts()).join("|") === "Needs you|You asked, no answer yet|Sorted", "Mail’s sections, in order");
+    expect((await page.locator(".wrap.mail .block h2").allTextContents()).join("|") === "Needs you|You asked, no answer yet|Sorted", "Mail’s sections, in order");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Mail scrolls sideways");
     await page.waitForTimeout(300); await shot("12-mail");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on Mail: " + (await small()).join(", "));

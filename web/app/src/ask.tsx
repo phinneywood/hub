@@ -1,6 +1,6 @@
 // Ask, the screen Hub opens to: a conversation with Hub, which speaks first with what needs you and the house.
 import { Fragment } from "preact";
-import type { VNode } from "preact";
+import type { JSX, VNode } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { health, healthAsk, post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, loadOlder, older, stop, talk } from "./asking";
@@ -17,10 +17,10 @@ import { RoomCell, spans } from "./screens";
 import { ShowCard, ShowPick } from "./show";
 import type { ShowChoice } from "./show";
 import { inApp } from "./today";
-import { dragVolume, go, lookAtCare, loadPicks, picks, playPick, runScene, say, seen, setVolume, switchRoom, undo, undone } from "./state";
+import { dimRoom, dragRoom, dragVolume, go, lookAtCare, loadPicks, picks, playPick, runScene, say, seen, setVolume, switchRoom, undo, undone } from "./state";
 import type { View } from "./state";
 import type { ArchiveItem, CareDrill, House, Room } from "./types";
-import { Icon, SheetFrame, Slider, Switch } from "./ui";
+import { Glow, Icon, SheetFrame, Slider, Switch } from "./ui";
 
 
 function marked(name: string, text: string) {
@@ -289,7 +289,16 @@ function CardView({ card, now, said = "" }: { card: Card; now: House; said?: str
   if (card.kind === "rooms") {
     const rooms = (card.rooms ?? []).map((id) => now.rooms[id]).filter((r): r is Room => r !== undefined).slice(0, 6);
     const widths = rooms.length === 1 ? [6] : rooms.length === 2 ? [3, 3] : spans(rooms.length);
-    return rooms.length ? <div class="plan">{rooms.map((r, n) => <RoomCell key={r.id} room={r} span={widths[n] ?? 2} order={0} />)}</div> : null;
+    const one = rooms.length === 1 && rooms[0]!.dims ? rooms[0]! : null;
+    if (!rooms.length) return null;
+    // One room that dims: its brightness right under the answer, to set it just so without opening the room.
+    return (
+      <>
+        <div class="plan">{rooms.map((r, n) => <RoomCell key={r.id} room={r} span={widths[n] ?? 2} order={0} />)}</div>
+        {one && <div class="ask-dim"><Slider big value={one.on ? one.level : 0} label={`${one.name} brightness`}
+          onDrag={(v) => dragRoom(one.id, v)} onSet={(v) => void dimRoom(one.id, v)} /></div>}
+      </>
+    );
   }
   if (card.kind === "music" && now.music) {       // the speakers this touched, each with its volume
     const touched = now.music.speakers.filter((s) => card.speakers?.includes(s.id) && !s.offline);
@@ -402,7 +411,6 @@ function TurnView({ turn, now, open, onOpen }: { turn: Turn; now: House; open: b
   }
   const morning = turn.cards.some((card) => card.kind === "morning");
   const shown = morning ? (turn.answer.split("\n")[0] ?? "") : turn.answer;
-  const took = !turn.ms ? "" : turn.ms < 950 ? "Done in under a second" : `Done in ${(turn.ms / 1000).toFixed(1)} seconds`;
   return (
     <div class={"turn" + (back ? " back" : "")}>
       {turn.asked && <p class="asked">{turn.asked}</p>}
@@ -413,7 +421,7 @@ function TurnView({ turn, now, open, onOpen }: { turn: Turn; now: House; open: b
       {turn.cards.map((card, n) => <CardView card={card} now={now} said={turn.answer} key={n} />)}
       {!turn.busy && batch && (back
         ? <p class="took"><span>Put back as it was</span></p>
-        : <p class="took">{took && <span>{took}</span>}<button type="button" onClick={() => void undo(batch)}>Undo</button></p>)}
+        : <p class="took"><button type="button" onClick={() => void undo(batch)}>Undo</button></p>)}
     </div>
   );
 }
@@ -533,8 +541,12 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
   const hidden = all ? [] : earlier.slice(0, Math.max(0, earlier.length - SHOWN_EARLIER)).map((turn) => turn.n);
   const back = (turn: Turn) => { pinned.current = false; setOpened([...opened, turn.n]); };   // read where it is
   const showing = earlier.filter((turn) => !hidden.includes(turn.n));
+  const quiet = !current.some((turn) => turn.asked);
+  // The band of light behind Hub's greeting is as warm as the house: brighter the more rooms are lit.
+  const lit = now ? Object.values(now.rooms).filter((room) => room.on && !room.outside).length : 0;
   return (
-    <div class={"ask" + (home ? " askpage" : "")}>
+    <div class={"ask" + (home ? " askpage" : "")} style={home ? { "--warm": Math.min(1, lit / 4) } as JSX.CSSProperties : undefined}>
+      {home && <Glow />}
       {home && <ChatHead />}
       <ShowCard />
       <div class="ask-scroll" ref={scroll}>
@@ -562,9 +574,10 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
           )}
           {now && current.map((turn) => <TurnView turn={turn} now={now} key={turn.n} open onOpen={() => undefined} />)}
           {now && <Found now={now} text={text} />}
+          {home && <Prompts quiet={quiet} />}
         </div>
       </div>
-      <Prompts quiet={!current.some((turn) => turn.asked)} />
+      {!home && <Prompts quiet={quiet} />}
       <Composer />
     </div>
   );

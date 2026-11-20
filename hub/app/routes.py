@@ -30,8 +30,8 @@ PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#141C33" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#E4EAF1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1322" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F5EFE4" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Hub</title>
@@ -39,6 +39,7 @@ PAGE = """<!doctype html>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preload" href="/static/app/fonts/Jost.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="/static/app/fonts/Fraunces.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/app/app.css?v={css}">
 </head>
 <body>

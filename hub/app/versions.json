@@ -1,8 +1,21 @@
 [
  {
   "sha": null,
-  "from": "f158d708798b841d685167e4cca5f2cb5d83d5e3",
+  "from": "3e169b52d434677c557bbeba301f8d1bd68fbf55",
   "live": null,
+  "title": "Lamplight: Hub, redrawn",
+  "changes": [
+   "Hub has a new look: a warm night and warm paper by day, Hub speaking in a serif voice of its own, and lit rooms that glow like windows seen from the street, as bright as their lamps.",
+   "Behind Hub's greeting, a slow band of warm light drifts like lamplight through a window at night. It is warmer the more rooms are lit, and the kitchen wall has it along the bottom.",
+   "One bar at the bottom instead of four: Ask, House and Dashboards, with the record that is playing and its pause beside them. Suggested messages sit at the end of what Hub says first.",
+   "Every page opened from Ask has its way back at the top left, and the phone's back gesture works. Pull a sheet down to close it.",
+   "After \"dim the kitchen\", the room's brightness is right under the answer to set it just so."
+  ]
+ },
+ {
+  "sha": "3e169b52d434677c557bbeba301f8d1bd68fbf55",
+  "from": "f158d708798b841d685167e4cca5f2cb5d83d5e3",
+  "live": "2026-11-19T15:58:40Z",
   "title": "Ask's message field stays in sight",
   "changes": [
    "On a phone, Ask’s message field stays above the music bar after the wall has been opened; it used to slip under it."

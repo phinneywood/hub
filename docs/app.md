@@ -15,6 +15,25 @@ Since 2026-11-15 (owner's request) Ask can change anything in Home Assistant, no
 “Setting up the house”), and Kitchen is part of Ask: the shopping list and the cart are worked from Ask, and the
 Kitchen screen is the picture of the list on its way into the cart, with no second conversation (see “Kitchen”).
 
+## The look: Lamplight
+
+Since 2026-11-19 the app is drawn as the house seen from the
+street after dark (`app.css`). A warm night (Evening) and warm paper (Day); Hub speaks in a serif of its own (Fraunces,
+SIL Open Font License, its soft axis set in the file) wherever it speaks, Jost for everything you tap and read at a
+glance. A lit room glows like a window, from gold to burnt orange, as bright as its lamps, and warms up and cools down
+slowly. Behind the top of Ask, and along the foot of the wall, a band of warm night colours moves left to
+right every two minutes and breathes; it is warmer the more rooms are lit (`Glow` in `ui.tsx`). It moves only by
+transform and opacity and stands still where motion is turned down. Nothing else moves by itself but the bars of
+music playing.
+
+Colour keeps its meaning: lamplight is light and the one main action on a screen, sea-glass is sound, coral a problem.
+
+The bar at the bottom is one row: Ask, House (and Dashboards on a phone), with the record playing and its pause at the
+right; a tap on the record opens the music. A page Ask opened (Today, Mail, Kitchen, System and their pages) keeps Ask
+marked in the bar and has its own way back at its top left, named after where it was opened from. Going into a page
+is a step in the browser's history, so the phone's back gesture and Back come out the way you went in. A sheet can be
+pulled down to close it.
+
 ## The front door
 
 The app is Hub's front door: `/` sends the browser to `/app/`, which opens on Ask, and the phone's home-screen icon
@@ -147,22 +166,24 @@ one way into everything else. It reads as a chat (owner's ask, after trying it: 
 interface”): a header naming Hub, Hub's words in bubbles on the left, yours in the lamp's colour on the right, and
 a message field with its send button. From the top:
 
-- **The header** (`ChatHead` in `now.tsx`): Hub, and the day and time, or that Hub or the house can't be reached.
+- **The header** (`ChatHead` in `now.tsx`): Hub, with its ember (which glows while Hub works on something), and the
+  part of the day, read from the same clock as the greeting; or that Hub or the house can't be reached.
 - **Earlier** (above, scrolled past on opening). The last twelve hours of this person's requests are kept, so they
   are still there when the app opens again. A conversation ends at a pause of half an hour; earlier ones sit
   above what Hub says now, each request and the start of its answer as two small bubbles (with its Undo), the
   last two shown and the rest under “Show N earlier messages”. A tap opens one. The model still sees only the
   last half hour (`brain.earlier`).
-- **Hub speaks first** (`Greeting` in `now.tsx`). A bubble with the day's sentence (“Good evening. Dinner at home
-  is at seven. Three things need you.”), then at most three cards under it: what needs you (Today's rows, three
+- **Hub speaks first** (`Greeting` in `now.tsx`). The day's sentence in Hub's own voice, on the band of light (“Good
+  evening. Dinner at home is at seven. Three things need you.”), then at most three cards under it: what needs you (Today's rows, three
   at most, each with its circle and its button, then “Open Today”), and the house in a line with a tiny plan and
   its scenes (a tap opens House). The third place is for a feature that needs a person now, such as an errand
   coming due or the house unwell. Never more than three: Ask stays a conversation, not a feed. On a wide screen
   the house card gives way to the plan beside Ask.
 - **The conversation going on now**, under it, in full. What is newest is read from its start: the last request
   (or Hub's first bubble, on opening) stays at the top when what follows is taller than the screen.
-- **Suggested messages** over the field while no conversation is going: what this person often asks around now
-  (marked with a lamp dot), then a few questions anyone can ask. One tap sends it.
+- **Suggested messages** at the end of what Hub says first, while no conversation is going (beside another screen on a
+  wide one, over the field): what this person often asks around now (marked with a lamp dot), then a few questions
+  anyone can ask. One tap sends it.
 - **The field** (“Message Hub”), pinned above the bar. It grows to a few lines, Return sends, and the keyboard's own microphone
   dictates. A request made while another is going waits under it and goes as soon as that one ends (Hub takes
   one at a time per person); while one is going, an empty field offers Stop, which stops waiting for it: what
@@ -230,8 +251,8 @@ conversation, written by code (no model): at most three numbered things, ranked 
 what is overdue or due within a day, then the soonest due. The pool is the errands that person may see and Today's
 "Needs you" list (mail, the overnight review's suggestions, fix cards, the house, Kitchen's cart, Hub's own health);
 cut as the brief cuts Today for that person, so nobody hears of another's things. Under the greeting, Ask then shows
-only the day's next thing and Open Today: the morning message takes the Needs-you rows' place, and Today keeps the
-full list. The turn is kept as private (it holds errand titles and senders), so the model and the summary see only
+only the day's next thing and Open Today (only Open Today when the greeting already names that thing): the morning
+message takes the Needs-you rows' place, and Today keeps the full list. The turn is kept as private (it holds errand titles and senders), so the model and the summary see only
 that it was given.
 
 - **Typed answers, in code before the model.** "done 2", "paid", "not this 1", "Thursday 3", "later", "build it"

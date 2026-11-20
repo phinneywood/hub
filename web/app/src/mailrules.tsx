@@ -5,7 +5,7 @@ import { useEffect, useState } from "preact/hooks";
 import * as api from "./api";
 import { NotConnected } from "./mail";
 import { Top } from "./screens";
-import { go, me, say } from "./state";
+import { me, say } from "./state";
 import type { MailSettings, PlanItem } from "./types";
 
 const BUSY_EVERY = 3000;
@@ -110,7 +110,6 @@ export function MailSettings() {
   return (
     <div class="wrap">
       <Top />
-      <button type="button" class="uplink" onClick={() => go("mail")}>Mail</button>
       <h1 class="say">Mail settings</h1>
       <p class="sub">{failed ? "Can’t reach Hub to read them." : !now ? "Reading…"
         : now.paused ? "Changes to Gmail are paused right now. Hub saves what you choose and waits." : "How Hub sorts and tidies the inbox."}</p>

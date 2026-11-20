@@ -8,7 +8,7 @@ import * as api from "./api";
 import { Days, Hours, OvernightBlock, Sky, aboutTomorrow, addToList, adding } from "./brief";
 import { go, look, me } from "./state";
 import type { Day, Need } from "./types";
-import { ToastLine } from "./ui";
+import { Glow, ToastLine } from "./ui";
 
 const EVERY = 60_000;
 const NIGHT_EVERY = 15 * 60_000;      // asleep, the wall shows only the clock and the morning: a look each quarter hour
@@ -214,6 +214,7 @@ export function Wall() {
   );
   return (
     <div class={"wall" + (away.value ? " stale" : "")} style={shift(moment)}>
+      <Glow class="wallglow" />
       <Done />
       <div class="wcol wtime">
         <p class="wclock">{time}<small>{half}</small></p>

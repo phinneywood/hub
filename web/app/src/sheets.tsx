@@ -46,7 +46,7 @@ function QuietRow({ speaker, music, title, sub }: { speaker: Speaker; music: Mus
     <div class="ctl acts">
       <div class="ctl-name"><b>{title}</b><span>{sub}</span></div>
       <div class="pills">
-        <button type="button" class="pill go" aria-label={`Play something in ${speaker.name}`}
+        <button type="button" class="pill go snd" aria-label={`Play something in ${speaker.name}`}
           onClick={() => (sheet.value = { kind: "here", speaker: speaker.id })}><Icon name="play" />Play here</button>
         {joins && <button type="button" class="pill" aria-label={`${speaker.name} joins “${music.title || "the music"}”`}
           onClick={() => void speakerIn(speaker.id, speaker.name, true)}>Join</button>}
@@ -208,7 +208,7 @@ function Quiet({ speaker, all }: { speaker: Speaker; all: Tune[] }) {
     <div class="ctl acts">
       <div class="ctl-name"><b>{speaker.name}</b><span>Quiet</span></div>
       <div class="pills">
-        <button type="button" class="pill go" aria-label={`Play something in ${speaker.name}`}
+        <button type="button" class="pill go snd" aria-label={`Play something in ${speaker.name}`}
           onClick={() => (sheet.value = { kind: "here", speaker: speaker.id })}><Icon name="play" />Play here</button>
         {playing.length > 0 && <button type="button" class="pill" aria-label={only ? `${speaker.name} joins ${named(only)}` : `${speaker.name} joins some music`}
           onClick={() => only ? void joinStream(only.leader, speaker.id, speaker.name, only.title) : setChoosing(true)}>Join</button>}
