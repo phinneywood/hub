@@ -64,15 +64,24 @@ for (const [vp, options] of VIEWPORTS) {
     await wait(1200);
   };
   const tryTap = async (loc, why) => { try { await tapEl(loc, why); return true; } catch (e) { console.log(vp, "skip:", why, String(e.message).split("\n")[0]); return false; } };
-  const home = async () => { await page.goto(BASE + "/app/"); await page.waitForSelector(".askpage", { timeout: 20000 }).catch(() => {}); await wait(6000); taps = 0; };
-  const tab = (name) => page.locator(phone ? ".dock .tabs .tab" : ".rail .tab").filter({ hasText: new RegExp(`^${name}$`) });
-  // Ask's few-letter search, the documented way to reach Today, Mail and Kitchen (they have no tab).
+  // Hub opens on Home: the clock, the field, live tiles and the dashboards. On a laptop the left column stays.
+  const home = async () => { await page.goto(BASE + "/app/"); await page.waitForSelector(".wrap.start, .askpage", { timeout: 20000 }).catch(() => {}); await wait(6000); taps = 0; };
+  const tab = (name) => page.locator(".rail .tab").filter({ hasText: new RegExp(`^${name}$`) });
+  const tile = (name) => page.locator(".tiles .tile").filter({ has: page.locator(".tile-k", { hasText: new RegExp(`^${name}$`) }) });
+  // House (phone: its tile on Home; laptop: the left column).
+  const place = (name) => (phone ? tile(name) : tab(name));
+  const toAsk = async () => {
+    if (await page.locator("#askq").isVisible().catch(() => false)) return;
+    await tapEl(phone ? page.locator(".startask .toask") : tab("Ask"), "Ask");
+  };
+  // The few-letter search: Home's own field, or Ask's where Home isn't on screen. It reaches Mail (no tile).
   const byLetters = async (name, desc) => {
-    if (!(await page.locator("#askq").isVisible().catch(() => false))) await tapEl(tab("Ask"), "back to Ask");
-    await page.locator("#askq").fill(name.slice(0, 4)); taps++;
+    let input = page.locator("#startq");
+    if (!(await input.isVisible().catch(() => false))) { await toAsk(); input = page.locator("#askq"); }
+    await input.fill(name.slice(0, 4)); taps++;
     await wait(600);
     const sug = page.locator(".found button.sug").filter({ hasText: desc || name });
-    if (!(await sug.count())) { await page.locator("#askq").fill(""); throw new Error("no page suggestion for " + name); }
+    if (!(await sug.count())) { await input.fill(""); throw new Error("no page suggestion for " + name); }
     await tapEl(sug, "open " + name);
   };
 
@@ -167,7 +176,10 @@ for (const [vp, options] of VIEWPORTS) {
   // ---- Ask ----
   await journey("ask", async () => {
     await home();
-    await shot("ask-landing", "first open, before touching anything");
+    await shot("home-landing", "first open: Home, before touching anything");
+    await toAsk();
+    await wait(1500);
+    await shot("ask-landing", "Ask, one tap from Home");
     if (await tryTap(page.locator("button.fold").filter({ hasText: /Good morning/ }), "open the morning message")) await shot("ask-morning-open", "the morning message unfolded");
     if (await tryTap(page.locator("button.fold-more"), "earlier messages")) await shot("ask-earlier", "after Show earlier messages");
     await page.locator("#askq").scrollIntoViewIfNeeded();
@@ -189,8 +201,8 @@ for (const [vp, options] of VIEWPORTS) {
   // ---- House ----
   await journey("house", async () => {
     await home();
-    await tapEl(tab("House"), "House tab");
-    await shot("house", "House tab");
+    await tapEl(place("House"), phone ? "House tile" : "House tab");
+    await shot("house", phone ? "House, from its tile on Home" : "House tab");
     const more = page.locator(".room.lit .room-more, .room-more");
     if (await tryTap(more, "open a room without switching it")) {
       await shot("house-room-sheet", "a room opened with its own button (not toggled)");
@@ -204,22 +216,21 @@ for (const [vp, options] of VIEWPORTS) {
   // ---- Dashboards ----
   await journey("dashboards", async () => {
     await home();
-    const way = phone ? tab("Dashboards") : page.locator(".rail .rlink.head");
-    await tapEl(way, "Dashboards from home");
+    const way = phone ? page.locator(".dashes-head button") : page.locator(".rail .rlink.head");
+    await tapEl(way, phone ? "Arrange, under Home's dashboards" : "Dashboards from home");
     await shot("dashboards", "the list of dashboards");
     const names = await page.evaluate(() => [...document.querySelectorAll(".rlink:not(.head), .boards button, .boards a, .board-list button, main button.row, .rows button")]
       .map((e) => e.innerText.trim().split("\n")[0]).filter(Boolean));
     const wanted = [...new Set(names)].slice(0, 12);      // every dashboard the list offers, as a person sees it
-    // Each board from home the way a person goes: the Dashboards tab (phone) or the left column (laptop), then its row.
+    // Each board from home the way a person goes: its tile on Home (phone) or the left column (laptop).
     for (const n of wanted) {
       await step("board-" + n, async () => {
         await home();
         if (phone) {
-          await tapEl(tab("Dashboards"), "Dashboards tab");
-          const rows = page.locator(".wrap button.row");
-          const at = (await rows.allInnerTexts()).findIndex((t) => t.split("\n")[0].trim() === n);
-          if (at < 0) throw new Error("no dashboard row " + n);
-          await tapEl(rows.nth(at), "board " + n);
+          const tiles = page.locator(".dash-grid .dash");
+          const at = (await tiles.allInnerTexts()).findIndex((t) => t.split("\n")[0].trim() === n);
+          if (at < 0) throw new Error("no dashboard tile " + n);
+          await tapEl(tiles.nth(at), "board " + n);
         } else await tapEl(page.locator(".rlink").filter({ hasText: new RegExp("^" + n + "$") }), "board " + n);
         await wait(2500);
         await shot("board-" + n.toLowerCase().replace(/\s+/g, "-"), `dashboard ${n} (seen in list: ${names.length})`);
@@ -227,16 +238,19 @@ for (const [vp, options] of VIEWPORTS) {
     }
   });
 
-  // ---- Today, Errands, Mail, Kitchen (no tab: reached by Ask's letters) ----
+  // ---- Today, Errands, Mail, Kitchen (Today and Kitchen by their tile on Home; Mail by a few letters) ----
   for (const [name, desc] of [["Today", "The day, what needs you"], ["Mail", "What needs you and what Hub sorted"], ["Kitchen", "The shopping list"]]) {
     await journey(name, async () => {
       await home();
       // Does the home screen offer a visible way there without typing?
-      const visible = await page.locator("button, a").filter({ hasText: new RegExp(`^(Open )?${name}$`) }).locator("visible=true").count();
+      const visible = await page.locator("button, a").filter({ hasText: new RegExp(`^(Open )?${name}$`) }).locator("visible=true").count()
+        + await tile(name).locator("visible=true").count();
       report.taps[`${vp}:${name}:visible-link-on-home`] = visible;
-      await byLetters(name, desc);
+      const byTile = (await tile(name).count()) > 0;
+      if (byTile) await tapEl(tile(name), name + " tile");
+      else await byLetters(name, desc);
       await wait(2500);
-      await shot(name.toLowerCase(), `reached by typing "${name.slice(0, 4)}" in Ask${visible ? "" : " (no visible link on home)"}`);
+      await shot(name.toLowerCase(), byTile ? `${name}, from its tile on Home` : `reached by typing "${name.slice(0, 4)}" on Home${visible ? "" : " (no visible link on home)"}`);
       if (name === "Today") {
         if (await tryTap(page.locator("a").filter({ hasText: /^All errands$/ }), "Errands from Today")) await shot("errands", "Errands");
       }
