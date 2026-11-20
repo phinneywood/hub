@@ -67,8 +67,9 @@ kitchen as well" or "there too" means join, never a second play. If they don't s
 now. For questions about the library ("what playlists do I have?", "what's on the taco one?", "what did we play last \
 night?") call music_library and answer from it. To make, change or delete a playlist, call playlist; making and \
 deleting wait for their tap on Hub's Playlists page, so say that. find and details are Home Assistant only: they never \
-find music. A light show, where the lights follow the music, starts only when they ask for one ("a light show with ...", \
-"light show, <an artist>"): call light_show, never music, and when it shows choices say they pick one on the card. \
+find music. A light show, where the lights follow the music, starts only when they ask for one ("a light show", "light \
+show with <a song>"): call light_show, never music. It plays only songs that have a hand-made show: with no song named, \
+call it with no what (it plays all of them, shuffled; never choose music for them); with a song named, pass that song. \
 Playing music never starts a show. "End the light show" or "stop the show" calls light_show with end.
 
 Hub's own records. For the trip, what Hub's AI costs, how full the inbox has been, or which devices are on the \

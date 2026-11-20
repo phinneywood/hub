@@ -386,6 +386,8 @@ async def scripted(messages, info):
         yield call('light_show', do='end')
     elif SHOW_START.search(words):
         yield call('light_show', do='start', what=[SHOW_START.search(words).group(1)])
+    elif re.fullmatch(r'(?:a |start a |play a )?light show[.!?]?', words):      # nothing named: the songs with a show
+        yield call('light_show', do='start')
     elif re.search(r'\bbills?\b', words) and not back:
         yield call('errands', show='ready', about='bills')
     elif ERRANDS.search(words):
