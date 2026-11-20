@@ -91,6 +91,10 @@ Keep it clean. Write every new or changed file, commit message and branch name a
   the setup door in `broker.py` only. Keep its rule for what waits for a tap in code, its record and Undo, and
   what the door keeps shut; read "Setting up the house" in `docs/app.md` first. The same day Kitchen became part
   of Ask: nothing of Kitchen's (the list, products, prices, notes) may reach Ask's model.
+  Owner-asked (2026-11-20, "set one up"): a weekly review of the house's logs that only suggests
+  (`hub/engine/house_review.py`, "The weekly house review" in `docs/engine.md`). Rules, no model of its own; it
+  changes nothing. Its ideas, in Hub's words (automation, light and device names, how often, the time of day), reach
+  Ask's model in `<house>` for the owner only, never the Activity rows themselves.
   The family brief's note (`hub/app/ask/note.py`, 2026-11-16, the owner's pick of a brief "reusing Ask's
   permission to read those sources") goes through Ask's route and key too, and is given only the weather, the
   owner's calendar titles and times, the class guide's dates, the locks and doors, and the house's and the trip's

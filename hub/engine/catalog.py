@@ -867,6 +867,18 @@ def friction_items():
     return friction.today_items()
 
 
+def house_review_items():
+    """The weekly house review's ideas that still wait (house_review.py): one item each."""
+    from . import house_review
+    return house_review.today_items()
+
+
+def house_review_prepare():
+    """With the morning job: the week's house review, once a week from Sunday on. Rules only, no model."""
+    from . import house_review
+    house_review.prepare()
+
+
 def hub_prepare():
     """With the morning job, no model here: the old-key reminder, recent friction ranked into fix cards, then the daily live checks."""
     from ..live import routes as live
@@ -1063,8 +1075,16 @@ SOURCES = [
                            '/house/playlists', 'Playlists', library_lookup))),
     Source('caretaker', 'House caretaker', 'What the house’s caretaker on this Mac found and could not fix itself: '
            'its journal, read-only.',
-           'Nothing to the overnight review or to Ask. Today shows each thing that needs you, in the caretaker’s words.',
+           'Nothing to the overnight review. To Ask Hub: how House health stands in a line or two, and the caretaker’s '
+           'whole account when you ask about the house’s health. Today shows each thing that needs you, in its words.',
            items=(caretaker_items,)),
+    Source('house_review', 'Weekly house review', 'Once a week: the last seven days of the house activity Hub keeps '
+           '(Home Assistant’s logbook) and Home Assistant’s automations as they are now. Rules only, no model. It only '
+           'suggests: automations undone by hand or broken, lights switched by hand at the same time most days, devices '
+           'that keep dropping off, automations that never run.',
+           'Nothing to the overnight review. To Ask Hub, for you only: the week’s open ideas in Hub’s words (automation, '
+           'light and device names, how often, and the time of day).',
+           items=(house_review_items,), prepare=house_review_prepare, account=people.DEFAULT),
     Source('hub', 'Hub itself', 'Its own runs, limits and what you waved away.',
            'What is already on your list and what you said “Not today” to this week. To Ask Hub when you ask: what its '
            'runs cost against each limit and how many finished.', items=(hub_faults, hub_release, live_items, improvement_items, friction_items),

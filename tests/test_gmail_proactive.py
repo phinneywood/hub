@@ -206,8 +206,9 @@ def test_sources_prepare_once_a_day_and_one_failure_does_not_stop_the_rest(monke
 
 
 def test_the_real_catalog_prepares_gmail_and_the_key_reminder():
-    assert [s.slug for s in catalog.SOURCES if s.prepare] == ['gmail', 'hub']
-    assert prep.run() == ['gmail', 'hub'] and nightly.load()['old_mail']['count'] == 1234
+    assert [s.slug for s in catalog.SOURCES if s.prepare] == ['gmail', 'house_review', 'hub']
+    # No house here: the weekly review finishes without one (it tries again the next morning).
+    assert prep.run() == ['gmail', 'house_review', 'hub'] and nightly.load()['old_mail']['count'] == 1234
 
 
 def test_old_key_reminder_waits_for_the_date_and_for_1password_to_carry_the_key(monkeypatch):
