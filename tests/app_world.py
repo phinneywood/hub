@@ -111,6 +111,29 @@ def _show_parts(world, on, timing):
                      {'action': 'input_boolean.turn_off', 'target': {'entity_id': s['flag']}}]}
 
 
+# Made-up songs with a hand-made light show: the music light's maps folder as tools/house/lightshow.py reads it. The
+# last one has a map but no cue sheet, so it has no show.
+SHOW_SONGS = [('a1b2c3d4e5f60001', 'Night Drive', 'Alex', 'library://track/71'),
+              ('a1b2c3d4e5f60002', 'Paper Kites', 'Sam', 'library://track/72'),
+              ('a1b2c3d4e5f60003', 'Morning Run', 'Alex', 'apple_music://track/73')]
+NO_SHOW = ('a1b2c3d4e5f60004', 'Thunder Road', 'Sam', 'library://track/74')
+
+
+def show_songs(folder):
+    """Write the made-up maps folder (each song's map, and a cue sheet beside every one but NO_SHOW). Returns it."""
+    import json
+    from pathlib import Path
+    folder = Path(folder)
+    (folder / 'sheets').mkdir(parents=True, exist_ok=True)
+    for name, title, artist, uri in [*SHOW_SONGS, NO_SHOW]:
+        (folder / f'{name}.json').write_text(json.dumps({'map_version': 1, 'ids': [uri], 'title': title, 'artist': artist,
+                                                         'duration': 200.0, 'bars': [], 'beats': []}))
+        if name != NO_SHOW[0]:
+            (folder / 'sheets' / f'{name}.json').write_text(json.dumps({'song': title, 'sections': []}))
+    (folder / 'index.json').write_text('{"ids": {}, "titles": {}}')
+    return folder
+
+
 def add_show(world, on=False, timing=0):
     """Give the made-up house its light show, kept through reset(). `on`: a show is already running."""
     world.with_show = True

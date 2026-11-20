@@ -3,7 +3,7 @@
 import { computed, effect, signal } from "@preact/signals";
 import * as api from "./api";
 import type { Card } from "./asking";
-import type { ArchiveItem, ArchiveSource, Down, House, Me, Pick, Room, Said, Scene, Speaker } from "./types";
+import type { ArchiveItem, ArchiveSource, Down, House, Me, Pick, Room, Said, Scene, ShowSong, Speaker } from "./types";
 import { spoken } from "./words";
 
 const KEEP = "hub.house";         // the last picture, so the app opens on something at once
@@ -530,9 +530,9 @@ export async function setShowTiming(value: number) {
   if (answered(answer, ["timing"], "") && answer.timing) hold("timing", { value: answer.timing.value }, SOUND_HOLD);
 }
 
-/** Start the light show with one of Ask's choices for it (a handle a lookup gave) or one of the playlists Hub offers
- * (its uri), never words. True once the show is on. */
-export async function startShow(what: { handle: string } | { uri: string }): Promise<boolean> {
+/** Start the light show with a song that has a hand-made show ({song}) or all of them, shuffled ({all}). A choice
+ * card from before (a handle) is answered by Hub: those no longer start a show. True once the show is on. */
+export async function startShow(what: { song: string } | { all: true } | { handle: string }): Promise<boolean> {
   const answer = await api.post("show/start", what);
   return answered(answer, [], answer.said ?? "Light show on");
 }
@@ -602,6 +602,17 @@ export async function playHere(speaker: Speaker, pick: Pick) {
   sheet.value = null;
   const answer = await api.post(`play/${encodeURIComponent(speaker.id)}`, { uri: pick.uri, kind: pick.kind, name: pick.name, here: true });
   answered(answer, ["own:" + speaker.id], `Playing ${pick.name} in ${spoken(speaker.name)}`);
+}
+
+/** The songs that have a hand-made light show, for its sheet (null while asked for). */
+export const showSongs = signal<ShowSong[] | null>(null);
+
+export async function loadShowSongs() {
+  try {
+    showSongs.value = (await api.showSongs()).songs;
+  } catch {
+    showSongs.value = showSongs.value ?? [];
+  }
 }
 
 export async function loadPicks() {

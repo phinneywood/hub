@@ -1308,21 +1308,21 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await tap('.showcard .end-show');
     expect(await until(() => !document.querySelector(".showcard"), null, 8000), "End show left the light show card");
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Light show ended"), "no word that the light show ended");
-    // Ask starts one: words that fit two things bring a card, and nothing starts until a tap; Ask ends it too.
-    await askFor("light show with day");
-    expect(await answered("Which one for the light show?"), "Ask's light show question: " + await lastAnswer());
-    expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelectorAll(".showpick .row").length === 2),
-      "the light show's two choices under the answer");
-    expect(await page.locator(".showcard").count() === 0, "a light show started before a tap");
-    await page.waitForTimeout(300); await shot("10j-light-show-pick");
-    expect(await until(() => !document.querySelector(".toast"), null, 6000), "the last word stayed over the choices");
-    await tap('.showpick .row:has-text("Sunday Morning")');
-    expect(await until(() => !!document.querySelector(".showcard"), null, 8000), "a tap on a choice did not start the light show");
+    // Ask starts one: a song without a hand-made show starts nothing, and Ask names the songs that have one; with nothing
+    // named it plays every song with a show, shuffled; Ask ends it too.
+    await askFor("light show with Thunder Road");
+    expect(await answered("Hub couldn’t do that. There’s no light show for “thunder road” yet. The songs with one: Morning Run, Night Drive and Paper Kites."),
+      "a light show for a song without one: " + await lastAnswer());
+    expect(await page.locator(".showcard").count() === 0, "a light show started for a song without one");
+    await askFor("light show");
+    expect(await answered("The light show is on: 3 songs, starting with "), "Ask's light show with nothing named: " + await lastAnswer());
+    expect(await until(() => !!document.querySelector(".showcard"), null, 8000), "Ask's light show did not start");
+    await page.waitForTimeout(300); await shot("10j-light-show-ask");
     await askFor("end the light show");
     expect(await answered("The light show has ended."), "ending the light show from Ask: " + await lastAnswer());
     expect(await until(() => !document.querySelector(".showcard"), null, 8000), "the light show card stayed after Ask ended the show");
     // And without words: after the scenes on House (on a wide screen, beside Ask) a chip opens the light show's sheet,
-    // a playlist on it starts the show, and its card leads Ask.
+    // which lists the songs with a show; one of them starts the show, and its card leads Ask.
     if (phone) await toPlace("House");
     const showGo = phone ? ".main .scenes .show-go" : ".side .scenes .show-go";
     expect(await until((sel) => !!document.querySelector(sel), showGo, 6000), "no way to start a light show in sight");
@@ -1331,9 +1331,11 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect((await page.textContent(".sheet h1")).trim() === "Light show", "the light show's sheet: " + await page.textContent(".sheet h1"));
     await page.waitForTimeout(450); await shot("10k-light-show-sheet");
     if (phone) expect((await small()).length === 0, "tap targets under 44 px on the light show's sheet: " + (await small()).join(", "));
-    await tap('.sheet .pick:has-text("Rainy Day")');
+    expect((await page.locator(".sheet .pick b").allInnerTexts()).join("|") === "All of them, shuffled|Morning Run|Night Drive|Paper Kites",
+      "the light show's sheet does not list the songs with a show: " + (await page.locator(".sheet .pick b").allInnerTexts()).join("|"));
+    await tap('.sheet .pick:has-text("Night Drive")');
     expect(await until(() => !document.querySelector(".sheet") && !!document.querySelector(".showcard"), null, 8000),
-      "a playlist on the light show's sheet did not start the show");
+      "a song on the light show's sheet did not start the show");
     expect(await page.locator(showGo).count() === 0, "the way to start a light show stayed while one is on");
     await tap('.showcard .end-show');
     expect(await until(() => !document.querySelector(".showcard"), null, 8000), "End show left the light show card, after the sheet started it");

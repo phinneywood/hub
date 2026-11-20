@@ -397,44 +397,36 @@ def _shown(item):
     return f'{item["name"]} – {item["artist"]}' if item['artist'] else item['name']
 
 
-def light_show(ctx: RunContext[Turn], do: Literal['start', 'end'], what: list[str] | None = None,
-               kind: Literal['playlist', 'album', 'artist', 'track'] | None = None) -> dict:
+def light_show(ctx: RunContext[Turn], do: Literal['start', 'end'], what: list[str] | None = None) -> dict:
     """The music light show: Home Assistant plays music on its speaker, the lights follow it, and it puts them back
-    at the end. Only when the person asks for a light show; playing music (the music tool) never starts one.
-    start: `what` is one to three short searches, best first: a playlist's name, an artist, an album or a song. `kind`
-    only when they said which. When one thing plainly fits, the show starts; when several could, they pick from a card
-    under your answer and nothing starts until they tap, so say that. end: ends the show that is on."""
+    at the end. Only when the person asks for a light show; playing music (the music tool) never starts one. A show
+    plays only songs that have a hand-made show. start: with nothing named, all of them, shuffled (leave `what` out;
+    never pick music for them). `what`: the song they named, one to three short searches; when no song with a show
+    fits, nothing starts and the answer names the songs that have one. end: ends the show that is on."""
     turn = ctx.deps
     try:
         _may_change(turn)
         if do == 'end':
             return _outcome(turn, lightshow.end(login=turn.login, via=VIA), 'The light show has ended.')
-        if not read.snapshot().get('show'):         # no pick card for a show that can't start
+        if not read.snapshot().get('show'):
             return _again(turn, 'Home Assistant has no light show Hub can run.')
-        if not library.ready():
-            return _miss(turn, 'Music Assistant isn’t set up in Hub, so Hub can’t look up what to play.')
-        reasons = []
-        for words in list(what or ())[:SEARCHES]:
-            try:
-                found = library.choices(words, kind)
-            except control.Refused as error:
-                reasons.append(str(error))
-                continue
-            if found['sure']:
-                item = found['items'][0]
-                result = lightshow.start(item['uri'], item['kind'], _shown(item), login=turn.login, via=VIA)
-                return _outcome(turn, result, f'The light show is on with {_shown(item)}.')
-            turn.said.append('Which one for the light show?')
-            turn.cards.append({'kind': 'showpick', 'items': [{k: c[k] for k in ('handle', 'name', 'artist', 'kind')}
-                                                             for c in found['items']]})
-            return {'needs_tap': 'The choices are on a card under the answer; the show starts when the person taps one.'}
-        return _again(turn, ' '.join(reasons) or 'Say what the light show should play.')
+        every = lightshow.songs()
+        if not every:
+            return _again(turn, 'No song has a light show yet.')
+        named = [w for w in list(what or ())[:SEARCHES] if str(w).strip()]
+        if named:
+            found = lightshow.matching(named, every)
+            if not found:
+                return _again(turn, f'There’s no light show for “{admin._clip(named[0], 60)}” yet. The songs with one: '
+                                    f'{_listed([s["title"] for s in every])}.')
+            result = lightshow.start_songs([found[0]['id']], login=turn.login, via=VIA)
+            return _outcome(turn, result, f'The light show is on with {found[0]["title"]}.')
+        result = lightshow.start_songs(None, login=turn.login, via=VIA)
+        return _outcome(turn, result, f'The light show is on: {len(result["songs"])} songs, starting with {result["songs"][0]}.')
     except NotNow as error:
         return _miss(turn, str(error), why='refused')
     except control.Refused as error:
         return _again(turn, error)
-    except library.MusicDown:
-        return _miss(turn, 'Music Assistant isn’t answering, so no light show was started.')
     except broker.HomeDown:
         return _miss(turn, 'The house isn’t answering, so nothing was changed.')
 

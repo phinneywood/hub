@@ -1,8 +1,8 @@
 // What rises over the house: a room, the music, and Ask.
 import { useEffect, useState } from "preact/hooks";
-import { dimDevice, dimRoom, dragDevice, dragGroupVolume, dragRoom, dragVolume, forgetScene, go, joinStream, keepScene, loadPicks, pauseStream,
+import { dimDevice, dimRoom, dragDevice, dragGroupVolume, dragRoom, dragVolume, forgetScene, go, joinStream, keepScene, loadPicks, loadShowSongs, pauseStream,
   picks, play, playHere, playOn, playPick, setGroupVolume, setVolume, sheet, skip, speakerIn, startShow, streamPlay, streamSkip, switchDevice,
-  switchRoom, takeOut } from "./state";
+  showSongs, switchRoom, takeOut } from "./state";
 import type { Button, House, Music, Pick, Room, Speaker, Stream } from "./types";
 import { Sleeve } from "./screens";
 import { Bars, Icon, SheetFrame, Slider, Switch } from "./ui";
@@ -286,23 +286,27 @@ function Picks({ found, onPick, all, busy }: { found: Pick[]; onPick: (pick: Pic
   );
 }
 
-/** The light show, one tap away: pick the music, and the lights follow it. When it is on, its card at the top of Ask
- * has the music, the timing and End show, so the sheet goes there. */
+/** The light show, one tap away: the songs that have a hand-made show, or all of them shuffled. When it is on, its
+ * card at the top of Ask has the music, the timing and End show, so the sheet goes there. */
 export function ShowSheet() {
-  useEffect(() => void loadPicks(), []);
-  const found = picks.value;
+  useEffect(() => void loadShowSongs(), []);
+  const songs = showSongs.value;
   const [busy, setBusy] = useState<Pick | null>(null);
+  const found: Pick[] | null = songs && [
+    ...(songs.length > 1 ? [{ name: "All of them, shuffled", kind: "all", uri: "all" }] : []),
+    ...songs.map((s) => ({ name: s.title, kind: "track", uri: s.id })),
+  ];
   const start = async (pick: Pick) => {
     setBusy(pick);
-    const on = await startShow({ uri: pick.uri });
+    const on = await startShow(pick.kind === "all" ? { all: true } : { song: pick.uri });
     setBusy(null);
     if (on) { sheet.value = null; go("ask"); }
   };
   return (
-    <SheetFrame title="Light show" sub="Pick the music. The lights follow it, and go back as they were when it ends.">
-      {found === null && <p class="quiet">Finding playlists…</p>}
-      {found !== null && found.length === 0 && <p class="quiet">Hub can’t find any playlists right now. Ask for a light show with an artist or a song.</p>}
-      {busy && <p class="quiet show-starting">Starting the light show with {busy.name}…</p>}
+    <SheetFrame title="Light show" sub="Songs with a hand-made show. The lights follow the music, and go back as they were when it ends.">
+      {found === null && <p class="quiet">Finding the songs…</p>}
+      {found !== null && found.length === 0 && <p class="quiet">No song has a light show yet.</p>}
+      {busy && <p class="quiet show-starting">Starting the light show{busy.kind === "all" ? "" : ` with ${busy.name}`}…</p>}
       {found !== null && found.length > 0 && <Picks found={found} all busy={busy?.uri} onPick={(p) => void start(p)} />}
     </SheetFrame>
   );

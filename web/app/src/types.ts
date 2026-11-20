@@ -124,6 +124,8 @@ export interface Happening {
 export interface SourceRead { read: number | null; trouble: string; off: boolean }
 export interface Activity { events: Happening[]; more: boolean; kinds: ActivityKind[]; sources: ActivitySource[]; status: { ha: SourceRead; apple: SourceRead } }
 export interface Pick { name: string; kind: string; uri: string }
+/** A song that has a hand-made light show (tools/house/lightshow.py). */
+export interface ShowSong { id: string; title: string; artist: string }
 
 // The Photos screen, as Hub sends it (hub/app/photos.py): a month the curator chose on this Mac.
 export type PhotoMark = "" | "keep" | "skip" | "print";

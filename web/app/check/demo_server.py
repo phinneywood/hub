@@ -92,6 +92,9 @@ for _n in range(1, 5):
 world = app_world.install(patch)
 # A made-up light show: its two scripts, its timing and the speaker it plays on. POST /demo/show-on starts one.
 app_world.add_show(world)
+# The songs with a hand-made show, as the music light's maps folder on the Mac holds them (made-up ones).
+from hub.tools.house import lightshow  # noqa: E402
+lightshow.SONGS = app_world.show_songs(Path(scratch) / 'show-maps')
 
 # The Activity screen: a made-up evening in Home Assistant's logbook, and Apple Home through a stand-in HomeClaw.
 from hub.app import activity  # noqa: E402

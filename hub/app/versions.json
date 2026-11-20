@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "9787733fbf69e052367156fc17a39f57029532a4",
+  "from": "e793d9a366e1d28364fd65405bdac046021640f1",
   "live": null,
+  "title": "Light shows play the songs that have a show",
+  "changes": [
+   "A light show now plays only songs that have a hand-made show. “Light show” on its own plays all of them in a shuffled order, naming one of them plays just that song, and for any other song Ask says it has no show yet and names the ones that do. The light show’s sheet lists those songs."
+  ]
+ },
+ {
+  "sha": "e793d9a366e1d28364fd65405bdac046021640f1",
+  "from": "9787733fbf69e052367156fc17a39f57029532a4",
+  "live": "2026-11-20T15:43:47Z",
   "title": "Ask shows scene and automation changes before you approve them",
   "changes": [
    "Ask can change scenes and automations from plain words, like “make this the new Dinner scene”. It shows the change before and after on a card, and nothing changes until you tap Approve. Undo still puts it back for a day."

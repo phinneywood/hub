@@ -80,6 +80,10 @@ Status: steps 1 and 2 (read, then lights, power and music) built; step 5 (playli
   ("Start light show", "End light show", "Light show timing"). Hub may run those two scripts, the start one only
   with something Music Assistant found, and set that number within its range, and nothing else of theirs; it
   records each without an Undo, because ending the show is the way back (`lightshow.py`, 2026-11-19).
+  A show plays only songs that have a hand-made show: the music light's song maps on the Mac, each with a cue sheet
+  beside it (`lightshow.songs()`, `HUB_SHOW_SONGS` to point elsewhere). With none named, all of them play in a
+  shuffled order (the first starts the show; the rest join its speaker's queue once it is on); a song without a
+  show starts nothing (2026-11-20).
   The owner can set the "Change lights, plugs, scenes and speakers" action to Suggest only on the Engine
   page, and then Ask changes nothing.
 - **"As well" means in sync** (2026-11-13). "Play it in the kitchen as well", "there too" or "in both" joins

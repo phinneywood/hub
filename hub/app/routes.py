@@ -298,27 +298,30 @@ def play(speaker: str, request: Request, body: dict = Body(...)):
     return _change(request, work)
 
 
+@router.get('/api/show/songs')
+def show_songs(request: Request):
+    """The songs that have a hand-made light show, for the light show's sheet: [{"id", "title", "artist"}]."""
+    from ..tools.house import lightshow
+    if _login(request) is None:
+        return _signed_out()
+    return {'songs': [{k: s[k] for k in ('id', 'title', 'artist')} for s in lightshow.songs()]}
+
+
 @router.post('/api/show/{do}')
 def show(do: str, request: Request, body: dict = Body(default={})):
     """The light show's card: "end" ends the show; "timing" sets its lights {"value": 150} milliseconds earlier (or,
-    below 0, later) and answers with the timing as set. "start" is a tap on one of Ask's choices for a show,
-    {"handle": "#1a2b3c"}, or on one of the playlists Hub offers (/api/picks), {"uri": ...}: only something a lookup
-    found lately, never words (tools/house/lightshow.py)."""
+    below 0, later) and answers with the timing as set. "start" plays songs that have a hand-made show: {"song": id}
+    one of them, {"all": true} all of them shuffled (tools/house/lightshow.py). Nothing else starts a show."""
     from ..tools.house import lightshow
-    from ..tools.house import music as library
 
     def work(login):
         if do == 'start':
-            handle, uri = str(body.get('handle') or '')[:20], str(body.get('uri') or '')[:300]
-            found = library.recall(handle) if handle.startswith('#') else None
-            if not found and uri:       # one of the playlists the light show sheet offers, as /api/picks gave it
-                found = next(({**p, 'artist': ''} for p in picks()['picks'] if p['uri'] == uri), None)
-            if not found and uri:
-                raise control.Refused('Hub can’t find that playlist any more.')
-            if not found:
-                raise control.Refused('Hub doesn’t remember that choice any more. Ask for the light show again.')
-            shown = f'{found["name"]} – {found["artist"]}' if found['artist'] and found['kind'] != 'playlist' else found['name']
-            return lightshow.start(found['uri'], found['kind'], shown, login=login, via='app')
+            if body.get('all') is True:
+                return lightshow.start_songs(None, login=login, via='app')
+            song = str(body.get('song') or '')[:40]
+            if not song:
+                raise control.Refused('A light show plays the songs that have one. Pick one, or all of them.')
+            return lightshow.start_songs([song], login=login, via='app')
         if do == 'end':
             return lightshow.end(login=login, via='app')
         if do == 'timing':

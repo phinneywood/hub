@@ -9,10 +9,17 @@ the start script must name one switch and one speaker, or Hub has no show.
 
 Starting, ending and timing are recorded with the house's other changes, never with an Undo: ending the show is the
 way back.
+
+A show plays only songs that have a hand-made show: the music light's song maps on this Mac (SONGS), each with a cue
+sheet beside it. With none named, all of them play in a shuffled order; anything else has no show yet.
 """
+import json
 import math
+import os
+import random
 import threading
 import time
+from pathlib import Path
 
 from . import broker, control, read
 
@@ -22,6 +29,8 @@ WIRING_SECONDS = 600         # how long what the start script says is trusted
 MISS_SECONDS = 60            # a start script that couldn't be read, or says too little, is asked again after this
 WIRING_TIMEOUT = 2.0         # reading it never holds up a reading of the house for long
 CHECKS, CHECK_WAIT = 10, 0.5  # after starting: the show on and its speaker playing; a script answers before it runs
+SONGS = Path(os.environ.get('HUB_SHOW_SONGS') or Path.home() / 'Library' / 'Application Support' / 'HomeOps' / 'music-light' / 'maps')
+QUEUE = 12                   # the most songs one show plays
 
 _lock = threading.Lock()
 _wiring = {'script': None, 'until': float('-inf'), 'found': None}
@@ -131,6 +140,74 @@ def _running(show):
         if now.get('on') and (speaker is None or speaker['state'] in control.PLAYING):
             return True
     return False
+
+
+def songs(folder=None):
+    """The songs that have a hand-made show: each map in the music light's maps folder with a cue sheet beside it
+    (sheets/ or cues/, same name), as [{'id', 'title', 'artist', 'uri'}] by title. The uri is the exact version that
+    was mapped. Empty when there are none or the folder can't be read."""
+    folder = Path(folder or SONGS)
+    try:
+        names = sorted(p.name for p in folder.glob('*.json') if p.name != 'index.json')
+    except OSError:
+        return []
+    out = []
+    for name in names:
+        if not ((folder / 'sheets' / name).is_file() or (folder / 'cues' / name).is_file()):
+            continue
+        try:
+            found = json.loads((folder / name).read_text())
+        except (OSError, ValueError):
+            continue
+        ids = [i for i in found.get('ids') or [] if isinstance(i, str) and broker.playable(i, 'track')] \
+            if isinstance(found, dict) else []
+        title = str(found.get('title') or '').strip() if isinstance(found, dict) else ''
+        if ids and title:
+            out.append({'id': name[:-5], 'title': title[:120], 'artist': str(found.get('artist') or '').strip()[:120],
+                        'uri': ids[0]})
+    return sorted(out, key=lambda song: song['title'].lower())
+
+
+def _words(text):
+    return {w for w in ''.join(c.lower() if c.isalnum() else ' ' for c in str(text or '')).split() if w not in ('the', 'a')}
+
+
+def matching(searches, every=None):
+    """The songs with a show that the words name: a search whose words are all in a song's title and artist, or a
+    song whose title's words are all in the search ("light show with levels"). Best first, no repeats."""
+    every = songs() if every is None else every
+    out = []
+    for search in searches or ():
+        said = _words(search)
+        for song in every:
+            title, both = _words(song['title']), _words(song['title'] + ' ' + song['artist'])
+            if said and song not in out and (said <= both or (title and title <= said)):
+                out.append(song)
+    return out
+
+
+def start_songs(chosen=None, *, login, via):
+    """Start the show with songs that have a hand-made show: `chosen` (their ids, in that order) or, with none, all
+    of them in a shuffled order. The first starts the show; the rest join its speaker's queue once it is on."""
+    every = songs()
+    if not every:
+        raise control.Refused('No song has a light show yet.')
+    by_id = {song['id']: song for song in every}
+    picked = [by_id[i] for i in chosen if i in by_id] if chosen else random.sample(every, len(every))
+    if not picked:
+        raise control.Refused('That song has no light show.')
+    picked = picked[:QUEUE]
+    first, rest = picked[0], picked[1:]
+    label = f'{first["title"]} and {len(rest)} more' if rest else first['title']
+    result = start(first['uri'], 'track', label, login=login, via=via)
+    if rest and result['done']:
+        show = _show()
+        control.once(show['player'], 'Light show', 'show_queue', f'Light show: {len(rest)} more songs queued',
+                     [('music_assistant', 'play_media', {'entity_id': show['player'], 'media_id': song['uri'],
+                                                         'media_type': 'track', 'enqueue': 'add'}) for song in rest],
+                     login=login, via=via)
+    result['songs'] = [song['title'] for song in picked]
+    return result
 
 
 def start(uri, kind, label, *, login, via):
