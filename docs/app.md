@@ -189,8 +189,11 @@ a message field with its send button. From the top:
 - **The field** (“Message Hub”), pinned above the bar. It grows to a few lines, Return sends, and the keyboard's own microphone
   dictates. A request made while another is going waits under it and goes as soon as that one ends (Hub takes
   one at a time per person); while one is going, an empty field offers Stop, which stops waiting for it: what
-  Hub already did stays done, with its Undo. On a phone, while the keyboard is up, the screen is sized to what it
-  leaves (`viewport.ts`, from `visualViewport`), so the field rides on the keyboard and the bar steps aside meanwhile.
+  Hub already did stays done, with its Undo. A turn runs on Hub by itself, not inside the phone's connection: if
+  the connection drops while Hub answers (a locked screen, a weak signal), Hub finishes and keeps the turn, a
+  request sent meanwhile waits for it, and the app reads the turn back, answer and cards (`readBack` in
+  `asking.ts`). Only a request that never reached Hub says “Can’t reach Hub. Nothing was asked.” On a phone,
+  while the keyboard is up, the screen is sized to what it leaves (`viewport.ts`, from `visualViewport`), so the field rides on the keyboard and the bar steps aside meanwhile.
   Without the keyboard, Ask is pinned between the top of the screen and the top of the bar, the page under it never
   scrolls, and a page an iPhone left scrolled when the keyboard went is put back. While a finger is on the
   conversation (and as it coasts after), nothing scrolls it but the finger. The browser check holds Ask to this,

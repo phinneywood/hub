@@ -351,8 +351,16 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     await page.locator(".turn .took button").last().click();
     expect(await until(() => document.querySelector(".turn.back .took")?.textContent === "Put back as it was"), "the answer did not say it was put back");
     expect(await until(() => fetch("/app/api/home").then((r) => r.json()).then((h) => h.rooms.kitchen.level === 80)), "Undo under the answer did not put the kitchen back");
+    // The connection goes while Hub answers (a locked screen, a weak signal): Hub finishes and keeps the turn anyway,
+    // and the app reads it back, cards and all, instead of saying nothing was asked.
+    await page.route("**/app/api/ask", async (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      const real = await route.fetch();
+      return route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body: (await real.text()).split("\n\n")[0] + "\n\n" });
+    });
     await askFor("some jazz in the bedroom, softly");
-    expect(await answered("Playing Evening Jazz in the bedroom at 15%."), "Ask did not play the music: " + await lastAnswer());
+    expect(await answered("Playing Evening Jazz in the bedroom at 15%.", 12000), "after a dropped connection, Ask did not read the answer back: " + await lastAnswer());
+    await page.unroute("**/app/api/ask");
     expect(await until(() => [...document.querySelectorAll(".turn")].pop()?.querySelector(".rows .ctl-name")?.textContent === "Bedroom"), "the speaker was not drawn under the answer");
     expect(await until(() => document.querySelector(".np-text span")?.textContent.endsWith("also Bedroom")), "the bar did not say that two rooms play different things");
     await askFor("what should we cook this week?");

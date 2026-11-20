@@ -1,8 +1,18 @@
 [
  {
   "sha": null,
-  "from": "4bf806da88bea5a90070bb9df928d43306ee6a21",
+  "from": "07714531d167c4bc791074c4dce9976ff2dc48a4",
   "live": null,
+  "title": "Ask finishes what it started",
+  "changes": [
+   "If the connection drops while Hub is answering, say when the phone’s screen locks, Hub still finishes and keeps the answer, and Ask shows it once the connection is back. It used to say nothing was asked, though Hub had already started.",
+   "A follow-up Hub can’t place, like “the same again” with nothing before it, gets a short question back instead of a guess. And when part of a request is beyond Hub, it says which part."
+  ]
+ },
+ {
+  "sha": "07714531d167c4bc791074c4dce9976ff2dc48a4",
+  "from": "4bf806da88bea5a90070bb9df928d43306ee6a21",
+  "live": "2026-11-20T03:31:05Z",
   "title": "Errands stay finished",
   "changes": [
    "Errands no longer puts back an errand Hub has just closed. When two looks overlapped, the older one could land last and show the errand as waiting again.",

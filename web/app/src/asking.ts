@@ -128,6 +128,8 @@ async function send(n: number, text: string, signal: AbortSignal) {
   const change = (make: (turn: Turn) => Partial<Turn>) => {
     talk.value = talk.value.map((turn) => (turn.n === n ? { ...turn, ...make(turn) } : turn));
   };
+  const known = Math.max(0, ...talk.value.map((turn) => turn.id ?? 0));     // the newest turn Hub kept before this one
+  let reached = false;      // Hub took the request: from here, a break is a lost connection, not a request never made
   change(() => ({ waiting: false, busy: true }));
   const take = (event: Event) => {
     if (event.t === "say") change((turn) => ({ answer: turn.answer + event.text, doing: "" }));
@@ -152,6 +154,7 @@ async function send(n: number, text: string, signal: AbortSignal) {
       change(() => ({ answer: told.error ?? "Hub couldn’t take that just now.", busy: false, status: "failed" }));
       return;
     }
+    reached = true;
     const reader = answer.body.getReader(), decoder = new TextDecoder();
     let rest = "";
     for (;;) {
@@ -164,15 +167,42 @@ async function send(n: number, text: string, signal: AbortSignal) {
         if (line.startsWith("data: ")) take(JSON.parse(line.slice(6)) as Event);
       }
     }
-    change((turn) => (turn.busy ? { busy: false, status: turn.status || "failed", answer: turn.answer || "Hub stopped before it answered." } : {}));
+    // The stream ended without Hub saying how the turn ended: the connection went partway, so read the turn back.
+    if (talk.value.some((turn) => turn.n === n && turn.busy)) await readBack(text, known, signal, change);
     if (talk.value.some((turn) => turn.n === n && turn.cards.some((card) => card.kind === "memory"))) void loadAble();
   } catch {
+    if (!signal.aborted && reached) await readBack(text, known, signal, change);
     if (signal.aborted) {
       change((turn) => ({ busy: false, doing: "", status: "stopped",
         answer: (turn.answer ? turn.answer + "\n" : "") + (turn.cards.some((card) => card.batch) ? "Stopped. What Hub already did is below, with Undo." : "Stopped.") }));
-    } else {
+    } else if (!reached) {
       change((turn) => ({ answer: turn.answer || "Can’t reach Hub. Nothing was asked.", busy: false, status: "failed" }));
     }
+  }
+}
+
+/** Hub took the request and the connection went while it answered (a locked screen, a weak signal). Hub finishes the
+ *  turn and keeps it either way, so wait for it there and show the turn as Hub kept it: its whole answer and cards. */
+async function readBack(text: string, known: number, signal: AbortSignal, change: (make: (turn: Turn) => Partial<Turn>) => void) {
+  change(() => ({ busy: true, doing: "Lost the connection. Waiting for Hub’s answer" }));
+  const said = text.split(/\s+/).join(" ");
+  for (let tries = 0; tries < 40 && !signal.aborted; tries++) {
+    await new Promise((done) => window.setTimeout(done, tries < 6 ? 1500 : 3000));
+    try {
+      const answer = await fetch("/app/api/ask", { headers: { accept: "application/json" } });
+      if (!answer.ok) continue;
+      const kept = ((await answer.json()) as Able).recent.find((turn) => turn.id > known && said.startsWith(turn.asked));
+      if (kept) {
+        change(() => ({ answer: kept.answer, cards: kept.cards, status: kept.status, id: kept.id, ms: kept.ms, busy: false, doing: "" }));
+        return;
+      }
+    } catch {
+      /* still away: look again */
+    }
+  }
+  if (!signal.aborted) {
+    change((turn) => ({ busy: false, doing: "", status: "failed",
+      answer: (turn.answer ? turn.answer + "\n" : "") + "The connection went while Hub was answering, and Hub kept no answer to this. Ask again." }));
   }
 }
 
