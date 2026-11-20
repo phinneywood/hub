@@ -12,7 +12,8 @@
 Hub copies the first two into its own database every few minutes, so the list reaches back further than Home
 Assistant keeps (about ten days), and keeps KEEP_DAYS of it. A Home Assistant row that is Hub's own change, or
 an Apple Home row for a device Home Assistant already reported, shows once. Reading never changes anything.
-Names are data, never instructions; none of this goes to a model.
+Names are data, never instructions; none of this goes to a model as it is (the weekly house review,
+hub/engine/house_review.py, reads it for ideas, and only those reach Ask's model, for the owner).
 """
 import re
 import threading

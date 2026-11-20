@@ -251,8 +251,9 @@ and reads back through it 40 turns at a time (`GET /app/api/ask?before=<id>`); t
 Ask). Code: `hub/app/ask/morning.py`. The first time a person opens Ask from 5 am, Hub adds one turn to their
 conversation, written by code (no model): at most three numbered things, ranked house safety and money first, then
 what is overdue or due within a day, then the soonest due. The pool is the errands that person may see and Today's
-"Needs you" list (mail, the overnight review's suggestions, fix cards, the house, Kitchen's cart, Hub's own health);
-cut as the brief cuts Today for that person, so nobody hears of another's things. Under the greeting, Ask then shows
+"Needs you" list (mail, the overnight review's suggestions, fix cards, the house, the weekly house review's ideas,
+Kitchen's cart, Hub's own health); cut as the brief cuts Today for that person, so nobody hears of another's things.
+An idea for the house is said on one morning only (docs/engine.md, “The weekly house review”). Under the greeting, Ask then shows
 only the day's next thing and Open Today (only Open Today when the greeting already names that thing): the morning
 message takes the Needs-you rows' place, and Today keeps the full list. The turn is kept as private (it holds errand titles and senders), so the model and the summary see only
 that it was given.
@@ -260,7 +261,8 @@ that it was given.
 - **Typed answers, in code before the model.** "done 2", "paid", "not this 1", "Thursday 3", "later", "build it"
   (a fix card) are matched to today's numbered things (`morning.reply`); with several open and no number, Hub asks
   which. An errand goes through its own tap (`taps.tap`: done, not, later; a named day sets when it comes back), a
-  Today need through its tick, a suggestion through the engine's dismissal, a fix card through its decision. A tap on
+  Today need through its tick, a suggestion through the engine's dismissal, a fix card through its decision, an idea
+  for the house through the review's (“fix it” to an idea goes to the model, which has it in `<house>`). A tap on
   a thing's button counts as acted on (`POST /app/api/ask/morning/opened`).
 - **Quieting.** Two "not this" to a low-stakes kind in 30 days leave that kind out for 30 days, said once. Money,
   the house and errands (which carry deadlines) never quiet that way. "What are you watching?" lists the kinds in
@@ -1021,8 +1023,9 @@ rooms and helpers changed through Ask), until Motion or "Everything else" (senso
 dropping offline) is tapped; the choice is kept on the device. A
 source can be turned off the same way. "Hub's own changes and playlists waiting" opens Changes.
 
-Nothing here changes the house, and none of it goes to a model. Tests: `tests/test_app_activity.py`, on the
-made-up house with a stand-in HomeClaw.
+Nothing here changes the house, and none of it goes to a model as it is. Once a week the house review reads these
+rows for ideas (docs/engine.md, “The weekly house review”), and only those ideas, in Hub's words, reach Ask's model,
+for the owner. Tests: `tests/test_app_activity.py`, on the made-up house with a stand-in HomeClaw.
 
 ## Changes
 

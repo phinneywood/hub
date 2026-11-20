@@ -111,7 +111,7 @@ FILING_WORTH = 10          # sorted mail sitting in the inbox before Hub offers 
 GMAIL_FILED = 'gmail-filed'
 FYI = (GMAIL_FILED,)       # told, not asked: shown on Today, left out of the morning message
 GMAIL_NEXT = 'gmail-next'  # the one slot for Hub's own Gmail offers; each offer's key starts with it
-WEEK_KEYS = (GMAIL_NEXT + '-',)  # “not now” hides these for a week: the same offer every morning is nagging
+WEEK_KEYS = (GMAIL_NEXT + '-', 'idea-')  # “not now” hides these for a week: the same offer every morning is nagging
 
 
 def gmail_rules_due():
@@ -164,7 +164,7 @@ def hide(key):
     day = home.today()
     week = key.startswith(WEEK_KEYS)
     store.snooze(key, day.isoformat(), (day + timedelta(days=6)).isoformat() if week else None)
-    if week:
+    if key.startswith(GMAIL_NEXT + '-'):
         store.snooze(GMAIL_NEXT, day.isoformat())  # and no other Gmail offer takes its place today
 
 
@@ -236,12 +236,15 @@ def start():
     return [(home._pool.submit(check), account) for check, account in _checks()]
 
 
+NOT_REVIEWED = ('idea-',)   # the weekly house review's ideas: they reach Ask's model only, never the overnight review's
+
+
 def rule_items():
     """Every rule-based item, gathered in turn. For the overnight review, which is the owner's; never raises."""
     found = []
     for check, _ in _checks():
         try:
-            found += check()
+            found += [item for item in check() if not str(item.get('key', '')).startswith(NOT_REVIEWED)]
         except Exception:  # noqa: BLE001
             continue
     return found
@@ -250,7 +253,7 @@ def rule_items():
 # Whose account a list item's key is about, by its start: what the owner's mail and calendar raise, and the overnight
 # review's suggestions and Hub's notes on what it did by itself (both read the owner's mail). Any other key is the
 # household's. Used where a key arrives without its item: a tap that hides or ticks it.
-KEY_ACCOUNTS = ('mail:', 'gmail-', 'calendar-', 'tile-gmail', 'tile-calendar', 'ai-', 'auto-', 'hub-')
+KEY_ACCOUNTS = ('mail:', 'gmail-', 'calendar-', 'tile-gmail', 'tile-calendar', 'ai-', 'auto-', 'hub-', 'idea-')
 
 
 def account_of(key):
@@ -281,7 +284,7 @@ def show(key):
     """Put back what hide() hid."""
     from . import store
     store.unsnooze(key)
-    if key.startswith(WEEK_KEYS):
+    if key.startswith(GMAIL_NEXT + '-'):
         store.unsnooze(GMAIL_NEXT)
 
 

@@ -199,6 +199,7 @@ have nothing to wait for. One that fails is skipped and logged by name.
   starred). Saved in `gmail-prepared.json` in the data directory: addresses, sender names and
   counts, never subjects. Used for 36 hours, then pages work things out themselves as before.
 - Hub itself: the reminder to delete the older Keychain copy of the model key (see “The model key”).
+- The weekly house review, on the first morning from Sunday on (see below).
 
 `today.gmail_next` offers at most one Gmail step a day in “Needs you”: sorted mail that is ready
 to file, or the choice to let Hub file once 10 sorted emails sit in the inbox, or the backlog
@@ -206,6 +207,39 @@ to file, or the choice to let Hub file once 10 sorted emails sit in the inbox, o
 the list). “Not this week” hides that offer for seven days and leaves the Gmail slot empty for the
 day. The sender review, bulk clean-ups, rules and filters are still there under “Clean up”
 (`/gmail/tools`); they are no longer offered on the home list.
+
+## The weekly house review
+
+The owner asked (2026-11-20) for something that regularly reviews the house's logs for what could work better, and
+only suggests. `hub/engine/house_review.py` is that: the `house_review` source, the owner's, rules only, no model.
+
+The first morning job from Sunday on reads the seven whole days before that morning (midnight to midnight, Pacific)
+from the house activity Hub already keeps (the Activity screen's copy of Home Assistant's logbook,
+`hub/app/activity.py`) and Home Assistant's automations as they are now, and looks for:
+
+| Kind | What it looks for |
+| --- | --- |
+| broken | An automation Home Assistant can't run (it shows as unavailable), or one that ran 30 times or more in one hour, five times its usual busiest hour over the four weeks before |
+| undone | Lights an automation switched on or off, switched back within 15 minutes by anything but an automation (a person, or something outside Home Assistant such as a Hue app timer), on 3 or more days and on at least a quarter of that automation's runs |
+| offline | A device (not a speaker) that dropped off the network 3 or more times; its parts dropping together count once, and a moment when 4 or more devices dropped within a minute (a bridge or Home Assistant restarting) doesn't count |
+| by_hand | A light switched on or off, not by an automation, a button or right after motion in its room, within the same hour (it may cross midnight) on 5 or more days, that hour holding most of its switches that way, and never by an automation in that hour |
+| idle | Automations that are on but haven't run in 30 days (one made less than 30 days ago is too new to tell); one is mentioned again only after four weeks |
+
+Hub's own test changes (the live checks and golden tests in `house_changes`) are left out, and a change one of
+Hub's own routines made counts as an automation's.
+
+At most three ideas a week, one of each kind before a second of any, each with what was seen, its numbers and one
+thing that might help, in Hub's words. They show:
+- on Today, as the owner's items (“Not this week” hides one for the week; See activity, or Ask Hub);
+- in the owner's morning message, once, as “An idea for the house: … Ask me about it.” “not this” keeps that finding
+  away for good (a light at a time); “done” puts it away until a later review finds it again; “fix it” goes to the
+  model;
+- to Ask's model, for the owner only, as one line in `<house>`, with its number in that morning's message, so “change
+  that automation” can follow. Ask's own rules for changing the house apply as always; the review changes nothing.
+
+They are kept from the overnight review (`today.rule_items` leaves them out). A morning when the logbook's last
+reading failed or is over an hour old, or Home Assistant can't be read, makes no review; the next morning tries
+again. The logbook records on and off, not dimming, so a light someone keeps dimming isn't seen.
 
 ## Calendar
 

@@ -190,3 +190,37 @@ def test_a_long_line_ends_at_a_whole_sentence_or_word():
     assert said.endswith('…') and len(said) <= morning.LINE and one.startswith(said[:-1]) and one[len(said) - 1] == ' '
     assert morning._clip('Short and sweet.') == 'Short and sweet.'
 
+
+
+def test_an_idea_for_the_house_is_said_once_and_fix_it_goes_to_the_model(week, monkeypatch):
+    from hub.engine import house_review
+    idea = _need('idea-abc123', '“Evening lights” keeps getting undone', 'On 3 days this week, …', href='/app/#activity')
+    monkeypatch.setattr(screen, '_list', lambda accounts, missed=None: ([dict(idea)] if people.DEFAULT in accounts else [], 0, []))
+    monkeypatch.setattr(morning, '_errands', lambda login, now: [])
+    monkeypatch.setattr(morning, '_looked', {})        # an earlier test's slow source isn't this one's
+    decided = []
+    monkeypatch.setattr(house_review, 'decide', lambda key, choice: decided.append((key, choice)) or True)
+    morning.message(ME, AT)
+    assert _things(ME) == ['An idea for the house: “Evening lights” keeps getting undone. Ask me about it.']
+    assert morning.numbers(ME, AT) == {'idea-abc123': 1} and morning.numbers(PARTNER, AT) == {}
+    assert morning.answer('fix it', ME, AT) is None            # the model has the idea in <house>, and answers
+    assert morning.answer('not this', ME, AT).startswith('Number 1 is gone')
+    assert decided == [('idea-abc123', 'never')]
+    assert [i['key'] for i in morning.pool(ME, AT + 86400)] == []      # still on Today until the next review; said once
+    assert morning.pool(PARTNER, AT) == []
+    assert 'Weekly ideas for the house' in morning.answer('What are you watching?', ME, AT)
+
+
+def test_an_idea_put_off_to_a_day_comes_back_that_morning(week, monkeypatch):
+    from hub.engine import house_review
+    idea = _need('idea-abc123', '“Evening lights” keeps getting undone', 'On 3 days this week, …')
+    monkeypatch.setattr(screen, '_list', lambda accounts, missed=None: ([dict(idea)], 0, []))
+    monkeypatch.setattr(morning, '_errands', lambda login, now: [])
+    monkeypatch.setattr(house_review, 'decide', lambda key, choice: True)
+    monkeypatch.setattr(morning, '_looked', {})
+    morning.message(ME, AT)
+    assert morning.answer('tomorrow', ME, AT) == 'Number 1 comes back tomorrow.'
+    assert [i['key'] for i in morning.pool(ME, AT + 86400)] == ['idea-abc123']
+    morning.message(ME, AT + 86400)
+    assert morning.answer('done', ME, AT + 86400) == 'Done, number 1 is off the list.'
+    assert [i['key'] for i in morning.pool(ME, AT + 2 * 86400)] == []

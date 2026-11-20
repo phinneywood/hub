@@ -9,8 +9,9 @@ called: the message is made from what Hub already keeps, the first time the pers
 The pool, for one person (`login`):
 - the errands they may see (hub/app/errands/), with when each is due;
 - Today's "Needs you" list (hub/app/today.py: mail that needs a person, the overnight review's suggestions, the fix
-  cards, the house, Kitchen's cart, Hub's own health), cut as Today cuts it for them: only what the accounts they
-  may see bring (people.py). The other person's things are never mentioned, not even as counts.
+  cards, the house, the weekly house review's ideas, Kitchen's cart, Hub's own health), cut as Today cuts it for
+  them: only what the accounts they may see bring (people.py). The other person's things are never mentioned, not
+  even as counts. An idea for the house is said on one morning only; it stays on Today until the next review.
 
 Ranking (`_rank`): house safety and money first, then what is overdue or due within a day, then the soonest due,
 then the order Hub's lists already gave. A kind the person said "not this" to twice in QUIET_DAYS is left out for
@@ -57,6 +58,7 @@ KINDS = {
     'mail': ('Email that needs you', False),
     'kitchen': ('Kitchen’s grocery cart', False),
     'suggestions': ('Ideas from the overnight review', False),
+    'ideas': ('Weekly ideas for the house, from how it ran', False),
     'fixes': ('Where Hub got in your way', False),
     'hub': ('Hub itself: its morning job, checks and limits', False),
 }
@@ -68,6 +70,7 @@ WORDS = {'money': ('bill', 'bills', 'renewal', 'renewals', 'money', 'pay'),
          'mail': ('mail', 'email', 'emails', 'inbox'),
          'kitchen': ('kitchen', 'grocery', 'groceries', 'cart', 'shopping'),
          'suggestions': ('idea', 'ideas', 'suggestion', 'suggestions', 'overnight', 'review'),
+         'ideas': ('weekly',),
          'fixes': ('fix', 'fixes', 'friction', 'way'),
          'hub': ('hub', 'itself', 'checks', 'limits', 'health')}
 
@@ -129,6 +132,8 @@ def _kind(key):
         return 'suggestions'
     if key.startswith(('friction-', 'improve-')):
         return 'fixes'
+    if key.startswith('idea-'):
+        return 'ideas'
     if key.startswith(('house-', 'tile-')):
         return 'house'
     if key.startswith('kitchen-'):
@@ -156,14 +161,27 @@ def _gap(card, now):
     return (date.fromisoformat(on) - _clock(now).date()).days if on else None
 
 
-def _needs(login, missed=None):
+def _said(login, day):
+    """The weekly ideas this person's morning message held on an earlier day: each is said once (or again on the day
+    they asked for it back)."""
+    with closing(_db()) as conn:
+        return {r['key'] for r in conn.execute("select key from app_ask_morning where person = ? and kind = 'ideas' "
+                                               "and day < ? and coalesce(did, '') != 'later'", (_person(login), day))}
+
+
+def _needs(login, missed=None, now=None):
     from .. import today
     needs, _, _ = today._list(people.accounts(login), missed)      # cut to what this person may see (the brief, people.py)
+    said = _said(login, _clock(now).date().isoformat())
     found = []
     for n, need in enumerate(needs):
         kind = _kind(need['key'])
+        if kind == 'ideas' and need['key'] in said:
+            continue                # still on Today until next week's review; the morning message says it once
         if kind == 'fixes':
             text = _sentence(f'Hub got in your way: {need["title"].rstrip(".")}', 'Say “build it” to file a fix')
+        elif kind == 'ideas':
+            text = _sentence(f'An idea for the house: {need["title"]}', 'Ask me about it')
         else:
             text = _sentence(need['title'], need['why'])
         found.append({'key': need['key'], 'kind': kind, 'tone': need['tone'], 'gap': None, 'order': 100 + n, 'text': text,
@@ -200,7 +218,7 @@ def pool(login, now=None, missed=None):
     day = _clock(now).date().isoformat()
     missed = [] if missed is None else missed
     found = []
-    for part in (lambda: _errands(login, now), lambda: _needs(login, missed)):
+    for part in (lambda: _errands(login, now), lambda: _needs(login, missed, now)):
         try:
             found += part()
         except Exception:  # noqa: BLE001 - one source that can't be read must not keep the others from the message
@@ -342,10 +360,12 @@ def _errand(item, do, login, until=None):
 
 
 def _need(item, do):
-    from ...engine import friction, state
+    from ...engine import friction, house_review, state
     from .. import today
     key = item['key']
-    if do == 'build':
+    if key.startswith('idea-'):     # "not this": that finding never comes back; "done": away until it is seen again
+        house_review.decide(key, 'never' if do == 'not' else 'done')
+    elif do == 'build':
         friction.decide(key.removeprefix('friction-'), 'build')
     elif do == 'not' and key.startswith('ai-'):
         state.dismiss(key)
@@ -389,6 +409,8 @@ def reply(text, login, now=None):
         until = _until(match.group('when'), moment.date()) if do == 'later' else None
         if item['key'].startswith('errand-') and do == 'build':
             return 'That one is an errand. Say “done” or “not this”.'
+        if do == 'build' and item['key'].startswith('idea-'):
+            return None             # "fix it 2" to an idea for the house: the model, which has the idea, answers
         if do == 'build' and not item['key'].startswith('friction-'):
             return 'Only a fix can be built. Say “done” or “not this”.'
         try:
@@ -408,6 +430,13 @@ def reply(text, login, now=None):
 def _day_words(until, today):
     gap = (until - today).days
     return 'tomorrow' if gap == 1 else f'on {until.strftime("%A")}' if gap < 7 else f'on {until.strftime("%A, %B %-d")}'
+
+
+def numbers(login, now=None):
+    """Today's morning message for this person: each thing's number, by its key."""
+    with closing(_db()) as conn:
+        return {r['key']: r['n'] for r in conn.execute('select key, n from app_ask_morning where person = ? and day = ?',
+                                                       (_person(login), _clock(now).date().isoformat()))}
 
 
 def opened(login, key, now=None):
