@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "241a7ca6827f7a2718afb7a181584537f9a419df",
+  "from": "8e3310f784c25ef2e632af2562c09958f45165f9",
   "live": null,
+  "title": "A weekly look at the house",
+  "changes": [
+   "On Sundays Hub reads the past week of the house’s activity and offers at most three ideas on Today and in the morning message: an automation that keeps failing or gets undone, a device that keeps dropping off, a light switched by hand at the same hour, an automation that never runs. It only suggests; nothing changes unless you ask."
+  ]
+ },
+ {
+  "sha": "8e3310f784c25ef2e632af2562c09958f45165f9",
+  "from": "241a7ca6827f7a2718afb7a181584537f9a419df",
+  "live": "2026-11-20T02:30:35Z",
   "title": "One step back at a time",
   "changes": [
    "Two quick taps on a page's way back go back one step, as meant. The second tap used to go back again, sometimes out of Hub. A page opened while Hub is still going back now waits for it, so it no longer vanishes."
