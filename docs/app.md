@@ -1,7 +1,9 @@
 # The app
 
-Hub's new front: one small app instead of a page per tool. It opens on Ask, a conversation with Hub, which speaks
-first with what needs you and the house right now, over a field to say what you want (see “Ask at the center”). The house is one tap away, drawn
+Hub's new front: one small app instead of a page per tool. Since 2026-11-20 (owner's ask: the earlier screens
+“devalue the dashboards”) it opens on Home (see “Home”): the time, a field that asks Hub or finds anything, a big live
+tile for the house, the music, today and the kitchen, and a tile for each dashboard. Ask, a conversation with Hub, is
+one tap away and is where anything typed on Home goes (see “Ask at the center”). The house is one tap away, drawn
 as a plan of rooms that are lit when their lights are, and changes under a tap. Source: `web/app/` (Preact,
 TypeScript). Built files, committed: `hub/static/app/`. The data and taps it uses: `hub/app/`.
 
@@ -28,16 +30,47 @@ music playing.
 
 Colour keeps its meaning: lamplight is light and the one main action on a screen, sea-glass is sound, coral a problem.
 
-The bar at the bottom is one row: Ask, House (and Dashboards on a phone), with the record playing and its pause at the
-right; a tap on the record opens the music. A page Ask opened (Today, Mail, Kitchen, System and their pages) keeps Ask
-marked in the bar and has its own way back at its top left, named after where it was opened from. Going into a page
-is a step in the browser's history, so the phone's back gesture and Back come out the way you went in. A sheet can be
-pulled down to close it.
+**Palettes** (since 2026-11-20, owner's ask): the same house in four palettes, each with its night (Evening) and its
+day: Dusk (the navy night and warm paper above), Evergreen (deep spruce and brass), Clay (terracotta and sand) and
+Graphite (plain). Chosen in System > The look, under Evening or Day. A palette changes only the grounds and inks
+(`[data-palette]` in `app.css`); lamplight, sound and coral keep their colours in all four. The palette on screen is
+kept on the device (`hub.palette.now`) and put on the page the moment the app's script runs, so the next opening
+starts in it; the phone's own bars take the ground's colour. A change while the app is open
+comes in over a second, never as a jump.
+
+By default (“Follows what’s going on” in The look) Hub picks the palette from the household's day (`hub/app/mood.py`,
+sent as `mood` with `/app/api/today`): Clay for a birthday, a party, guests or a holiday on today's calendar, or a
+holiday Hub knows by date (Thanksgiving, Christmas…); Evergreen while the trip is on, on a day without school, and at
+the weekend; Dusk otherwise. Graphite is only ever chosen by hand. It is decided once a day (again after Hub restarts, with the same answer unless the calendar changed) for the whole household,
+so every phone wears the same one all day; someone who can't see the calendar it came from gets the reason without the
+event's name. The app wears the pick when it opens and when it comes back to the front, never while someone is looking
+(`palette.ts`); the one live rule is Clay while a light show is on. Home says why in a line under the time (“Clay
+today, for Robin's birthday”), except on an ordinary Dusk day; a tap on it opens The look, which says the same.
+
+On a phone the bar at the bottom is one row: Home at the left, in thumb reach, with the record playing and its pause at
+the right; a tap on the record opens the music. Home itself has no bar, since every place has its tile there. Every
+page has its own way back at its top left, named after where it was opened from. Home is the one place: everything
+else (Ask, House, a dashboard, a page one of those opened) is a step in the browser's history from it, so the phone's
+back gesture and Back come out the way you went in, and the bar's Home goes back out through all of them at once
+(`goHome` in `state.ts`). On a laptop or iPad the left column lists Home, Ask and House, and the dashboards. A sheet can
+be pulled down to close it.
+
+### Home
+
+`start.tsx`. From the top: the part of the day and the System button (`Top`), the time in Hub's voice, then the field
+(“Ask Hub, or find anything”). A few letters find rooms (switched right there), scenes, playlists, pages and dashboards,
+as Ask's own field does (`Found`), with “Ask …” first; Send or that row opens Ask with the words asked. With nothing
+typed, the field's button opens Ask itself, where Hub's morning message is. Under it, four tiles, each saying what is
+going on there now: House (how many rooms are lit, and a row of windows that glow as their rooms do), Music (what plays
+and where, with pause on the tile; a tap opens the music; during a light show it leads to the show's card in Ask),
+Today (how many things need you, counted as Hub's greeting counts them, and the first) and Kitchen (Kitchen's own
+sentence). Then Dashboards: a tile for each, in the person's order, with its line for today; Arrange opens the list. On
+a wide screen Ask is open beside Home, so Home has no field of its own and the four tiles sit in one row.
 
 ## The front door
 
-The app is Hub's front door: `/` sends the browser to `/app/`, which opens on Ask, and the phone's home-screen icon
-opens it. `/app/#house` opens on the house. The
+The app is Hub's front door: `/` sends the browser to `/app/`, which opens on Home, and the phone's home-screen icon
+opens it. `/app/#ask` opens on Ask and `/app/#house` on the house. The
 older pages all still answer, listed under System; the old chat is at `/ask`. Since 2026-11-18 the older pages are
 moving in (owner's ask): Calendar, Insights (as AI spend), Trip and School are dashboards (see “Dashboards”), and All
 tools and Settings open System, whose “How Hub checks itself” lists Status, Checks, Practice requests (the golden tests) and Ask activity. They wear the app's look (its palette and
@@ -161,8 +194,10 @@ Say what you want, and Hub does it or answers. Code: `hub/app/ask/`. In the app:
 
 ### Ask at the center
 
-Since 2026-11-16 (owner's choice, after finding Ask hard to start on a phone) Ask is the screen Hub opens to, and the
-one way into everything else. It reads as a chat (owner's ask, after trying it: “not obvious that you are in a chat
+Since 2026-11-16 (owner's choice, after finding Ask hard to start on a phone) Ask was the screen Hub opened to, and the
+one way into everything else. Since 2026-11-20 Home opens first and Ask is a tap from it (or a few words typed there);
+on a phone Ask no longer repeats the house under the greeting, since Home's tile says it, and the light show's chip is on
+House. It reads as a chat (owner's ask, after trying it: “not obvious that you are in a chat
 interface”): a header naming Hub, Hub's words in bubbles on the left, yours in the lamp's colour on the right, and
 a message field with its send button. From the top:
 
@@ -693,8 +728,8 @@ person shows in Ask or Today; and the category has one page of its own that the 
 that page, written once for every category. Code: `hub/app/boards/` (one module per board), in the app
 `web/app/src/boards.tsx`. Address: `/app/#board/<id>`; `/app/#boards` lists the ones this person may open. They are
 found by a few letters in Ask, listed in System, and Today ends with one line for each. On a laptop or iPad the left
-column lists each one under Ask and House; on a phone (owner's ask, 2026-11-18) the bar gets a third place, Dashboards,
-once the person has one, and it opens the list.
+column lists each one under Home, Ask and House. On a phone, since 2026-11-20, Home has a tile for each, with its line
+for today, and Arrange opens the list.
 
 - **Blocks.** A board is a list of blocks of a few kinds the app draws: `hero` (a big line, with an optional progress
   bar), `tiles` (numbers), `rows`, `checks` (a checklist), `line` (a chart, points in a 720 by 180 box), `bars` and

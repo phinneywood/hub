@@ -247,7 +247,7 @@ export function kitchenSays(now: Shop): string {
   return now.items.every((i) => i.state === "cart") ? "Everything on the list is in the cart." : `${count(now.items.length, "thing")} on the list.`;
 }
 
-function kitchenSub(now: Shop): string {
+export function kitchenSub(now: Shop): string {
   const carted = now.items.filter((i) => i.state === "cart").length, all = now.items.length;
   const parts = [];
   if (all && carted < all) parts.push(`${NUMBERS[carted] ?? carted} of ${(NUMBERS[all] ?? String(all)).toLowerCase()} ${carted === 1 ? "is" : "are"} in the cart.`);

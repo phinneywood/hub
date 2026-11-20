@@ -55,7 +55,7 @@
   --sun: #FFC56E;
   --mine: #2A2A36;                       /* your own messages: the room's colour, warmed */
   --glow-lo: .34; --glow-hi: .36;        /* the band of light: how strong with the house dark, and how much more lit */
-  --bar: rgba(15, 19, 34, .78);
+  --bar: color-mix(in srgb, var(--ground) 78%, transparent);
 }
 
 /* Day: the same house on warm paper, in daylight. */
@@ -78,9 +78,47 @@
   --lamp-ink: #8A5A00;   /* lamp light as words on paper: the yellow itself can't be read on a light ground */
   --mine: #EFE6D6;
   --glow-lo: .26; --glow-hi: .16;
-  --bar: rgba(245, 239, 228, .8);
+  --bar: color-mix(in srgb, var(--ground) 80%, transparent);
   --gold: #FFD27A; --amber: #FFBE6B; --burnt: #F6A15E; --embr: #EE8A68; --russet: #E7B08A;
 }
+
+/* Three more palettes for the same house (System > The look), each with its night and its day. Dusk is the one above.
+   Only the grounds and inks change: lamplight stays lamplight, sound stays sea-glass, a problem stays coral. */
+[data-palette="evergreen"][data-theme="dusk"] {
+  --ground: #0B1511; --room: #15231C; --raised: #111C17; --sheet: #15231C; --ink: #EEF2EA; --ink-2: #B3C0B6; --ink-3: #849488;
+  --line: rgba(238, 242, 234, .09); --line-2: rgba(238, 242, 234, .24); --ember: #3C2E1E; --mine: #22302A; --scrim: rgba(4, 10, 7, .55);
+}
+[data-palette="evergreen"][data-theme="day"] {
+  --ground: #E6ECE4; --room: #FAFCF8; --raised: #F0F4EE; --sheet: #FAFCF8; --ink: #15241C; --ink-2: #4C5B52; --ink-3: #74827A;
+  --line: rgba(21, 36, 28, .09); --line-2: rgba(21, 36, 28, .26); --ember: #F5E3C4; --mine: #DCE6DA; --scrim: rgba(21, 36, 28, .3);
+}
+[data-palette="clay"][data-theme="dusk"] {
+  --ground: #17110E; --room: #251B16; --raised: #1E1612; --sheet: #251B16; --ink: #F6ECE3; --ink-2: #C7B5A7; --ink-3: #9A887E;
+  --line: rgba(246, 236, 227, .09); --line-2: rgba(246, 236, 227, .24); --ember: #4E2A1C; --mine: #33251E; --scrim: rgba(10, 6, 4, .55);
+}
+[data-palette="clay"][data-theme="day"] {
+  --ground: #F3E6DA; --room: #FFF9F3; --raised: #F8EEE5; --sheet: #FFF9F3; --ink: #2B1D16; --ink-2: #6B5548; --ink-3: #8F796B;
+  --line: rgba(43, 29, 22, .09); --line-2: rgba(43, 29, 22, .26); --ember: #FADDC6; --mine: #EED9C8; --scrim: rgba(43, 29, 22, .3);
+}
+[data-palette="graphite"][data-theme="dusk"] {
+  --ground: #0E0E10; --room: #1C1C20; --raised: #151518; --sheet: #1C1C20; --ink: #F4F4F5; --ink-2: #B4B4BB; --ink-3: #8A8A93;
+  --line: rgba(244, 244, 245, .09); --line-2: rgba(244, 244, 245, .24); --ember: #3A2C22; --mine: #2A2A30; --scrim: rgba(0, 0, 0, .55);
+}
+[data-palette="graphite"][data-theme="day"] {
+  --ground: #F1F0ED; --room: #FFFFFF; --raised: #F7F6F3; --sheet: #FFFFFF; --ink: #19191A; --ink-2: #55534F; --ink-3: #7E7B76;
+  --line: rgba(25, 25, 26, .09); --line-2: rgba(25, 25, 26, .26); --ember: #F6E6CC; --mine: #E9E7E3; --scrim: rgba(25, 25, 26, .3);
+}
+/* The look's palettes: each shown by its own night ground with a lamp in it */
+.palettes { margin-top: 12px; }
+.palettes .row.palette { grid-template-columns: 46px 1fr auto; text-align: left; }
+.palette .swatch { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 1px var(--line-2); }
+.palette .swatch i { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #FFE4B0, var(--gold) 45%, var(--burnt)); }
+[data-swatch="dusk"] .swatch { background: #1C2340; } [data-swatch="evergreen"] .swatch { background: #1C3A2D; }
+[data-swatch="clay"] .swatch { background: #9A3D23; } [data-swatch="graphite"] .swatch { background: #2A2A2E; }
+[data-swatch="auto"] .swatch { background: conic-gradient(#1C2340 0 25%, #1C3A2D 0 50%, #9A3D23 0 75%, #2A2A2E 0); }
+.palette > .ic { color: var(--lamp-ink, var(--lamp)); }
+/* a new palette arrives as a slow change of light, never a jump */
+html.repaint body, html.repaint .room, html.repaint .tile, html.repaint .dash, html.repaint .dock { transition: background-color .9s ease, color .9s ease; }
 
 * { box-sizing: border-box; margin: 0; }
 html { -webkit-text-size-adjust: 100%; }
@@ -1332,3 +1370,70 @@ a.kcard-t { text-decoration: underline; text-decoration-color: var(--line-2); te
     border-radius: 22px; background: color-mix(in oklab, var(--ink) 12%, transparent); color: inherit; font-size: var(--t-s); }
 }
 
+
+/* ---------- Home, where Hub opens: the time, a field that asks or finds, and a tile for each place ----------
+   Each tile says what is going on there now. The big four are the places used every day; the dashboards follow, two
+   to a row, each with its one line for today. On a phone the bar steps aside here: every place has its tile. */
+.start .clock { font-family: var(--voice); font-size: 54px; line-height: 1; letter-spacing: -.02em; margin-top: 2px; font-variant-numeric: lining-nums tabular-nums; }
+.start .clock small { font-family: var(--f); font-size: 18px; letter-spacing: .02em; color: var(--ink-2); margin-left: 6px; }
+.start .why { display: inline-flex; align-items: center; min-height: 44px; margin: 0 0 -10px; font-size: var(--t-s); color: var(--ink-2); }
+.start .why::before { content: ""; width: 7px; height: 7px; border-radius: 50%; margin-right: 9px; background: var(--lamp); box-shadow: 0 0 8px 1px color-mix(in oklab, var(--amber) 60%, transparent); }
+.startask { margin-top: 18px; display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 6px 0 16px; border-radius: 18px;
+  background: var(--room); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink-3); }
+.startask input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; color: var(--ink); font: inherit; font-size: 17px; }
+.startask input::placeholder { color: var(--ink-3); }
+.startask .send { position: static; flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--line); color: var(--ink-3); transition: background-color .2s ease, color .2s ease; }
+.startask .send.on { background: var(--lamp); color: var(--on-lamp); }
+.startask .toask { flex: none; height: 44px; padding: 0 18px; border-radius: 22px; background: var(--line); color: var(--ink); font-weight: 500; }
+.startfound { margin-top: 6px; padding: 2px 14px; border-radius: 18px; background: var(--room); box-shadow: inset 0 0 0 1px var(--line); }
+.startfound .found.brief { border-top: 1px solid var(--line); padding-top: 0; margin: 0; }
+.startfound .sug.askit { font-weight: 500; }
+.tiles { margin-top: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tile { position: relative; min-height: 150px; padding: 14px 15px 14px; border-radius: 22px; background: var(--room); box-shadow: inset 0 0 0 1px var(--line);
+  display: flex; flex-direction: column; justify-content: space-between; gap: 8px; text-align: left; overflow: hidden; transition: transform .12s ease; }
+.tile:active, .tile.music:has(.tile-hit:active) { transform: scale(.985); }
+.tile-k { font-size: var(--t-m); font-weight: 500; }
+.tile-v { font-size: 34px; line-height: 1.05; letter-spacing: -.02em; font-family: var(--voice); font-variant-numeric: lining-nums; }
+.tile-v small { font-family: var(--f); font-size: 17px; letter-spacing: 0; color: var(--ink-2); }
+.tile-l { font-size: var(--t-s); color: var(--ink-2); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tile-l.big { font-family: var(--voice); font-size: 21px; line-height: 1.18; color: var(--ink); -webkit-line-clamp: 3; }
+/* the house as a row of windows: lit ones glow as their room does, as bright as its lamps */
+.windows { display: grid; grid-template-columns: repeat(5, 16px); gap: 5px; }
+.windows i { width: 16px; height: 16px; border-radius: 5px; background: var(--line); }
+.windows i.lit { background: linear-gradient(168deg, color-mix(in oklab, var(--gold) calc(48% + 52% * var(--lvl)), var(--ember)),
+  color-mix(in oklab, var(--burnt) calc(40% + 50% * var(--lvl)), var(--ember))); }
+.tile.music { padding: 0; }
+.tile-hit { position: absolute; inset: 0; padding: 14px 15px; display: flex; flex-direction: column; justify-content: space-between; text-align: left; }
+.tile-song b { display: block; font-family: var(--voice); font-weight: 400; font-size: 21px; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tile-song > span { display: flex; align-items: center; gap: 7px; margin-top: 4px; font-size: var(--t-s); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile-song .eq { color: var(--sound); height: 11px; flex: none; }
+.tile-act { position: absolute; top: 8px; right: 8px; z-index: 1; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--line); }
+.tile-act:active { transform: scale(.94); }
+.dashes { margin-top: 30px; }
+.dashes-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.dashes-head h2 { font-size: 12px; font-weight: 500; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
+.dashes-head button { min-height: 44px; padding: 0 2px 0 12px; font-size: var(--t-s); color: var(--ink-2); }
+.dash-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dash { min-height: 86px; padding: 12px 14px; border-radius: 18px; background: var(--room); box-shadow: inset 0 0 0 1px var(--line);
+  display: flex; flex-direction: column; justify-content: space-between; gap: 6px; text-align: left; }
+.dash:active { transform: scale(.985); }
+.dash b { font-weight: 500; font-size: var(--t-m); }
+.dash span { font-size: var(--t-s); color: var(--ink-2); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.dash.warn span, .dash.bad span { color: var(--alarm); }
+.dash.lit span { color: var(--lamp-ink, var(--gold)); }
+/* the bar's way Home, on every page but Home */
+.homebtn { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px 0 14px; border-radius: 23px; font-weight: 500;
+  background: var(--room); box-shadow: inset 0 0 0 1px var(--line); }
+.homebtn .ic { width: 20px; height: 20px; }
+.homebtn:active { transform: scale(.97); }
+@media (max-width: 1039px) {
+  .dock.athome { display: none; }
+  .app:has(.start) .toast { bottom: calc(env(safe-area-inset-bottom) + 24px); }
+  .main:has(> .start) { padding-bottom: calc(env(safe-area-inset-bottom) + 36px); }
+}
+@media (min-width: 1040px) {
+  .homebtn { display: none; }
+  .start .clock { font-size: 72px; }
+  .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .dash-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

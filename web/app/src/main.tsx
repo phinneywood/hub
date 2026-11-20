@@ -1,10 +1,11 @@
-// Hub's app: Ask at the center, the house a tap away, kept live. Built into hub/static/app (see ../README.md).
+// Hub's app: a home screen of live tiles, Ask a tap (or a few letters) away, the house kept live. Built into hub/static/app (see ../README.md).
 import { Fragment, render } from "preact";
 import { useEffect } from "preact/hooks";
 import { signal } from "@preact/signals";
 import "./app.css";
 import { Dock, Home, Rail, System } from "./screens";
 import { Ask, CardSheet } from "./ask";
+import { Start } from "./start";
 import { loadAble } from "./asking";
 import { loadDay, watchDay } from "./day";
 import { Today } from "./today";
@@ -24,6 +25,7 @@ import { ChangeSheet, HereSheet, KeepSheet, PlayingSheet, RoomSheet, ShowSheet }
 import { go, seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
 import { watchViewport } from "./viewport";
+import { watchPalette } from "./palette";
 
 const wideScreen = matchMedia("(min-width: 1040px)");
 const wide = signal(wideScreen.matches);
@@ -32,9 +34,9 @@ wideScreen.addEventListener("change", (e) => (wide.value = e.matches));
 const waking = signal(true);
 window.setTimeout(() => (waking.value = false), 1800);
 
-/** Cmd-K, from anywhere: Ask, with the field ready. */
+/** Cmd-K, from anywhere: Ask, with the field ready (on a wide screen its column is beside every screen but House, where the house sits instead of it). */
 function toAsk() {
-  if (view.value !== "home" && !wide.value) go("home");
+  if (view.value !== "ask" && (!wide.value || view.value === "house")) go("ask");
   requestAnimationFrame(() => document.getElementById("askq")?.focus());
 }
 
@@ -75,12 +77,12 @@ function OpenSheet() {
 
 function Screen() {
   const where = view.value;
-  return where === "home" ? <Ask home house={!wide.value} /> : where === "house" ? <Home /> : where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "health" ? <Health /> : where === "archive" ? <Archive /> : where === "today" ? <Today /> : where === "errands" ? <Errands /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : where === "boards" ? <BoardsScreen /> : where === "board" ? <BoardScreen /> : <Home />;
+  return where === "home" ? <Start wide={wide.value} /> : where === "ask" ? <Ask home /> : where === "house" ? <Home /> : where === "system" ? <System /> : where === "versions" ? <Versions /> : where === "engine" ? <Engine /> : where === "mailsettings" ? <MailSettings /> : where === "changes" ? <Changes /> : where === "activity" ? <Activity /> : where === "health" ? <Health /> : where === "archive" ? <Archive /> : where === "today" ? <Today /> : where === "errands" ? <Errands /> : where === "mail" ? <Mail /> : where === "kitchen" ? <Kitchen /> : where === "boards" ? <BoardsScreen /> : where === "board" ? <BoardScreen /> : <Home />;
 }
 
 /** Beside the screen on a wide one: the house while Ask is in the middle, and Ask beside everything else. */
 function Side() {
-  if (view.value === "home") return <aside class="side" aria-label="The house"><Home /></aside>;
+  if (view.value === "ask") return <aside class="side" aria-label="The house"><Home /></aside>;
   return <aside class="askrail" aria-label="Ask"><h2>Ask</h2><Ask /></aside>;
 }
 
@@ -93,7 +95,7 @@ function App() {
     return () => document.removeEventListener("keydown", key);
   }, []);
   if (view.value === "wall") return <Wall />;         // the kitchen iPad: the brief alone, nothing to steer the house with
-  const asking = view.value === "home";
+  const asking = view.value === "ask";
   return (
     <div class={"app" + (asking ? " asking" : "")}>
       <Rail />
@@ -136,6 +138,7 @@ if (root) {
     void loadAble();
   });
   watchDay();
+  watchPalette();
   watchViewport();
   watchMail();
   watchErrands();
