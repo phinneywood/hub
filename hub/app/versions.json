@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "3e169b52d434677c557bbeba301f8d1bd68fbf55",
+  "from": "ac6422a27d703f7550d163c025a5ccfd961bcfa9",
   "live": null,
+  "title": "The light show, one tap away",
+  "changes": [
+   "“Light show” is the first chip under Hub's greeting, and on House it sits after the scenes. It opens your playlists, and one tap starts the show. Its card then leads Ask, with the music, the timing and End show."
+  ]
+ },
+ {
+  "sha": "ac6422a27d703f7550d163c025a5ccfd961bcfa9",
+  "from": "3e169b52d434677c557bbeba301f8d1bd68fbf55",
+  "live": "2026-11-20T01:00:25Z",
   "title": "Lamplight: Hub, redrawn",
   "changes": [
    "Hub has a new look: a warm night and warm paper by day, Hub speaking in a serif voice of its own, and lit rooms that glow like windows seen from the street, as bright as their lamps.",

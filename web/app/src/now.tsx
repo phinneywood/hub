@@ -3,7 +3,7 @@
 // needs a person right now (an errand due, the house unwell) takes the third place; everything else is reached by asking.
 import { day } from "./day";
 import { inApp, NeedRow, SlotRow } from "./today";
-import { go, me, runScene, running, seen, trouble } from "./state";
+import { go, me, runScene, running, seen, sheet, trouble } from "./state";
 import type { Day, House, Slot } from "./types";
 import { talk } from "./asking";
 import { Bars, Icon } from "./ui";
@@ -80,6 +80,21 @@ export function NeedsCard({ most }: { most: number }) {
   );
 }
 
+/** The light show can start: Home Assistant has one and none is on (while one is, its card leads Ask instead). */
+export function showable(now: House): boolean {
+  return !!now.can_show && !now.show;
+}
+
+/** One tap to the light show: its sheet offers the music to play. First of the chips under Hub's greeting, where it
+is looked for; after the scenes on House, where the newest scene leads. */
+export function ShowChip({ scene }: { scene?: boolean }) {
+  return (
+    <button type="button" class={(scene ? "scene" : "chip") + " show-go"} onClick={() => (sheet.value = { kind: "show" })}>
+      <Icon name="wave" />Light show
+    </button>
+  );
+}
+
 /** The house in a line: how many rooms are lit, a tiny plan, and the scenes. Opens House. What plays is on the bar below. */
 export function HouseCard({ now }: { now: House }) {
   const families = familySizes(now.scenes);
@@ -95,8 +110,9 @@ export function HouseCard({ now }: { now: House }) {
           {rooms.map((room) => <i key={room.id} class={room.on ? "lit" : ""} style={room.on ? { opacity: 0.45 + 0.55 * (room.level / 100) } : undefined} />)}
         </span>
       </button>
-      {now.scenes.length > 0 && (
+      {(now.scenes.length > 0 || showable(now)) && (
         <div class="chips">
+          {showable(now) && <ShowChip />}
           {now.scenes.filter((s) => !families.has(familyOf(s.name))).map((s) => (
             <button type="button" key={s.id} class={"chip" + (s.on ? " on" : "") + (running.value === s.id ? " busy" : "")} aria-pressed={s.on}
               onClick={() => void runScene(s)}>{s.name}</button>

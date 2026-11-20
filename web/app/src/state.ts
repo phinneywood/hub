@@ -15,7 +15,7 @@ const ALL_OFF = "all-off";
 const SILENCE = 12000;            // Hub sends a beat every 5 s; this long without one and the line is taken for dead
 
 export type Look = "auto" | "dusk" | "day";
-export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "change"; speaker: string } | { kind: "keep" }
+export type Sheet = { kind: "room"; id: string } | { kind: "playing" } | { kind: "here"; speaker: string } | { kind: "change"; speaker: string } | { kind: "keep" } | { kind: "show" }
   | { kind: "found"; id: string; source: ArchiveSource; page?: number | null; title?: string }
   | { kind: "viewer"; photos: ArchiveItem[]; at: number }
   | { kind: "item"; id: number } | { kind: "card"; card: Card } | { kind: "errand"; id: number; way?: number } | null;
@@ -439,10 +439,11 @@ export async function setShowTiming(value: number) {
   if (answered(answer, ["timing"], "") && answer.timing) hold("timing", { value: answer.timing.value }, SOUND_HOLD);
 }
 
-/** Start the light show with one of Ask's choices for it: a handle a lookup gave, never words. */
-export async function startShow(handle: string) {
-  const answer = await api.post("show/start", { handle });
-  answered(answer, [], answer.said ?? "Light show on");
+/** Start the light show with one of Ask's choices for it (a handle a lookup gave) or one of the playlists Hub offers
+ * (its uri), never words. True once the show is on. */
+export async function startShow(what: { handle: string } | { uri: string }): Promise<boolean> {
+  const answer = await api.post("show/start", what);
+  return answered(answer, [], answer.said ?? "Light show on");
 }
 
 /** End the show: Home Assistant stops its music and puts the lights back. */

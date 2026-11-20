@@ -70,3 +70,30 @@ def test_a_house_without_a_show_offers_no_card(house):  # noqa: F811
     answer, cards, _ = ask('light show with day')
     assert 'no light show' in answer.lower() and not cards
     assert not [w for w, _ in house.sent if w == 'script/turn_on']
+
+
+def offered():
+    from hub.app import routes
+    routes._picks.update(at=float('-inf'), found=[])      # the playlists read afresh, as the sheet opening them would
+    return client.get('/app/api/picks', headers=SIGNED_IN).json()['picks']
+
+
+def test_the_light_show_sheet_starts_with_one_of_the_playlists_it_offers(show):
+    assert picture()['can_show'] and picture()['show'] is None
+    rainy = next(p for p in offered() if p['name'] == 'Rainy Day')
+    answer = client.post('/app/api/show/start', json={'uri': rainy['uri']}, headers=SIGNED_IN).json()
+    assert answer['ok'] and answer['said'] == 'Light show with Rainy Day'
+    assert started(show)[-1]['variables'] == {'media_id': rainy['uri'], 'media_type': 'playlist'}
+    assert picture()['show']['playing']
+
+
+def test_the_sheet_starts_only_a_playlist_it_offered(show):
+    offered()
+    for uri in ('library://playlist/999', 'library://track/1', 'Rainy Day'):
+        answer = client.post('/app/api/show/start', json={'uri': uri}, headers=SIGNED_IN).json()
+        assert answer['error'] == 'Hub can’t find that playlist any more.'
+    assert not started(show)
+
+
+def test_a_house_without_a_show_offers_no_way_to_start_one(house):  # noqa: F811
+    assert picture()['can_show'] is False

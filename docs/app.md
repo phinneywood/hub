@@ -64,7 +64,7 @@ sets this in the private settings file (`household.json`):
 | `POST /app/api/music/{speaker}` | Play, pause, next, previous, a volume, a room in or out |
 | `GET /app/api/picks`, `POST /app/api/play/{speaker}` | The library's playlists, and playing one where music is on, or with `"here": true` in that speaker's room only |
 | `POST /app/api/show/end`, `POST /app/api/show/timing` | The light show's card: end the show, or set its lights `{"value": 150}` ms earlier (below 0, later), on the timing's own steps and within its range (`hub/tools/house/lightshow.py`) |
-| `POST /app/api/show/start` | A tap on one of Ask's choices for a light show: `{"handle": "#1a2b3c"}`, only something a lookup found lately, never words |
+| `POST /app/api/show/start` | A tap on one of Ask's choices for a light show, `{"handle": "#1a2b3c"}`, or on a playlist the light show's sheet offers, `{"uri": ...}` (one `/app/api/picks` gave): only something a lookup found lately, never words |
 | `POST /app/api/undo/{batch}` | Put a change back: lights and speakers, or a change to how the house is set up |
 | `GET /app/api/setup/{card}`, `POST /app/api/setup/{card}/confirm`, `.../dismiss` | A change that waits for a tap: what became of it, do it, or put it away (see “Setting up the house”) |
 | `GET /app/api/kitchen`, `POST /app/api/kitchen/{do}` | The shopping list with each thing's product and where it stands, and its taps: `add`, `remove`, `pick`, `keep`, `fill`, `read`, `order`, `auto`, `reminders` (see “Kitchen”) |
@@ -176,7 +176,9 @@ a message field with its send button. From the top:
 - **Hub speaks first** (`Greeting` in `now.tsx`). The day's sentence in Hub's own voice, on the band of light (“Good
   evening. Dinner at home is at seven. Three things need you.”), then at most three cards under it: what needs you (Today's rows, three
   at most, each with its circle and its button, then “Open Today”), and the house in a line with a tiny plan and
-  its scenes (a tap opens House). The third place is for a feature that needs a person now, such as an errand
+  its scenes (a tap opens House). When Home Assistant has a light show and none is on, “Light show” is the first
+  chip (after the scenes on House): its sheet offers the owner's playlists, and one tap starts the show, whose card
+  then leads Ask (`ShowSheet` in `sheets.tsx`). The third place is for a feature that needs a person now, such as an errand
   coming due or the house unwell. Never more than three: Ask stays a conversation, not a feed. On a wide screen
   the house card gives way to the plan beside Ask.
 - **The conversation going on now**, under it, in full. What is newest is read from its start: the last request

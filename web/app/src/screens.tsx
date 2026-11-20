@@ -7,6 +7,7 @@ import { able, forgetNote } from "./asking";
 import { boards } from "./boards";
 import type { Floor, House, Room } from "./types";
 import { Bars, Icon } from "./ui";
+import { ShowChip, showable } from "./now";
 import { watchDock } from "./viewport";
 import { clock, familyOf, familySizes, houseSays, list, musicSays, NUMBER_WORDS, playingIn, when } from "./words";
 
@@ -174,6 +175,7 @@ function Scenes({ now, where }: { now: House; where: "top" | "below" }) {
         drawn.add(f);
         return open === f ? [head, chip] : head;
       })}
+      {showable(now) && <ShowChip scene />}
       <button type="button" class="scene add" aria-label="Keep the house as it is now as a scene" onClick={() => (sheet.value = { kind: "keep" })}>
         <Icon name="plus" />
       </button>

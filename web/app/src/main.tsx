@@ -20,7 +20,7 @@ import { ItemSheet, Kitchen, shop, watchKitchen } from "./kitchen";
 import { Mail, watchMail } from "./mail";
 import { ErrandSheet, Errands, watchErrands } from "./errands";
 import { BoardScreen, BoardsScreen, loadBoards, watchBoards } from "./boards";
-import { ChangeSheet, HereSheet, KeepSheet, PlayingSheet, RoomSheet } from "./sheets";
+import { ChangeSheet, HereSheet, KeepSheet, PlayingSheet, RoomSheet, ShowSheet } from "./sheets";
 import { go, seen, sheet, start, view } from "./state";
 import { ToastLine } from "./ui";
 import { watchViewport } from "./viewport";
@@ -69,6 +69,7 @@ function OpenSheet() {
   }
   if (open.kind === "change") return now.music ? <ChangeSheet leader={open.speaker} music={now.music} /> : null;
   if (open.kind === "keep") return <KeepSheet now={now} />;
+  if (open.kind === "show") return <ShowSheet />;
   return null;
 }
 

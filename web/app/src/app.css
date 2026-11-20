@@ -201,6 +201,9 @@ h2 { font-size: var(--t-l); line-height: 1.2; font-weight: 500; letter-spacing: 
 .scene.on { color: var(--on-lamp); background: linear-gradient(168deg, var(--gold), var(--amber)); box-shadow: none; }
 .scene.add { width: 44px; padding: 0; display: grid; place-items: center; background: transparent; color: var(--ink-3); }
 .scene.add .ic { width: 20px; height: 20px; }
+/* The light show: first of the chips and not a scene, so it says what it is with a wave in the drift's amber */
+.show-go { display: inline-flex; align-items: center; gap: 7px; color: var(--ink); }
+.show-go .ic { width: 18px; height: 18px; color: var(--amber); }
 @media (hover: hover) { .scene:hover { color: var(--ink); } }
 
 .facts { margin-top: 26px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; border-radius: 16px; overflow: hidden; }
@@ -428,6 +431,9 @@ button.row { text-align: left; }
 .picks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; align-items: start; }
 .pick { display: block; }
 .pick b { display: block; font-size: var(--t-xs); font-weight: 500; line-height: 1.2; margin-top: 7px; }
+.pick:disabled { opacity: .45; transition: opacity .3s ease; }
+.pick.busy { opacity: 1; animation: breathe .9s ease-in-out infinite alternate; }      /* the one the light show is starting with */
+.show-starting { margin-top: 10px; }
 
 /* ---------- ask ---------- */
 .ask { display: flex; flex-direction: column; min-height: 0; flex: 1; }

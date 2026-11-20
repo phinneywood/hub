@@ -1,8 +1,8 @@
 // What rises over the house: a room, the music, and Ask.
 import { useEffect, useState } from "preact/hooks";
-import { dimDevice, dimRoom, dragDevice, dragGroupVolume, dragRoom, dragVolume, forgetScene, joinStream, keepScene, loadPicks, pauseStream,
-  picks, play, playHere, playOn, playPick, setGroupVolume, setVolume, sheet, skip, speakerIn, streamPlay, streamSkip, switchDevice, switchRoom,
-  takeOut } from "./state";
+import { dimDevice, dimRoom, dragDevice, dragGroupVolume, dragRoom, dragVolume, forgetScene, go, joinStream, keepScene, loadPicks, pauseStream,
+  picks, play, playHere, playOn, playPick, setGroupVolume, setVolume, sheet, skip, speakerIn, startShow, streamPlay, streamSkip, switchDevice,
+  switchRoom, takeOut } from "./state";
 import type { Button, House, Music, Pick, Room, Speaker, Stream } from "./types";
 import { Sleeve } from "./screens";
 import { Bars, Icon, SheetFrame, Slider, Switch } from "./ui";
@@ -272,16 +272,39 @@ export function ChangeSheet({ leader, music }: { leader: string; music: Music })
   );
 }
 
-/** Playlists as sleeves, in full rows: four or eight beside the music, all of them when choosing for a room. */
-function Picks({ found, onPick, all }: { found: Pick[]; onPick: (pick: Pick) => void; all?: boolean }) {
+/** Playlists as sleeves, in full rows: four or eight beside the music, all of them when choosing for a room.
+ * `busy`: the one starting now; the others wait for it. */
+function Picks({ found, onPick, all, busy }: { found: Pick[]; onPick: (pick: Pick) => void; all?: boolean; busy?: string }) {
   return (
     <div class="picks">
       {(all ? found : found.slice(0, found.length >= 8 ? 8 : found.length >= 4 ? 4 : found.length)).map((p) => (
-        <button type="button" class="pick" key={p.uri} onClick={() => onPick(p)}>
+        <button type="button" class={"pick" + (busy === p.uri ? " busy" : "")} key={p.uri} disabled={!!busy} onClick={() => onPick(p)}>
           <Sleeve name={p.name} size="mid" /><b>{p.name}</b>
         </button>
       ))}
     </div>
+  );
+}
+
+/** The light show, one tap away: pick the music, and the lights follow it. When it is on, its card at the top of Ask
+ * has the music, the timing and End show, so the sheet goes there. */
+export function ShowSheet() {
+  useEffect(() => void loadPicks(), []);
+  const found = picks.value;
+  const [busy, setBusy] = useState<Pick | null>(null);
+  const start = async (pick: Pick) => {
+    setBusy(pick);
+    const on = await startShow({ uri: pick.uri });
+    setBusy(null);
+    if (on) { sheet.value = null; go("home"); }
+  };
+  return (
+    <SheetFrame title="Light show" sub="Pick the music. The lights follow it, and go back as they were when it ends.">
+      {found === null && <p class="quiet">Finding playlists…</p>}
+      {found !== null && found.length === 0 && <p class="quiet">Hub can’t find any playlists right now. Ask for a light show with an artist or a song.</p>}
+      {busy && <p class="quiet show-starting">Starting the light show with {busy.name}…</p>}
+      {found !== null && found.length > 0 && <Picks found={found} all busy={busy?.uri} onPick={(p) => void start(p)} />}
+    </SheetFrame>
   );
 }
 
