@@ -108,7 +108,23 @@ function remember(from: View, where: View, to: string) {
   else history.pushState({ hub: step().hub + 1, from } satisfies Step, "", to);
 }
 
+// A step back asked of the browser arrives a moment later, after this tap's own work is done. Until it arrives a
+// second tap on a back link is the same step (two quick taps once went back twice, out of Hub), and a page opened
+// meanwhile waits for it, so the step back never lands on top of the page opened after it.
+const STEP_MS = 1500;      // the browser said nothing by then (it had nowhere to go): carry on as if it had
+let stepping = 0;
+let after: (() => void) | null = null;
+
+function stepped() {
+  clearTimeout(stepping);
+  stepping = 0;
+  const next = after;
+  after = null;
+  next?.();
+}
+
 export function go(where: View, board = "") {
+  if (stepping) { after = () => go(where, board); return; }
   const from = view.value;
   remember(from, where, address(where, board));
   if (where === "board") boardId.value = board;
@@ -127,8 +143,11 @@ export function cameFrom(): View | undefined {
 /** A page's back link: one step back the way you came in, or straight to `up` when this page was opened directly
  * (a link, the Home Screen), so Back never leaves Hub. */
 export function back(up: View) {
-  if (step().hub > 0) history.back();
-  else go(up);
+  if (stepping) return;
+  if (step().hub > 0) {
+    stepping = window.setTimeout(stepped, STEP_MS);
+    history.back();
+  } else go(up);
 }
 
 // The back gesture, the browser's Back, or a link to "#mail": show what the address now says, once.
@@ -141,10 +160,11 @@ const follow = () => {
   archiveQuery.value = q;
 };
 window.addEventListener("hashchange", follow);
-window.addEventListener("popstate", follow);
+window.addEventListener("popstate", () => { follow(); if (stepping) stepped(); });
 
 /** The Archive, searching for `q`: from Ask's cards ("See all"), the phone's search button, or a search typed there. */
 export function openArchive(q = "") {
+  if (stepping) { after = () => openArchive(q); return; }
   remember(view.value, "archive", "#archive" + (q.trim() ? "?" + new URLSearchParams({ q: q.trim() }).toString() : ""));
   view.value = "archive";
   sheet.value = null;

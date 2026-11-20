@@ -571,6 +571,14 @@ const FINGER = 44;      // the smallest side of anything meant to be tapped, in 
     expect(await page.waitForSelector(".askpage", { timeout: 4000 }).then(() => true, () => false), "the browser’s back did not return from Today to Ask");
     await page.goForward();
     expect(await saysSoon("Dinner at home is at seven. Ten things need you."), "Today, again: " + await says());
+    // Two quick taps on the way back are one step back, never two: the second once went back again, out of Hub.
+    await page.evaluate(() => { const link = document.querySelector(".top .uplink"); link.click(); link.click(); });
+    expect(await page.waitForSelector(".askpage", { timeout: 4000 }).then(() => true, () => false), "two quick taps on Today’s way back did not land on Ask");
+    await page.waitForTimeout(800);
+    expect(new URL(page.url()).pathname === "/app/" && !new URL(page.url()).hash && await page.locator(".askpage").count() === 1,
+      "two quick taps on Today’s way back went back twice: " + page.url());
+    await page.goForward();
+    expect(await saysSoon("Dinner at home is at seven. Ten things need you."), "Today, after two quick taps back: " + await says());
     await page.locator('.row.need:has-text("Email from Sam Rivera") .tickbtn').click();
     expect(await saysSoon("Dinner at home is at seven. Nine things need you.", 3000), "a tick did not take the email off the list: " + await says());
     expect(await until(() => document.querySelector(".toast span")?.textContent.trim() === "Marked as handled"), "a tick did not say what it did");
