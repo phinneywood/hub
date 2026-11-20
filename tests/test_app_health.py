@@ -98,8 +98,10 @@ def test_without_a_caretaker_the_screen_says_so(tmp_path, monkeypatch):
         checks.caretaker_alive()
 
 
-def test_a_caretaker_that_stopped_looking_is_said_plainly_and_fails_its_check(folder):
-    beat = datetime.now(timezone.utc) - timedelta(minutes=12)
+def test_a_caretaker_that_stopped_looking_is_said_plainly_and_fails_its_check(folder, monkeypatch):
+    noon = at(0, 12, 0)                                            # at midday, 12 minutes ago is today's at whatever
+    monkeypatch.setattr(caretaker, '_now', lambda: noon)           # hour the tests run
+    beat = noon - timedelta(minutes=12)
     folder.status(beat)
     watching, words = caretaker.alive()
     assert watching is False and words == f'The caretaker hasn’t looked since {caretaker.clock(beat)}.'
@@ -108,7 +110,7 @@ def test_a_caretaker_that_stopped_looking_is_said_plainly_and_fails_its_check(fo
     with pytest.raises(checks.Failed) as failed:
         checks.caretaker_alive()
     assert 'hasn’t looked since' in str(failed.value)
-    folder.status(datetime.now(timezone.utc))
+    folder.status(noon)
     assert checks.caretaker_alive().startswith('The caretaker looked at')
 
 
