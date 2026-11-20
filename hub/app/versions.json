@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "07714531d167c4bc791074c4dce9976ff2dc48a4",
+  "from": "08e9d5889a418f619fcc6b79dbd5918f692cd3f4",
   "live": null,
+  "title": "Hub says when something's left on far longer than usual",
+  "changes": [
+   "When a fan, a light, a plug or a speaker has been on far longer than it usually is, Today says so the same day, and so does the morning message. It only says so: switching it off is yours, and Not today puts the line away for the day."
+  ]
+ },
+ {
+  "sha": "08e9d5889a418f619fcc6b79dbd5918f692cd3f4",
+  "from": "07714531d167c4bc791074c4dce9976ff2dc48a4",
+  "live": "2026-11-20T04:01:12Z",
   "title": "Ask finishes what it started",
   "changes": [
    "If the connection drops while Hub is answering, say when the phone’s screen locks, Hub still finishes and keeps the answer, and Ask shows it once the connection is back. It used to say nothing was asked, though Hub had already started.",

@@ -867,6 +867,12 @@ def friction_items():
     return friction.today_items()
 
 
+def left_on_items():
+    """A fan, a light, a plug or a speaker on far longer than it usually is (left_on.py): one item each."""
+    from . import left_on
+    return left_on.items()
+
+
 def house_review_items():
     """The weekly house review's ideas that still wait (house_review.py): one item each."""
     from . import house_review
@@ -1054,11 +1060,13 @@ SOURCES = [
                            '/network/devices', 'Open devices', network_devices_lookup))),
     Source('house', 'Home', 'Lights, plugs, speakers, the thermostat, locks, the garage door, the alarm, batteries and the '
            'weather forecast, from Home Assistant through the HA broker on this Mac; and the locks and batteries Apple Home '
-           'knows, read from HomeClaw’s own list. Never cameras, location or automations. Read-only for now.',
+           'knows, read from HomeClaw’s own list; and, against the house activity Hub keeps, how long fans, lights, plugs '
+           'and speakers usually stay on, to say when one is left on far longer. Never cameras, location or '
+           'automations. Read-only for now.',
            'Nothing to the overnight review. To Ask Hub when you ask: room and device names and their states, the '
            'thermostat’s readings, and what each speaker is playing. To the brief’s note (only while it is on): the weather, '
            'and the names and states of the locks, the alarm and doors left open.',
-           items=(house_items, lock_items, music_items),
+           items=(house_items, lock_items, music_items, left_on_items),
            lookups=(Lookup('family_brief', 'Home', 'The family brief: the weather forecast, the locks and their batteries, '
                            'doors left open and the house’s overnight note.',
                            'The forecast, the names and states of the locks, the alarm and doors left open, lock battery '
