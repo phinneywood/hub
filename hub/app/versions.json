@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "bd84498871ff2d0625e5eb9cee3efe3e241b934a",
+  "from": "9787733fbf69e052367156fc17a39f57029532a4",
   "live": null,
+  "title": "Ask shows scene and automation changes before you approve them",
+  "changes": [
+   "Ask can change scenes and automations from plain words, like “make this the new Dinner scene”. It shows the change before and after on a card, and nothing changes until you tap Approve. Undo still puts it back for a day."
+  ]
+ },
+ {
+  "sha": "9787733fbf69e052367156fc17a39f57029532a4",
+  "from": "bd84498871ff2d0625e5eb9cee3efe3e241b934a",
+  "live": "2026-11-20T09:22:51Z",
   "title": "Hub opens on Home, dressed for the day",
   "changes": [
    "Hub now opens on a home screen: the time, a field to ask Hub or find anything, and a tile for the house, the music, today and the kitchen, each saying what is going on there now.",
