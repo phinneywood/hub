@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "3625d519b45b49e4e8345785687d4230e1906e4b",
+  "from": "925413fac38b892f700622b1833677d8b8681e18",
   "live": null,
+  "title": "Quiet grey words easier to read by day",
+  "changes": [
+   "Hints, the empty message field and other quiet grey words are a little darker by day in every palette, so they read clearly on the page. The evening looks are unchanged."
+  ]
+ },
+ {
+  "sha": "925413fac38b892f700622b1833677d8b8681e18",
+  "from": "3625d519b45b49e4e8345785687d4230e1906e4b",
+  "live": "2026-11-21T05:11:00Z",
   "title": "Ask on a plain background",
   "changes": [
    "Behind the conversation, Ask is now the palette’s own plain colour, in every palette, day and dusk, without the moving band of warm light. The wall keeps its band."

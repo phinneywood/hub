@@ -66,7 +66,7 @@
   --sheet: #FFFDF8;
   --ink: #1E2030;
   --ink-2: #575466;
-  --ink-3: #85808E;
+  --ink-3: #6E6A76;      /* the quiet grey: 4.6:1 on the ground, like every palette's by day and night */
   --line: rgba(30, 32, 48, .09);
   --line-2: rgba(30, 32, 48, .26);
   --lamp: #FFC53D;
@@ -89,7 +89,7 @@
   --line: rgba(238, 242, 234, .09); --line-2: rgba(238, 242, 234, .24); --ember: #3C2E1E; --mine: #22302A; --scrim: rgba(4, 10, 7, .55);
 }
 [data-palette="evergreen"][data-theme="day"] {
-  --ground: #E6ECE4; --room: #FAFCF8; --raised: #F0F4EE; --sheet: #FAFCF8; --ink: #15241C; --ink-2: #4C5B52; --ink-3: #74827A;
+  --ground: #E6ECE4; --room: #FAFCF8; --raised: #F0F4EE; --sheet: #FAFCF8; --ink: #15241C; --ink-2: #4C5B52; --ink-3: #606B65;
   --line: rgba(21, 36, 28, .09); --line-2: rgba(21, 36, 28, .26); --ember: #F5E3C4; --mine: #DCE6DA; --scrim: rgba(21, 36, 28, .3);
 }
 [data-palette="clay"][data-theme="dusk"] {
@@ -97,7 +97,7 @@
   --line: rgba(246, 236, 227, .09); --line-2: rgba(246, 236, 227, .24); --ember: #4E2A1C; --mine: #33251E; --scrim: rgba(10, 6, 4, .55);
 }
 [data-palette="clay"][data-theme="day"] {
-  --ground: #F3E6DA; --room: #FFF9F3; --raised: #F8EEE5; --sheet: #FFF9F3; --ink: #2B1D16; --ink-2: #6B5548; --ink-3: #8F796B;
+  --ground: #F3E6DA; --room: #FFF9F3; --raised: #F8EEE5; --sheet: #FFF9F3; --ink: #2B1D16; --ink-2: #6B5548; --ink-3: #756358;
   --line: rgba(43, 29, 22, .09); --line-2: rgba(43, 29, 22, .26); --ember: #FADDC6; --mine: #EED9C8; --scrim: rgba(43, 29, 22, .3);
 }
 [data-palette="graphite"][data-theme="dusk"] {
@@ -105,7 +105,7 @@
   --line: rgba(244, 244, 245, .09); --line-2: rgba(244, 244, 245, .24); --ember: #3A2C22; --mine: #2A2A30; --scrim: rgba(0, 0, 0, .55);
 }
 [data-palette="graphite"][data-theme="day"] {
-  --ground: #F1F0ED; --room: #FFFFFF; --raised: #F7F6F3; --sheet: #FFFFFF; --ink: #19191A; --ink-2: #55534F; --ink-3: #7E7B76;
+  --ground: #F1F0ED; --room: #FFFFFF; --raised: #F7F6F3; --sheet: #FFFFFF; --ink: #19191A; --ink-2: #55534F; --ink-3: #6E6C67;
   --line: rgba(25, 25, 26, .09); --line-2: rgba(25, 25, 26, .26); --ember: #F6E6CC; --mine: #E9E7E3; --scrim: rgba(25, 25, 26, .3);
 }
 /* The look's palettes: each shown by its own night ground with a lamp in it */
