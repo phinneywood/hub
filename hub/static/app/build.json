@@ -7,7 +7,7 @@
     "record-build.mjs": "0d1ca0afe2544a3dd8c957be6a95cb5eafeed4daad8a9f68d4f315126e9537d8",
     "src/activity.tsx": "bc450efef01abf6c749e63c69f6664241236fef682371885f370b25f180e1f8a",
     "src/api.ts": "da80c5b4b7892f54e6b16442751308bab43e3d27c5999224f737a26c8e4e02d2",
-    "src/app.css": "faabbe1131c7d861565314746eec861406174ffe45bbd95d37d2087806c5f34b",
+    "src/app.css": "e56f7c05d8c42220071620137298d31e4d3d9e49ec4e1aab31a696f68076b5d6",
     "src/archive.tsx": "993994ff04cf1aaea78741e6bc6dbc7ffae3d0f2bee29b7223c6387f6b296cfb",
     "src/ask.tsx": "a86e5231ddbf117ca77bac78155d2ec47fc3f99238f1b61fe7617b447f187172",
     "src/asking.ts": "5d2bb0965b68e4d070efb8d323c2c43b52310596ee41a5a120cdfa25e53dab22",
@@ -40,7 +40,7 @@
     "src/words.ts": "b026ec96932d66ab34807a547f18edc5b0b79e6cb98b792e018496e4aa7d0def"
   },
   "built": {
-    "app.css": "f5af49daa606ee8fe3581dab8028355c99a590ead9280ebb5e0d98b70136a647",
+    "app.css": "da08446afdd196ff6967b06aed785d9206e66cca29a4aca324e20f38d08923d4",
     "app.js": "860e33fd97b1d0c21712990779b9bdf4bd8339b7de79cc4c84e7c160e6120999"
   }
 }
