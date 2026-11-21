@@ -23,10 +23,9 @@ Since 2026-11-19 the app is drawn as the house seen from the
 street after dark (`app.css`). A warm night (Evening) and warm paper (Day); Hub speaks in a serif of its own (Fraunces,
 SIL Open Font License, its soft axis set in the file) wherever it speaks, Jost for everything you tap and read at a
 glance. A lit room glows like a window, from gold to burnt orange, as bright as its lamps, and warms up and cools down
-slowly. Behind the top of Ask, and along the foot of the wall, a band of warm night colours moves left to
-right every two minutes and breathes; it is warmer the more rooms are lit (`Glow` in `ui.tsx`). It moves only by
-transform and opacity and stands still where motion is turned down. Nothing else moves by itself but the bars of
-music playing.
+slowly. Along the foot of the wall, a band of warm night colours moves left to right every two minutes and breathes
+(`Glow` in `ui.tsx`). It moves only by transform and opacity and stands still where motion is turned down. Ask has
+nothing behind its words: the palette's plain ground. Nothing else moves by itself but the bars of music playing.
 
 Colour keeps its meaning: lamplight is light and the one main action on a screen, sea-glass is sound, coral a problem.
 
@@ -209,7 +208,7 @@ a message field with its send button. From the top:
   above what Hub says now, each request and the start of its answer as two small bubbles (with its Undo), the
   last two shown and the rest under “Show N earlier messages”. A tap opens one. The model still sees only the
   last half hour (`brain.earlier`).
-- **Hub speaks first** (`Greeting` in `now.tsx`). The day's sentence in Hub's own voice, on the band of light (“Good
+- **Hub speaks first** (`Greeting` in `now.tsx`). The day's sentence in Hub's own voice, on the plain ground (“Good
   evening. Dinner at home is at seven. Three things need you.”), then at most three cards under it: what needs you (Today's rows, three
   at most, each with its circle and its button, then “Open Today”), and the house in a line with a tiny plan and
   its scenes (a tap opens House). When Home Assistant has a light show and none is on, “Light show” is the first

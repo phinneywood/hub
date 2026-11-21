@@ -1,6 +1,6 @@
 // Ask, one tap from Home: a conversation with Hub, which speaks first with what needs you and the house.
 import { Fragment } from "preact";
-import type { JSX, VNode } from "preact";
+import type { VNode } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { health, healthAsk, post } from "./api";
 import { able, ask, asked, forgetNote, loadAble, loadOlder, older, stop, talk } from "./asking";
@@ -20,7 +20,7 @@ import { inApp } from "./today";
 import { dimRoom, dragRoom, dragVolume, go, lookAtCare, loadPicks, picks, playPick, runScene, say, seen, setVolume, switchRoom, undo, undone } from "./state";
 import type { View } from "./state";
 import type { ArchiveItem, CareDrill, House, Room } from "./types";
-import { Glow, Icon, SheetFrame, Slider, Switch } from "./ui";
+import { Icon, SheetFrame, Slider, Switch } from "./ui";
 
 
 function marked(name: string, text: string) {
@@ -546,11 +546,8 @@ export function Ask({ home, house }: { home?: boolean; house?: boolean }) {
   const back = (turn: Turn) => { pinned.current = false; setOpened([...opened, turn.n]); };   // read where it is
   const showing = earlier.filter((turn) => !hidden.includes(turn.n));
   const quiet = !current.some((turn) => turn.asked);
-  // The band of light behind Hub's greeting is as warm as the house: brighter the more rooms are lit.
-  const lit = now ? Object.values(now.rooms).filter((room) => room.on && !room.outside).length : 0;
   return (
-    <div class={"ask" + (home ? " askpage" : "")} style={home ? { "--warm": Math.min(1, lit / 4) } as JSX.CSSProperties : undefined}>
-      {home && <Glow />}
+    <div class={"ask" + (home ? " askpage" : "")}>
       {home && <ChatHead />}
       <ShowCard />
       <div class="ask-scroll" ref={scroll}>
