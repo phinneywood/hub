@@ -1,8 +1,17 @@
 [
  {
   "sha": null,
-  "from": "1811152fd075beb6cd203bf7dca3db71204cbab8",
+  "from": "3625d519b45b49e4e8345785687d4230e1906e4b",
   "live": null,
+  "title": "Ask on a plain background",
+  "changes": [
+   "Behind the conversation, Ask is now the palette’s own plain colour, in every palette, day and dusk, without the moving band of warm light. The wall keeps its band."
+  ]
+ },
+ {
+  "sha": "3625d519b45b49e4e8345785687d4230e1906e4b",
+  "from": "1811152fd075beb6cd203bf7dca3db71204cbab8",
+  "live": "2026-11-20T21:54:24Z",
   "title": "Look again closes an errand you just replied to",
   "changes": [
    "Tapping Look again right after sending a reply from your mail app now closes the errand. Before, a look Hub had started a moment earlier could make Look again skip its own, and the errand stayed open for a minute or more."

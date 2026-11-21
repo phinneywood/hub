@@ -532,12 +532,13 @@ button.row { text-align: left; }
 .chat-who b { font-size: var(--t-m); font-weight: 500; letter-spacing: .01em; }
 .chat-who span { font-size: var(--t-s); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* The band of light: the night drift behind the top of Ask. Static colours on a layer three times as
-   wide as the screen, moved by one turn of its colours every two minutes and breathing over fourteen seconds: only
-   transform and opacity change, so nothing is redrawn. As warm as the house: --warm is how many rooms are lit. */
+/* Ask itself is the palette's plain ground: nothing moves or shines behind the words. */
 .askpage { isolation: isolate; }
+/* The band of light: the night drift along the foot of the wall. Static colours on a layer three times as
+   wide as the screen, moved by one turn of its colours every two minutes and breathing over fourteen seconds: only
+   transform and opacity change, so nothing is redrawn. */
 .glow { position: absolute; left: 0; right: 0; top: 0; height: min(400px, 52%); z-index: -1; overflow: hidden; pointer-events: none;
-  opacity: calc(var(--glow-lo) + var(--glow-hi) * var(--warm, .5));
+  opacity: calc(var(--glow-lo) + var(--glow-hi) * .5);
   -webkit-mask-image: radial-gradient(130% 100% at 50% 0%, #000 22%, #0000 78%); mask-image: radial-gradient(130% 100% at 50% 0%, #000 22%, #0000 78%);
   transition: opacity 2.4s ease; animation: glow-in 1.2s ease-out both; }
 .glow i { position: absolute; top: -10%; bottom: 0; left: 0; width: 300%; will-change: transform;
